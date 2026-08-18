@@ -1190,5 +1190,13 @@ def test_the_template_count_is_seventy_seven():
     gemessene Ausgangslage (297 sichtbare Zeichenketten, 297 davon fest
     verdrahtet) stehen in der Zwillingszusicherung in
     tests/src/test_inventory.py; beide muessen zusammen wandern.
+
+    83 STATT 82, am 18.08.2026: ags-kit. Sie erzeugt ags/utils/kit.ts -
+    Funktionen (zepButton, zepRow, zepToggle, zepSectionLabel,
+    zepDivider), die fertige Widgets zurueckgeben, damit ein Fenster
+    gar nicht erst in die Lage kommt, sich einen eigenen Knopf zu
+    bauen. Die gemessene Ausgangslage (45 Knopfregeln in 41 Klassen,
+    keine gemeinsame) steht bei der Zwillingszusicherung in
+    tests/src/test_inventory.py; beide muessen zusammen wandern.
     """
-    assert len(list(TEMPLATES.glob("*.template"))) == 82
+    assert len(list(TEMPLATES.glob("*.template"))) == 83

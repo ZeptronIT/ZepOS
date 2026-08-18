@@ -738,6 +738,13 @@ case "$CONFIG_NAME" in
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/utils"
         CONFIG_FILE="overlay.ts"
         ;;
+    # Das Bauteil-Kit. Neben overlay.ts und i18n.ts der dritte Baustein
+    # unter ags/utils/ - kein Fenster, sondern das, woraus Fenster
+    # gebaut werden.
+    ags-kit)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/utils"
+        CONFIG_FILE="kit.ts"
+        ;;
     # Die Uebersetzung. Ein Baustein wie overlay.ts und aus demselben
     # Grund dort: JEDES Widget importiert `_` daraus.
     ags-i18n)

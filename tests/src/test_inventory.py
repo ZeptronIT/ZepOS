@@ -338,8 +338,15 @@ def test_template_count_is_seventy_seven():
     erzeugt ags/utils/i18n.ts - dasselbe gettext, das der Installer
     schon benutzt, nur unter der Domaene zepos-desktop. Nachgezaehlt
     wird seither bei jedem Lauf in tests/src/test_ags_i18n.py.
+
+    83 STATT 82, am 18.08.2026: ags-kit. Der Nutzer hat gemeldet, die
+    Fenster wirkten "zusammengebastelt" und die Knoepfe "billig", und
+    das war zu messen: 45 Knopfregeln in 41 Klassen, keine gemeinsame.
+    Die neue Vorlage erzeugt ags/utils/kit.ts - Funktionen, die fertige
+    Widgets zurueckgeben, damit ein Fenster gar nicht erst in die Lage
+    kommt, sich einen eigenen Knopf zu bauen.
     """
-    assert len(list((SRC / "templates").glob("*.template"))) == 82
+    assert len(list((SRC / "templates").glob("*.template"))) == 83
 
 
 def test_nothing_refers_to_a_deleted_template():

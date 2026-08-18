@@ -1,0 +1,111 @@
+// DIE BAUTEILE DER ZEPOS-FENSTER
+//
+// Erzeugt nach ags/utils/kit.ts. Wer ein Fenster baut, ruft von hier -
+// er baut keinen Gtk.Button und haengt keine eigene Klasse dran.
+//
+// WARUM FUNKTIONEN UND NICHT NUR CSS-KLASSEN
+//     GEMESSEN am 18.08.2026: ags-style.template trug 45 Knopfregeln in
+//     41 Klassen, ohne eine einzige gemeinsame. Es gab keine Regel, die
+//     das verboten haette - es gab nur keine, die es leicht gemacht
+//     haette. Eine Klasse, an die man sich halten SOLL, ist schwaecher
+//     als eine Funktion, die man aufruft; die eine ist eine Bitte, die
+//     andere eine Schnittstelle.
+//
+// WAS HIER NICHT HINEINGEHOERT: alles, was ein Fenster besonders macht.
+// Das Kit kennt Knopf, Zeile, Schalter, Abschnittsmarke und Trenner -
+// mehr nicht. Ein Bauteil, das nur ein Fenster braucht, gehoert in
+// dieses Fenster.
+import { Gtk } from "ags/gtk4"
+
+export type ZepRolle = "voll" | "umrandet" | "still" | "kritisch"
+
+// Ein Knopf. EINE Hoehe, EIN Radius, vier Rollen.
+//
+// Die Rolle steht in der Klasse und nicht im Aufruf des Aussehens: das
+// Stylesheet entscheidet, wie "kritisch" aussieht, nicht diese Datei.
+export function zepButton(
+  label: string,
+  rolle: ZepRolle,
+  aktion: () => void,
+): Gtk.Button {
+  const knopf = new Gtk.Button({ can_focus: true })
+  knopf.set_child(new Gtk.Label({ label }))
+  knopf.add_css_class("zep-btn")
+  knopf.add_css_class(`zep-btn-${rolle}`)
+  knopf.connect("clicked", aktion)
+  return knopf
+}
+
+// Eine Zeile: Symbol, Titel, optionale Nebenzeile, optionales Ende.
+//
+// Der Titel kuerzt. Das ist keine Kosmetik - am 17.08.2026 hat eine
+// Beschriftung ohne Kuerzen das Netzfenster auf 660 Punkte
+// aufgeblasen, weil die Mindestbreite einer solchen Beschriftung ihre
+// GANZE Zeile ist.
+export function zepRow(opts: {
+  symbol: string
+  titel: string
+  unterzeile?: string
+  ende?: Gtk.Widget
+}): Gtk.Box {
+  const zeile = new Gtk.Box({ spacing: 0 })
+  zeile.add_css_class("zep-row")
+
+  const symbol = new Gtk.Label({ label: opts.symbol })
+  symbol.add_css_class("zep-row-icon")
+  zeile.append(symbol)
+
+  const texte = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 0,
+  })
+  texte.add_css_class("zep-row-texts")
+
+  const titel = new Gtk.Label({ label: opts.titel, xalign: 0 })
+  titel.add_css_class("zep-row-title")
+  titel.set_ellipsize(3)  // Pango.EllipsizeMode.END
+  texte.append(titel)
+
+  if (opts.unterzeile) {
+    const unter = new Gtk.Label({ label: opts.unterzeile, xalign: 0 })
+    unter.add_css_class("zep-row-sub")
+    unter.set_ellipsize(3)
+    texte.append(unter)
+  }
+  zeile.append(texte)
+
+  const luecke = new Gtk.Box({ hexpand: true })
+  zeile.append(luecke)
+
+  if (opts.ende) zeile.append(opts.ende)
+  return zeile
+}
+
+// Der Schalter. Gtk.Switch und kein selbstgebauter Knopf: er bringt
+// seine Barrierefreiheit und seine Tastaturbedienung mit.
+export function zepToggle(
+  an: boolean,
+  aktion: (an: boolean) => void,
+): Gtk.Widget {
+  const schalter = new Gtk.Switch({ active: an, valign: Gtk.Align.CENTER })
+  schalter.add_css_class("zep-toggle")
+  schalter.connect("notify::active", () => aktion(schalter.get_active()))
+  return schalter
+}
+
+// Die Marke ueber einer Gruppe. Klein, gedaempft, gesperrt gesetzt.
+export function zepSectionLabel(text: string): Gtk.Label {
+  const marke = new Gtk.Label({ label: text, xalign: 0 })
+  marke.add_css_class("zep-section")
+  return marke
+}
+
+// Der Trenner. Ein Gtk.Separator und keine 1-px-Box: er meldet sich
+// den Hilfsmitteln als Trenner.
+export function zepDivider(): Gtk.Widget {
+  const trenner = new Gtk.Separator({
+    orientation: Gtk.Orientation.HORIZONTAL,
+  })
+  trenner.add_css_class("zep-divider")
+  return trenner
+}

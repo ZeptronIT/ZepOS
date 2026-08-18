@@ -102,6 +102,32 @@ $overlay-border: $border;
 
 .zep-divider { background: $border; margin: {{STYLE_SPACE_8}} 0; }
 
+// Der Schalter. NACHGETRAGEN am 18.08.2026: die Schnittstellenliste von
+// task-3 nannte .zep-toggle, der Codeblock des vorigen Auftrags
+// (task-1u4) enthielt sie nicht - GEPRUEFT per `grep -rn switch
+// src/templates/*.template` am selben Tag: kein Treffer ausser
+// JS-Funktionsnamen (switchTab, switchMonitor), also keine bestehende
+// switch-Regel, an der sich diese haette orientieren koennen. Gtk.Switch
+// bringt seine eigene Groesse und Tastaturbedienung mit - hier nur
+// Farbe, Rundung (die Pille, wie fuer jeden Schalter gedacht: siehe
+// STYLE_RADIUS_PILL in sizes.py) und dieselbe Bewegung wie .zep-btn.
+.zep-toggle {
+  border-radius: {{STYLE_RADIUS_PILL}};
+  background: rgba($surface, 0.55);
+  border: 1px solid $border;
+  transition: background-color {{STYLE_MOTION_INSTANT}} {{STYLE_MOTION_CURVE}};
+
+  &:checked {
+    background: $accent;
+    border-color: $accent;
+  }
+
+  slider {
+    border-radius: {{STYLE_RADIUS_PILL}};
+    background: $text;
+  }
+}
+
 // ===== SHARED OVERLAY STYLES (Muted Dark / HyprLaunch / HyprClipX) =====
 //
 // DIE PLATTE ALLER ELF UEBERLAGERUNGEN
