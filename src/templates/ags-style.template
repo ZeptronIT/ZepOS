@@ -1864,46 +1864,35 @@ $overlay-border: $border;
   border-top: 1px solid rgba($surface, 0.3);
 }
 
-.wp-action-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
-
-  &:hover {
-    background: rgba($wallpaper-accent, 0.2);
-    border-color: rgba($wallpaper-accent, 0.5);
-  }
-}
+// GEGANGEN am 18.08.2026 (Task B): wp-action-btn. zepButton mit Rolle
+// "umrandet" (ags-kit.template) traegt die zwei Werkzeugknoepfe jetzt,
+// siehe ags-wallpaper.template. GEPRUEFT mit `grep -rn wp-action-btn
+// src/templates/` auf ausschliesslich diesen Kommentar.
 
 // Wallpaper Monitor Selector
 .wp-monitor-selector {
   padding: {{STYLE_SPACE_8}} 0;
   border-bottom: 1px solid rgba($surface, 0.3);
+
+  // Der gewaehlte Monitor, in der Akzentfarbe dieses Fensters (Task B,
+  // 18.08.2026): zepButton (ags-kit.template) kennt selbst keinen
+  // "aktiv"-Zustand, nur Rollen - dieselbe Sprache wie
+  // .battery-profile-buttons .zep-btn.active (Task A), nur mit
+  // $wallpaper-accent statt $battery-accent, weil dieser Farbton diesem
+  // Fenster gehoert und nicht dem geteilten Bauteil. Die Grundregel
+  // (Hintergrund, Rahmen, Polster) und der Zustand ":hover" kommen
+  // seither von zep-btn-umrandet, GEGANGEN ist nur wp-monitor-btn selbst
+  // - GEPRUEFT mit `grep -rn wp-monitor-btn src/templates/` auf
+  // ausschliesslich diesen Kommentar.
+  .zep-btn.active {
+    background: rgba($wallpaper-accent, 0.3);
+    border-color: $wallpaper-accent;
+  }
 }
 
 .wp-monitor-label {
   font-size: {{STYLE_FONT_BODY}};
   color: $subtext;
-}
-
-.wp-monitor-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  font-size: {{STYLE_FONT_BODY}};
-  color: $text;
-
-  &:hover {
-    background: rgba($wallpaper-accent, 0.2);
-    border-color: rgba($wallpaper-accent, 0.3);
-  }
-
-  &.active {
-    background: rgba($wallpaper-accent, 0.3);
-    border-color: $wallpaper-accent;
-  }
 }
 
 // Wallpaper Section
@@ -1934,19 +1923,10 @@ $overlay-border: $border;
   margin: {{STYLE_SPACE_4}} 0;
 }
 
-.wp-import-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  font-size: {{STYLE_FONT_BODY}};
-  color: $wallpaper-accent;
-
-  &:hover {
-    background: rgba($wallpaper-accent, 0.2);
-    border-color: rgba($wallpaper-accent, 0.5);
-  }
-}
+// GEGANGEN am 18.08.2026 (Task B): wp-import-btn. zepButton mit Rolle
+// "still" (ags-kit.template) traegt den Einlese-Knopf jetzt, siehe
+// ags-wallpaper.template. GEPRUEFT mit `grep -rn wp-import-btn
+// src/templates/` auf ausschliesslich diesen Kommentar.
 
 .wp-row {
   padding: {{STYLE_SPACE_2}} 0;
@@ -2037,30 +2017,14 @@ $overlay-border: $border;
   }
 }
 
-.cp-cancel-btn {
-  background: rgba($surface, 0.5);
-  border: 1px solid rgba($text, 0.15);
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_20}};
-  color: $subtext;
-
-  &:hover {
-    background: rgba($surface, 0.8);
-    color: $text;
-  }
-}
-
-.cp-apply-btn {
-  background: rgba($style-accent, 0.2);
-  border: 1px solid rgba($style-accent, 0.5);
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_20}};
-  color: $style-accent;
-
-  &:hover {
-    background: rgba($style-accent, 0.4);
-  }
-}
+// GEGANGEN am 18.08.2026 (Task B): cp-cancel-btn und cp-apply-btn.
+// zepButton mit den Rollen "umrandet" bzw. "voll" (ags-kit.template)
+// tragen die beiden Fusszeilen-Knoepfe des Farbwaehlers jetzt, siehe
+// ags-style-editor.template. GEPRUEFT mit `grep -rn
+// 'cp-cancel-btn\|cp-apply-btn' src/templates/`: ausser diesem
+// Loeschprotokoll und einem Querverweis-Kommentar bei pickerApplyBtn in
+// ags-style-editor.template kein Treffer mehr, keine Regel und kein
+// add_css_class.
 
 // ===== INLINE PICKER =====
 .se-picker-content {
@@ -2169,50 +2133,24 @@ $overlay-border: $border;
   font-family: monospace;
 }
 
-.se-edit-btn {
-  background: transparent;
-  border: none;
-  padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_8}};
-  font-size: {{STYLE_FONT_BODY}};
-  color: $subtext;
-
-  &:hover {
-    color: $style-accent;
-  }
-}
+// GEGANGEN am 18.08.2026 (Task B): se-edit-btn. zepButton mit Rolle
+// "still" (ags-kit.template) traegt den Stift je Farbzeile jetzt, siehe
+// ags-style-editor.template. GEPRUEFT mit `grep -rn se-edit-btn
+// src/templates/`: ausser diesem Loeschprotokoll und einem
+// Querverweis-Kommentar bei importBtn in ags-wallpaper.template kein
+// Treffer mehr, keine Regel und kein add_css_class.
 
 .se-actions {
   padding-top: {{STYLE_SPACE_12}};
   border-top: 1px solid rgba($surface, 0.3);
 }
 
-.se-action-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
-  color: $text;
-
-  &.reset {
-    color: $red;
-    border-color: rgba($red, 0.3);
-
-    &:hover {
-      background: rgba($red, 0.2);
-      border-color: rgba($red, 0.5);
-    }
-  }
-
-  &.apply {
-    color: $style-accent;
-    background: rgba($style-accent, 0.2);
-    border-color: rgba($style-accent, 0.5);
-
-    &:hover {
-      background: rgba($style-accent, 0.4);
-    }
-  }
-}
+// GEGANGEN am 18.08.2026 (Task B): se-action-btn (mit den Unterklassen
+// .apply/.reset). zepButton mit den Rollen "voll" (Anwenden, die
+// Hauptsache dieser Ansicht) bzw. "kritisch" (Zuruecksetzen, verwirft
+// Aenderungen unwiderruflich) traegt die beiden Fussknoepfe jetzt, siehe
+// ags-style-editor.template. GEPRUEFT mit `grep -rn se-action-btn
+// src/templates/` auf ausschliesslich diesen Kommentar.
 
 // Style Editor Tab Bar
 .se-tab-bar {

@@ -113,7 +113,33 @@ AUSGANGSZAHL = 52
 #                   der Plan mit "lass ihn stehen und melde es"
 #                   vorwegnimmt. GEZAEHLT mit _knopfklassen/
 #                   _ist_knopfname aus diesem Modul, nicht abgeschrieben.
-ERLAUBT = 45
+#   38  18.08.2026  Task B (Hintergruende und Stil-Editor): wp-action-btn,
+#                   wp-import-btn, wp-monitor-btn (ags-wallpaper.template)
+#                   sowie se-edit-btn, se-action-btn, cp-cancel-btn,
+#                   cp-apply-btn (ags-style-editor.template) sind gefallen
+#                   - sieben von neun benannten Klassen.
+#                   se-tab-btn bleibt stehen: ein Reiter, kein Knopf. Die
+#                   waagerechte Innenabstand von .se-tab-btn und .zep-btn
+#                   ist GLEICH ({{STYLE_SPACE_16}} je Seite), eine
+#                   Umstellung haette die gemessene Breite des breitesten
+#                   Reiters (122px, Kommentar am Kopf von
+#                   ags-style-editor.template) also NICHT veraendert -
+#                   aber genau diese Breite ist die EINZIGE Grundlage der
+#                   Fensterbreite (WIN_WIDTH = 474) dieses Fensters, staerker
+#                   daran gekoppelt als jede andere Klasse in diesem
+#                   Auftrag. Ein Fehler hier waere ein Fehler in der
+#                   Fensterbreite, und die Breitenleiter ist Stufe 5, nicht
+#                   dieser Auftrag - siehe Gruppenbericht.
+#                   cp-preset-btn bleibt ebenfalls stehen: eine Farbkachel,
+#                   kein Knopf mit Text. GEMESSEN: .cp-preset-btn hat
+#                   padding {{STYLE_SPACE_2}} (2px) und min-width/
+#                   min-height 0; .zep-btn erzwingt padding
+#                   "0 {{STYLE_SPACE_16}}" (16px je Seite) und min-height
+#                   {{STYLE_CONTROL_HEIGHT}} (32px). Acht Kacheln je Zeile
+#                   in einem 474px breiten Fenster wuerden die verfuegbare
+#                   Breite sprengen. GEZAEHLT mit _knopfklassen/
+#                   _ist_knopfname aus diesem Modul, nicht abgeschrieben.
+ERLAUBT = 38
 
 
 def _without_comments(css: str) -> str:

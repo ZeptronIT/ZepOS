@@ -9,6 +9,7 @@ import GLib from "gi://GLib"
 import Cairo from "gi://cairo"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _, format, pgettext } from "../utils/i18n"
+import { zepButton } from "../utils/kit"
 
 const WINDOW_NAME = "style-editor"
 
@@ -657,12 +658,10 @@ export default function StyleEditor(): OverlayWidget {
     const hexLabel = new Gtk.Label({ label: currentColor })
     hexLabel.add_css_class("se-color-hex")
 
-    // Edit button
-    const editBtn = new Gtk.Button({ can_focus: false })
-    editBtn.add_css_class("se-edit-btn")
-    const editIcon = new Gtk.Label({ label: ICONS.edit })
-    editBtn.set_child(editIcon)
-    editBtn.connect("clicked", () => {
+    // Edit button. zepButton, Rolle "still" (Task B, 18.08.2026): ein
+    // Symbol-Knopf je Farbzeile, kein Hauptweg - dieselbe Einordnung wie
+    // notif-close-btn (Task A).
+    const editBtn = zepButton(ICONS.edit, "still", () => {
       showInlinePicker(colorDef.key, BRAND_DEFAULTS[colorDef.key])
     })
 
@@ -931,6 +930,20 @@ export default function StyleEditor(): OverlayWidget {
       mainBox.add_css_class("se-container")
 
       // ===== TAB BAR =====
+      //
+      // se-tab-btn BLEIBT STEHEN (Task B, 18.08.2026, gemeldete Ausnahme
+      // aus dem Plan): ein Reiter, kein Knopf - eigener ausgewaehlter
+      // Zustand, sitzt in einer Leiste. GEPRUEFT: die waagerechte
+      // Innenabstand von .se-tab-btn und .zep-btn ist gleich (beide
+      // STYLE_SPACE_16 je Seite, siehe ags-style.template), eine
+      // Umstellung wuerde die gemessene Breite des breitesten Reiters
+      // (122px, siehe die
+      // WIN_WIDTH-Rechnung am Dateikopf) also NICHT veraendern - aber
+      // genau DIESE Breite ist die einzige Grundlage der Fensterbreite
+      // dieses Fensters, und keine andere im Umbau befindliche Klasse
+      // traegt eine so direkt daran gekoppelte Messung. Ein Fehler hier
+      // waere ein Fehler in der Fensterbreite, und die Breitenleiter ist
+      // Stufe 5, nicht dieser Auftrag. Einzelheiten im Gruppenbericht.
       const tabBar = new Gtk.Box({ spacing: 4, homogeneous: true })
       tabBar.add_css_class("se-tab-bar")
 
@@ -1164,6 +1177,18 @@ export default function StyleEditor(): OverlayWidget {
       })
       pickerPresetsFlow.add_css_class("cp-presets")
 
+      // cp-preset-btn BLEIBT STEHEN (Task B, 18.08.2026, gemeldete
+      // Ausnahme aus dem Plan): eine Farbkachel ist kein Knopf mit Text,
+      // sie traegt eine 24x24-Zeichenflaeche und sonst nichts. GEMESSEN:
+      // .cp-preset-btn hat padding STYLE_SPACE_2 (2px) und
+      // min-width/min-height 0; .zep-btn erzwingt padding
+      // "0 STYLE_SPACE_16" (16px je Seite) und min-height
+      // STYLE_CONTROL_HEIGHT (32px). Acht Kacheln je Zeile
+      // (max_children_per_line: 8) in einem Fenster von 474px Breite
+      // (WIN_WIDTH oben) wuerden mit der erzwungenen Innenabstand-
+      // breite von 8x(24+32)=448px plus 7x4px Reihenabstand die
+      // verfuegbare Breite sprengen - heute sind es 8x(24+4)=224px plus
+      // Abstand. zepButton passt hier nicht, siehe Gruppenbericht.
       for (const color of PRESET_COLORS) {
         const swatch = new Gtk.DrawingArea()
         swatch.set_size_request(24, 24)
@@ -1184,14 +1209,23 @@ export default function StyleEditor(): OverlayWidget {
         pickerPresetsFlow.append(pbtn)
       }
 
-      // Apply / Cancel buttons
-      const pickerCancelBtn = new Gtk.Button({ label: _("Cancel"), can_focus: false })
-      pickerCancelBtn.add_css_class("cp-cancel-btn")
-      pickerCancelBtn.connect("clicked", () => hideInlinePicker(null))
+      // Apply / Cancel buttons. zepButton (Task B, 18.08.2026): der
+      // Farbwaehler ist eine eigene Ansicht (siehe Gruppenbericht) mit
+      // genau einem "voll" - Anwenden ist hier die Hauptsache, Abbrechen
+      // der Nebenweg dazu.
+      //
+      // KONTRASTPRUEFUNG fuer "voll" (WARNUNG aus dem letzten Auftrag):
+      // pickerApplyBtn traegt keine eigene Kind-Klasse fuer seine
+      // Beschriftung - `label: _("Apply")` erzeugt das GtkLabel intern,
+      // ohne dass eine CSS-Regel `color` darauf setzt. Es erbt damit
+      // `color: $bg` von .zep-btn-voll, keine Kollision mit $accent
+      // moeglich (anders als sc-edit-btn/Task A, wo die Kind-Labels ihre
+      // eigene `color` gesetzt hatten).
+      const pickerCancelBtn = zepButton(_("Cancel"), "umrandet",
+                                         () => hideInlinePicker(null))
 
-      const pickerApplyBtn = new Gtk.Button({ label: _("Apply"), can_focus: false })
-      pickerApplyBtn.add_css_class("cp-apply-btn")
-      pickerApplyBtn.connect("clicked", () => hideInlinePicker(getPickerHex()))
+      const pickerApplyBtn = zepButton(_("Apply"), "voll",
+                                        () => hideInlinePicker(getPickerHex()))
 
       const pickerBtnRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 })
       pickerBtnRow.set_halign(Gtk.Align.END)
@@ -1348,9 +1382,21 @@ export default function StyleEditor(): OverlayWidget {
       const actionsBox = new Gtk.Box({ spacing: 8, homogeneous: true })
       actionsBox.add_css_class("se-actions")
 
-      const applyBtn = new Gtk.Button({ can_focus: false })
-      applyBtn.add_css_class("se-action-btn")
-      applyBtn.add_css_class("apply")
+      // zepButton, Rolle "voll" (Task B, 18.08.2026): Anwenden ist die
+      // Hauptsache des Stil-Editors - genau EIN "voll" in dieser Ansicht
+      // (der Farbwaehler ist eine eigene Ansicht mit eigenem "voll",
+      // siehe cp-apply-btn und der Gruppenbericht).
+      //
+      // KONTRASTPRUEFUNG (WARNUNG aus dem letzten Auftrag): applyIcon
+      // und applyLabel tragen KEINE eigene CSS-Klasse und damit keine
+      // eigene `color` - beide erben `color: $bg` von .zep-btn-voll, wie
+      // .zep-btn-voll es fuer genau diesen Fall vorsieht. Anders als bei
+      // sc-edit-btn (Task A) gibt es hier keine Kind-Regel, die eine
+      // Akzentfarbe fest eingetragen haette und mit der deckenden
+      // $accent-Flaeche kollidieren koennte.
+      const applyBtn = zepButton("", "voll", async () => {
+        await applyChanges(applyBtn)
+      })
       applyBtn.set_tooltip_text(_("Regenerate all configs"))
       const applyBtnBox = new Gtk.Box({ spacing: 6, halign: Gtk.Align.CENTER })
       const applyIcon = new Gtk.Label({ label: ICONS.apply })
@@ -1358,13 +1404,18 @@ export default function StyleEditor(): OverlayWidget {
       applyBtnBox.append(applyIcon)
       applyBtnBox.append(applyLabel)
       applyBtn.set_child(applyBtnBox)
-      applyBtn.connect("clicked", async () => {
-        await applyChanges(applyBtn)
-      })
 
-      resetBtn = new Gtk.Button({ can_focus: false })
-      resetBtn.add_css_class("se-action-btn")
-      resetBtn.add_css_class("reset")
+      // zepButton, Rolle "kritisch" (Task B, 18.08.2026): Zuruecksetzen
+      // verwirft eigene Aenderungen (Farben oder Groessen der aktuellen
+      // Aufloesung) unwiderruflich - dieselbe Einordnung wie
+      // vpn-reset-btn (Task E).
+      resetBtn = zepButton("", "kritisch", async () => {
+        if (currentTab === "colors") {
+          await resetColors(resetBtn)
+        } else {
+          await resetWidgetSizes(currentResolution, resetBtn)
+        }
+      })
       resetBtn.set_tooltip_text(_("Reset all colors"))
       const resetBtnBox = new Gtk.Box({ spacing: 6, halign: Gtk.Align.CENTER })
       const resetIcon = new Gtk.Label({ label: ICONS.reset })
@@ -1372,13 +1423,6 @@ export default function StyleEditor(): OverlayWidget {
       resetBtnBox.append(resetIcon)
       resetBtnBox.append(resetLabel)
       resetBtn.set_child(resetBtnBox)
-      resetBtn.connect("clicked", async () => {
-        if (currentTab === "colors") {
-          await resetColors(resetBtn)
-        } else {
-          await resetWidgetSizes(currentResolution, resetBtn)
-        }
-      })
 
       actionsBox.append(applyBtn)
       actionsBox.append(resetBtn)

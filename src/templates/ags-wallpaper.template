@@ -8,6 +8,7 @@ import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _, format, pgettext } from "../utils/i18n"
+import { zepButton } from "../utils/kit"
 
 const WINDOW_NAME = "wallpaper"
 
@@ -437,8 +438,14 @@ export default function WallpaperSelector(): OverlayWidget {
       const orientLabel = mon.isPortrait
         ? pgettext("monitor orientation, portrait", "P")
         : pgettext("monitor orientation, landscape", "L")
-      const btn = new Gtk.Button({ label: `${mon.name} [${orientLabel}]`, can_focus: false })
-      btn.add_css_class("wp-monitor-btn")
+      // zepButton, Rolle "umrandet" (Task B, 18.08.2026): die Monitore
+      // sind gleichrangige Auswahlmoeglichkeiten, keine Hauptsache -
+      // dieselbe Einordnung wie battery-profile-btn (Task A). Welcher
+      // Monitor GERADE gilt, zeigt weiterhin die Klasse "active" unten
+      // (siehe .wp-monitor-selector .zep-btn.active im Stylesheet) und
+      // nicht die Rolle.
+      const btn = zepButton(`${mon.name} [${orientLabel}]`, "umrandet",
+                             () => switchMonitor(mon.id))
       if (mon.id === currentMonitor) {
         btn.add_css_class("active")
       }
@@ -446,7 +453,6 @@ export default function WallpaperSelector(): OverlayWidget {
       btn.set_tooltip_text(format(_("{monitor} ({orientation})"),
                                   { monitor: mon.name,
                                     orientation: mon.isPortrait ? _("Portrait") : _("Landscape") }))
-      btn.connect("clicked", () => switchMonitor(mon.id))
 
       monitorButtons.set(mon.id, btn)
       monitorSelector.append(btn)
@@ -507,18 +513,17 @@ export default function WallpaperSelector(): OverlayWidget {
 
       const headerSpacer = new Gtk.Box({ hexpand: true })
 
-      const importBtn = new Gtk.Button({ can_focus: false })
-      importBtn.add_css_class("wp-import-btn")
-      const importBtnLabel = new Gtk.Label({ label: ICONS.import })
-      importBtn.set_child(importBtnLabel)
-      importBtn.set_tooltip_text(_("Import wallpaper"))
-      importBtn.connect("clicked", () => {
+      // zepButton, Rolle "still" (Task B, 18.08.2026): ein einzelner
+      // Symbol-Knopf am Rand der Abschnittskopfzeile, kein Hauptweg -
+      // dieselbe Einordnung wie se-edit-btn (Bearbeiten-Stift je Zeile).
+      const importBtn = zepButton(ICONS.import, "still", () => {
         importWallpaper(isPortrait ? "portrait" : "landscape")
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
           refreshWallpapers()
           return GLib.SOURCE_REMOVE
         })
       })
+      importBtn.set_tooltip_text(_("Import wallpaper"))
 
       sectionHeader.append(sectionIcon)
       sectionHeader.append(sectionTitle)
@@ -552,9 +557,19 @@ export default function WallpaperSelector(): OverlayWidget {
       const actionsBox = new Gtk.Box({ spacing: 10, homogeneous: true })
       actionsBox.add_css_class("wp-actions")
 
-      // Random button
-      const randomBtn = new Gtk.Button({ can_focus: false })
-      randomBtn.add_css_class("wp-action-btn")
+      // Random button. zepButton, Rolle "umrandet" (Task B, 18.08.2026):
+      // Zufall und Neuaufbau sind zwei gleichrangige Nebenwege - die
+      // Hauptsache dieses Fensters ist der Klick auf ein Miniaturbild
+      // (wp-thumb, ausserhalb dieses Auftrags), darum kein "voll" hier.
+      // Dieselbe Einordnung wie disk-action-btn/calendar-action-btn
+      // (Task A, ebenfalls ohne "voll").
+      const randomBtn = zepButton("", "umrandet", () => {
+        setRandomWallpaper(currentMonitor)
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+          refreshWallpapers()
+          return GLib.SOURCE_REMOVE
+        })
+      })
       randomBtn.set_tooltip_text(_("Random wallpaper for this monitor"))
       const randomBtnBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -568,17 +583,15 @@ export default function WallpaperSelector(): OverlayWidget {
       randomBtnBox.append(randomIcon)
       randomBtnBox.append(randomLabel)
       randomBtn.set_child(randomBtnBox)
-      randomBtn.connect("clicked", () => {
-        setRandomWallpaper(currentMonitor)
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+
+      // Refresh button, Rolle "umrandet" wie oben.
+      const refreshBtn = zepButton("", "umrandet", () => {
+        regenerateThumbnails()
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
           refreshWallpapers()
           return GLib.SOURCE_REMOVE
         })
       })
-
-      // Refresh button
-      const refreshBtn = new Gtk.Button({ can_focus: false })
-      refreshBtn.add_css_class("wp-action-btn")
       refreshBtn.set_tooltip_text(_("Regenerate thumbnails"))
       const refreshBtnBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -592,13 +605,6 @@ export default function WallpaperSelector(): OverlayWidget {
       refreshBtnBox.append(refreshIcon)
       refreshBtnBox.append(refreshLabel)
       refreshBtn.set_child(refreshBtnBox)
-      refreshBtn.connect("clicked", () => {
-        regenerateThumbnails()
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
-          refreshWallpapers()
-          return GLib.SOURCE_REMOVE
-        })
-      })
 
       actionsBox.append(randomBtn)
       actionsBox.append(refreshBtn)
