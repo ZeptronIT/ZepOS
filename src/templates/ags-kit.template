@@ -47,9 +47,18 @@ export function zepRow(opts: {
   titel: string
   unterzeile?: string
   ende?: Gtk.Widget
+  // NACHGETRAGEN am 18.08.2026, task-5: der "ausgewaehlt"-Zustand fehlte
+  // hier, und Bluetooth ist der erste Verbraucher, der ihn braucht - das
+  // verbundene Geraet muss sich von den uebrigen abheben. GEZAEHLT
+  // (`grep -oE '\.[a-z][a-z0-9-]*\.active|&\.active' ags-style.template`):
+  // 18 Fundstellen im Bestand (.net-item.active, .cc-toggle-btn.active,
+  // .se-tab-btn.active, ...), zepRow bekommt darum dieselbe Klasse statt
+  // einer eigenen.
+  ausgewaehlt?: boolean
 }): Gtk.Box {
   const zeile = new Gtk.Box({ spacing: 0 })
   zeile.add_css_class("zep-row")
+  if (opts.ausgewaehlt) zeile.add_css_class("active")
 
   const symbol = new Gtk.Label({ label: opts.symbol })
   symbol.add_css_class("zep-row-icon")

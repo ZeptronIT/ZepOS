@@ -75,20 +75,32 @@
 import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import { interval } from "ags/time"
-// Fuer JEDE Beschriftung, deren Text aus einem fremden Programm kommt -
-// hier der Geraetename und die Adresse, die bluetoothctl liefert.
-//
-// GEMESSEN am 17.08.2026 im verschachtelten Compositor mit dem
-// Bluetooth-Adapter dieser Maschine: mit einem gekoppelten "Keychron K3
-// Version 3" stand das Fenster 460 Punkte breit da statt der 312, die
-// es leer braucht - und der dritte Knopf ueber der Liste lag hinter der
-// rechten Kante. Dieselbe Messung wie im Kontrollzentrum am selben Tag,
-// und dieselbe Antwort: die Zeile endet nach
-// {{STYLE_MEASURE_LINE}} Zeichen mit drei Punkten, statt das Fenster zu
-// verbreitern.
-import Pango from "gi://Pango"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
+import { zepButton, zepRow, zepToggle, zepSectionLabel, zepDivider }
+  from "../utils/kit"
+
+// NACHGETRAGEN am 18.08.2026, task-5: dieses Fenster stellte bis hierher
+// jede Beschriftung, deren Text aus bluetoothctl kommt, mit `ellipsize`
+// UND `max_width_chars: {{STYLE_MEASURE_LINE}}` selbst zusammen - siehe
+// die Messung, die frueher an dieser Stelle stand: 460 statt 312 Punkte
+// mit einem gekoppelten "Keychron K3 Version 3", der dritte Knopf hinter
+// der rechten Kante.
+//
+// zepRow (ags-kit.template) nimmt Titel und Nebenzeile nur als TEXT
+// entgegen und kappt sie nicht - das ist eine bewusste Grenze des
+// geteilten Bauteils, kein Versehen: "was ein Fenster besonders macht"
+// gehoert dort ausdruecklich NICHT hinein (siehe Kopf des Kits). Ein
+// ungewoehnlich langer Geraetename kann dieses Fenster darum wieder bis
+// zum Deckel aus MODAL_SHARE wachsen lassen (ags-overlay-utils.template,
+// `getOverlayPosition`) - und DANACH greift die waagerechte
+// Bildlaufleiste der Fabrik (`hscrollbar_policy: AUTOMATIC`), dieselbe,
+// die schon fuer den Fall vorgesehen ist, dass die Ellipsengrenze nicht
+// reicht. Kein Rueckfall auf einen kaputten Zustand, aber weniger
+// sauber als vorher - EIN GEFUNDENER UNTERSCHIED ZUM BAUTEIL-KIT, nicht
+// stillschweigend behoben: eine `max_width_chars`-Stuetze fuer zepRow
+// betrifft alle kuenftigen Verbraucher und ist keine Aenderung, die
+// Task 5 (ein Fenster) fuer sich allein treffen sollte.
 
 const WINDOW_NAME = "bluetooth"
 const UPDATE_INTERVAL = 5000
@@ -177,13 +189,16 @@ const FRIST = 3
 // Suchmodus, und das kostet auf einem Notebook Strom.
 const SUCHDAUER = 10
 
+// power und check sind mit dem Umbau auf die Bauteile gegangen
+// (task-5, 18.08.2026): zepToggle zeigt den Adapterschalter ueber
+// seinen eigenen Schalterstand, nicht ueber ein Symbol, und das
+// verbundene Geraet hebt sich ueber "ausgewaehlt" an zepRow ab statt
+// ueber ein eigenes Haekchen.
 const ICONS = {
   bluetooth: "{{ICON_BLUETOOTH}}",
   connected: "{{ICON_BLUETOOTH_CONNECTED}}",
-  power: "{{ICON_POWER}}",
   search: "{{ICON_SEARCH}}",
   refresh: "{{ICON_REFRESH}}",
-  check: "{{ICON_CHECK}}",
   settings: "{{ICON_SETTINGS}}",
   alert: "{{ICON_ALERT}}",
 }
@@ -337,10 +352,13 @@ export default function BluetoothManager(): OverlayWidget {
   // Die Widgets, die spaeter beschrieben werden. Sie stehen hier und
   // nicht in buildContent(), weil updateDisplay() sie von aussen
   // erreichen muss - dieselbe Aufteilung wie im Netzfenster.
-  let statusIcon: Gtk.Label
-  let statusLabel: Gtk.Label
-  let statusDetail: Gtk.Label
-  let powerBtn: Gtk.Button
+  // statusIcon/statusLabel/statusDetail/powerBtn sind mit dem Umbau auf
+  // die Bauteile (task-5, 18.08.2026) verschwunden: zepRow nimmt Titel
+  // und Nebenzeile nur als TEXT entgegen, es gibt keinen Griff, um sie
+  // nachtraeglich zu aendern. Der Zustandskopf wird deshalb jeden Takt
+  // neu in statusWrap hinein gebaut - derselbe Kunstgriff wie deviceList
+  // weiter unten, das schon vorher jeden Takt neu gebaut wurde.
+  let statusWrap: Gtk.Box
   let scanBtn: Gtk.Button
   let deviceList: Gtk.Box
   let emptyLabel: Gtk.Label
@@ -365,12 +383,44 @@ export default function BluetoothManager(): OverlayWidget {
 
     adapter = await readAdapter()
 
+    // Der Schalter, frisch fuer DIESEN Takt gebaut. zepToggle verbindet
+    // sich erst NACH dem Konstruktor mit "notify::active" (siehe
+    // ags-kit.template) - der Anfangswert loest darum keinen Klick aus.
+    // DASSELBE Zeichen fuer an und aus, und der Unterschied ist der
+    // Schalterstand - das ist von bar-status-config.template
+    // uebernommen, wo ein ausgeschalteter Adapter seit dem 13.08.2026
+    // abgeblendet dasteht statt zu verschwinden. Immer noch powerBtn
+    // genannt, auch als zepToggle: tests/src/test_overlay_windows.py
+    // haelt Spec §7.4 (kein bedienbar aussehender Knopf ohne Ziel) am
+    // Namen fest.
+    const buildPowerToggle = (): Gtk.Widget => {
+      const powerBtn = zepToggle(adapter.powered, async (an) => {
+        powerBtn.set_sensitive(false)
+        try {
+          await bctl(an ? "power on" : "power off")
+        } catch (e) {
+          console.error("Bluetooth: power schlug fehl:", e)
+        }
+        updateDisplay()
+      })
+      // KEIN Schalter, der nichts tun kann. Ein Adapter, den es nicht
+      // gibt, laesst sich nicht einschalten und nicht suchen lassen -
+      // Spec §7.4. adapter.vorhanden ist in genau den beiden Faellen,
+      // die das betrifft (Fehler, kein Adapter), false.
+      powerBtn.set_sensitive(adapter.vorhanden)
+      powerBtn.set_tooltip_text(_("Turn Bluetooth on or off"))
+      return powerBtn
+    }
+
+    removeAllChildren(statusWrap)
+
     if (adapter.fehler) {
-      statusIcon.set_text(ICONS.alert)
-      statusIcon.set_css_classes(["bt-status-icon", "bt-broken"])
-      statusLabel.set_text(_("Bluetooth is not answering"))
-      statusDetail.set_text(adapter.fehler)
-      powerBtn.set_sensitive(false)
+      statusWrap.append(zepRow({
+        symbol: ICONS.alert,
+        titel: _("Bluetooth is not answering"),
+        unterzeile: adapter.fehler,
+        ende: buildPowerToggle(),
+      }))
       scanBtn.set_sensitive(false)
       removeAllChildren(deviceList)
       emptyLabel.set_visible(false)
@@ -378,40 +428,24 @@ export default function BluetoothManager(): OverlayWidget {
     }
 
     if (!adapter.vorhanden) {
-      statusIcon.set_text(ICONS.bluetooth)
-      statusIcon.set_css_classes(["bt-status-icon", "bt-off"])
-      statusLabel.set_text(_("No Bluetooth adapter"))
-      statusDetail.set_text(_("This machine reports no controller"))
-      // KEIN Knopf, der nichts tun kann. Ein Adapter, den es nicht gibt,
-      // laesst sich nicht einschalten und nicht suchen lassen - Spec
-      // §7.4.
-      powerBtn.set_sensitive(false)
+      statusWrap.append(zepRow({
+        symbol: ICONS.bluetooth,
+        titel: _("No Bluetooth adapter"),
+        unterzeile: _("This machine reports no controller"),
+        ende: buildPowerToggle(),
+      }))
       scanBtn.set_sensitive(false)
       removeAllChildren(deviceList)
       emptyLabel.set_visible(false)
       return
     }
 
-    powerBtn.set_sensitive(true)
-    // DASSELBE Zeichen fuer an und aus, und der Unterschied ist die
-    // Klasse. Das ist von bar-status-config.template uebernommen, wo
-    // ein ausgeschalteter Adapter seit dem 13.08.2026 abgeblendet
-    // dasteht statt zu verschwinden: "ein Adapter, der AUS ist, ist
-    // etwas anderes als kein Adapter", und wer ihn sieht, weiss, dass
-    // er ihn nur einschalten muss.
-    statusIcon.set_text(ICONS.bluetooth)
-    statusIcon.set_css_classes(
-      adapter.powered ? ["bt-status-icon"] : ["bt-status-icon", "bt-off"])
-    statusLabel.set_text(
-      adapter.powered ? _("Bluetooth is on") : _("Bluetooth is off"))
-    statusDetail.set_text(adapter.name || NOTHING)
-    if (adapter.powered) {
-      powerBtn.add_css_class("active")
-      powerBtn.remove_css_class("inactive")
-    } else {
-      powerBtn.remove_css_class("active")
-      powerBtn.add_css_class("inactive")
-    }
+    statusWrap.append(zepRow({
+      symbol: ICONS.bluetooth,
+      titel: adapter.powered ? _("Bluetooth is on") : _("Bluetooth is off"),
+      unterzeile: adapter.name || NOTHING,
+      ende: buildPowerToggle(),
+    }))
     // Suchen kann man nur mit eingeschaltetem Adapter, und waehrend ein
     // Suchlauf laeuft nicht noch einmal.
     scanBtn.set_sensitive(adapter.powered && !suchtGerade)
@@ -435,62 +469,37 @@ export default function BluetoothManager(): OverlayWidget {
     for (const device of devices) deviceList.append(createDeviceRow(device))
   }
 
-  /** Eine Zeile: Zeichen, Name, Zustand - und ein Klick, der etwas tut. */
+  /** Eine Zeile: Zeichen, Name, Zustand - und ein Klick, der etwas tut.
+   *
+   * zepButton fuer den Klick und die Rolle "umrandet" (siehe die
+   * Rollen-Zuteilung im Aufgabenbrief), zepRow fuer den Inhalt - eine
+   * Zusammensetzung, kein neues Bauteil. Verbunden bekommt "ausgewaehlt"
+   * an zepRow statt einer eigenen Klasse (task-5, 18.08.2026).
+   */
   const createDeviceRow = (device: Device): Gtk.Button => {
-    const row = new Gtk.Button({ can_focus: false })
-    row.add_css_class("bt-item")
-    if (device.connected) row.add_css_class("active")
-
-    const rowBox = new Gtk.Box({ spacing: 12 })
-    const icon = new Gtk.Label({
-      label: device.connected ? ICONS.connected : ICONS.bluetooth,
-    })
-    icon.add_css_class("bt-device-icon")
-    if (device.connected) icon.add_css_class("bt-device-connected")
-
-    const infoBox = new Gtk.Box({
-      orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true,
-    })
-    const nameLabel = new Gtk.Label({
-      label: device.name, xalign: 0,
-      ellipsize: Pango.EllipsizeMode.END,
-      max_width_chars: {{STYLE_MEASURE_LINE}},
-    })
-    nameLabel.add_css_class("bt-device-name")
     // Der Zustand IN WORTEN und die Adresse daneben. Die Adresse ist
     // das, was zwei gleich benannte Kopfhoerer unterscheidet, und der
     // Zustand das, was der Klick gleich aendert.
     const zustand = device.connected ? "Verbunden"
       : device.paired ? "Gekoppelt" : "Gefunden"
-    const detailLabel = new Gtk.Label({
-      label: `${zustand} • ${device.address}`, xalign: 0,
-      ellipsize: Pango.EllipsizeMode.END,
-      max_width_chars: {{STYLE_MEASURE_LINE}},
+
+    // zepRow nimmt die Nebenzeile nur als Text entgegen - eine frische
+    // Zeile je Aufruf ist darum der einzige Weg, sie spaeter zu aendern
+    // (waehrend des Klicks, siehe unten), derselbe Kunstgriff wie beim
+    // Zustandskopf in updateDisplay().
+    const rowContent = (unterzeile: string) => zepRow({
+      symbol: device.connected ? ICONS.connected : ICONS.bluetooth,
+      titel: device.name,
+      unterzeile,
+      ausgewaehlt: device.connected,
     })
-    detailLabel.add_css_class("bt-device-detail")
-    infoBox.append(nameLabel)
-    infoBox.append(detailLabel)
 
-    rowBox.append(icon)
-    rowBox.append(infoBox)
-
-    if (device.connected) {
-      const mark = new Gtk.Label({ label: ICONS.check })
-      mark.add_css_class("bt-connected-icon")
-      rowBox.append(mark)
-    }
-
-    row.set_child(rowBox)
-    row.set_tooltip_text(device.connected
-      ? format(_("Disconnect {device}"), { device: device.name })
-      : format(_("Connect to {device}"), { device: device.name }))
-
-    row.connect("clicked", async () => {
+    const row = zepButton("", "umrandet", async () => {
       // Waehrend der Aufruf laeuft, sagt die Zeile es. Ein Knopf, der
       // nach dem Klick zwei Sekunden lang aussieht wie vorher, sieht aus
       // wie einer, der nichts tut.
-      detailLabel.set_text(
-        device.connected ? _("Disconnecting …") : _("Connecting …"))
+      row.set_child(rowContent(
+        device.connected ? _("Disconnecting …") : _("Connecting …")))
       row.set_sensitive(false)
       try {
         // `connect`/`disconnect` warten auf die Gegenstelle. Die Frist
@@ -501,13 +510,17 @@ export default function BluetoothManager(): OverlayWidget {
           + `${device.address}`])
       } catch (e) {
         console.error("Bluetooth:", device.address, e)
-        detailLabel.set_text(device.connected
+        row.set_child(rowContent(device.connected
           ? _("Disconnecting failed")
-          : _("Connecting failed - is it paired?"))
+          : _("Connecting failed - is it paired?")))
       }
       row.set_sensitive(true)
       updateDisplay()
     })
+    row.set_child(rowContent(`${zustand} • ${device.address}`))
+    row.set_tooltip_text(device.connected
+      ? format(_("Disconnect {device}"), { device: device.name })
+      : format(_("Connect to {device}"), { device: device.name }))
 
     return row
   }
@@ -539,91 +552,29 @@ export default function BluetoothManager(): OverlayWidget {
       })
 
       // ----- Der Zustand des Adapters, mit dem Schalter daneben -----
-      const currentBox = new Gtk.Box({ spacing: 0 })
-      currentBox.add_css_class("bt-current")
-
-      const currentInner = new Gtk.Box({ spacing: 16 })
-      statusIcon = new Gtk.Label({ label: ICONS.bluetooth, valign: Gtk.Align.CENTER })
-      statusIcon.add_css_class("bt-status-icon")
-
-      const statusInfo = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true,
-        valign: Gtk.Align.CENTER,
-      })
-      // MIT GRENZE, seit dem 17.08.2026. Diese Zeile war die BREITESTE
-      // des ganzen Fensters: GEMESSEN meldete `.bt-current` 464 Punkte
-      // MINDESTbreite, und 247 davon waren diese eine Beschriftung -
-      // ohne `ellipsize` ist die Mindestbreite einer Beschriftung ihre
-      // ganze Zeile, und ein Kasten, der nicht schmaler werden kann,
-      // laesst GTK nur die waagerechte Bildlaufleiste.
       //
-      // Der laengste Satz, den sie traegt, ist nicht "Bluetooth ist an",
-      // sondern "Bluetooth antwortet nicht" - und daneben steht in
-      // statusDetail ein ganzer Befehl. Auf dem Schirm des Nutzers
-      // greift die Grenze nie; sie ist da fuer den Schirm, auf dem sie
-      // greifen wuerde.
-      statusLabel = new Gtk.Label({
-        label: _("Loading …"), xalign: 0,
-        ellipsize: Pango.EllipsizeMode.END,
-        max_width_chars: {{STYLE_MEASURE_LINE}},
-      })
-      statusLabel.add_css_class("bt-status-label")
-      // Die Zeile, in der der Grund steht, wenn es keinen Adapter gibt.
-      // Sie bricht um und ellipsiert nicht: der Satz aus readAdapter()
-      // nennt einen Befehl, und ein abgeschnittener Befehl ist keiner.
-      statusDetail = new Gtk.Label({
-        label: NOTHING, xalign: 0, wrap: true,
-        max_width_chars: {{STYLE_MEASURE_LINE}},
-      })
-      statusDetail.add_css_class("bt-status-detail")
-      statusInfo.append(statusLabel)
-      statusInfo.append(statusDetail)
-
-      powerBtn = new Gtk.Button({ can_focus: false })
-      powerBtn.add_css_class("bt-power-btn")
-      powerBtn.set_child(new Gtk.Label({ label: ICONS.power }))
-      powerBtn.set_tooltip_text(_("Turn Bluetooth on or off"))
-      powerBtn.connect("clicked", async () => {
-        powerBtn.set_sensitive(false)
-        try {
-          await bctl(adapter.powered ? "power off" : "power on")
-        } catch (e) {
-          console.error("Bluetooth: power schlug fehl:", e)
-        }
-        powerBtn.set_sensitive(true)
-        updateDisplay()
-      })
-
-      currentInner.append(statusIcon)
-      currentInner.append(statusInfo)
-      currentInner.append(powerBtn)
-      currentBox.append(currentInner)
+      // Ersetzt `.bt-current` (Kasten mit linkem Akzentstreifen) durch
+      // eine zepRow: Punkt, Ueberschrift, Nebenzeile, zepToggle rechts
+      // (task-5, 18.08.2026). statusWrap traegt jeweils GENAU eine
+      // zepRow und wird in updateDisplay() jeden Takt neu befuellt.
+      statusWrap = new Gtk.Box({})
 
       // Ein Gtk.Separator und kein leerer Kasten: ein Kasten ohne Kind
       // ist null Punkte hoch und braucht eine Mindesthoehe im
       // Stylesheet, ein Separator bringt seine eigene mit.
-      const divider = new Gtk.Separator({
-        orientation: Gtk.Orientation.HORIZONTAL,
-      })
-      divider.add_css_class("bt-divider")
+      const divider = zepDivider()
 
       // ----- Die Zeile ueber der Liste: Ueberschrift und drei Knoepfe -----
       //
       // Dieselbe Aufteilung wie im Netzfenster, wo dieselben drei Rollen
       // stehen: etwas anstossen, neu lesen, das grosse Werkzeug oeffnen.
       const toolRow = new Gtk.Box({ spacing: 12 })
-      const listHeader = new Gtk.Label({
-        label: _("DEVICES"), xalign: 0, hexpand: true,
-      })
-      listHeader.add_css_class("bt-section-title")
+      const listHeader = zepSectionLabel(_("DEVICES"))
+      listHeader.set_hexpand(true)
 
-      scanBtn = new Gtk.Button({ can_focus: false })
-      scanBtn.add_css_class("bt-tool-btn")
-      scanBtn.set_child(new Gtk.Label({ label: ICONS.search }))
-      scanBtn.set_tooltip_text(
-        format(_("Search for devices for {seconds} seconds"),
-               { seconds: SUCHDAUER }))
-      scanBtn.connect("clicked", async () => {
+      // "Geraete suchen" ist die Hauptsache dieser Zeile - die Rolle
+      // "voll" (task-5-brief, Schritt 4).
+      scanBtn = zepButton(ICONS.search, "voll", async () => {
         if (suchtGerade) return
         suchtGerade = true
         scanBtn.set_sensitive(false)
@@ -641,12 +592,12 @@ export default function BluetoothManager(): OverlayWidget {
         suchtGerade = false
         updateDisplay()
       })
+      scanBtn.set_tooltip_text(
+        format(_("Search for devices for {seconds} seconds"),
+               { seconds: SUCHDAUER }))
 
-      const refreshBtn = new Gtk.Button({ can_focus: false })
-      refreshBtn.add_css_class("bt-tool-btn")
-      refreshBtn.set_child(new Gtk.Label({ label: ICONS.refresh }))
+      const refreshBtn = zepButton(ICONS.refresh, "umrandet", () => { updateDisplay() })
       refreshBtn.set_tooltip_text(_("Read the list again"))
-      refreshBtn.connect("clicked", () => { updateDisplay() })
 
       // blueman, und zwar fuer das, was hier NICHT steht: der
       // Kopplungsassistent mit PIN-Vergleich, die Dateiuebertragung, die
@@ -654,16 +605,13 @@ export default function BluetoothManager(): OverlayWidget {
       // zepos-desktop (siehe dort), also fuehrt dieser Knopf auf jeder
       // Installation irgendwohin - anders als der
       // `nm-connection-editor`, den das Netzfenster am 12.08.2026
-      // losgeworden ist.
-      const bluemanBtn = new Gtk.Button({ can_focus: false })
-      bluemanBtn.add_css_class("bt-tool-btn")
-      bluemanBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
-      bluemanBtn.set_tooltip_text(
-        _("Open Blueman - pairing, sending files"))
-      bluemanBtn.connect("clicked", () => {
+      // losgeworden ist. Rolle "still": es ist die Nebenfunktion.
+      const bluemanBtn = zepButton(ICONS.settings, "still", () => {
         execAsync("blueman-manager")
         closeWindow()
       })
+      bluemanBtn.set_tooltip_text(
+        _("Open Blueman - pairing, sending files"))
 
       toolRow.append(listHeader)
       toolRow.append(scanBtn)
@@ -689,7 +637,7 @@ export default function BluetoothManager(): OverlayWidget {
       })
       emptyLabel.add_css_class("bt-empty")
 
-      container.append(currentBox)
+      container.append(statusWrap)
       container.append(divider)
       container.append(toolRow)
       container.append(deviceList)

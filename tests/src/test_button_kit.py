@@ -89,7 +89,12 @@ AUSGANGSZAHL = 52
 #   52  18.08.2026  task-1u4: .zep-btn + vier Rollen, das Bauteil-Kit
 #                   selbst (Ruling 1 des Controllers - die eine erlaubte
 #                   Ausnahme, siehe Modul-Docstring)
-ERLAUBT = 52
+#   50  18.08.2026  task-5: Bluetooth auf die Bauteile. .bt-power-btn
+#                   und .bt-tool-btn (eine gemeinsame Regel) sind
+#                   gefallen, kein Fenster hat sich einen neuen Knopf
+#                   gebaut - GEZAEHLT mit _knopfklassen/_ist_knopfname
+#                   aus diesem Modul, nicht abgeschrieben.
+ERLAUBT = 50
 
 
 def _knopfklassen(text: str) -> set[str]:

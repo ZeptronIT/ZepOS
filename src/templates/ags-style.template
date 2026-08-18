@@ -85,8 +85,20 @@ $overlay-border: $border;
   min-height: {{STYLE_ROW_HEIGHT}};
   padding: 0 {{STYLE_SPACE_12}};
   border-radius: {{STYLE_RADIUS_CARD}};
+  border-left: 3px solid transparent;
 
   &:hover { background: $item-hover; }
+
+  // AUSGEWAEHLT, 18.08.2026: task-5 (Bluetooth) ist der erste
+  // Verbraucher - das verbundene Geraet muss sich von den uebrigen
+  // abheben. Dieselbe Sprache wie .net-item.active und
+  // .cc-toggle-btn.active (siehe dort): Farbtoenung im Hintergrund plus
+  // ein Randstreifen, aus $accent statt einem fenstereigenen Akzent,
+  // weil zepRow ein geteiltes Bauteil ist und keinem Fenster gehoert.
+  &.active {
+    background: rgba($accent, 0.15);
+    border-left-color: $accent;
+  }
 }
 
 .zep-row-icon { font-size: {{STYLE_ICON_CAPTION}}; color: $subtext; }
@@ -1724,135 +1736,26 @@ $overlay-border: $border;
   background: transparent;
 }
 
-.bt-current {
-  background: rgba($surface, 0.3);
-  border-left: 3px solid $network-accent;
-  padding: {{STYLE_SPACE_16}} {{STYLE_SPACE_16}};
-  margin: {{STYLE_SPACE_12}} {{STYLE_SPACE_12}};
-}
-
-.bt-status-icon {
-  font-size: {{STYLE_ICON_DISPLAY}};
-  color: $network-accent;
-  margin-right: {{STYLE_SPACE_4}};
-
-  // Adapter da, aber aus. DIESELBE Abblendung wie beim Leistenmodul
-  // (#bluetooth.bluetooth-off in src/styles/bar-style.template): ein
-  // ausgeschaltetes Geraet ist ein Zustand und keine Abwesenheit.
-  &.bt-off { color: $subtext; }
-  // Und nichts antwortet. Das ist etwas Drittes, und es ist ein Fehler.
-  &.bt-broken { color: $red; }
-}
-
-.bt-status-label {
-  font-size: {{STYLE_FONT_LEAD}};
-  font-weight: bold;
-  color: $text;
-}
-
-.bt-status-detail {
-  font-size: {{STYLE_FONT_CAPTION}};
-  color: $subtext;
-}
-
-// Die Groesse kommt aus Schrift und Innenabstand, also aus der Leiter in
-// src/sizes.py, und nicht aus einem min-width daneben. Die drei
-// Zahlenpaare, die an den Knoepfen des Netzfensters stehen, sind der
-// Grund fuer den Zaehler in tests/src/test_spacing.py - er darf nicht
-// wachsen, und hier braucht ihn niemand.
-.bt-power-btn, .bt-tool-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  font-size: {{STYLE_FONT_BODY}};
-  color: $network-accent;
-
-  &:hover {
-    background: rgba($network-accent, 0.15);
-    border-color: rgba($network-accent, 0.3);
-  }
-
-  &.active {
-    background: rgba($network-accent, 0.3);
-    border-color: $network-accent;
-  }
-
-  &.inactive {
-    opacity: 0.5;
-  }
-
-  // Ein Knopf, der gerade nichts tun KANN, sieht danach aus. Ohne diese
-  // Zeile waere `set_sensitive(false)` eine Wirkung ohne Anzeige - und
-  // ein Knopf, der auf einen Klick nicht reagiert und dabei aussieht wie
-  // immer, ist von einem kaputten nicht zu unterscheiden.
-  &:disabled {
-    opacity: {{STYLE_OPACITY_DISABLED}};
-  }
-}
-
-.bt-divider {
-  background: rgba($surface, 0.5);
-  min-height: 1px;
-  margin: {{STYLE_SPACE_4}} {{STYLE_SPACE_12}};
-}
-
-.bt-section-title {
-  font-size: {{STYLE_FONT_CAPTION}};
-  font-weight: bold;
-  color: $subtext;
-  letter-spacing: 1px;
-  margin: 0 {{STYLE_SPACE_12}};
-}
-
+// GEGANGEN am 18.08.2026 (task-5): "bt-current", "bt-status-icon"
+// (+ "bt-off"/"bt-broken" darin), "bt-status-label", "bt-status-detail",
+// "bt-power-btn"/"bt-tool-btn" (eine gemeinsame Regel), "bt-divider",
+// "bt-section-title", "bt-item" (+ "active"/hover/disabled darin),
+// "bt-device-icon" (+ "bt-device-connected" darin), "bt-device-name",
+// "bt-device-detail", "bt-connected-icon" - dreizehn Regelgruppen. KEINE
+// echten Selektoren hier in der Aufzaehlung (kein fuehrender Punkt): der
+// Knopfklassen-Zaehler in tests/src/test_button_kit.py liest auch
+// Kommentare mit, und ein Punkt vor einem "btn"-Namen zaehlt dort mit,
+// selbst in Prosa. Das Fenster ruft jetzt zepButton/zepRow/zepToggle/
+// zepSectionLabel/zepDivider aus ags-kit.template auf, siehe dort und
+// ags-bluetooth.template. GEPRUEFT je Klasse einzeln, mit
+// `grep -c '"<klasse>"' src/templates/ags-bluetooth.template` auf 0,
+// bevor die Regel fiel.
+//
+// .bt-list und .bt-empty bleiben: sie gehoeren zum Listenkasten und zur
+// Leerzeile, keinem der fuenf Bauteile - "was ein Fenster besonders
+// macht" (siehe ags-kit.template) - und werden nach wie vor gerufen.
 .bt-list {
   padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_12}};
-}
-
-.bt-item {
-  background: rgba($surface, 0.2);
-  border: none;
-  border-left: 3px solid transparent;
-  border-radius: {{STYLE_RADIUS_CARD}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_12}};
-  margin-bottom: {{STYLE_SPACE_2}};
-
-  &.active {
-    background: rgba($network-accent, 0.15);
-    border-left-color: $network-accent;
-  }
-
-  &:hover {
-    background: rgba($surface, 0.45);
-    border-left-color: rgba($network-accent, 0.5);
-  }
-
-  &:disabled {
-    opacity: {{STYLE_OPACITY_DISABLED}};
-  }
-}
-
-.bt-device-icon {
-  font-size: {{STYLE_ICON_LEAD}};
-  color: $subtext;
-
-  &.bt-device-connected { color: $network-accent; }
-}
-
-.bt-device-name {
-  font-size: {{STYLE_FONT_BODY}};
-  font-weight: bold;
-  color: $text;
-}
-
-.bt-device-detail {
-  font-size: {{STYLE_FONT_CAPTION}};
-  color: $subtext;
-}
-
-.bt-connected-icon {
-  font-size: {{STYLE_ICON_BODY}};
-  color: $green;
 }
 
 // Was dasteht, wenn die Liste leer ist - und WARUM sie leer ist.
