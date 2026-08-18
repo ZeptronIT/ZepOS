@@ -350,22 +350,12 @@ $overlay-border: $border;
   min-height: 650px;
 }
 
-.shortcuts-header {
-  padding-bottom: {{STYLE_SPACE_12}};
-  border-bottom: 1px solid rgba($surface, 0.5);
-
-  .shortcuts-header-icon {
-    font-size: {{STYLE_ICON_TITLE}};
-    color: $shortcuts-accent;
-  }
-
-  .shortcuts-header-title {
-    font-size: {{STYLE_FONT_TITLE}};
-    font-weight: bold;
-    color: $text;
-  }
-}
-
+// ENTFERNT am 18.08.2026: shortcuts-header samt der darin
+// verschachtelten shortcuts-header-icon/shortcuts-header-title -
+// repo-weit ohne Leser (GEPRUEFT: `grep -c '"shortcuts-header'
+// src/templates/ags-shortcuts.template` auf 0). Derselbe Fall wie
+// battery-header/disk-header (siehe dort): ags-shortcuts.template
+// bekommt seinen Kopf seit createOverlayWindow() von der Fabrik.
 .shortcuts-scroll {
   min-height: 480px;
 }
@@ -468,24 +458,20 @@ $overlay-border: $border;
   min-width: 360px;
 }
 
-.battery-header {
-  padding-bottom: {{STYLE_SPACE_12}};
-  border-bottom: 1px solid rgba($surface, 0.5);
-
-  .battery-header-icon {
-    font-size: {{STYLE_ICON_TITLE}};
-    color: $battery-accent;
-  }
-
-  .battery-header-title {
-    font-size: {{STYLE_FONT_TITLE}};
-    font-weight: bold;
-    color: $text;
-  }
-}
-
-.battery-section,
-.battery-status-section {
+// ENTFERNT am 18.08.2026: battery-header samt der darin verschachtelten
+// battery-header-icon/battery-header-title - repo-weit ohne Leser
+// (GEPRUEFT: `grep -c '"battery-header' src/templates/ags-battery.template`
+// auf 0). Derselbe Fall wie das schon entfernte calendar-header und
+// net-header weiter oben: ags-battery.template baut seinen Kopf seit der
+// Umstellung auf createOverlayWindow() nicht mehr selbst, sondern bekommt
+// ihn von der Fabrik (.overlay-header/.overlay-header-icon/
+// .overlay-header-title).
+//
+// ENTFERNT, ebenfalls am 18.08.2026: battery-status-section, der zweite,
+// tote Selektor in der Komma-Liste mit dem lebenden battery-section -
+// GEPRUEFT ebenso auf 0 Leser. battery-section allein traegt die
+// Regel jetzt weiter, unveraendert.
+.battery-section {
   padding: {{STYLE_SPACE_16}} 0;
 }
 
@@ -511,9 +497,9 @@ $overlay-border: $border;
   color: $subtext;
 }
 
-.battery-display {
-  padding-bottom: {{STYLE_SPACE_12}};
-}
+// ENTFERNT am 18.08.2026: battery-display - repo-weit ohne Leser
+// (GEPRUEFT: `grep -c '"battery-display"' src/templates/ags-battery.template`
+// auf 0).
 
 .battery-big-icon {
   font-size: {{STYLE_ICON_HERO}};
@@ -554,28 +540,18 @@ $overlay-border: $border;
   }
 }
 
-.battery-info-title {
-  font-size: {{STYLE_FONT_CAPTION}};
-  color: $subtext;
-}
-
-.battery-info-value {
-  font-size: {{STYLE_FONT_BODY}};
-  font-weight: bold;
-  color: $text;
-}
-
-.battery-profile-section,
-.battery-sys-section {
+// ENTFERNT am 18.08.2026: battery-info-title, battery-info-value und
+// battery-section-title - repo-weit ohne Leser (GEPRUEFT: `grep -c` je
+// Klasse einzeln gegen ags-battery.template, jedes Mal 0).
+//
+// ENTFERNT, ebenfalls am 18.08.2026: battery-sys-section, der zweite,
+// tote Selektor in der Komma-Liste mit dem lebenden
+// battery-profile-section - GEPRUEFT ebenso auf 0 Leser.
+// battery-profile-section allein traegt die Regel jetzt weiter,
+// unveraendert.
+.battery-profile-section {
   padding: {{STYLE_SPACE_12}} 0;
   border-top: 1px solid rgba($surface, 0.3);
-}
-
-.battery-section-title {
-  font-size: {{STYLE_FONT_BODY}};
-  font-weight: bold;
-  color: $subtext;
-  margin-bottom: {{STYLE_SPACE_12}};
 }
 
 .battery-profile-buttons {
@@ -616,22 +592,15 @@ $overlay-border: $border;
   min-width: 480px;
 }
 
-.disk-header {
-  padding-bottom: {{STYLE_SPACE_12}};
-  border-bottom: 1px solid rgba($surface, 0.5);
-
-  .disk-header-icon {
-    font-size: {{STYLE_ICON_TITLE}};
-    color: $disk-accent;
-  }
-
-  .disk-header-title {
-    font-size: {{STYLE_FONT_TITLE}};
-    font-weight: bold;
-    color: $text;
-  }
-}
-
+// ENTFERNT am 18.08.2026: disk-header samt der darin verschachtelten
+// disk-header-icon/disk-header-title - repo-weit ohne Leser (GEPRUEFT:
+// `grep -c '"disk-header"' src/templates/ags-disk.template` auf 0).
+// Derselbe Fall wie battery-header (siehe dort): ags-disk.template
+// bekommt seinen Kopf seit createOverlayWindow() von der Fabrik
+// (.overlay-header/.overlay-header-icon/.overlay-header-title).
+// disk-header-subtitle bleibt UNVERAENDERT stehen - anders als der Name
+// vermuten laesst, ist sie NICHT Teil dieses Kopfs, sondern eine eigene,
+// lebende Regel (totalNameLabel in ags-disk.template).
 .disk-header-subtitle {
   font-size: {{STYLE_FONT_BODY}};
   color: $subtext;
@@ -641,49 +610,30 @@ $overlay-border: $border;
   padding: {{STYLE_SPACE_16}} 0;
 }
 
-.disk-total-percent {
-  font-size: {{STYLE_FONT_HERO}};
-  font-weight: bold;
-  color: $disk-accent;
-}
-
-.disk-total-name {
-  font-size: {{STYLE_FONT_LEAD}};
-  font-weight: bold;
-  color: $text;
-}
-
-.disk-total-label {
-  font-size: {{STYLE_FONT_BODY}};
-  color: $subtext;
-}
-
-.disk-main-progress {
-  min-height: 10px;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  background: rgba($surface, 0.5);
-
-  progress {
-    background: $disk-accent;
-    border-radius: {{STYLE_RADIUS_CONTROL}};
-  }
-
-  &.warning progress {
-    background: $yellow;
-  }
-
-  &.critical progress {
-    background: $red;
-  }
-}
-
+// ENTFERNT am 18.08.2026: disk-total-percent, disk-total-name und
+// disk-total-label - repo-weit ohne Leser (GEPRUEFT: `grep -c` je Klasse
+// einzeln gegen ags-disk.template, jedes Mal 0). Ueberbleibsel einer
+// aelteren Gesamt-Anzeige, seit der Ring-Visualisierung
+// (disk-ring-container/disk-ring-percent/disk-ring-label weiter unten)
+// nicht mehr gebaut.
+//
+// ENTFERNT, ebenfalls am 18.08.2026: disk-main-progress samt der drei
+// darin verschachtelten Uebergangsregeln (progress/&.warning/&.critical)
+// - aus demselben Grund ohne Leser, abgeloest durch denselben Ring. Ihre
+// zweite Fundstelle in der globalen Uebergangsliste ("DIE BEWEGUNG")
+// weiter unten ist mitentfernt (siehe dort).
 .disk-stat-value {
   font-size: {{STYLE_FONT_TITLE}};
   font-weight: bold;
   color: $text;
 }
 
-.disk-stat-title,
+// ENTFERNT am 18.08.2026: disk-stat-title, der erste, tote Selektor in
+// der Komma-Liste mit dem lebenden disk-stat-label (GEPRUEFT: `grep -c
+// '"disk-stat-title"' src/templates/ags-disk.template` auf 0, waehrend
+// disk-stat-label ueber usedTitle/freeTitle/sizeTitle weiterhin dreimal
+// gelesen wird). disk-stat-label allein traegt die Regel jetzt weiter,
+// unveraendert.
 .disk-stat-label {
   font-size: {{STYLE_FONT_CAPTION}};
   color: $subtext;
@@ -842,23 +792,15 @@ $overlay-border: $border;
   min-width: 320px;
 }
 
-.cc-header {
-  padding-bottom: {{STYLE_SPACE_8}};
-  border-bottom: 1px solid rgba($surface, 0.5);
-  margin-bottom: {{STYLE_SPACE_8}};
-
-  .cc-header-icon {
-    font-size: {{STYLE_ICON_LEAD}};
-    color: $control-accent;
-  }
-
-  .cc-header-title {
-    font-size: {{STYLE_FONT_BODY}};
-    font-weight: bold;
-    color: $text;
-  }
-}
-
+// ENTFERNT am 18.08.2026: cc-header samt der darin verschachtelten
+// cc-header-icon/cc-header-title - repo-weit ohne Leser (GEPRUEFT:
+// `grep -c '"cc-header' src/templates/ags-control-center.template` auf
+// 0). Derselbe Fall wie battery-header/disk-header (siehe dort):
+// ags-control-center.template bekommt seinen Kopf seit
+// createOverlayWindow() von der Fabrik. Bereits von Task D
+// (gruppe-D-report.md, "Weitere gefundene tote Regeln") gefunden und
+// gemeldet, aber bewusst stehen gelassen, weil sie ausserhalb ihres
+// Umfangs lag - jetzt entfernt.
 .cc-sublabel {
   font-size: {{STYLE_FONT_CAPTION}};
   color: $subtext;
@@ -870,61 +812,6 @@ $overlay-border: $border;
 // in irgendeiner Vorlage) - Ueberbleibsel eines aelteren
 // Kontrollzentrum-Entwurfs vor dem heutigen Aufbau. Eine der zehn
 // Klassen aus dem Auftrag, siehe gruppe-D-report.md.
-
-.cc-toggle-box {
-  background: rgba($surface, 0.3);
-  border: 1px solid transparent;
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-
-  &:hover {
-    background: rgba($surface, 0.5);
-    border-color: rgba($control-accent, 0.3);
-  }
-}
-
-.cc-toggle-label {
-  font-size: {{STYLE_FONT_CAPTION}};
-  color: $text;
-}
-
-.cc-hw-row {
-  padding: {{STYLE_SPACE_8}} 0;
-  background: rgba($surface, 0.2);
-  margin: {{STYLE_SPACE_4}} 0;
-}
-
-.cc-hw-chip {
-  padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_8}};
-}
-
-.cc-hw-chip-icon {
-  font-size: {{STYLE_ICON_CAPTION}};
-  color: $control-accent;
-}
-
-.cc-hw-chip-value {
-  font-size: {{STYLE_FONT_BODY}};
-  font-weight: bold;
-  color: $text;
-}
-
-.cc-slider-row {
-  padding: {{STYLE_SPACE_4}} 0;
-}
-
-.cc-slider-icon {
-  font-size: {{STYLE_ICON_CAPTION}};
-  color: $control-accent;
-  min-width: 20px;
-}
-
-.cc-slider-value {
-  font-size: {{STYLE_FONT_CAPTION}};
-  font-weight: bold;
-  color: $text;
-  min-width: 35px;
-  font-family: monospace;
-}
 
 // ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): vier zusammen-
 // gehoerige Regeln aus demselben alten Kontrollzentrum-Entwurf, alle
@@ -948,28 +835,32 @@ $overlay-border: $border;
 // Schalter trug) und cc-toggle-btn samt seiner zwei verschachtelten
 // Kindregeln .cc-toggle-icon/.cc-toggle-label - eine der zehn Klassen.
 // Die STANDALONE .cc-toggle-btn.active in der globalen Uebergangsliste
-// weiter unten in dieser Datei ist mitentfernt (siehe dort); die
-// eigenstaendige .cc-toggle-label (ohne cc-toggle-btn davor, Teil von
-// cc-toggle-box) bleibt UNVERAENDERT stehen - sie ist zwar ebenfalls
-// ohne Leser, aber nicht Teil dieses Auftrags (siehe Bericht,
-// Abschnitt "weitere gefundene tote Regeln").
-
-.cc-sliders {
-  padding: {{STYLE_SPACE_12}} 0;
-  border-top: 1px solid rgba($surface, 0.3);
-}
-
-.cc-slider-icon {
-  font-size: {{STYLE_ICON_LEAD}};
-  color: $control-accent;
-  min-width: 24px;
-}
+// weiter unten in dieser Datei ist mitentfernt (siehe dort).
+//
+// BERICHTIGT am 18.08.2026 (heutiger Auftrag "die toten css regeln raus"):
+// hier stand bis dahin, cc-toggle-box und die eigenstaendige
+// cc-toggle-label (ohne cc-toggle-btn davor, Teil von cc-toggle-box)
+// blieben "UNVERAENDERT stehen", weil sie ausserhalb des Umfangs von
+// Task D lagen. Beide waren GEPRUEFT ebenfalls ohne Leser - GEPRUEFT
+// erneut, `grep -c` je Klasse gegen ags-control-center.template, beide
+// 0 - und sind jetzt mit entfernt, zusammen mit cc-hw-row/cc-hw-chip/
+// cc-hw-chip-icon/cc-hw-chip-value (derselbe alte Kachel-Entwurf, siehe
+// cc-hw-grid/cc-hw-item/cc-hw-icon/cc-hw-title/cc-hw-value weiter unten)
+// und cc-slider-row/cc-slider-value (die Zeile, die die ERSTE der zwei
+// gleichnamigen cc-slider-icon-Regeln trug, siehe unten) - alle ohne
+// Leser, alle Ueberbleibsel desselben aelteren Kontrollzentrum-Entwurfs.
 
 // ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): die ERSTE der
 // zwei gleichnamigen cc-icon-btn-Regeln in dieser Datei (die zweite
 // steht weiter unten, direkt vor .cc-ip-row) - beide repo-weit ohne
 // Leser, seit volBtn/micBtn (die einzigen bisherigen Verbraucher) auf
 // zepButton umgestellt sind. Eine der zehn Klassen aus dem Auftrag.
+//
+// ENTFERNT, ebenfalls am 18.08.2026 (heutiger Auftrag): cc-sliders (die
+// Huelle, die diesen Knopf-Kandidaten trug) und BEIDE gleichnamigen
+// cc-slider-icon-Regeln dieser Datei (die zweite stand hier, die erste
+// bei cc-slider-row oben) - GEPRUEFT `grep -c '"cc-slider-icon"'
+// src/templates/ags-control-center.template` auf 0.
 
 .cc-slider {
   min-height: 8px;
@@ -992,11 +883,13 @@ $overlay-border: $border;
   }
 }
 
-.cc-actions {
-  padding-top: {{STYLE_SPACE_12}};
-  border-top: 1px solid rgba($surface, 0.3);
-}
-
+// ENTFERNT am 18.08.2026: cc-actions - repo-weit ohne Leser (GEPRUEFT:
+// `grep -c '"cc-actions"' src/templates/ags-control-center.template`
+// auf 0). Bereits von Task D gefunden und gemeldet (gruppe-D-report.md,
+// "Weitere gefundene tote Regeln"), aber ausserhalb ihres Umfangs
+// stehen gelassen - jetzt entfernt. cc-action-btn bleibt UNVERAENDERT
+// stehen: sie traegt "Clear all" in ags-notifications.template
+// (clearButton) und ist damit lebendig.
 .cc-action-btn {
   background: rgba($surface, 0.4);
   border: 1px solid transparent;
@@ -1083,10 +976,12 @@ $overlay-border: $border;
   font-family: monospace;
 }
 
-.cc-toggle-small {
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
-}
-
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): cc-toggle-small - repo-weit
+// ohne Leser (GEPRUEFT: `grep -c '"cc-toggle-small"'
+// src/templates/ags-control-center.template` auf 0). Bereits von Task D
+// gefunden und gemeldet (gruppe-D-report.md), aber ausserhalb ihres
+// Umfangs stehen gelassen - jetzt entfernt.
+//
 // ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): cc-expand-btn
 // hatte repo-weit KEINEN Leser (Ueberbleibsel eines aelteren Entwurfs,
 // wie cc-mini-btn oben). Eine der zehn Klassen aus dem Auftrag.
@@ -1116,16 +1011,15 @@ $overlay-border: $border;
   margin: {{STYLE_SPACE_8}} 0;
 }
 
-.cc-hw-grid {
-  padding: {{STYLE_SPACE_8}} 0;
-}
-
-.cc-hw-item {
-  background: rgba($surface, 0.3);
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
-  min-width: 90px;
-  border: 1px solid $control-accent;
-}
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): cc-hw-grid und cc-hw-item -
+// repo-weit ohne Leser (GEPRUEFT: `grep -c` je Klasse einzeln gegen
+// ags-control-center.template, jedes Mal 0). Ueberbleibsel desselben
+// alten Kachel-Entwurfs wie cc-hw-row/cc-hw-chip* oben und
+// cc-hw-icon/cc-hw-title/cc-hw-value weiter unten - ags-control-center.
+// template zeigt Hardware heute als einzelne deskRow()-Zeile mit
+// btop-Knopf, kein Kachel-Gitter mehr. Bereits von Task D gefunden und
+// gemeldet (gruppe-D-report.md), aber ausserhalb ihres Umfangs stehen
+// gelassen - jetzt entfernt.
 
 // Icon-specific colors
 //
@@ -1140,31 +1034,36 @@ $overlay-border: $border;
 .printer-icon { color: $wallpaper-accent; }
 .helpers-icon { color: $control-accent; }
 
-// VPN status colors
-.vpn-connected { color: $green; }
-.vpn-disconnected { color: $subtext; }
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): "VPN status colors" -
+// vpn-connected und vpn-disconnected - repo-weit ohne Leser (GEPRUEFT:
+// `grep -c` je Klasse einzeln gegen ags-vpn.template/
+// ags-vpn-settings.template, jedes Mal 0). Namensvettern der lebenden
+// .vpn-connected-icon &.connected/&.disconnected und .vpn-status-icon
+// &.connected/&.disconnected weiter unten - diese beiden standalone
+// Regeln hier sind KEINE Kompositionsglieder davon (die Klassennamen
+// sind woertlich verschieden), sondern ein eigenstaendiges,
+// unbenutztes drittes Paar.
 
 // Watchdog status colors
-.watchdog-ok, .cc-icon.active { color: $green; }
-.watchdog-warning { color: $yellow; }
-.watchdog-error { color: $red; }
-.watchdog-stopped { color: $subtext; }
+//
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): watchdog-ok, der erste,
+// tote Selektor in der Komma-Liste mit dem lebenden .cc-icon.active -
+// GEPRUEFT: getWatchdogClass() in ags-control-center.template haengt
+// nur ".active" an watchdogIcon (das selbst "cc-icon" traegt), NIE
+// woertlich "watchdog-ok". .cc-icon.active allein traegt die Regel
+// jetzt weiter, unveraendert.
+//
+// ENTFERNT, ebenfalls am 18.08.2026: watchdog-warning, watchdog-error
+// und watchdog-stopped - repo-weit ohne Leser aus demselben Grund
+// (GEPRUEFT je einzeln, `grep -c` gegen ags-control-center.template,
+// jedes Mal 0).
+.cc-icon.active { color: $green; }
 
-.cc-hw-icon {
-  font-size: {{STYLE_ICON_LEAD}};
-  color: $control-accent;
-}
-
-.cc-hw-title {
-  font-size: {{STYLE_FONT_CAPTION}};
-  color: $subtext;
-}
-
-.cc-hw-value {
-  font-size: {{STYLE_FONT_BODY}};
-  font-weight: bold;
-  color: $text;
-}
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): cc-hw-icon, cc-hw-title
+// und cc-hw-value - repo-weit ohne Leser (GEPRUEFT je einzeln, `grep -c`
+// gegen ags-control-center.template, jedes Mal 0). Letzte drei Regeln
+// desselben alten Kachel-Entwurfs wie cc-hw-grid/cc-hw-item/cc-hw-row/
+// cc-hw-chip* (siehe dort).
 
 // ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): drei
 // zusammengehoerige Regeln aus demselben alten Kontrollzentrum-Entwurf
@@ -1461,36 +1360,25 @@ $overlay-border: $border;
   min-width: 540px;
 }
 
-.wp-header {
-  padding-bottom: {{STYLE_SPACE_12}};
-  border-bottom: 1px solid rgba($surface, 0.5);
-
-  .wp-header-icon {
-    font-size: {{STYLE_ICON_TITLE}};
-    color: $wallpaper-accent;
-  }
-
-  .wp-header-title {
-    font-size: {{STYLE_FONT_TITLE}};
-    font-weight: bold;
-    color: $text;
-  }
-}
-
-.wp-current {
-  padding: {{STYLE_SPACE_8}} 0;
-}
-
-.wp-current-title {
-  font-size: {{STYLE_FONT_CAPTION}};
-  color: $subtext;
-}
-
-.wp-current-name {
-  font-size: {{STYLE_FONT_BODY}};
-  color: $text;
-}
-
+// ENTFERNT am 18.08.2026: wp-header samt der darin verschachtelten
+// wp-header-icon/wp-header-title - repo-weit ohne Leser (GEPRUEFT:
+// `grep -c '"wp-header' src/templates/ags-wallpaper.template` auf 0).
+// Derselbe Fall wie battery-header/disk-header (siehe dort):
+// ags-wallpaper.template bekommt seinen Kopf seit createOverlayWindow()
+// von der Fabrik.
+//
+// ENTFERNT, ebenfalls am 18.08.2026 (heutiger Auftrag): wp-current,
+// wp-current-title, wp-current-name UND wp-current-label - repo-weit
+// ohne Leser (GEPRUEFT je einzeln, `grep -c` gegen ags-wallpaper.
+// template, jedes Mal 0). BERICHTIGT im selben Arbeitsgang: hier stand
+// zunaechst faelschlich, wp-current-label sei "die tatsaechlich benutzte
+// Regel" und bleibe stehen - eine ungeprueften Annahme nach dem Vorbild
+// von disk-header-subtitle (das TATSAECHLICH einen Namensvetter-Leser
+// hat). Erneute Pruefung ergab: `grep -n "wp-current-label"
+// src/templates/ags-wallpaper.template` findet nichts - die ganze
+// "aktuelle Tapete"-Anzeige (wp-current/-title/-name/-label) ist
+// Ueberbleibsel, ags-wallpaper.template zeigt heute nur noch das
+// Vorschaubilder-Gitter. Alle vier jetzt entfernt.
 .wp-scroll {
   min-height: 350px;
 }
@@ -1499,9 +1387,9 @@ $overlay-border: $border;
   padding: {{STYLE_SPACE_8}};
 }
 
-.wp-thumb-child {
-  margin: {{STYLE_SPACE_4}};
-}
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): wp-thumb-child - repo-weit
+// ohne Leser (GEPRUEFT: `grep -c '"wp-thumb-child"'
+// src/templates/ags-wallpaper.template` auf 0).
 
 .wp-thumb {
   background: rgba($surface, 0.4);
@@ -1585,10 +1473,9 @@ $overlay-border: $border;
   color: $wallpaper-accent;
 }
 
-.wp-current-label {
-  font-size: {{STYLE_FONT_BODY}};
-  color: $text;
-}
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): wp-current-label - siehe
+// die Berichtigung bei wp-current/wp-current-title/wp-current-name
+// weiter oben (Abschnitt WALLPAPER SELECTOR).
 
 .wp-divider {
   background: rgba($surface, 0.3);
@@ -1616,23 +1503,20 @@ $overlay-border: $border;
 }
 
 // ===== CUSTOM COLOR PICKER =====
-.cp-window {
-  background: transparent;
-}
-
-// Der Farbwaehler steht IN einem Fenster, das schon Glas ist, und malt
-// deshalb deckend weiter - eine zweite Glasschicht auf der ersten
-// zeigte den Stil-Editor durch den Farbwaehler hindurch. Seine zwei
-// Graustufen (#0a0a0a und #2a2a2a) sind am 12.08.2026 trotzdem
-// gegangen: sie waren die letzte Stelle in dieser Datei, an der eine
-// Flaeche eine Farbe hatte, die kein Thema erreicht.
-.cp-container {
-  background: $bg;
-  border: 1px solid $border;
-  padding: {{STYLE_SPACE_16}};
-  font-family: {{STYLE_FONT_FAMILY}};
-}
-
+//
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): cp-window und cp-container,
+// die Huelle eines aelteren, EIGENEN Farbwaehler-Fensters - repo-weit
+// ohne Leser (GEPRUEFT: `grep -c '"cp-window"\|"cp-container"'
+// src/templates/ags-style-editor.template` auf 0 fuer beide). Der
+// Farbwaehler ist heute eine INLINE-Ansicht im Stil-Editor selbst
+// (siehe "INLINE PICKER" weiter unten, se-picker-content/-header/-back/
+// -inner) und braucht darum keine eigene Fensterhuelle mehr - dieselbe
+// Abloesung wie bei den *-header-Trios (siehe battery-header oben). Die
+// uebrigen cp-*-Regeln (cp-sv-area, cp-hue-bar, cp-preview, cp-hex-entry,
+// cp-presets-label, cp-presets, cp-preset-btn) bleiben UNVERAENDERT
+// stehen: sie tragen die Farbflaechen/Textfelder/Kacheln INNERHALB
+// dieser Inline-Ansicht und werden weiterhin gelesen (GEPRUEFT: `grep -c`
+// je Klasse gegen ags-style-editor.template, jedes Mal >= 1).
 .cp-sv-area {
   border: 1px solid rgba($text, 0.15);
 }
@@ -1661,11 +1545,11 @@ $overlay-border: $border;
   }
 }
 
-.cp-info-row {
-  padding-bottom: {{STYLE_SPACE_12}};
-  border-bottom: 1px solid rgba($surface, 0.5);
-}
-
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): cp-info-row - repo-weit
+// ohne Leser (GEPRUEFT: `grep -c '"cp-info-row"'
+// src/templates/ags-style-editor.template` auf 0). Ueberbleibsel
+// desselben aelteren, eigenstaendigen Farbwaehler-Fensters wie
+// cp-window/cp-container (siehe dort).
 .cp-presets-label {
   font-size: {{STYLE_FONT_CAPTION}};
   font-weight: bold;
@@ -1747,22 +1631,12 @@ $overlay-border: $border;
   min-width: 370px;
 }
 
-.se-header {
-  padding-bottom: {{STYLE_SPACE_12}};
-  border-bottom: 1px solid rgba($surface, 0.5);
-
-  .se-header-icon {
-    font-size: {{STYLE_ICON_TITLE}};
-    color: $style-accent;
-  }
-
-  .se-header-title {
-    font-size: {{STYLE_FONT_TITLE}};
-    font-weight: bold;
-    color: $text;
-  }
-}
-
+// ENTFERNT am 18.08.2026: se-header samt der darin verschachtelten
+// se-header-icon/se-header-title - repo-weit ohne Leser (GEPRUEFT:
+// `grep -c '"se-header' src/templates/ags-style-editor.template` auf
+// 0). Derselbe Fall wie battery-header/disk-header (siehe dort):
+// ags-style-editor.template bekommt seinen Kopf seit
+// createOverlayWindow() von der Fabrik.
 .se-scroll {
   min-height: 400px;
 }
@@ -1851,10 +1725,11 @@ $overlay-border: $border;
   }
 }
 
-.se-header-subtitle {
-  font-size: {{STYLE_FONT_CAPTION}};
-  color: $subtext;
-}
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): se-header-subtitle - anders
+// als disk-header-subtitle (siehe dort, die bleibt) ist DIESE hier
+// wirklich ohne Leser (GEPRUEFT: `grep -c '"se-header-subtitle"'
+// src/templates/ags-style-editor.template` auf 0) - kein Namensvetter-
+// Fund wie bei disk, sondern tatsaechlich Teil des toten se-header-Kopfs.
 
 // Style Editor Widgets Tab
 .se-widgets-content {
@@ -2007,22 +1882,12 @@ $overlay-border: $border;
   min-width: 400px;
 }
 
-.vpn-header {
-  padding-bottom: {{STYLE_SPACE_12}};
-  border-bottom: 1px solid rgba($surface, 0.5);
-
-  .vpn-header-icon {
-    font-size: {{STYLE_ICON_TITLE}};
-    color: $vpn-accent;
-  }
-
-  .vpn-header-title {
-    font-size: {{STYLE_FONT_TITLE}};
-    font-weight: bold;
-    color: $text;
-  }
-}
-
+// ENTFERNT am 18.08.2026: vpn-header samt der darin verschachtelten
+// vpn-header-icon/vpn-header-title - repo-weit ohne Leser (GEPRUEFT:
+// `grep -c '"vpn-header' src/templates/ags-vpn.template` auf 0).
+// Derselbe Fall wie battery-header/disk-header (siehe dort):
+// ags-vpn.template bekommt seinen Kopf seit createOverlayWindow() von
+// der Fabrik.
 .vpn-status {
   background: rgba($surface, 0.3);
   padding: {{STYLE_SPACE_12}};
@@ -2049,11 +1914,12 @@ $overlay-border: $border;
   color: $text;
 }
 
-.vpn-status-detail {
-  font-size: {{STYLE_FONT_BODY}};
-  color: $subtext;
-  font-family: monospace;
-}
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): vpn-status-detail -
+// repo-weit ohne Leser (GEPRUEFT: `grep -c '"vpn-status-detail"'
+// src/templates/ags-vpn.template` auf 0). Kein Namensvetter-Fund wie
+// bei disk-header-subtitle - .vpn-connected-detail (dieselbe Rolle in
+// der verbundenen Ansicht) ist ein woertlich anderer Klassenname und
+// bleibt UNVERAENDERT lebendig.
 
 .vpn-form {
   padding: {{STYLE_SPACE_12}} 0;
@@ -2195,22 +2061,13 @@ $overlay-border: $border;
   min-width: 480px;
 }
 
-.vpn-settings-header {
-  padding-bottom: {{STYLE_SPACE_12}};
-  border-bottom: 1px solid rgba($surface, 0.5);
-
-  .vpn-settings-icon {
-    font-size: {{STYLE_ICON_TITLE}};
-    color: $vpn-accent;
-  }
-
-  .vpn-settings-title {
-    font-size: {{STYLE_FONT_TITLE}};
-    font-weight: bold;
-    color: $text;
-  }
-}
-
+// ENTFERNT am 18.08.2026: vpn-settings-header samt der darin
+// verschachtelten vpn-settings-icon/vpn-settings-title - repo-weit ohne
+// Leser (GEPRUEFT: `grep -c '"vpn-settings-icon"\|"vpn-settings-title"\|
+// "vpn-settings-header"' src/templates/ags-vpn-settings.template` auf 0
+// fuer alle drei). Derselbe Fall wie battery-header/disk-header (siehe
+// dort): ags-vpn-settings.template bekommt seinen Kopf seit
+// createOverlayWindow() von der Fabrik.
 .vpn-tab-bar {
   padding: {{STYLE_SPACE_8}} 0;
   background: rgba($surface, 0.3);
@@ -2291,17 +2148,14 @@ $overlay-border: $border;
   }
 }
 
-.vpn-list-item-name {
-  font-size: {{STYLE_FONT_BODY}};
-  font-weight: bold;
-  color: $text;
-}
-
-.vpn-list-item-value {
-  font-size: {{STYLE_FONT_BODY}};
-  color: $subtext;
-  font-family: monospace;
-}
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): vpn-list-item-name und
+// vpn-list-item-value - repo-weit ohne Leser (GEPRUEFT: `grep -c` je
+// Klasse einzeln gegen ags-vpn-settings.template, jedes Mal 0).
+// ags-vpn-settings.template zeigt Netz-/DNS-Eintraege heute als
+// Gtk.Entry direkt im Eintrag (rebuildNetList()/rebuildDnsList(),
+// dieselbe Umstellung wie bei vpn-list-item-actions/vpn-list-btn, Task
+// E) statt als Name/Wert-Paar - vpn-list-item selbst (die Zeile) bleibt
+// UNVERAENDERT stehen, sie traegt die Eintraege weiterhin.
 
 // ENTFERNT am 18.08.2026 (Task E): vpn-list-item-actions samt der darin
 // verschachtelten vpn-list-btn. GEPRUEFT repo-weit vor jeder Aenderung
@@ -2346,24 +2200,9 @@ $overlay-border: $border;
 //     Handlung, aber nicht die Hauptsache des Fensters).
 // Sechs der vierzehn Klassen aus dem Auftrag, siehe gruppe-E-report.md.
 
-.vpn-mini-label {
-  font-size: {{STYLE_FONT_CAPTION}};
-  color: $subtext;
-  min-width: 40px;
-}
-
-.vpn-entry-small {
-  background: rgba($surface, 0.3);
-  border: 1px solid rgba($surface, 0.5);
-  padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_8}};
-  color: $text;
-  font-size: {{STYLE_FONT_BODY}};
-
-  &:focus {
-    border-color: $vpn-accent;
-    background: rgba($surface, 0.5);
-  }
-}
+// ENTFERNT am 18.08.2026 (heutiger Auftrag): vpn-mini-label und
+// vpn-entry-small - repo-weit ohne Leser (GEPRUEFT: `grep -c` je Klasse
+// einzeln gegen ags-vpn-settings.template, jedes Mal 0).
 
 .vpn-psk-status {
   font-size: {{STYLE_FONT_CAPTION}};
@@ -2554,8 +2393,19 @@ $overlay-border: $border;
 // animiert auch die, an die niemand gedacht hat - eine Breite, die sich
 // beim Fuellen einer Liste aendert, laeuft dann sichtbar auseinander.
 
+// .launcher-item:hover stand hier bis zum 18.08.2026 (heutiger Auftrag,
+// "die toten css regeln raus"). GEFUNDEN: .launcher-item selbst hat
+// zwei Eigentuemer mit demselben Namen in zwei VOELLIG getrennten
+// Stylesheets - src/styles/hyprlaunch-style.template (der native
+// hyprlaunch-Prozess, C++, gtk_widget_add_css_class in
+// LauncherRenderer.cpp - dort lebendig) und DIESE Datei. Es gibt kein
+// AGS-Fenster, das je die Klasse "launcher-item" traegt (GEPRUEFT:
+// `grep -rn launcher-item src/templates/*.template` ausser dieser
+// Datei selbst: kein Treffer) - der Verweis hier zeigte auf ein Fenster
+// aus einem ANDEREN Prozess, dessen CSS-Provider dieses Stylesheet
+// nie laedt (siehe GLASS_PLATES in src/style_definition.py: getrennte
+// Eintraege, getrennte Dateien). ENTFERNT.
 button:hover,
-.launcher-item:hover,
 .wp-thumb:hover,
 .se-theme-card:hover {
   transition: background-color {{STYLE_MOTION_INSTANT}} {{STYLE_MOTION_CURVE}},
@@ -2576,8 +2426,11 @@ button:hover,
               border-color {{STYLE_MOTION_BASE}} {{STYLE_MOTION_CURVE}};
 }
 
+// .disk-main-progress progress stand hier bis zum 18.08.2026 (heutiger
+// Auftrag) - mit disk-main-progress selbst entfernt (siehe oben, Abschnitt
+// DISK USAGE), derselbe Fall wie cc-toggle-btn.active oben: eine zweite
+// Fundstelle, die nach dem Fall der Basisregel folgenlos weiterstand.
 .battery-progress progress,
-.disk-main-progress progress,
 .disk-partition-progress progress {
   transition: min-width {{STYLE_MOTION_ENTER}} {{STYLE_MOTION_CURVE}};
 }
