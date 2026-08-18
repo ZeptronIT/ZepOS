@@ -46,6 +46,26 @@ msgstr "Aussehen und Farben"
 msgid "Control center"
 msgstr "Kontrollzentrum"
 
+#: src/templates/ags-control-center.template:530
+msgid "CONNECTIONS"
+msgstr "VERBINDUNGEN"
+
+#: src/templates/ags-control-center.template:531
+msgid "SYSTEM"
+msgstr "SYSTEM"
+
+#: src/templates/ags-control-center.template:540
+msgid "This page is moving."
+msgstr "Diese Seite zieht gerade um."
+
+#: src/templates/ags-control-center.template:569
+msgid "Sound"
+msgstr "Ton"
+
+#: src/templates/ags-control-center.template:571
+msgid "Display"
+msgstr "Anzeige"
+
 #: src/templates/ags-bar.template:1351
 msgid "What no longer fits on this screen"
 msgstr "Was auf diesem Schirm nicht mehr hinpasst"

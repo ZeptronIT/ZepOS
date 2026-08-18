@@ -146,6 +146,19 @@ app.start({
     //
     // Dass widgets.wallpaper erst weiter unten entsteht, macht nichts:
     // toggleByName schlaegt beim KLICK nach und nicht beim Bauen.
+    //
+    // UNVERAENDERT SEIT AUFGABE 6 (18.08.2026, "Das Kontrollzentrum wird
+    // die Schale"), UND DAS IST GEPRUEFT, NICHT VERGESSEN
+    //     ControlCenter() baut intern seit Aufgabe 6 eine Schale
+    //     (createShellWindow(), ags-overlay-utils.template) statt eines
+    //     einzelnen Aufklappfensters - ihr Rueckgabetyp ist jetzt
+    //     ShellWidget statt OverlayWidget. Diese Zeile bleibt trotzdem
+    //     woertlich stehen: ShellWidget ERWEITERT OverlayWidget nur (um
+    //     zeigeSeite()), es entzieht ihm nichts, und `widgets` ist als
+    //     `Record<string, OverlayWidget | null>` typisiert - ein
+    //     ShellWidget passt dort ohne Umbau hinein. Aufgabenblatt 6,
+    //     Schritt 3, woertlich: "Der Zweig reqStr.includes(\"control\")
+    //     ... bleibt und ruft weiterhin toggleWidget(widgets.control)."
     try {
       widgets.control = ControlCenter(toggleByName)
       console.log("ControlCenter loaded successfully")

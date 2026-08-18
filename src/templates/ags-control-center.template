@@ -27,9 +27,15 @@ import GLib from "gi://GLib"
 // Fund lag diesmal im eigenen Auftragsfenster, darum repariert statt
 // nur gemeldet.
 import Pango from "gi://Pango"
-import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
+// SEIT AUFGABE 6 (18.08.2026, "Das Kontrollzentrum wird die Schale"):
+// createShellWindow statt createOverlayWindow - dieses Fenster IST jetzt
+// die Schale aus ags-overlay-utils.template (Aufgabe 5), nicht mehr ein
+// Aufklappfenster daneben. ShellWidget ersetzt OverlayWidget als
+// Rueckgabetyp (ShellWidget ERWEITERT OverlayWidget um zeigeSeite());
+// ShellSeite ist der Typ jeder einzelnen Seite der Seitenleiste.
+import { createShellWindow, ShellSeite, ShellWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
-import { zepButton, ZepRolle } from "../utils/kit"
+import { zepButton, ZepRolle, zepStateHeader } from "../utils/kit"
 
 const HOME = GLib.get_home_dir()
 // Das Widget laeuft eigenstaendig unter AGS und kann paths.py nicht
@@ -274,10 +280,28 @@ async function getHelpersCount(): Promise<number> {
   }
 }
 
-// Der Weg, dieses Fenster zu schliessen - buildContent setzt ihn
+// Der Weg, dieses Fenster zu schliessen - bauen() der Seite "general"
+// setzt ihn (siehe dort). Frueher setzte ihn buildContent von
+// createOverlayWindow(); die Fabrik heisst seit Aufgabe 6 (18.08.2026)
+// createShellWindow(), und ihre Seiten heissen bauen() statt
+// buildContent - derselbe Rueckruf, ein anderer Name.
 let closeFn: (() => void) | null = null
 
-/** Das Kontrollzentrum.
+/** Das Kontrollzentrum - seit Aufgabe 6 (18.08.2026) die SCHALE selbst.
+ *
+ * Frueher ein eigenes Aufklappfenster (createOverlayWindow), jetzt der
+ * erste - und bislang einzige - Aufrufer von createShellWindow()
+ * (Aufgabe 5, ags-overlay-utils.template): eine Seitenleiste links,
+ * eine Seite rechts. Was dieses Fenster VORHER zeigte, ist unveraendert
+ * die Seite "general" unter SYSTEM - nichts ist weggenommen, siehe die
+ * Zusage vom 17.08.2026 ("alle funktionen auch im control panel aber
+ * auch ausserhalb"). Netzwerk, Bluetooth und VPN bekommen ihre
+ * Eintraege unter VERBINDUNGEN schon jetzt, zeigen aber bis zu den
+ * Aufgaben 7-9 nur einen Umzugshinweis (siehe stubSeite() unten) - ein
+ * Eintrag, der ins Leere fuehrt, ist schlimmer als einer, der sagt, was
+ * los ist. Dasselbe gilt fuer Ton und Anzeige unter SYSTEM: die
+ * Spezifikation sieht sie vor, dieser Plan baut sie nicht (siehe
+ * Bericht zu Aufgabe 6).
  *
  * `toggle` oeffnet ein anderes Aufklappfenster DIESES Prozesses - genau
  * die Funktion, die auch die Leiste bekommt (toggleByName in
@@ -291,7 +315,7 @@ let closeFn: (() => void) | null = null
  * der Leiste kein Weg mehr fuehrt.
  */
 export default function ControlCenter(
-    toggle: (name: string) => void = () => {}): OverlayWidget {
+    toggle: (name: string) => void = () => {}): ShellWidget {
   // Die Bausteine, die sich aendern
   let networkIcon: Gtk.Label
   let networkLabel: Gtk.Label
@@ -329,9 +353,6 @@ export default function ControlCenter(
   let clocksRow: Gtk.Box
   let clocksLabel: Gtk.Label
   let hardwareLabel: Gtk.Label
-
-  // Der Takt, solange das Fenster offen ist. Siehe onShow/onHide unten.
-  let ticker: ReturnType<typeof interval> | null = null
 
   // Was der Knopf der Aktualisierungszeile gerade tut.
   //
@@ -495,135 +516,112 @@ export default function ControlCenter(
     hardwareLabel.set_text(hardwareText || _("Hardware"))
   }
 
-  return createOverlayWindow({
-    name: "control",
-    // GEMESSEN am 12.08.2026 im verschachtelten Compositor, auf einem
-    // Schirm, auf dem der Deckel nicht greift: dieses Fenster braucht
-    // fuer seinen ganzen Inhalt 495x1682 Punkte. Hier standen 400x580,
-    // und beides war Zierrat - utils/overlay.ts hat die Zahlen nie
-    // angewendet, und das Fenster stand als 545x1622 auf einem Schirm
-    // mit 1080 Zeilen.
-    //
-    // 1682 ist keine Zusage, sondern der Wunsch: auf jedem Schirm unter
-    // 3364 Zeilen entscheidet der Deckel aus MODAL_SHARE, und der Rest
-    // steht unter der Bildlaufleiste. Fuenf Abschnitte passen nicht auf
-    // eine halbe Bildschirmhoehe, und das ist auch nicht noetig - was
-    // zaehlt, ist, dass nichts mehr UNTER dem Bildrand liegt, wo es
-    // niemand erreichen kann.
-    //
-    // 495 ist die Mindestbreite des Inhalts; GTK geht ohnehin nicht
-    // darunter. Sie ist seit heute 50 Punkte kleiner als vorher: die
-    // fuenf Schalter stehen in drei Spalten statt in fuenf.
-    //
-    // 1790 STATT 1682, am selben Tag, nachgemessen auf einem 4000 Zeilen
-    // hohen Schirm (dort deckelt MODAL_SHARE erst bei 2000, die Zahl
-    // hier bindet also wirklich). Der Zuwachs sind die Bildschirmzeile
-    // und der Platz, den die drei bedingten Zeilen als leere Kaesten
-    // brauchen.
-    //
-    // UND 2098 STATT 1790, am 17.08.2026 - OBWOHL an diesem Tag DREI
-    // ZEILEN GEGANGEN SIND (Netz, Bluetooth, Style Editor).
-    //
-    //     Das ist kein Widerspruch, sondern der Befund, dass die 1790
-    //     nie gemessen waren. Ein 4000 Zeilen hoher Schirm deckelt bei
-    //     2000, und die Fabrik setzt `Math.min(naturalHeight,
-    //     pos.height)`: ein Fenster, dessen Inhalt HOEHER ist als sein
-    //     eigener Wunsch, steht dort als genau dieser Wunsch da. Die
-    //     Messung hat damals also die eingetragene Zahl
-    //     zurueckgespiegelt.
-    //
-    //     NACHGEMESSEN am 17.08.2026 auf 1920x7200 - dort deckelt
-    //     MODAL_SHARE erst bei 3600 - und mit einem probeweise auf 3400
-    //     gesetzten Wunsch, damit nicht wieder er die Antwort gibt:
-    //
-    //         Wunsch 3400   Fenster 495x2098
-    //
-    //     2098 ist damit die WIRKLICHE natuerliche Hoehe dieses
-    //     Aufbaus, und sie steht jetzt hier. Praktisch aendert das
-    //     nichts: unter 4196 Zeilen entscheidet ohnehin MODAL_SHARE,
-    //     auf dem Schirm des Nutzers (1920x1200) sind das 600.
-    //
-    // UND 2470 STATT 2098, am Nachmittag desselben Tages: die drei
-    // Zeilen von oben sind zurueck (Netz, Bluetooth, Style Editor).
-    // GEMESSEN im verschachtelten Compositor an der senkrechten
-    // Verstellung des Inhalts: 2067 vor den drei Zeilen, 2391 mit ihnen -
-    // 324 Punkte fuer drei `.cc-row`, also 108 je Zeile. Dazu der Kopf
-    // (77) und der Rand der Platte (2), macht 2470.
-    //
-    // WAS IN DER ZAHL NICHT DRINSTECKT, und das ist kein Versehen:
-    // Datenschutz, Wiedergabe und Aktualisierung sind bei der Messung
-    // UNSICHTBAR - sie gehen erst auf, wenn updateDisplay() geantwortet
-    // hat, und das ist ein asynchroner Aufruf, der nach dem Messen
-    // zurueckkommt. createOverlayWindow() misst in show() VOR onShow.
-    // Sie tragen deshalb zur angemeldeten Hoehe nichts bei und stehen,
-    // wenn sie aufgehen, unter der Bildlaufleiste. Auf jedem Schirm
-    // unter 3580 Zeilen ist das ohne Folgen, weil dort ohnehin der
-    // Deckel entscheidet.
-    //
-    // UND 520 STATT 495, am Nachmittag des 17.08.2026 - DIE BREITE WAR
-    // UM DIE BILDLAUFLEISTE ZU KLEIN, UND ZWAR SEIT ES SIE GIBT
-    //
-    //     GEMESSEN im verschachtelten Compositor, Schirm 1920x1200, mit
-    //     einem Messfuehler in der erzeugten utils/overlay.ts, der die
-    //     Verstellwerte der Bildlaufleiste mitschreibt:
-    //
-    //         Fenster 495, Sichtfenster 469, Inhalt 493
-    //         hadj oben 493 / Seitenbreite 469  ->  24 Punkte verdeckt
-    //
-    //     Vierundzwanzig, und das ist genau die Breite der SENKRECHTEN
-    //     Bildlaufleiste. Sie liegt neben dem Inhalt
-    //     (overlay_scrolling: false), und dieses Fenster hat sie IMMER -
-    //     sein Inhalt ist mehr als viermal so hoch wie der Deckel. Ein
-    //     Wunsch, der genau die Mindestbreite des Inhalts nennt, laesst
-    //     also keinen Platz mehr fuer sie, und GTK antwortet mit der
-    //     einzigen Moeglichkeit, die ihm bleibt: einer WAAGERECHTEN
-    //     Bildlaufleiste. Der Nutzer hat sie gemeldet ("man muss nach
-    //     rechts ... scrollen").
-    //
-    //     Die 493 sind hart und nicht kuerzbar: sie kommen aus
-    //     `.cc-power-grid` (gemessen min = nat = 457) plus dem
-    //     Innenabstand der Platte. Fuenf Schalter nebeneinander lassen
-    //     sich nicht ellipsieren, anders als jede Beschriftung darueber -
-    //     die tragen alle ccLabel und melden 13 Punkte Mindestbreite.
-    //
-    //     493 + 2 (Rand der Platte) + 24 (Leiste) = 519. 520 ist die
-    //     naechste Zehnerstufe darueber und bleibt weit unter
-    //     MODAL_SHARE (960 auf 1920).
-    width: 520,
-    height: 2470,
-    cssClass: "ControlCenter",
-    headerIcon: ICONS.settings,
-    headerTitle: _("Control center"),
-    accentCssClass: "control-accent",
-    // DER TAKT LAEUFT NUR, SOLANGE DAS FENSTER OFFEN IST.
-    //
-    // Hier stand `interval(UPDATE_INTERVAL, updateDisplay)` in
-    // buildContent, also EIN Takt, der beim Start der Oberflaeche
-    // beginnt und nie endet. GEMESSEN am 12.08.2026 an updateDisplay():
-    // fuenfzehn Aufrufe fremder Programme je Durchlauf (neun ueber
-    // ags-network-scripts, pgrep, zweimal pamixer-Paar, brightnessctl,
-    // ein ls) - alle drei Sekunden, rund um die Uhr, fuer ein Fenster,
-    // das geschlossen ist. Das sind 300 Prozessstarts je Minute fuer
-    // Zahlen, die niemand ansieht.
-    //
-    // Die drei Zeilen, die heute dazugekommen sind, haetten daraus 360
-    // gemacht. Also geht der Takt an, wenn das Fenster aufgeht, und
-    // wieder aus, wenn es zugeht - `interval()` gibt einen Timer
-    // zurueck, der `cancel()` kennt (nachgelesen in
-    // /usr/share/ags/js/lib/time.ts, `static interval(...)`).
-    //
-    // Der erste Durchlauf kostet nichts extra: Timer.interval() feuert
-    // sofort und danach im Takt.
-    onShow: () => {
-      ticker?.cancel()
-      ticker = interval(UPDATE_INTERVAL, updateDisplay)
-    },
-    onHide: () => {
-      ticker?.cancel()
-      ticker = null
-    },
-    buildContent: (_win, closeWindow) => {
-      closeFn = closeWindow
+  // ============================================================================
+  // DIE SEITENLEISTE: DREI GRUPPEN (Aufgabe 6, 18.08.2026)
+  // ============================================================================
+  //
+  // gruppenAus() in ags-overlay-utils.template baut ZepNavGruppe aus der
+  // REIHENFOLGE des ersten Auftretens von seite.gruppe in config.seiten -
+  // die Reihenfolge unten in `seiten` bestimmt darum die Reihenfolge in
+  // der Seitenleiste: VERBINDUNGEN vor SYSTEM. EINSTELLUNGEN (Spec
+  // Abschnitt 2.2/4.1) bekommt in diesem Plan bewusst KEINE Seite und
+  // taucht darum in der Seitenleiste gar nicht auf - "UI-1 baut sie
+  // nicht ... der Platz kostet nichts" (Spezifikation, 4.1).
+  const gruppeVerbindungen = _("CONNECTIONS")
+  const gruppeSystem = _("SYSTEM")
+
+  // Der Umzugshinweis (Aufgabenblatt 6, Schritt 2, woertlich): "Ein
+  // Eintrag, der ins Leere fuehrt, ist schlimmer als einer, der sagt,
+  // was los ist." Netzwerk, Bluetooth und VPN ziehen in den Aufgaben
+  // 7-9 ein; Ton und Anzeige stehen in der Spezifikation (Abschnitt
+  // 2.2), werden aber von diesem Plan ueberhaupt nicht gebaut (siehe
+  // Bericht zu Aufgabe 6) - beide Faelle bekommen deshalb denselben
+  // Platzhalter statt eines fehlenden oder toten Eintrags.
+  const UMZUGSHINWEIS = _("This page is moving.")
+
+  // Eine Seite, die nur den Umzugshinweis zeigt - fuenfmal gebraucht
+  // (Netzwerk, Bluetooth, VPN, Ton, Anzeige), darum eine Funktion und
+  // nicht fuenf fast identische Objektliterale (derselbe Grundsatz wie
+  // bei ccLabel/mediaButton/deskRow weiter unten in dieser Datei).
+  const stubSeite = (
+    id: string, titel: string, symbol: string, gruppe: string,
+  ): ShellSeite => ({
+    id, titel, symbol, gruppe,
+    bauen: () => zepStateHeader({ titel, unterzeile: UMZUGSHINWEIS }),
+  })
+
+  // VERBINDUNGEN: noch leer, Aufgaben 7-9 fuellen sie. "network",
+  // "bluetooth" und "vpn" sind die IDs, unter denen die jeweilige
+  // Aufgabe ihre echte Seite spaeter eintraegt (zeigeSeite("bluetooth",
+  // ...) - siehe Aufgabenblatt 7, Schritt 2) - ein spaeterer Umbau
+  // ERSETZT diese drei stubSeite()-Aufrufe, er fuegt keine neuen IDs
+  // hinzu.
+  const networkSeite = stubSeite("network", _("Network"), ICONS.wifi,
+                                 gruppeVerbindungen)
+  const bluetoothSeite = stubSeite("bluetooth", _("Bluetooth"),
+                                   ICONS.bluetooth, gruppeVerbindungen)
+  const vpnSeite = stubSeite("vpn", _("VPN"), ICONS.vpn, gruppeVerbindungen)
+
+  // SYSTEM: Ton und Anzeige, ausserhalb des Umfangs dieses Plans (siehe
+  // Bericht) - beide bleiben Umzugshinweise, bis eine spaetere Aufgabe
+  // sie mit echtem Inhalt aus dem Abschnitt "TON UND BILD" unten
+  // fuellt.
+  const soundSeite = stubSeite("sound", _("Sound"), ICONS.volume,
+                               gruppeSystem)
+  const displaySeite = stubSeite("display", _("Display"), ICONS.displays,
+                                 gruppeSystem)
+
+  // DIE SEITE "general": WAS DAS KONTROLLZENTRUM VOR AUFGABE 6 GANZ
+  // ALLEIN WAR
+  //
+  // KEIN width/height MEHR, UND DAS IST KEIN VERLUST, SONDERN EIN
+  // UMZUG (Aufgabe 6, 18.08.2026)
+  //     Hier standen bis heute `width: 520, height: 2470` mit rund 90
+  //     Zeilen Messgeschichte darueber (400x580 -> 545x1622 am
+  //     12.08.2026, danach 1682/1790/2098/2470 in der Hoehe und
+  //     495/520 in der Breite, je einzeln gemessen und begruendet -
+  //     nachzulesen in der Historie dieser Datei). ShellConfig
+  //     (ags-overlay-utils.template, Aufgabe 5) kennt weder width noch
+  //     height: die Schale setzt SHELL_WIDTH/SHELL_HEIGHT einmal fuer
+  //     ALLE Seiten, nicht jede Seite fuer sich. Die alte Messreihe
+  //     beschriebe damit ein Feld, das es an dieser Stelle nicht mehr
+  //     gibt - stehen gelassen waere sie eine Erklaerung ohne Adresse
+  //     (Regel 14).
+  //
+  // WAS DIE BREITE FUER DIESEN INHALT JETZT BEDEUTET, GEMESSEN GEGEN
+  // DIE SPEZIFIKATION UND NICHT GEGEN DEN COMPOSITOR (tests/render/
+  // ist fuer diese Aufgabe verboten)
+  //     SHELL_WIDTH ist STYLE_MODAL_WIDTH_L (880), die Seitenleiste
+  //     208 (zepSidebar, ags-style.template .zep-sidebar) - es bleiben
+  //     rund 672 fuer diese Seite. Der letzte gemessene Wert fuer die
+  //     Mindestbreite dieses Inhalts war 495-520 (siehe oben); 672 ist
+  //     MEHR und schneidet also nichts ab. Was sich aendert, ist die
+  //     Aufteilung: `.cc-power-grid` und die drei Wiedergabeknoepfe
+  //     bleiben mit `halign: Gtk.Align.CENTER` schmal und stehen jetzt
+  //     mit deutlich mehr Leerraum links und rechts davon, statt das
+  //     Fenster (fast) auszufuellen - ein Aussehensunterschied, kein
+  //     abgeschnittener Inhalt. `updateLabel` traegt `wrap: true`
+  //     (Zeile "was ansteht"); bei mehr verfuegbarer Breite bricht ein
+  //     langer Aktualisierungssatz auf WENIGER Zeilen um als bei 520 -
+  //     die alte Hoehenmessung 2470 waere also ohnehin nicht mehr die
+  //     wahre natuerliche Hoehe bei 672. Das macht nichts: die Fabrik
+  //     misst live bei jedem show() (siehe getOverlayPosition() /
+  //     outerBox.measure() in ags-overlay-utils.template) und nicht aus
+  //     einer hier eingetragenen Zahl.
+  const generalSeite: ShellSeite = {
+    id: "general",
+    // "Control center" bleibt der msgid - siehe
+    // tests/src/test_overlay_windows.py,
+    // test_the_control_centre_speaks_one_language: der deutsche Eintrag
+    // "Kontrollzentrum" ist dort namentlich verlangt. Diese Seite TRAEGT
+    // heute noch alles, was das Kontrollzentrum je gezeigt hat - der
+    // Name bleibt darum derselbe, nur der Ort (jetzt ein Sidebar-
+    // Eintrag statt ein Fenstertitel) hat sich geaendert.
+    titel: _("Control center"),
+    symbol: ICONS.settings,
+    gruppe: gruppeSystem,
+    bauen: (win, schliessen) => {
+      closeFn = schliessen
 
       // Die Oberflaeche bauen
       const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
@@ -1462,7 +1460,68 @@ export default function ControlCenter(
       mainBox.append(div3)
       mainBox.append(powerGrid)
 
+      // DER TAKT LAEUFT FUER DIE LEBENSDAUER DER SCHALE, NICHT MEHR NUR
+      // "SOLANGE DAS FENSTER OFFEN IST" - UND TROTZDEM OHNE DIE 300
+      // PROZESSSTARTS JE MINUTE, DIE DAS AM 12.08.2026 GEKOSTET HAT
+      //
+      // ShellConfig (ags-overlay-utils.template, Aufgabe 5) kennt kein
+      // onShow/onHide mehr - createShellWindow() ruft bauen() GENAU
+      // EINMAL, beim Start der Oberflaeche (dokumentiert am Kopf von
+      // ShellSeite.bauen dort: "er laeuft danach fuer die Lebensdauer
+      // der Schale weiter, auch waehrend eine ANDERE Seite aktiv ist" -
+      // wie es ags-bluetooth.template und ags-network.template mit
+      // ihrem eigenen `interval(UPDATE_INTERVAL, updateDisplay)" in
+      // buildContent schon tun, siehe dort). Hier stand bis heute
+      // `ticker = interval(...)` in onShow und `ticker?.cancel()` in
+      // onHide - beide Rueckrufe gibt es nicht mehr.
+      //
+      // Ersetzt durch dieselbe Loesung wie bei Bluetooth/Netzwerk: der
+      // Takt LAEUFT durch, aber sein Rueckruf fragt zuerst `win.visible`
+      // und tut sonst nichts. Der Unterschied zu deren `windowIsUp`-
+      // Schalter ist nur, WOHER die Antwort kommt - dort ein eigenes
+      // Feld, gesetzt in onShow/onHide; hier das Fenster selbst, weil
+      // ShellSeite.bauen() genau dieses `win` schon in der Hand haelt
+      // und kein onShow/onHide braucht, um es zu kennen.
+      //
+      // UND EIN ZWEITER RUECKRUF FUER DIE SOFORTIGE FRISCHE BEIM OEFFNEN
+      //
+      //     Der alte Takt (`ticker = interval(...)` in onShow) feuerte
+      //     bei JEDEM Aufgehen sofort - Timer.interval() tut das beim
+      //     ERSTEN Mal immer. Ein Takt, der nur alle drei Sekunden
+      //     nachsieht, ob das Fenster gerade sichtbar wurde, liesse den
+      //     Nutzer bis zu drei Sekunden lang die Zahlen vom letzten
+      //     Zumachen sehen. `notify::visible` ist GTK4s eigenes Signal
+      //     fuer genau diesen Wechsel (win.visible = true in show()
+      //     loest es aus, siehe ags-overlay-utils.template) - es holt
+      //     die Sofortigkeit des alten onShow zurueck, ohne dass die
+      //     Fabrik dafuer etwas Neues lernen muesste.
+      //
+      // NICHT AM ECHTEN COMPOSITOR NACHGEMESSEN: tests/render/ ist fuer
+      // diese Aufgabe verboten (Blattkopf). Beide Zeilen sind eine
+      // Lesart der GTK4-Dokumentation zu GObject-Eigenschaften
+      // (notify::<eigenschaft> feuert bei jeder Wertaenderung, auch bei
+      // einer programmatischen) und keine eigene Messung.
+      interval(UPDATE_INTERVAL, () => { if (win.visible) updateDisplay() })
+      win.connect("notify::visible", () => {
+        if (win.visible) updateDisplay()
+      })
+
       return mainBox
     },
+  }
+
+  return createShellWindow({
+    name: "control",
+    cssClass: "ControlCenter",
+    // VERBINDUNGEN vor SYSTEM, siehe der Kommentar bei gruppeVerbindungen
+    // oben - die Reihenfolge hier IST die Reihenfolge der Seitenleiste.
+    seiten: [networkSeite, bluetoothSeite, vpnSeite,
+            generalSeite, soundSeite, displaySeite],
+    // Wer das Kontrollzentrum oeffnet (Zahnrad in der Leiste, wie schon
+    // vor Aufgabe 6), sieht zuerst dieselbe Seite, die er bisher als
+    // ganzes Fenster gesehen hat - "general" und nicht die erste
+    // Seitenleisten-Gruppe (VERBINDUNGEN), die heute nur Umzugshinweise
+    // zeigt.
+    startSeite: "general",
   })
 }

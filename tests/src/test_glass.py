@@ -201,12 +201,31 @@ def _declared_namespaces(root: Path = SRC.parent) -> dict[str, str]:
     eine Liste zu halten pruefte nur, dass jemand zweimal dasselbe
     getippt hat.
 
-    In den AGS-Vorlagen kommen drei Schreibweisen vor, und alle drei
+    In den AGS-Vorlagen kommen vier Schreibweisen vor, und alle vier
     muessen erkannt werden:
       namespace: "notifications"   direkt
       namespace: WINDOW_NAME       ueber eine Konstante derselben Datei
-      namespace: config.name       die Fabrik in ags-overlay-utils, die
-                                   ihren Namen vom Aufrufer bekommt
+      namespace: config.name       createOverlayWindow() in
+                                   ags-overlay-utils, die ihren Namen vom
+                                   Aufrufer bekommt
+      namespace: config.name       createShellWindow() daneben - sie
+                                   REICHT ihr eigenes config.name NUR AN
+                                   createOverlayWindow() WEITER (siehe
+                                   dort), meldet also denselben
+                                   Namensraum an, nur ueber ein ANDERES
+                                   Aufrufmuster im Quelltext
+
+    NACHGETRAGEN am 18.08.2026 (Aufgabe 6, "Das Kontrollzentrum wird die
+    Schale"): ags-control-center.template war der ERSTE Aufrufer von
+    createShellWindow() (Aufgabe 5 hat die Fabrik gebaut, aber noch
+    niemand hat sie gerufen) und fiel hier lautlos durch -
+    test_every_surface_this_project_opens_is_named_in_the_glass_list
+    meldete "control" als verwaist, weil dieser Scanner nur nach
+    `createOverlayWindow({` gesucht hat und `namespace:` in einer Vorlage,
+    die nur noch createShellWindow() ruft, gar nicht mehr vorkommt (die
+    Fabrik selbst traegt es, nicht ihr Aufrufer). GLASS_LAYERS/
+    GLASS_PLATES kannten "control" die ganze Zeit richtig - der Fehler
+    lag allein im Scanner, nicht in der Glasregel selbst.
 
     Die anderen drei Sprachen rufen alle set_namespace() auf und
     schreiben den Namen entweder direkt hin oder ueber eine Konstante
@@ -237,7 +256,16 @@ def _declared_namespaces(root: Path = SRC.parent) -> dict[str, str]:
 
         if path.suffix != ".template":
             continue
-        if "namespace:" not in text and "createOverlayWindow({" not in text:
+        # Erweitert am 18.08.2026 (Aufgabe 6) um "createShellWindow({":
+        # eine Vorlage, die NUR NOCH die Schale ruft, traegt weder
+        # "namespace:" noch "createOverlayWindow({" mehr woertlich -
+        # beides steckt in ags-overlay-utils.template, nicht mehr im
+        # Aufrufer. Ohne diese dritte Bedingung wuerde diese Vorlage hier
+        # UEBERSPRUNGEN und ihr Namensraum bliebe unauffindbar, egal was
+        # der Scanner weiter unten koennte.
+        if ("namespace:" not in text
+                and "createOverlayWindow({" not in text
+                and "createShellWindow({" not in text):
             continue
 
         for literal in re.findall(r'namespace:\s*"([^"]+)"', text):
@@ -247,16 +275,22 @@ def _declared_namespaces(root: Path = SRC.parent) -> dict[str, str]:
             for name in re.findall(r'WINDOW_NAME\s*=\s*"([^"]+)"', text):
                 found[name] = path.name
 
-        # Die Fabrik selbst meldet nichts an - ihre AUFRUFER tun es.
-        for call in re.findall(r"createOverlayWindow\(\{(.*?)\}\)", text,
-                               re.DOTALL):
-            match = re.search(r'name:\s*"([^"]+)"', call)
-            if match:
-                found[match.group(1)] = path.name
-                continue
-            if re.search(r"name:\s*WINDOW_NAME", call):
-                for name in re.findall(r'WINDOW_NAME\s*=\s*"([^"]+)"', text):
-                    found[name] = path.name
+        # Die Fabrik selbst meldet nichts an - ihre AUFRUFER tun es. Zwei
+        # Fabriken kennen ein `name:`-Feld, das am Ende beim selben
+        # `namespace: config.name` in createOverlayWindow() landet -
+        # createOverlayWindow() direkt und, seit Aufgabe 5 (18.08.2026),
+        # createShellWindow() daneben (siehe Docstring oben). Dieselbe
+        # Ausleseregel fuer beide, nur der Fabrikname wechselt.
+        for fabrik in ("createOverlayWindow", "createShellWindow"):
+            for call in re.findall(fabrik + r"\(\{(.*?)\}\)", text,
+                                   re.DOTALL):
+                match = re.search(r'name:\s*"([^"]+)"', call)
+                if match:
+                    found[match.group(1)] = path.name
+                    continue
+                if re.search(r"name:\s*WINDOW_NAME", call):
+                    for name in re.findall(r'WINDOW_NAME\s*=\s*"([^"]+)"', text):
+                        found[name] = path.name
     return found
 
 
