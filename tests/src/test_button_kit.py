@@ -4,9 +4,35 @@
 GEMELDET am 18.08.2026: "ausserdem wirken sie so billig durch die button
 wie sie dargestellt sind weisst du was ich meine".
 
-GEMESSEN am selben Tag in src/templates/ags-style.template: 45
-Knopfregeln in 41 verschiedenen Klassen, und keine einzige gemeinsame.
-Jedes Fenster hatte sich seine Knoepfe selbst erfunden.
+GEMESSEN am selben Tag in src/templates/ags-style.template: zuerst 45
+Knopfregeln in 41 verschiedenen Klassen - mit einem Zaehler, der nur
+Zeilen ansah, deren allererstes Zeichen ein Punkt war.
+
+BERICHTIGT, noch am selben Tag, in der Pruefung dieses Tests: der
+Zaehler hatte drei blinde Flecken, und alle drei kommen im Stylesheet
+tatsaechlich vor.
+
+  1. Eingerueckte Selektoren (SCSS-Verschachtelung): ".calendar-action-btn",
+     ".sc-edit-btn", ".vpn-list-btn" stehen mit fuehrenden Leerzeichen in
+     einem umschliessenden Block und begannen darum nie am Zeilenanfang.
+  2. Das zweite (und jedes weitere) Glied einer Komma-Liste: in
+     ".bt-power-btn, .bt-tool-btn {" sah der alte Zaehler nur das erste
+     Glied, ".bt-tool-btn" fiel durch. Ebenso ".net-refresh-btn" hinter
+     ".net-wifi-toggle,".
+  3. Die Endung "-button" statt "-btn": ".cc-button" ist ein
+     vollstaendig ausgepraegter Knopf (Hintergrund, Rahmen, Polster,
+     32px), aber der alte Zaehler suchte nur nach "btn" als Teilstring -
+     "button" enthaelt "btn" nicht als zusammenhaengende Buchstabenfolge.
+     Die Behauptung weiter unten, "-btn" sei die einzige durchgehaltene
+     Benennung, war damit falsch; der Bestand widerlegt sie.
+
+Mit dem reparierten Zaehler (siehe _knopfklassen) neu gemessen, ebenfalls
+am 18.08.2026: 51 Knopfregeln in 47 verschiedenen Klassen. Die Namen, die
+der alte Zaehler nicht sah: bt-tool-btn, calendar-action-btn, cc-button,
+net-refresh-btn, sc-edit-btn, vpn-list-btn - genau die sechs, die aus den
+drei blinden Flecken oben folgen. AUSGANGSZAHL ist darum jetzt 47, nicht
+41; wer die Differenz spaeter als Verschlechterung liest, findet hier den
+Grund.
 
 WARUM EINE RATSCHE UND NICHT "GENAU EINE": UI-1 stellt zwoelf Fenster
 um, und das geht nicht in einem Zug (siehe Abschnitt 6 der
@@ -27,28 +53,52 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 STIL = ROOT / "src" / "templates" / "ags-style.template"
 
-# Am 18.08.2026 gezaehlt, bevor irgendetwas umgestellt war.
-AUSGANGSZAHL = 41
+# Am 18.08.2026 mit dem reparierten Zaehler gemessen, bevor irgendetwas
+# umgestellt war. Der urspruengliche Zaehler hatte an dieser Stelle
+# faelschlich 41 stehen (siehe Modul-Docstring) - das war kein anderer
+# Ausgangszustand, sondern derselbe Zustand, falsch gezaehlt.
+AUSGANGSZAHL = 47
 
 # Die Zahl, die HEUTE gilt. Sie darf nur kleiner werden, und wer sie
 # senkt, schreibt dazu, welches Fenster er umgestellt hat.
 #
-#   41  18.08.2026  Ausgangszustand
-ERLAUBT = 41
+#   41  18.08.2026  Ausgangszustand (Zaehler kaputt, siehe Docstring)
+#   47  18.08.2026  Zaehler repariert, echter Ausgangswert
+ERLAUBT = 47
 
 
 def _knopfklassen(text: str) -> set[str]:
     """Jede Klasse, deren Name auf einen Knopf hindeutet.
 
     Ueber den NAMEN und nicht ueber den Inhalt: eine Regel, die zufaellig
-    wie ein Knopf aussieht, ist keine; eine, die -btn heisst, ist eine -
-    und genau die Benennung ist es, die dieses Projekt durchgehalten hat.
+    wie ein Knopf aussieht, ist keine; eine, die "btn" enthaelt oder auf
+    "-button" endet, ist eine. Beide Formen sind im Bestand belegt - die
+    fruehere Behauptung, "-btn" sei die einzige durchgehaltene Benennung,
+    stimmte nicht (siehe Modul-Docstring, Punkt 3).
+
+    "-buttons" (Mehrzahl) zaehlt bewusst NICHT: das sind Container ohne
+    eigenen Knopf-Stil, reines Layout fuer eine Gruppe von Knoepfen
+    (z. B. ".battery-profile-buttons").
+
+    Ein Klassenname zaehlt unabhaengig davon, WIE er im Stylesheet
+    auftaucht: am Zeilenanfang, eingerueckt in einem verschachtelten
+    Block, oder als zweites/weiteres Glied einer durch Komma getrennten
+    Selektorliste. Nur ein direkt vorangehender Buchstabe, eine Ziffer
+    oder ein Bindestrich schliesst eine Fundstelle aus - das ist genau
+    der Fall bei einem angehaengten Compound-Selektor wie
+    ".cc-toggle-btn.active", wo ".active" kein eigener Treffer sein darf.
     """
-    return set(re.findall(r"^\.([a-z0-9-]*btn[a-z0-9-]*)", text, re.M))
+    return set(re.findall(r"(?<![a-z0-9-])\.([a-z][a-z0-9-]*)", text, re.M))
+
+
+def _ist_knopfname(name: str) -> bool:
+    """Enthaelt "btn" oder endet auf "-button" (Einzahl, nicht "-buttons")."""
+    return "btn" in name or name.endswith("-button")
 
 
 def test_no_window_invents_another_button():
-    gefunden = _knopfklassen(STIL.read_text(encoding="utf-8"))
+    kandidaten = _knopfklassen(STIL.read_text(encoding="utf-8"))
+    gefunden = {name for name in kandidaten if _ist_knopfname(name)}
     assert len(gefunden) <= ERLAUBT, (
         f"{len(gefunden)} Knopf-Klassen, erlaubt sind {ERLAUBT}.\n"
         f"Neu dazugekommen: {sorted(gefunden)[:60]}\n"
@@ -68,6 +118,37 @@ def test_the_ratchet_is_not_secretly_loose():
 
 
 def test_the_counter_would_notice_a_new_class():
-    """Der Selbsttest. Ein Zaehler, der nichts findet, zaehlt auch nichts."""
-    beispiel = ".a-btn {\n  color: red;\n}\n.b {\n  color: blue;\n}\n"
-    assert _knopfklassen(beispiel) == {"a-btn"}
+    """Der Selbsttest. Ein Zaehler, der nichts findet, zaehlt auch nichts.
+
+    Deckt genau die drei Formen ab, an denen der Zaehler bis zum
+    18.08.2026 vorbeigesehen hat (siehe Modul-Docstring): Einrueckung,
+    das zweite Glied einer Komma-Liste, und die Endung "-button". Dazu
+    den Gegenfall "-buttons" (Mehrzahl), der NICHT zaehlen darf.
+    """
+    beispiel = (
+        ".a-btn {\n"                # unveraendert: eigene, unverschachtelte Zeile
+        "  color: red;\n"
+        "}\n"
+        ".b {\n"                    # Gegenprobe: kein Knopfname
+        "  color: blue;\n"
+        "}\n"
+        ".wrapper {\n"
+        "  .indent-btn {\n"         # 1. Einrueckung
+        "    color: green;\n"
+        "  }\n"
+        "}\n"
+        ".first-btn, .second-btn {\n"  # 2. zweites Glied einer Komma-Liste
+        "  color: yellow;\n"
+        "}\n"
+        ".solo-button {\n"          # 3. Endung "-button" statt "-btn"
+        "  color: purple;\n"
+        "}\n"
+        ".group-buttons {\n"        # Gegenfall: Mehrzahl darf NICHT zaehlen
+        "  color: grey;\n"
+        "}\n"
+    )
+    kandidaten = _knopfklassen(beispiel)
+    gefunden = {name for name in kandidaten if _ist_knopfname(name)}
+    assert gefunden == {
+        "a-btn", "indent-btn", "first-btn", "second-btn", "solo-button",
+    }
