@@ -1426,3 +1426,112 @@ def test_the_collector_speaks_the_protocol_the_window_speaks(tmp_path,
     # Und die Daten liegen unter XDG_DATA_HOME, nicht in ~.
     assert (room / "data" / "hyprclipx" / "clipman.db").is_file(), (
         "der Sammler legt seine Datenbank nicht unter $XDG_DATA_HOME ab")
+
+
+# ---------------------------------------------------------------------
+# Die Ecken der beiden Plugin-Oberflaechen
+# ---------------------------------------------------------------------
+# GEMELDET am 18.08.2026: "die externen plugins die wir zepos genannt
+# haben wie hyprlauncher unsw sind nicht wirklich abgerundet das fenster
+# ist nicht rund".
+#
+# ZWEI VERSCHIEDENE URSACHEN, beide dieselbe Eigenschaft von GTK4: ein
+# Kasten mit border-radius beschneidet seine Kinder NICHT, und `overflow:
+# hidden` gibt es in GTKs CSS-Teilmenge nicht. Ein Kind mit deckendem
+# Grund und ohne eigenen Radius malt also ein Rechteck in die runde Ecke.
+#
+#   hyprlaunch  .launcher-container war rund, .launcher-search - sein
+#               erstes Kind - nicht. Oben eckig, unten rund.
+#   hyprclipx   .cm-root hatte ueberhaupt keinen Radius. Grund und
+#               Rahmen ja, Rundung nie.
+#
+# Dieselbe Ursache war am 17.08.2026 in den AGS-Fenstern gefunden und
+# behoben worden (.overlay-header in ags-style.template). Die
+# Plugin-Stylesheets hat dabei niemand mitgeprueft - deshalb steht die
+# Regel jetzt als Test und nicht als Erinnerung.
+#
+# WAS DIESER TEST NICHT KANN: ein Bild machen. Ob eine Ecke rund
+# AUSSIEHT, entscheidet ein Lauf mit den gebauten Plugins. Er haelt die
+# Zusage ab, die man ohne Compositor abhalten kann - dass jedes Kind, das
+# eine Ecke besetzt, dort auch einen Radius traegt.
+
+_ECKEN = {
+    "hyprlaunch-style.template": {
+        # container -> search (erstes Kind, oben). Unten traegt
+        # .launcher-list keinen Grund und `scrollbar` ist ausdruecklich
+        # durchsichtig, dort scheint die Rundung durch.
+        ".launcher-container": "voll",
+        ".launcher-search": "oben",
+    },
+    "hyprclipx-style.template": {
+        # Aus ClipboardRenderer::buildUI() abgelesen: cm-root ist eine
+        # senkrechte Kiste aus Kopfzeile, Rumpf und Hinweiszeile.
+        ".cm-root": "voll",
+        ".cm-sidebar-header": "eine",   # oben links
+        ".cm-search": "eine",           # oben rechts
+        ".cm-hints": "unten",           # volle Breite, beide unteren
+    },
+}
+
+
+def _radius_von(text: str, klasse: str) -> str | None:
+    """Der border-radius-Wert einer Regel, oder None."""
+    block = re.search(rf"^{re.escape(klasse)}\s*\{{(.*?)^\}}",
+                      text, re.M | re.S)
+    if not block:
+        return None
+    treffer = re.search(r"^\s*border-radius\s*:\s*([^;]+);",
+                        block.group(1), re.M)
+    return treffer.group(1).strip() if treffer else None
+
+
+@pytest.mark.parametrize("datei", sorted(_ECKEN))
+def test_every_child_that_owns_a_corner_rounds_it(datei):
+    """Wer eine Ecke besetzt, rundet sie - sonst ist das Fenster dort
+    eckig, egal was der Kasten darunter sagt."""
+    pfad = ROOT / "src" / "styles" / datei
+    text = pfad.read_text(encoding="utf-8")
+
+    ohne = []
+    for klasse in _ECKEN[datei]:
+        wert = _radius_von(text, klasse)
+        if wert is None:
+            ohne.append(klasse)
+    assert ohne == [], (
+        f"{datei}: {ohne} besetzen eine Ecke des Fensters und tragen "
+        "keinen border-radius. GTK4 beschneidet Kinder nicht - dort wird "
+        "ein Rechteck in die runde Ecke gemalt.")
+
+
+@pytest.mark.parametrize("datei", sorted(_ECKEN))
+def test_those_corners_use_the_shared_radius(datei):
+    """Und zwar mit der Sprosse der Marke, nicht mit einer eigenen Zahl.
+
+    Ein Fenster, das seinen Radius selbst waehlt, ist genau das, was der
+    Nutzer am 17.08.2026 beanstandet hat - "alle styles von ZEPOS muessen
+    einheitlich aussehen".
+    """
+    pfad = ROOT / "src" / "styles" / datei
+    text = pfad.read_text(encoding="utf-8")
+
+    fremd = {}
+    for klasse in _ECKEN[datei]:
+        wert = _radius_von(text, klasse)
+        if wert and "{{STYLE_RADIUS_PANEL}}" not in wert:
+            fremd[klasse] = wert
+    assert fremd == {}, (
+        f"{datei}: diese Ecken tragen einen eigenen Radius statt "
+        f"STYLE_RADIUS_PANEL: {fremd}")
+
+
+def test_that_rule_would_notice_a_missing_radius():
+    """Der Selbsttest: die Ablesefunktion muss ein Fehlen auch merken.
+
+    Eine Regel, die es nicht gibt, und eine Regel ohne border-radius
+    muessen beide None ergeben - sonst waere der Test darueber gruen,
+    weil er nichts findet.
+    """
+    beispiel = ".a {\n    background: red;\n}\n.b {\n    border-radius: 4px;\n}\n"
+    assert _radius_von(beispiel, ".a") is None
+    assert _radius_von(beispiel, ".gibtsnicht") is None
+    assert _radius_von(beispiel, ".b") == "4px"

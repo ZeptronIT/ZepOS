@@ -931,7 +931,7 @@ def test_a_healthy_machine_gets_a_clean_bill_and_a_zero_status(tmp_path):
     """Nothing to report has to be distinguishable from "did not run",
     both for the user and for whatever calls this in a script."""
     quiet_ip = ('if [ "$2" = "route" ] || [ "$3" = "route" ]; then\n'
-                '    printf \'[{"dst":"192.168.178.0/24","dev":"wlan0"}]\\n\'\n'
+                '    printf \'[{"dst":"192.168.1.0/24","dev":"wlan0"}]\\n\'\n'
                 "    exit 0\nfi\n"
                 'printf \'[{"ifname":"docker0","addr_info":'
                 '[{"family":"inet","local":"172.17.0.1","prefixlen":16}]}]\\n\'\n'
@@ -1234,11 +1234,11 @@ def test_the_doctor_reads_a_proper_network_list(doctor, tmp_path, monkeypatch):
     (tmp_path / "user-settings.json").write_text(json.dumps({
         "schema_version": 1,
         "vpn": {"routed_networks": ["10.8.0.0/24", " "],
-                "bypass_networks": ["192.168.178.0/24"]},
+                "bypass_networks": ["192.168.1.0/24"]},
     }), encoding="utf-8")
 
     routed, bypassed, findings = doctor.configured_networks()
 
     assert [network.address for network in routed] == ["10.8.0.0/24"]
-    assert bypassed == ["192.168.178.0/24"]
+    assert bypassed == ["192.168.1.0/24"]
     assert findings == []

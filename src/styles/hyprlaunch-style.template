@@ -93,10 +93,30 @@
  * einzige Bedienelement, das immer da ist, also traegt sie die
  * Aufmerksamkeit - dieselbe Begruendung wie bei #search in
  * zepos-menu-style.template. */
+/* DIE OBEREN ECKEN GEHOEREN DIESER ZEILE, seit dem 18.08.2026.
+ *
+ * GEMELDET: "die externen plugins die wir zepos genannt haben wie
+ * hyprlauncher unsw sind nicht wirklich abgerundet das fenster ist nicht
+ * rund".
+ *
+ * .launcher-container traegt den Radius und dieses Feld ist sein ERSTES
+ * Kind - GTK4 beschneidet Kinder aber NICHT. Ein deckender Grund ohne
+ * eigenen Radius wird als Rechteck in die runde Ecke gemalt, und genau
+ * so sah das Fenster oben eckig aus, obwohl der Kasten darunter rund
+ * war. `overflow: hidden` gibt es in GTKs CSS-Teilmenge nicht.
+ *
+ * Dieselbe Ursache und dieselbe Antwort wie bei .overlay-header in
+ * src/templates/ags-style.template, wo es am 17.08.2026 gefunden wurde.
+ * Die Plugin-Stylesheets hat damals niemand mitgeprueft.
+ *
+ * UNTEN BRAUCHT ES NICHTS: .launcher-list traegt nur Polster und keinen
+ * Grund, und `scrollbar` ist ausdruecklich durchsichtig - dort scheint
+ * die Rundung des Kastens durch. */
 .launcher-search {
     background-color: {{STYLE_COLOR_OVERLAY_SURFACE}};
     padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
     border-bottom: 1px solid {{STYLE_OVERLAY_BORDER_COLOR}};
+    border-radius: {{STYLE_RADIUS_PANEL}} {{STYLE_RADIUS_PANEL}} 0 0;
     transition: border-color {{STYLE_MOTION_INSTANT}} {{STYLE_MOTION_CURVE}};
 }
 

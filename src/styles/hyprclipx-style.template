@@ -53,15 +53,35 @@
  *     Zeile statt aus einer zweiten Liste.
  *
  *     Deckkraft abgeleitet, siehe src/brand.py bei glass_solo_alpha(). */
+/* DER RADIUS HAT HIER GEFEHLT, nicht bloss an einem Kind.
+ *
+ * GEMELDET am 18.08.2026: "die externen plugins ... sind nicht wirklich
+ * abgerundet das fenster ist nicht rund". Bei hyprlaunch war es ein
+ * Kind, das ueber die Ecke malt; hier war die Wurzel selbst eckig -
+ * Grund und Rahmen ja, Radius nie.
+ *
+ * Die vier Ecken gehoeren dabei nicht diesem Kasten, sondern seinen
+ * Kindern, denn GTK4 beschneidet sie NICHT. Aus ClipboardRenderer::
+ * buildUI() abgelesen, nicht geraten:
+ *
+ *     cm-root (senkrecht)
+ *       cm-sidebar-header | cm-search    <- oben links | oben rechts
+ *       cm-sidebar-body   | cm-scroll    <- Mitte, keine Ecke
+ *       cm-hints                         <- volle Breite, BEIDE unten
+ *
+ * cm-sidebar-body steht zwischen Kopf und Hinweiszeile und beruehrt
+ * deshalb keine Ecke - es bekommt bewusst keinen Radius. */
 .cm-root {
     background-color: {{STYLE_GLASS_SOLO}};
     border: 2px solid {{STYLE_COLOR_LAUNCHER_ACCENT}};
+    border-radius: {{STYLE_RADIUS_PANEL}};
 }
 
 /* ── Die Leiste links ────────────────────────────────────────────── */
 
 .cm-sidebar-header {
     background-color: {{STYLE_COLOR_OVERLAY_SURFACE}};
+    border-radius: {{STYLE_RADIUS_PANEL}} 0 0 0;
     border-right: 1px solid {{STYLE_OVERLAY_BORDER_COLOR}};
     border-bottom: 1px solid {{STYLE_OVERLAY_BORDER_COLOR}};
     padding: {{STYLE_SPACE_2}};
@@ -123,6 +143,7 @@
 
 .cm-search {
     background-color: {{STYLE_COLOR_OVERLAY_SURFACE}};
+    border-radius: 0 {{STYLE_RADIUS_PANEL}} 0 0;
     border-bottom: 1px solid {{STYLE_OVERLAY_BORDER_COLOR}};
     padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_8}};
 }
@@ -252,6 +273,7 @@
 
 .cm-hints {
     background-color: {{STYLE_COLOR_OVERLAY_BG}};
+    border-radius: 0 0 {{STYLE_RADIUS_PANEL}} {{STYLE_RADIUS_PANEL}};
     border-top: 1px solid {{STYLE_OVERLAY_BORDER_COLOR}};
     padding: {{STYLE_SPACE_2}} {{STYLE_SPACE_8}};
 }

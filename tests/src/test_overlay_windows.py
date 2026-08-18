@@ -36,6 +36,8 @@ import re
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from src import sizes
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -632,3 +634,121 @@ def test_no_button_of_the_bluetooth_window_stands_there_without_a_target():
     assert 'execAsync("blueman-manager")' in code, (
         "der Weg zu den Nebenfunktionen - Koppeln, Dateien senden - ist "
         "aus dem Fenster verschwunden")
+
+
+# ---------------------------------------------------------------------
+# Die vier Ecken jedes Aufklappfensters
+# ---------------------------------------------------------------------
+# GEFRAGT am 18.08.2026: "sind wirklich alle ags fenster jetzt rund wie
+# es sein sollte?" - und die Frage war berechtigt, denn geprueft hatte
+# das niemand. Am 17.08. wurden DREI Fenster auf Bildern angesehen und
+# repariert; die uebrigen neun teilen zwar denselben Bau, aber "teilt
+# denselben Bau" ist eine Vermutung, solange es niemand nachrechnet.
+#
+# WAS DIE FABRIK BAUT (createOverlayWindow in ags-overlay-utils.template):
+#
+#     overlay-outer          <- die Platte, sie traegt den Radius
+#       overlay-header       <- OBERE Ecken
+#       scroller             <- keine Klasse, kein Grund
+#         <Inhalt je Fenster><- UNTERE Ecken
+#
+# GTK4 beschneidet Kinder NICHT, und `overflow: hidden` gibt es in seiner
+# CSS-Teilmenge nicht. Wer eine Ecke besetzt und dort deckend malt, macht
+# sie eckig - egal wie rund die Platte darunter ist.
+#
+# Die Platte hat KEIN Polster (nachgesehen: background, border,
+# border-radius, font-family - mehr steht in .overlay-outer nicht).
+# Deshalb koennen ihre direkten Kinder die Ecken ueberhaupt erreichen,
+# und deshalb war der Kopf am 17.08. das Problem.
+#
+# UNTEN traegt die Platte selbst, WEIL jeder Inhaltskasten durchsichtig
+# ist UND ein Polster hat. Beide Bedingungen zusammen halten die unteren
+# Ecken frei - faellt eine weg, ist das Fenster unten eckig. Genau das
+# haelt der Test unten fest.
+
+_STIL = SRC / "templates" / "ags-style.template"
+
+# Die aeussersten Inhaltskaesten der Aufklappfenster - ABGELESEN aus den
+# Vorlagen am 18.08.2026 und nicht getippt. Wer ein Fenster hinzufuegt,
+# dessen Kasten hier fehlt, faellt bei test_every_overlay_declares_a_size
+# ohnehin auf; diese Liste haelt fest, welche Kaesten eine UNTERE Ecke
+# der Platte beruehren koennen.
+_INHALTSKAESTEN = (
+    "battery-container",
+    "calendar-container",
+    "cc-container",
+    "disk-container",
+    "se-container",
+    "shortcuts-container",
+    "vpn-container",
+    "vpn-settings-container",
+    "wp-container",
+)
+
+
+
+def _regel(css: str, selektor: str) -> dict[str, str]:
+    """Die Eigenschaften eines Regelblocks, oder ein leeres Verzeichnis."""
+    block = re.search(rf"^{re.escape(selektor)}\s*\{{(.*?)^\}}",
+                      css, re.M | re.S)
+    if not block:
+        return {}
+    return {name.strip(): wert.strip() for name, _, wert in
+            (zeile.partition(":") for zeile
+             in re.findall(r"^\s*([a-z-]+\s*:[^;]+);", block.group(1), re.M))}
+
+
+def test_the_plate_is_round_and_its_header_carries_the_top_corners():
+    """Die zwei Regeln, an denen ALLE zwoelf Fenster haengen."""
+    css = _STIL.read_text(encoding="utf-8")
+
+    platte = _regel(css, ".overlay-outer")
+    assert "border-radius" in platte, (
+        ".overlay-outer traegt keinen Radius - dann ist kein einziges "
+        "Aufklappfenster rund")
+
+    kopf = _regel(css, ".overlay-header")
+    radius = kopf.get("border-radius")
+    assert radius, (
+        ".overlay-header malt einen deckenden Grund in die oberen Ecken "
+        "der Platte und traegt keinen Radius - alle zwoelf Fenster sind "
+        "dann oben eckig (gemessen am 17.08.2026)")
+    assert radius.split()[-2:] == ["0", "0"], (
+        f"border-radius: {radius} - der Kopf darf NUR oben runden; "
+        "unten stiesse er sonst mitten im Fenster eine Rundung an")
+
+
+def test_the_scrollbar_trough_does_not_square_the_bottom_right():
+    """Die Bildlaufleiste liegt NEBEN dem Inhalt und reicht bis an die
+    Unterkante. Ein deckender Trog macht die untere rechte Ecke eckig -
+    gemessen am 17.08.2026, als unten links rund war und unten rechts
+    nicht."""
+    css = _STIL.read_text(encoding="utf-8")
+    trog = _regel(css, ".overlay-outer scrollbar")
+
+    assert trog.get("background") in ("transparent", "none"), (
+        f"der Trog malt {trog.get('background')!r} statt durchsichtig zu "
+        "sein - die untere rechte Ecke wird dann quadratisch")
+
+
+@pytest.mark.parametrize("kasten", sorted(_INHALTSKAESTEN))
+def test_no_content_box_paints_over_the_bottom_corners(kasten):
+    """Jeder Inhaltskasten ist durchsichtig ODER rundet selbst.
+
+    Und er hat ein Polster, damit SEINE Kinder die Ecken nicht erreichen.
+    Beides zusammen ist der Grund, warum unten die Platte traegt.
+    """
+    css = _STIL.read_text(encoding="utf-8")
+    regel = _regel(css, f".{kasten}")
+    assert regel, f".{kasten} hat keine CSS-Regel mehr"
+
+    grund = regel.get("background") or regel.get("background-color")
+    durchsichtig = grund in (None, "transparent", "none")
+    assert durchsichtig or "border-radius" in regel, (
+        f".{kasten} malt {grund!r} bis an die Unterkante und rundet nicht "
+        "selbst - die unteren Ecken des Fensters werden eckig")
+
+    assert "padding" in regel, (
+        f".{kasten} hat kein Polster - seine Kinder erreichen dann die "
+        "Ecken der Platte, und der naechste deckende Grund darin macht "
+        "sie quadratisch")

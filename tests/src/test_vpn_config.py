@@ -500,7 +500,7 @@ def test_a_string_where_a_list_belongs_is_refused_for_every_such_setting():
     way."""
     from src.vpn import nonblank_entries
 
-    for value in ("10.8.0.0/24", "9.9.9.9", "192.168.178.0/24"):
+    for value in ("10.8.0.0/24", "9.9.9.9", "192.168.1.0/24"):
         with pytest.raises(ValueError):
             nonblank_entries(value)
 
