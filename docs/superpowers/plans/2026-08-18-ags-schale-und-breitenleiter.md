@@ -993,6 +993,59 @@ git commit -m "fix(UI-1): der Loeschdialog der Hintergruende war ein blankes Gtk
 
 ---
 
+### Aufgabe 11: Die Abnahme — sieht wirklich alles gleich aus?
+
+**Vom Nutzer verlangt** (18.08.2026): "pruefe am ende ob wir wirklich alle ags
+fenster so umgesetzt haben inklusive der zepos einstellungen seiten die du auch
+entwickelt hast".
+
+**Diese Aufgabe aendert nichts.** Sie zaehlt, weist nach und schreibt auf. Ein
+Befund darin wird NICHT nebenbei behoben - er wird gemeldet und bekommt eine
+eigene Aufgabe. Wer beim Abnehmen repariert, nimmt nicht mehr ab.
+
+**Teil A - jedes AGS-Fenster einzeln.** Fuer jede `src/templates/ags-*.template`,
+die ein Fenster baut: welche Fabrik ruft sie (`createOverlayWindow`,
+`createShellWindow`, oder gar keine), welche Kit-Bauteile benutzt sie, und
+bleibt ein selbstgebauter Knopf uebrig? Ergebnis ist eine Tabelle mit einer
+Zeile je Vorlage. **Vorbefund vom 18.08.2026, den du pruefst statt uebernimmst:**
+zwoelf Vorlagen importieren das Kit, die Nullen sind Leiste, Dock, Tray,
+Einstiegspunkt und die Skript-Module ohne Oberflaeche.
+
+**Teil B - was KEIN AGS ist.** ZepOS traegt Oberflaechen, die das Kit technisch
+nie erreichen koennen, weil sie in einer anderen Sprache und einem anderen
+Werkzeugkasten stehen. Sie gehoeren trotzdem in die Abnahme, denn der Nutzer
+sieht kein AGS, er sieht einen Bildschirm:
+
+| Oberflaeche | Wo | Technik |
+|---|---|---|
+| ZepOS-Einstellungen | `settings/zepos_settings_gui/` | Python + GTK4 + **libadwaita** |
+| Installer | `installer/` | Python + GTK4 |
+| Sperrbildschirm | `packaging/zepos-lock` | C |
+| Abmeldedialog | `packaging/zepos-logout` | C |
+| Startmenue | `packaging/zepos-menu` | C |
+| hyprlaunch, hyprclipx | `packaging/zepos-hypr*` | C++ |
+
+Fuer jede: woher nimmt sie ihre Farben, ihre Ecken, ihre Schrift? Kommen sie
+aus `style_definition.py` (dann folgt sie ZepOS) oder aus den Vorgaben ihres
+Werkzeugkastens (dann nicht)?
+
+**BEKANNTER BEFUND, den du nur noch belegst:** die ZepOS-Einstellungen laden in
+`app.py` ein Blatt aus `style.py`, das **nur** Schriftgroesse, Eckenradius und
+die Schriftart fuer Farbwerte setzt. Alles andere ist libadwaita. Die
+Anwendung sieht damit aus wie eine GNOME-Anwendung. **Belege es mit den
+Zeilennummern** und stell fest, welche ZepOS-Werte fehlen - Petrol, Akzent,
+Textfarbe, die Knopf-Rollen.
+
+**Teil C - das Urteil.** Ein Absatz, im Klartext: Wo sieht ZepOS heute aus wie
+ein System aus einem Guss, und wo nicht? Keine Beschoenigung. Der Nutzer hat
+diese Frage gestellt, weil ihm die Antwort wichtig ist, nicht weil er eine
+Bestaetigung wollte.
+
+**Dateien:** keine geaendert. Ergebnis nach
+`.superpowers/sdd/2026-08-18-ags-schale-und-breitenleiter/abnahme-report.md`.
+
+---
+
 ## Was NICHT dazugehoert
 
 - **UI-2**, die Farbreduktion von 69 auf ~10. Vertagt, im Register.
