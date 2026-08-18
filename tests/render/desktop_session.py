@@ -120,8 +120,27 @@ WALLPAPER = SRC / "branding" / "zepos-wallpaper.png"
 # Was aus welcher Vorlage wird. Die Liste ist aus den case-Zweigen von
 # src/generate_config.sh abgelesen, nicht geraten - dort steht je Ziel
 # CONFIG_DIR und CONFIG_FILE.
+#
+# SIE IST EINMAL ABGELESEN WORDEN UND DANN AUSEINANDERGELAUFEN
+#     GEMESSEN am 19.08.2026: `templates/ags-kit.template` fehlte hier.
+#     Das Bauteil-Kit ist am 18.08.2026 entstanden, generate_config.sh
+#     bekam seinen Zweig (Zeile 744, kit.ts), diese Tabelle nicht - und
+#     weil sie eine HANDGEPFLEGTE ABSCHRIFT ist, hat es niemand gemerkt.
+#
+#     Der Preis: seit dem Tag konnte KEIN EINZIGER Render-Test mehr eine
+#     Sitzung bauen. Die erzeugten Fenster importieren "../utils/kit",
+#     die Datei entstand hier nie, und esbuild brach mit "Could not
+#     resolve" ab - 15 Fehler, bevor der erste Bildpunkt gemessen war.
+#     Am echten System war nie etwas kaputt; kaputt war die Abschrift.
+#
+#     Dagegen steht seit dem 19.08.2026
+#     tests/src/test_render_table.py: er haelt diese Tabelle gegen die
+#     case-Zweige und wird rot, sobald ein Ziel dazukommt, das hier
+#     fehlt. Ein Waechter im SICHEREN Lauf, damit die Luecke auffaellt,
+#     ohne dass jemand einen Compositor starten muss.
 RENDERED = {
     "templates/ags-i18n.template": "utils/i18n.ts",
+    "templates/ags-kit.template": "utils/kit.ts",
     "templates/ags-overlay-utils.template": "utils/overlay.ts",
     "templates/ags-hyprland.template": "utils/hyprland.ts",
     "templates/ags-tray.template": "utils/tray.ts",
