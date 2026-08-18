@@ -107,6 +107,20 @@ GTK4.
 | ST-2 | Anmeldemaske an die Marke: regreet traegt libadwaita-Grau, englische Beschriftungen, rote Knoepfe | offen |
 | — | `zepos-lock` - Sperrbildschirm (ersetzt hyprlock) | **erledigt** 12.08.2026 |
 | — | Terminal (ersetzt kitty) | offen, **Entscheidung** |
+| UI-1 | Alle zwoelf AGS-Fenster auf EIN Gestaltungssystem: ein Knopf, eine Zeile, eine Breitenleiter, Seitenleiste fuer die Hauptfunktionen. Das Kontrollzentrum ist dabei die Schale. | offen, **in Planung** 18.08.2026 |
+| UI-2 | Farben global und an EINER Stelle einstellbar, rund zehn statt der heutigen 69. Der Stil-Editor listet sie heute einzeln auf; gebraucht wird eine kleine Zahl benannter Rollen, aus denen sich der Rest ableitet. | offen, **vertagt** 18.08.2026 |
+
+**UI-2 ist bewusst vertagt** - der Nutzer am 18.08.2026: "das bitte
+irgendwie besser machen bzw als task anlegen das machen wir spaeter
+erstmal die UI verbessern". Die Reihenfolge ist richtig herum: welche
+Farbrollen es geben MUSS, zeigt sich erst, wenn die Fenster aus
+gemeinsamen Bauteilen bestehen. Heute traegt jedes Fenster eigene
+Knoepfe, und jeder eigene Knopf erfindet seine eigene Farbe - eine
+Reduktion vor UI-1 waere geraten statt hergeleitet.
+
+GEMESSEN am 18.08.2026: `brand.COLORS` fuehrt 69 Eintraege, und
+`src/templates/ags-style.template` traegt 41 verschiedene Knopf-Klassen
+ohne eine einzige gemeinsame.
 
 **Die Entscheidung zum Sperrbildschirm ist gefallen** - der Nutzer am
 11.08.2026: "4 sollten wir selber machen also sperrbildschirm gtk4".
