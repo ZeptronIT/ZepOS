@@ -1011,6 +1011,21 @@ export default function StyleEditor(): OverlayWidget {
       // breite von 8x(24+32)=448px plus 7x4px Reihenabstand die
       // verfuegbare Breite sprengen - heute sind es 8x(24+4)=224px plus
       // Abstand. zepButton passt hier nicht, siehe Gruppenbericht.
+      //
+      // BERICHTIGT am 18.08.2026 (Aufgabe 12): "474px" und "WIN_WIDTH
+      // oben" waren am Tag von Task B richtig. WIN_WIDTH ist seither
+      // (noch am selben Tag, NACH Task B) keine 474 mehr - siehe die
+      // Anmerkung dort ("UNGEPRUEFTE ABWEICHUNG SEIT 18.08.2026"): der
+      // Reiter "Größen" fiel (commit a41acee), und die Zeile darueber
+      // nennt seither die Sprosse STYLE_MODAL_WIDTH_S (500) statt eines
+      // Pixel-Literals. Ob acht Kacheln bei 500 statt 474 (26 Punkte
+      // mehr Spielraum) noch sprengen, ist NICHT nachgerechnet - dieselbe
+      // Warnung wie dort: tests/render/ ist fuer diesen Auftrag
+      // verboten, vor der naechsten Beruehrung dieses Fensters (Stufe 5,
+      // Breitenleiter) neu messen. Die Ausnahme selbst (cp-preset-btn
+      // bleibt eine eigene Klasse) ist davon unberuehrt - sie haengt an
+      // der Form der Kachel (keine Beschriftung, eigenes Mass), nicht an
+      // der konkreten Fensterbreite.
       for (const color of PRESET_COLORS) {
         const swatch = new Gtk.DrawingArea()
         swatch.set_size_request(24, 24)

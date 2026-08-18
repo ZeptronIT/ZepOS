@@ -1212,35 +1212,18 @@ $overlay-border: $border;
 // (die Tabelle IP/Gateway/DNS/Sicherheit - kein Symbol+Titel+Nebenzeile,
 // darum keine zepRow) und net-password-box/-pw-title/-pw-entry/-pw-error
 // bleiben: sie gehoeren keinem der fuenf Bauteile.
-.net-wifi-toggle {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  font-size: {{STYLE_FONT_BODY}};
-  color: $network-accent;
-  min-width: 32px;
-  min-height: 32px;
-
-  label {
-    min-width: 20px;
-    min-height: 20px;
-  }
-
-  &:hover {
-    background: rgba($network-accent, 0.15);
-    border-color: rgba($network-accent, 0.3);
-  }
-
-  &.active {
-    background: rgba($network-accent, 0.3);
-    border-color: $network-accent;
-  }
-
-  &.inactive {
-    opacity: 0.5;
-  }
-}
+//
+// GEGANGEN am 18.08.2026 (Aufgabe 12): net-wifi-toggle. Ein Gtk.Button
+// mit von Hand geschriebenen .active/.inactive-Zustaenden, der einen
+// Ein/Aus-Schalter nachstellte, statt Gtk.Switch (`.zep-toggle`,
+// weiter oben in dieser Datei) zu benutzen - derselbe Schalter, den
+// Bluetooth fuer seinen Adapter schon hatte. Ersetzt durch zepToggle in
+// ags-network.template (buildWifiToggle()), keine eigene Regel mehr
+// noetig - `.zep-toggle` deckt ihn mit ab. GEPRUEFT: net-wifi-toggle
+// enthielt kein "btn"/"-button" im Namen und zaehlte darum NIE zur
+// Ratsche in tests/src/test_button_kit.py - sein Fallen aendert die
+// dort gemessene Zahl (9) nicht, `_knopfklassen`/`_ist_knopfname` vor
+// und nach dieser Aenderung liefern dieselben neun Namen.
 
 // .net-scroll { min-height: 350px } stand hier und ist am 17.08.2026
 // gegangen. ags-network.template hat seine eigene Bildlaufleiste am
@@ -1958,11 +1941,50 @@ $overlay-border: $border;
 // Derselbe Fall wie battery-header/disk-header (siehe dort):
 // ags-vpn.template bekommt seinen Kopf seit createOverlayWindow() von
 // der Fabrik.
+// AUFGABE 12 (18.08.2026): SIEHT AUS WIE EIN ZUSTANDSKOPF, OHNE EINER ZU
+// SEIN
+//     GEMESSEN, VORHER: .vpn-status trug eine EIGENE Kartenoptik, die
+//     keine der beiden anderen Verbindungsseiten hat - rgba($surface,
+//     0.3) als eigener Grund, ein 3px breiter Streifen in $vpn-accent
+//     links, dazu eine eigene Aussenabstand (SPACE_12 0) ZUSAETZLICH
+//     zur Innenpolsterung (SPACE_12 auf allen Seiten). `.zep-state-head`
+//     (Bluetooth, und seit Aufgabe 12 auch Netzwerk) hat nichts davon:
+//     kein Grund, kein Streifen, keine Aussenabstand - nur eine
+//     Innenpolsterung aus SPACE_12/SPACE_16, und der Titel in FONT_TITLE
+//     fett statt FONT_BODY.
+//
+//     WARUM HIER TROTZDEM KEIN ECHTER zepStateHeader STEHT: die
+//     begruendete Ausnahme steht am Kopf von ags-vpn.template (Aufgabe
+//     9, dort BERICHTIGT und bestaetigt in Aufgabe 12) - zwei
+//     vollstaendig verschiedene Ansichten (verbunden/Formular), nie
+//     beide sichtbar, keine davon "eine Kopfzeile plus mehr Inhalt
+//     darunter". Diese Begruendung ist strukturell, nicht kosmetisch,
+//     und Aufgabe 12 hebt sie darum NICHT auf.
+//
+//     WAS AUFGABE 12 STATTDESSEN AENDERT: dieselben Sprossen aus
+//     sizes.py wie `.zep-state-head`, damit diese Karte AUSSIEHT wie
+//     ein Zustandskopf, auch wenn sie keiner ist. GEFALLEN: der eigene
+//     Grund, der Streifen, die Aussenabstand. ANGEGLICHEN: die
+//     Innenpolsterung (SPACE_12 SPACE_16 statt SPACE_12 auf allen
+//     Seiten) und die Titelschrift (`.vpn-status-label` FONT_TITLE
+//     fett statt FONT_BODY - "VPN unvollstaendig"/"Nicht verbunden"/
+//     "Verbinde ..." ist der ZUSTAND dieser Seite, keine Nebenzeile
+//     mehr). `.vpn-status-icon` faellt von ICON_TITLE auf ICON_CAPTION
+//     - dieselbe Groesse wie das Symbol einer zepRow (.zep-row-icon,
+//     siehe dort). Ein grosses freistehendes Symbol war genau das
+//     Muster, das task-C (Netzwerk) fuer .net-status-icon/
+//     .net-detail-icon bereits abgeschafft hat (siehe die Begruendung
+//     bei ICON_ROLES in src/sizes.py) - hier stand der letzte Rest
+//     davon im Baum.
+//
+//     WAS BLEIBT, UND BEWUSST NICHT DEM KIT WEICHT: das Symbol selbst
+//     (zepStateHeader kennt keins) und seine vier Zustandsfarben
+//     (gruen/grau/orange/rot). VPN hat keinen einfachen Ein/Aus-
+//     Schalter wie Bluetooth/Netzwerk - Verbinden verlangt
+//     Zugangsdaten -, und ohne das Symbol waere der Zustand ohne jede
+//     Farbe die einzige Auskunft, die "sieht aus wie" hier noch liesse.
 .vpn-status {
-  background: rgba($surface, 0.3);
-  padding: {{STYLE_SPACE_12}};
-  margin: {{STYLE_SPACE_12}} 0;
-  border-left: 3px solid $vpn-accent;
+  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
 }
 
 .vpn-status-row {
@@ -1970,7 +1992,7 @@ $overlay-border: $border;
 }
 
 .vpn-status-icon {
-  font-size: {{STYLE_ICON_TITLE}};
+  font-size: {{STYLE_ICON_CAPTION}};
   margin-right: {{STYLE_SPACE_8}};
 
   &.connected { color: $green; }
@@ -1980,7 +2002,8 @@ $overlay-border: $border;
 }
 
 .vpn-status-label {
-  font-size: {{STYLE_FONT_BODY}};
+  font-size: {{STYLE_FONT_TITLE}};
+  font-weight: bold;
   color: $text;
 }
 

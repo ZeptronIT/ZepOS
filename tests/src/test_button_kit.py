@@ -139,6 +139,31 @@ AUSGANGSZAHL = 52
 #                   in einem 474px breiten Fenster wuerden die verfuegbare
 #                   Breite sprengen. GEZAEHLT mit _knopfklassen/
 #                   _ist_knopfname aus diesem Modul, nicht abgeschrieben.
+#                   BERICHTIGT am 18.08.2026 (Aufgabe 12): beide 474px
+#                   oben (se-tab-btn UND cp-preset-btn) waren am Tag von
+#                   Task B richtig und sind seither veraltet - derselbe
+#                   Reiter "Größen", dessen Wegfall die Drei-Reiter-
+#                   Rechnung hinter den 474 traegt, ist NACH Task B, noch
+#                   am selben Tag, entfernt worden (commit a41acee).
+#                   ags-style-editor.template nennt seither nicht mehr
+#                   `const WIN_WIDTH = 474`, sondern die Sprosse
+#                   {{STYLE_MODAL_WIDTH_S}} (sizes.py, MODAL_WIDTHS["S"]
+#                   = 500) - GEMESSEN, `grep -n "WIN_WIDTH ="
+#                   ags-style-editor.template` am 18.08.2026. Die
+#                   Kopplungs-Begruendung fuer BEIDE Ausnahmen bleibt
+#                   unveraendert TRAGEND: se-tab-btn haengt weiterhin an
+#                   der Breite des breitesten Reiters, cp-preset-btn
+#                   weiterhin an der verfuegbaren Breite fuer acht
+#                   Kacheln je Zeile - nur die konkrete Pixelzahl war
+#                   die veraltete Haelfte, nicht die Kopplung selbst.
+#                   Beide Ausnahmen bleiben darum stehen. Ob acht Kacheln
+#                   bei 500 statt 474 (26 Punkte mehr) noch sprengen,
+#                   ist NICHT nachgerechnet - dieselbe Warnung wie am
+#                   Kopf von ags-style-editor.template ("Ohne den
+#                   verbotenen Bildschirmtest ... nicht neu vermessen"),
+#                   hier ebenso: tests/render/ ist fuer diesen Auftrag
+#                   verboten. Vor der naechsten Beruehrung dieses
+#                   Fensters (Stufe 5, Breitenleiter) neu messen.
 #   32  18.08.2026  Task C (Netzwerk): net-back-btn, net-connect-btn,
 #                   net-detail-btn, net-disconnect-btn, net-nm-btn,
 #                   net-refresh-btn (aus der gemeinsamen Regel mit

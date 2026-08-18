@@ -12,13 +12,12 @@
 //     Inhaltsbauer bleibt derselbe (dieselben zwei Ansichten - verbunden/
 //     Formular -, derselbe Statusabruf, dieselbe Verbindungslogik).
 //
-//     ANDERS ALS BLUETOOTH (Aufgabe 7) UND NETZWERK (Aufgabe 8): KEIN
-//     zepStateHeader ERZWUNGEN
-//         Beide Vorlagen bekamen einen Seitenkopf aus `zepStateHeader`
-//         ("der Kopf ist der Zustand" statt einer Titelzeile darueber,
-//         Spezifikation 2.2), weil beide eine kleine, IMMER SICHTBARE
-//         Statuszeile UEBER dem Rest des Inhalts hatten (statusWrap),
-//         die sich dafuer eins zu eins anbot. VPN hat diese Form nicht:
+//     ANDERS ALS BLUETOOTH (Aufgabe 7): KEIN zepStateHeader ERZWUNGEN
+//         Bluetooth bekam einen Seitenkopf aus `zepStateHeader` ("der
+//         Kopf ist der Zustand" statt einer Titelzeile darueber,
+//         Spezifikation 2.2), weil es eine kleine, IMMER SICHTBARE
+//         Statuszeile UEBER dem Rest des Inhalts hatte (statusWrap), die
+//         sich dafuer eins zu eins anbot. VPN hat diese Form nicht:
 //         `connectedView` (grosses zentriertes Symbol, drei Detailzeilen
 //         IP/Server/Verbindung, Trennen-Knopf) und `formView`
 //         (Statuszeile, drei Formularfelder, Verbinden-Knopf) sind zwei
@@ -38,6 +37,31 @@
 //         eine Form, die nicht passt. Die bestehenden Status-Anzeigen
 //         (connectedStatusLabel, disconnectedIcon/-Label) bleiben darum
 //         UNVERAENDERT. Siehe Bericht zu Aufgabe 9.
+//
+//         BERICHTIGT am 18.08.2026 (Aufgabe 12): an dieser Stelle stand
+//         bis hierher "ANDERS ALS BLUETOOTH (Aufgabe 7) UND NETZWERK
+//         (Aufgabe 8) ... Beide Vorlagen bekamen einen Seitenkopf aus
+//         zepStateHeader". Das war schon am Tag dieses Kommentars
+//         (Aufgabe 9) falsch: Netzwerk (Aufgabe 8) bekam KEINEN
+//         zepStateHeader - sein Statuskopf blieb eine zepRow, eine
+//         Entscheidung von "task-C" (Stufe 4, NACH Aufgabe 8, siehe der
+//         Kopf von ags-network.template), nicht von Aufgabe 8 selbst.
+//         GEPRUEFT per grep vor dieser Berichtigung: `import type` in
+//         ags-network.template fuehrte damals `zepButton, zepRow,
+//         zepSectionLabel, zepDivider` - `zepStateHeader` fehlte in der
+//         Liste. Aufgabe 12 hat das nachgeholt (siehe dort): Netzwerk
+//         traegt seither denselben zepStateHeader wie Bluetooth, mit
+//         `zepToggle` als `ende` fuer den WLAN-Schalter, an derselben
+//         Stelle wie `buildPowerToggle()` hier oben in Bluetooth. VPN
+//         bleibt seither die einzige der drei Verbindungsseiten OHNE
+//         echten zepStateHeader - aus dem strukturellen Grund im Absatz
+//         oben, den Aufgabe 12 geprueft und nicht nur uebernommen hat.
+//         Seine `.vpn-status`-Karte (siehe `formView` unten) bekam
+//         dafuer dieselbe Innenpolsterung und Titelschrift aus
+//         sizes.py wie `.zep-state-head` (SPACE_12/SPACE_16, FONT_TITLE
+//         fett) - siehe die Begruendung in ags-style.template, bei
+//         `.vpn-status`. Sie IST kein zepStateHeader, sie SIEHT jetzt
+//         nur so aus.
 //
 //     `const WINDOW_NAME = "vpn-manager"` faellt - sie war schon VOR
 //     diesem Umbau tot: die Fabrikkonfiguration nannte das Fenster ueber

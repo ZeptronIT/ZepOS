@@ -169,23 +169,56 @@ import Pango from "gi://Pango"
 // Aufgabe 7, an derselben Stelle).
 import type { ShellSeite } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
-import { zepButton, zepRow, zepSectionLabel, zepDivider } from "../utils/kit"
+import { zepButton, zepRow, zepStateHeader, zepToggle, zepSectionLabel, zepDivider } from "../utils/kit"
 
 // UMGESTELLT AUF DAS BAUTEIL-KIT, 18.08.2026 (task-C, Stufe 4)
-//     zepToggle fehlt bewusst in der Liste oben: net-wifi-toggle ist
-//     nicht Teil der sechs benannten Klassen dieser Aufgabe (der Plan
-//     nennt net-back-btn, net-connect-btn, net-detail-btn,
+//     zepToggle fehlte bewusst in der Liste oben, bis Aufgabe 12: net-
+//     wifi-toggle war nicht Teil der sechs benannten Klassen von task-C
+//     (der Plan nannte net-back-btn, net-connect-btn, net-detail-btn,
 //     net-disconnect-btn, net-nm-btn, net-refresh-btn) und traegt auch
-//     kein "btn"/"-button" im Namen, zaehlt also nicht zur Ratsche in
-//     tests/src/test_button_kit.py. Er bleibt stehen.
+//     kein "btn"/"-button" im Namen, zaehlte also nie zur Ratsche in
+//     tests/src/test_button_kit.py. Das war der Grund, aus dem er
+//     STEHENBLIEB - kein Grund, aus dem er anders aussehen SOLLTE.
 //
-//     .net-current (der Zustandskopf) und die Zeilen der WLAN-Liste
-//     (.net-item) sind trotzdem mitgegangen, obwohl keine der beiden
-//     Klassen in der Ratsche zaehlt (sie tragen kein "btn"/"-button")
-//     - genau das, was zepRow mit "ausgewaehlt" und der Kuerzung aus
-//     Task 6 fuer dieses Fenster leisten soll (Task-C-Auftrag,
-//     Interfaces-Abschnitt). Ebenso der Kopf der Detailansicht: gleiche
-//     Form (Zeichen, Titel, Nebenzeile), gleicher Grund.
+//     GEFALLEN, 18.08.2026 (Aufgabe 12): net-wifi-toggle ist ein
+//     Gtk.Button mit zwei per Hand geschriebenen CSS-Zustaenden
+//     (.active/.inactive), der einen Ein/Aus-Schalter NACHSTELLT -
+//     genau die Art "billig aussehender Knopf", die die Meldung vom
+//     18.08.2026 ausgeloest hat (Kopf von ags-bluetooth.template). Die
+//     Begruendung oben (nicht in der Ratsche gezaehlt) beantwortet nur,
+//     warum task-C ihn nicht mit umgestellt hat - nicht, warum er
+//     dauerhaft anders bleiben sollte als der Schalter, den Bluetooth
+//     fuer dieselbe Rolle (Adapter an/aus) laengst hat. Aufgabe 12
+//     traegt genau diese Frage nach: derselbe Schalter fuer dieselbe
+//     Handlung auf allen drei Verbindungsseiten. Ersetzt durch
+//     `zepToggle`, gebaut in `buildWifiToggle()` (updateDisplay()) und
+//     als `ende` des neuen Zustandskopfes gereicht - dieselbe Stelle
+//     wie `buildPowerToggle()` in ags-bluetooth.template.
+//
+//     NACHGEMESSEN (Aufgabe 12), NICHT VERMUTET: die Ratsche in
+//     tests/src/test_button_kit.py bleibt bei dieser Aenderung auf 9
+//     stehen - `_knopfklassen`/`_ist_knopfname` vor UND nach dem Fall
+//     von `.net-wifi-toggle` liefern dieselben neun Namen
+//     (cc-action-btn, cp-preset-btn, overlay-close-btn, se-tab-btn,
+//     zep-btn, zep-btn-kritisch/-still/-umrandet/-voll). Die
+//     Begruendung oben sagt es bereits: "net-wifi-toggle" enthaelt kein
+//     "btn" und endet nicht auf "-button" - er zaehlte nie zur Ratsche,
+//     also aendert sein Fallen sie auch nicht. ERLAUBT bleibt darum
+//     unveraendert auf 9, ohne neue Historie-Zeile.
+//
+//     .net-current (der Zustandskopf) war mit task-C bereits eine
+//     zepRow, nicht die urspruenglich fuer diese Rolle vorgesehene
+//     zepStateHeader ("der Kopf ist der Zustand", Spezifikation 2.2,
+//     wie in ags-bluetooth.template) - eine Entscheidung von task-C
+//     selbst (Interfaces-Abschnitt jenes Auftrags), nicht von Aufgabe 8.
+//     GEFALLEN, 18.08.2026 (Aufgabe 12): jetzt `zepStateHeader`, mit dem
+//     neuen `zepToggle` als `ende` - siehe `updateDisplay()`. Die
+//     Zeilen der WLAN-Liste (.net-item) BLEIBEN zepRow: sie sind
+//     Listeneintraege, keine Seitenkoepfe, dieselbe Rolle wie
+//     `createDeviceRow()` in ags-bluetooth.template. Ebenso der Kopf
+//     der Detailansicht (detailHeaderWrap): eine Unteransicht dieser
+//     Seite, kein Gegenstueck bei Bluetooth/VPN, darum ausserhalb des
+//     Vergleichs von Aufgabe 12 - bleibt unveraendert zepRow.
 //
 //     GEFUNDENER UNTERSCHIED ZUM BAUTEIL-KIT, nicht stillschweigend
 //     behoben (dieselbe Offenheit wie in ags-bluetooth.template): die
@@ -215,11 +248,20 @@ const SCRIPTS = {
 }
 
 // Zeichen
+// GEFALLEN, 18.08.2026 (Aufgabe 12): "wifi", "wifiOff" und "ethernet".
+// Der neue zepStateHeader kennt kein `symbol` - die Verbindungsart
+// stand bis hierher ZUSAETZLICH als Symbol neben dem Titeltext im
+// Zustandskopf (ICONS.ethernet fuer Kabel, ICONS.wifiOff fuer "nicht
+// verbunden", ICONS.wifi als Kind des alten net-wifi-toggle), alle drei
+// ohne zweiten Leser in dieser Datei, GEPRUEFT per grep vor der
+// Loeschung (Regel 14 - Rueckbau, kein toter Code fuer spaeter). Die
+// Unterscheidung bleibt ueber den Titeltext selbst erhalten (WIRED_NAME/
+// SSID/NOT_CONNECTED, siehe updateDisplay()); getSignalIcon() bleibt -
+// die WLAN-Liste (createNetworkRow) und der Kopf der Detailansicht
+// (showDetail) sind zepRow, nicht zepStateHeader, und tragen ihr Symbol
+// weiter.
 const ICONS = {
   network: "{{ICON_NETWORK}}",
-  wifi: "{{ICON_WIFI}}",
-  wifiOff: "{{ICON_WIFI_OFF}}",
-  ethernet: "{{ICON_ETHERNET}}",
   lock: "{{ICON_LOCK}}",
   signal4: "{{ICON_WIFI_4}}",
   signal3: "{{ICON_WIFI_3}}",
@@ -308,13 +350,6 @@ async function disconnect() {
   catch (e) { console.error("Das Trennen schlug fehl:", e) }
 }
 
-async function toggleWifi() {
-  try {
-    const status = await execAsync("nmcli radio wifi")
-    await execAsync(`nmcli radio wifi ${status.trim() === "enabled" ? "off" : "on"}`)
-  } catch (e) { console.error("Das Umschalten des WLAN-Adapters schlug fehl:", e) }
-}
-
 function removeAllChildren(box: Gtk.Box) {
   let child = box.get_first_child()
   while (child) { const next = child.get_next_sibling(); box.remove(child); child = next }
@@ -338,11 +373,19 @@ export const networkSeite: ShellSeite = {
     // drei Ansichtswechsel sie von aussen erreichen muessen.
     // statusIcon/statusLabel/ipLabel und detailSsidLabel/detailSignalLabel/
     // detailSignalIcon sind mit dem Umbau auf die Bauteile (18.08.2026,
-    // task-C) gegangen: zepRow nimmt Titel und Nebenzeile nur als TEXT
-    // entgegen, es gibt keinen Griff, sie nachtraeglich zu aendern -
-    // statusWrap und detailHeaderWrap tragen darum jeden Takt genau eine
-    // frische zepRow, derselbe Kunstgriff wie in ags-bluetooth.template.
-    let statusWrap: Gtk.Box, wifiToggle: Gtk.Button
+    // task-C) gegangen: weder zepRow noch zepStateHeader nehmen Titel
+    // und Nebenzeile als etwas anderes als TEXT entgegen, es gibt
+    // keinen Griff, sie nachtraeglich zu aendern - statusWrap und
+    // detailHeaderWrap tragen darum jeden Takt genau ein frisches
+    // Bauteil, derselbe Kunstgriff wie in ags-bluetooth.template.
+    // statusWrap traegt seit Aufgabe 12 (18.08.2026) einen
+    // zepStateHeader statt einer zepRow (siehe updateDisplay()) -
+    // detailHeaderWrap (Unteransicht, kein Gegenstueck bei Bluetooth/
+    // VPN) bleibt eine zepRow. `wifiToggle` faellt als eigenes Feld:
+    // der Schalter wird seit Aufgabe 12 jeden Takt frisch in
+    // `buildWifiToggle()` gebaut, derselbe Kunstgriff wie
+    // `buildPowerToggle()` in ags-bluetooth.template.
+    let statusWrap: Gtk.Box
     let networkList: Gtk.Box, passwordBox: Gtk.Box, passwordEntry: Gtk.Entry
     let passwordSsidLabel: Gtk.Label, passwordErrorLabel: Gtk.Label, mainContent: Gtk.Box
     let detailBox: Gtk.Box, detailHeaderWrap: Gtk.Box
@@ -478,35 +521,73 @@ export const networkSeite: ShellSeite = {
       const networks = await scanWifi()
       const wifiEnabled = (await execAsync("nmcli radio wifi").catch(() => "disabled")).trim() === "enabled"
 
-      // Der Zustandskopf als frische zepRow (18.08.2026, task-C) - siehe
-      // die Begruendung bei der Deklaration von statusWrap oben. Das
-      // Info-Symbol (net-detail-btn, Rolle "still") steht als `ende`
-      // dabei, dieselbe Stelle wie buildPowerToggle() im Bluetoothfenster.
+      // Der Zustandskopf als frischer zepStateHeader (18.08.2026,
+      // Aufgabe 12) - siehe die Begruendung bei der Deklaration von
+      // statusWrap oben und am Kopf dieser Datei. `zepStateHeader` kennt
+      // kein `symbol` (anders als die zepRow, die hier bis Aufgabe 12
+      // stand) - die Verbindungsart (Kabel/WLAN/keine) stand bisher
+      // ZUSAETZLICH im Symbol (ICONS.ethernet/getSignalIcon()/
+      // ICONS.wifiOff), sie bleibt jetzt allein im Titeltext erhalten
+      // (WIRED_NAME/SSID/NOT_CONNECTED) - derselbe Verzicht, den
+      // Bluetooth fuer sein Verbindungssymbol in Aufgabe 7 schon
+      // gemacht hat ("die Seitenleiste zeigt das Symbol schon").
+      //
+      // Das Info-Symbol (Rolle "still") und der neue WLAN-Schalter
+      // (`zepToggle`, Aufgabe 12) teilen sich `ende` als kleine Box -
+      // beide sind Bedienelemente FUER DIESEN Kopf, aber fuer zwei
+      // verschiedene Dinge: das Symbol oeffnet die Detailansicht DER
+      // AKTUELLEN Verbindung (Kabel oder WLAN), der Schalter schaltet
+      // NUR den WLAN-Empfaenger. GEPRUEFT (18.08.2026): eine Ethernet-
+      // Verbindung bleibt bestehen, auch wenn der WLAN-Schalter aus
+      // steht - beide Bedienelemente wirken darum unabhaengig
+      // voneinander, nie beide auf dasselbe Feld.
       const buildDetailButton = (): Gtk.Widget =>
         zepButton(ICONS.info, "still", () => {
           if (currentConnectionInfo.type !== "none") showDetail()
         })
 
-      removeAllChildren(statusWrap)
-      if (connInfo.type === "ethernet") {
-        statusWrap.append(zepRow({
-          symbol: ICONS.ethernet, titel: WIRED_NAME,
-          unterzeile: connInfo.ip || NOTHING, ende: buildDetailButton(),
-        }))
-      } else if (connInfo.type === "wifi") {
-        statusWrap.append(zepRow({
-          symbol: getSignalIcon(connInfo.signal), titel: connInfo.name,
-          unterzeile: connInfo.ip || NOTHING, ende: buildDetailButton(),
-        }))
-      } else {
-        statusWrap.append(zepRow({
-          symbol: ICONS.wifiOff, titel: NOT_CONNECTED,
-          unterzeile: NOTHING, ende: buildDetailButton(),
-        }))
+      // Derselbe Kunstgriff wie buildPowerToggle() in
+      // ags-bluetooth.template: frisch gebaut fuer DIESEN Takt, damit
+      // der Anfangswert keinen Klick ausloest (zepToggle verbindet sich
+      // erst NACH dem Konstruktor mit "notify::active").
+      const buildWifiToggle = (): Gtk.Widget => {
+        const toggle = zepToggle(wifiEnabled, async (an) => {
+          toggle.set_sensitive(false)
+          try {
+            await execAsync(`nmcli radio wifi ${an ? "on" : "off"}`)
+          } catch (e) {
+            console.error("Netzwerk: WLAN-Umschalten schlug fehl:", e)
+          }
+          updateDisplay()
+        })
+        toggle.set_tooltip_text(_("Turn Wi-Fi on or off"))
+        return toggle
       }
 
-      if (wifiEnabled) { wifiToggle.add_css_class("active"); wifiToggle.remove_css_class("inactive") }
-      else { wifiToggle.remove_css_class("active"); wifiToggle.add_css_class("inactive") }
+      const buildHeaderEnde = (): Gtk.Widget => {
+        const ende = new Gtk.Box({ spacing: 8 })
+        ende.append(buildDetailButton())
+        ende.append(buildWifiToggle())
+        return ende
+      }
+
+      removeAllChildren(statusWrap)
+      if (connInfo.type === "ethernet") {
+        statusWrap.append(zepStateHeader({
+          titel: WIRED_NAME,
+          unterzeile: connInfo.ip || NOTHING, ende: buildHeaderEnde(),
+        }))
+      } else if (connInfo.type === "wifi") {
+        statusWrap.append(zepStateHeader({
+          titel: connInfo.name,
+          unterzeile: connInfo.ip || NOTHING, ende: buildHeaderEnde(),
+        }))
+      } else {
+        statusWrap.append(zepStateHeader({
+          titel: NOT_CONNECTED,
+          unterzeile: NOTHING, ende: buildHeaderEnde(),
+        }))
+      }
 
       removeAllChildren(networkList)
       for (const network of networks.slice(0, 12)) { networkList.append(createNetworkRow(network)) }
@@ -584,16 +665,17 @@ export const networkSeite: ShellSeite = {
     const wifiHeader = zepSectionLabel(_("Wi-Fi networks"))
     wifiHeader.set_hexpand(true)
 
-    // net-wifi-toggle bleibt ausserhalb des Bauteil-Kits: er ist keine
-    // der sechs benannten Klassen dieser Aufgabe und traegt kein
-    // "btn"/"-button" im Namen (zaehlt also nicht zur Ratsche in
-    // tests/src/test_button_kit.py). Siehe die Begruendung am Kopf
-    // dieser Datei.
-    wifiToggle = new Gtk.Button({ can_focus: false })
-    wifiToggle.add_css_class("net-wifi-toggle")
-    wifiToggle.set_child(new Gtk.Label({ label: ICONS.wifi }))
-    wifiToggle.set_tooltip_text(_("Turn Wi-Fi on or off"))
-    wifiToggle.connect("clicked", () => { toggleWifi(); setTimeout(updateDisplay, 1000) })
+    // GEFALLEN, 18.08.2026 (Aufgabe 12): der WLAN-Schalter (vormals
+    // net-wifi-toggle, ein Gtk.Button mit von Hand geschriebenen
+    // .active/.inactive-Zustaenden) stand hier, in dieser Zeile ueber
+    // der Liste - getrennt vom Zustandskopf, der ueber ihm steht und
+    // "Kabelverbindung"/die SSID/"Nicht verbunden" zeigt. Bluetooth
+    // haelt seinen Adapterschalter dagegen IM Zustandskopf, als `ende`
+    // von zepStateHeader (buildPowerToggle() in ags-bluetooth.template).
+    // Der Schalter zieht darum mit in `updateDisplay()` um - siehe
+    // `buildWifiToggle()` dort - und ist jetzt `ende` des neuen
+    // Zustandskopfes, nicht mehr Teil dieser Zeile. Siehe die
+    // ausfuehrliche Begruendung am Kopf dieser Datei.
 
     // "Erneut suchen" ist die Hauptsache dieser Zeile - dieselbe Rolle
     // wie "Geraete suchen" (scanBtn) im Bluetoothfenster fuer dieselbe
@@ -626,7 +708,6 @@ export const networkSeite: ShellSeite = {
     nmBtn.set_tooltip_text(_("Open network management"))
 
     toggleRow.append(wifiHeader)
-    toggleRow.append(wifiToggle)
     toggleRow.append(refreshBtn)
     toggleRow.append(nmBtn)
 
