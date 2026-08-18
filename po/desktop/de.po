@@ -324,8 +324,8 @@ msgid "NETWORK & CONNECTIONS"
 msgstr "NETZ & VERBINDUNGEN"
 
 #: src/templates/ags-control-center.template:807
-msgid "Wi-Fi networks - the same window as above"
-msgstr "WLAN-Netzwerke - dasselbe Fenster wie oben"
+msgid "Wi-Fi networks - the same page as above"
+msgstr "WLAN-Netzwerke - dieselbe Seite wie oben"
 
 #: src/templates/ags-control-center.template:838
 msgid "VPN: off"

@@ -2199,14 +2199,14 @@ GLASS_LAYERS = (
     # Ecke, das Zentrum eine am Zeiger, und `match:namespace` sucht
     # verankert - ^(notifications)$ traefe diese hier nicht mit.
     "notification-center",
-    "network",
-    # "bluetooth" ist am 18.08.2026 (Aufgabe 7, "Bluetooth wird eine
-    # Seite") gefallen: ags-bluetooth.template baut kein eigenes
-    # Astal.Window mehr (kein `namespace:`/`createOverlayWindow({`
-    # mehr im eigenen Quelltext, siehe dort) - Bluetooth teilt sich
-    # seither die Glasplatte des Namensraums "control" (die Schale).
+    # "network" (Aufgabe 8) und "bluetooth" (Aufgabe 7) sind am
+    # 18.08.2026 gefallen: weder ags-network.template noch
+    # ags-bluetooth.template bauen ein eigenes Astal.Window mehr (kein
+    # `namespace:`/`createOverlayWindow({` mehr im eigenen Quelltext,
+    # siehe dort) - beide teilen sich seither die Glasplatte des
+    # Namensraums "control" (die Schale).
     # tests/src/test_glass.py::_declared_namespaces() faende sonst
-    # einen Eintrag ohne meldende Quelle - siehe Bericht zu Aufgabe 7.
+    # einen Eintrag ohne meldende Quelle - siehe Bericht zu Aufgabe 7/8.
     "calendar",
     "shortcuts",
     "battery",
@@ -2306,10 +2306,9 @@ GLASS_PLATES = {
     # die aeusserste Flaeche hier dieselbe wie beim Kalender und nicht
     # dieselbe wie beim Einblendstapel, der gar keine Fensterplatte hat.
     "notification-center": _OVERLAY,
-    "network": _OVERLAY,
-    # "bluetooth" ist am 18.08.2026 (Aufgabe 7) gefallen - siehe der
-    # Kommentar bei GLASS_LAYERS oben. Bluetooth malt sich seither auf
-    # der Platte des Namensraums "control".
+    # "network" (Aufgabe 8) und "bluetooth" (Aufgabe 7) sind am
+    # 18.08.2026 gefallen - siehe der Kommentar bei GLASS_LAYERS oben.
+    # Beide malen sich seither auf der Platte des Namensraums "control".
     "calendar": _OVERLAY,
     "shortcuts": _OVERLAY,
     "battery": _OVERLAY,

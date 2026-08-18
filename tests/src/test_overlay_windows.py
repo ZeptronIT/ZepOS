@@ -185,19 +185,23 @@ FENSTER_UND_KASTEN = {
     "ags-vpn-settings.template": ".vpn-settings-container",
 }
 
-# Das eine, dessen Kasten mit Absicht keine min-width hat. Der Grund
+# Die Fenster, deren Kasten mit Absicht keine min-width hat. Der Grund
 # steht in ags-style.template ueber .bt-power-btn: "Die Groesse kommt aus
 # Schrift und Innenabstand, also aus der Leiter in src/sizes.py, und
 # nicht aus einem min-width daneben." Ohne min-width gibt es hier nichts
 # nachzurechnen - aber es muss AUFGESCHRIEBEN sein, sonst faellt ein
 # neues Fenster einfach aus dieser Zusicherung heraus.
 #
-# "ags-bluetooth.template" ist am 18.08.2026 (Aufgabe 7) aus dieser
-# Menge gefallen: die Vorlage meldet ueberhaupt keine `const WIN_WIDTH`
-# mehr an (sie ist eine Seite der Schale, keine eigene Fensterbreite
-# mehr - siehe Kopf der Vorlage), darum landet sie gar nicht mehr in
-# `erklaert` unten und braucht auch keinen Platz mehr in dieser Menge.
-OHNE_MIN_WIDTH = {"ags-network.template"}
+# LEER SEIT AUFGABE 8 (18.08.2026): "ags-bluetooth.template" (Aufgabe 7)
+# und "ags-network.template" (Aufgabe 8) sind beide aus dieser Menge
+# gefallen - keine der beiden Vorlagen meldet ueberhaupt noch eine
+# `const WIN_WIDTH` an (beide sind Seiten der Schale, keine eigene
+# Fensterbreite mehr - siehe Kopf der jeweiligen Vorlage), darum landet
+# keine von ihnen mehr in `erklaert` unten. `set()` bleibt trotzdem
+# AUFGESCHRIEBEN statt geloescht, aus demselben Grund wie oben: die
+# naechste Vorlage ohne min-width braucht einen Platz, an dem sie
+# hingehoert, keine Leere, die niemand mehr erklaert.
+OHNE_MIN_WIDTH: set[str] = set()
 
 # DIE SENKRECHTE BILDLAUFLEISTE, GEMESSEN und nicht geschaetzt.
 #

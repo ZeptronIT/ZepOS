@@ -305,6 +305,30 @@ def test_the_factory_can_do_what_the_bypass_was_built_for():
 
     Eine Fabrik, der eine Sache fehlt, wird umgangen. Also fehlt sie
     nicht mehr.
+
+    KORRIGIERT am 18.08.2026 (Aufgabe 8, "Netzwerk wird eine Seite"):
+    hier stand bis dahin `network = _code(TEMPLATES / "ags-network
+    .template"); assert "onEscape:" in network` - das war der Beweis,
+    dass `OverlayConfig.onEscape` einen Leser hat. Netzwerk ist seit
+    Aufgabe 8 keine eigene `createOverlayWindow`-Aufruferin mehr (siehe
+    tests/src/test_modal_rule.py::test_who_imports_the_toolbox_imports_the_factory,
+    das es fuer diese Vorlage seither NICHT mehr verlangt) und kann
+    darum auch `OverlayConfig.onEscape` nicht mehr setzen - das Feld
+    gehoert zu einer Fabrik, die diese Vorlage nicht mehr direkt ruft.
+    Netzwerk verlangt darum nicht mehr, ESC selbst zu schliessen, ist
+    also NICHT die alte Behauptung geworden, sondern eine ANDERE
+    Vorlage: `ags-wallpaper.template` (Loeschbestaetigung) ist seit
+    Aufgabe 10 ein zweiter, unabhaengiger Nutzer von `OverlayConfig
+    .onEscape` und haelt das Feld allein am Leben - die Zusicherung
+    zeigt jetzt auf diese Datei.
+
+    Netzwerk bekommt eine EIGENE, zweite Pruefung darunter: es benutzt
+    denselben Grundsatz (ESC geht aus der Unteransicht zurueck, nicht
+    zu) jetzt eine Stufe tiefer - ein EIGENER
+    `Gtk.EventControllerKey`, angehaengt an das Wurzel-Widget der
+    Seite und NICHT an `win` (siehe die Begruendung in
+    ags-overlay-utils.template bei `buildContent` von
+    `createShellWindow` und im Bericht zu Aufgabe 8).
     """
     factory = _code(FACTORY)
     assert "onEscape?: () => boolean" in factory, (
@@ -314,10 +338,28 @@ def test_the_factory_can_do_what_the_bypass_was_built_for():
     assert "if (config.onEscape?.()) return true" in factory, (
         "onEscape wird angeboten und nicht gerufen")
 
+    wallpaper = _code(TEMPLATES / "ags-wallpaper.template")
+    assert "onEscape:" in wallpaper, (
+        "kein Fenster benutzt OverlayConfig.onEscape mehr - dann ist das "
+        "Feld in der Fabrik ohne Leser")
+
     network = _code(TEMPLATES / "ags-network.template")
-    assert "onEscape:" in network, (
-        "das Netzwerkfenster benutzt den Rueckweg aus der Unteransicht "
-        "nicht mehr - dann ist das Feld in der Fabrik ohne Leser")
+    assert "onEscape:" not in network, (
+        "das Netzwerkfenster setzt wieder OverlayConfig.onEscape - das "
+        "Feld gehoert zu createOverlayWindow(), das diese Seite seit "
+        "Aufgabe 8 nicht mehr selbst ruft (siehe "
+        "test_who_imports_the_toolbox_imports_the_factory)")
+    assert "new Gtk.EventControllerKey()" in network, (
+        "die Netzwerk-Seite hat keinen eigenen Tastenabfaenger mehr - "
+        "ohne ihn geht ESC aus der Passwort-/Detailansicht nicht mehr "
+        "zurueck zur Liste, sondern schliesst sofort die ganze Schale")
+    assert "container.add_controller(escController)" in network, (
+        "der Tastenabfaenger der Netzwerk-Seite haengt nicht mehr an "
+        "ihrem eigenen Wurzel-Widget (`container`) - haenge er "
+        "stattdessen an `win`, liefe er NACH dem Controller der Schale "
+        "und niemals VOR ihm (Bubble-Reihenfolge), und die Ruecknahme "
+        "aus der Unteransicht wuerfe die ganze Schale zu, statt zur "
+        "Liste zurueckzugehen")
 
 
 # --------------------------------------------------------------------

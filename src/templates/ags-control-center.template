@@ -41,6 +41,9 @@ import { zepButton, ZepRolle, zepStateHeader } from "../utils/kit"
 // (Kopf, Geraeteliste, eigener Takt), diese Datei haengt sie nur noch
 // in `seiten` ein.
 import { bluetoothSeite } from "./BluetoothManager"
+// AUFGABE 8 (18.08.2026): die echte Netzwerk-Seite statt des
+// Umzugshinweises - dieselbe Form wie bluetoothSeite oben.
+import { networkSeite } from "./NetworkManager"
 
 const HOME = GLib.get_home_dir()
 // Das Widget laeuft eigenstaendig unter AGS und kann paths.py nicht
@@ -555,15 +558,13 @@ export default function ControlCenter(
     bauen: () => zepStateHeader({ titel, unterzeile: UMZUGSHINWEIS }),
   })
 
-  // VERBINDUNGEN: "network" und "vpn" noch leer, Aufgaben 8-9 fuellen sie
-  // (dieselbe stubSeite()-Form wie bisher). "bluetooth" ist seit Aufgabe 7
-  // (18.08.2026) die echte, importierte bluetoothSeite - siehe den Import
-  // am Kopf dieser Datei. Ihre `gruppe` traegt denselben msgid
+  // VERBINDUNGEN: "vpn" noch leer, Aufgabe 9 fuellt sie (dieselbe
+  // stubSeite()-Form wie bisher). "bluetooth" und "network" sind seit
+  // Aufgabe 7/8 (18.08.2026) die echten, importierten Seiten - siehe die
+  // Importe am Kopf dieser Datei. Ihre `gruppe` traegt denselben msgid
   // "CONNECTIONS" wie gruppeVerbindungen hier (zwei `_()`-Aufrufe auf
   // denselben msgid ergeben denselben Text; gruppenAus() gruppiert nach
   // dem TEXT), darum keine eigene Uebergabe von aussen.
-  const networkSeite = stubSeite("network", _("Network"), ICONS.wifi,
-                                 gruppeVerbindungen)
   const vpnSeite = stubSeite("vpn", _("VPN"), ICONS.vpn, gruppeVerbindungen)
 
   // SYSTEM: Ton und Anzeige, ausserhalb des Umfangs dieses Plans (siehe
@@ -829,12 +830,15 @@ export default function ControlCenter(
       networkIcon = new Gtk.Label({ label: ICONS.wifi })
       networkIcon.add_css_class("cc-icon")
       networkLabel = ccLabel(_("Loading …"))
-      // zepButton, Rolle "still" (Task D, 18.08.2026): oeffnet nur das
-      // Netzfenster, dieselbe Einordnung wie nmBtn in
-      // ags-network.template (Navigation zu einem bestehenden Fenster,
-      // keine Handlung fuer sich).
-      const netBtn = zepButton(ICONS.settings, "still", opens("network"))
-      netBtn.set_tooltip_text(_("Wi-Fi networks - the same window as above"))
+      // zepButton, Rolle "still" (Task D, 18.08.2026): Navigation zur
+      // Netzwerk-Seite dieser Schale.
+      //
+      // `zeigtSeite("network")` statt `opens("network")` seit Aufgabe 8
+      // (18.08.2026, siehe der Kommentar bei zeigtSeite() oben und die
+      // Bluetooth-Zeile btBtn, Aufgabe 7, dieselbe Begruendung) -
+      // Netzwerk ist kein zweites Fenster mehr.
+      const netBtn = zepButton(ICONS.settings, "still", zeigtSeite("network"))
+      netBtn.set_tooltip_text(_("Wi-Fi networks - the same page as above"))
       netRow.append(networkIcon)
       netRow.append(networkLabel)
       netRow.append(netBtn)

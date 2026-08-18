@@ -1,8 +1,8 @@
-// Das Netzwerkfenster (AGS v3, GTK4) - eine Ueberlagerung aus der Fabrik
+// Die Netzwerk-Seite der Schale (AGS v3, GTK4)
 // Von ZepOS erzeugt
 // Enthaelt: WLAN-Liste, Verbinden und Trennen, Passwortabfrage, Details
 //
-// WAS SICH AM 12.08.2026 GEAENDERT HAT, UND WARUM ES DER GANZE PUNKT IST
+// WAS SICH AM 12.08.2026 GEAENDERT HAT, UND WARUM ES DER GANZE PUNKT WAR
 //     Diese Datei baute sich ihr Astal.Window SELBST. Sie rief aus
 //     utils/overlay.ts nur getOverlayPosition() fuer die Raender und ging
 //     an createOverlayWindow() vorbei - als einzige von zehn
@@ -30,9 +30,88 @@
 //
 //     Der Grund fuer den eigenen Bau war eine EINZIGE Sache, die die
 //     Fabrik nicht konnte: ESC soll hier aus der Passwort- und der
-//     Detailansicht zurueck zur Liste. Dafuer gibt es jetzt onEscape.
+//     Detailansicht zurueck zur Liste. Dafuer bekam die Fabrik am selben
+//     Tag `OverlayConfig.onEscape`, und dieses Fenster war bis zu Aufgabe 8
+//     (siehe unten) sein einziger Leser.
+//
+// AUFGABE 8 (18.08.2026): AUS DEM FENSTER WIRD EINE SEITE DER SCHALE, UND
+// DAS ESC-VERFAHREN ZIEHT MIT UM - NUR AUF EINE STUFE TIEFER
+//     Spezifikation docs/superpowers/specs/2026-08-18-ags-gestaltungssystem-
+//     design.md, Abschnitt 2.2. Aus `createOverlayWindow({...})` wird ein
+//     exportiertes `networkSeite: ShellSeite` - dieselbe Fabrik wird nur
+//     noch INDIREKT gerufen, von `createShellWindow()`
+//     (ags-overlay-utils.template) fuer die Schale als Ganzes. Der
+//     Inhaltsbauer bleibt derselbe (dieselben drei Ansichten, derselbe
+//     Takt, dieselbe `updateDisplay()`).
+//
+//     `OverlayConfig.onEscape` gehoert zu `createOverlayWindow` - und
+//     diese Seite ruft `createOverlayWindow` nicht mehr selbst, kann das
+//     Feld also nicht mehr setzen. `createShellWindow` setzt bei IHREM
+//     eigenen Aufruf der Fabrik ABSICHTLICH kein `onEscape` (siehe der
+//     lange Kommentar dort, bei `buildContent`): jede Seite mit einer
+//     Unteransicht haengt STATTDESSEN ihren EIGENEN
+//     `Gtk.EventControllerKey` an das Wurzel-Widget, das ihre eigene
+//     `bauen()` zurueckgibt - hier `container`, NICHT an `win`. `container`
+//     ist ein Nachfahre von `win` (haengt am Stapel der Schale, der am
+//     Rumpf, der im Inhalt der Fabrik-ScrolledWindow liegt); ein
+//     Bubble-Controller darauf laeuft darum VOR dem der Fabrik, und genau
+//     DAS ist der Mechanismus, fuer den `onEscape` ueberhaupt gebaut wurde
+//     - nur eine Stufe indirekter als vorher (damals: Fabrik fragt DAS
+//     FENSTER selbst; heute: Fabrik fragt DIE SCHALE, die Seite faengt es
+//     vorher ab).
+//
+//     Die drei ESC-Wege bleiben WOERTLICH dieselben wie vorher, nur landet
+//     die Hauptansicht jetzt bei der SCHALE statt beim eigenen Fenster:
+//
+//       Hauptansicht     Seiten-Controller liefert false (nicht
+//                        verbraucht) -> bubbelt zum Controller der Schale
+//                        (an win) -> die Schale hat kein eigenes
+//                        onEscape -> schliesst die GANZE SCHALE.
+//       Passwortansicht  Seiten-Controller faengt ESC ab, ruft
+//                        showMain(), liefert true -> Bubble-Kette endet
+//                        hier, Schale bleibt offen, zeigt die Liste.
+//       Detailansicht    wie Passwortansicht.
+//
+//     NICHT AM ECHTEN COMPOSITOR NACHGEMESSEN (tests/render/ ist fuer
+//     diesen Auftrag verboten) - dieselbe GTK4-Doku-Lesart wie der
+//     Kommentar in ags-overlay-utils.template, keine eigene Messung.
+//     Alle drei Wege stehen ausfuehrlich im Bericht zu Aufgabe 8, VOR
+//     dieser Aenderung aufgeschrieben.
+//
+//     `const WINDOW_NAME`, `const WIN_WIDTH = 500`, `const WIN_HEIGHT =
+//     600` und die rund 65 Zeilen Messgeschichte darueber sind geloescht
+//     (Regel 14) - dieselbe Begruendung wie bei ags-bluetooth.template,
+//     Aufgabe 7: ShellConfig kennt weder Breite noch Hoehe je Seite, die
+//     Schale setzt SHELL_WIDTH/SHELL_HEIGHT einmal fuer alle.
+//
+//     Der Namensraum "network" (GLASS_LAYERS/GLASS_PLATES,
+//     src/style_definition.py) faellt mit dem eigenen
+//     `createOverlayWindow`-Aufruf weg - Netzwerk teilt sich jetzt die
+//     Glasplatte der Schale (Namensraum "control"). NICHT in der
+//     Dateiliste des Aufgabenblatts genannt, aber test-erzwungen (siehe
+//     Bericht zu Aufgabe 7, dieselbe Begruendung gilt hier wortgleich).
+//
+//     `.NetworkManager` (die bisherige `cssClass:` der Fensterhuelle)
+//     wird NICHT in diesem Commit aus ags-style.template entfernt -
+//     Aufgabenblatt 9, Schritt 3 raeumt sie zusammen mit
+//     `.BluetoothManager` und `.VpnManager` in einem Zug auf.
+//
+//     ONSHOW FAELLT OHNE ENTSPRECHUNG AUF SEITENEBENE - ERSETZT AUF
+//     SCHALENEBENE, EIGENE ENTSCHEIDUNG
+//         `onShow: () => { windowIsUp = true; showMain(); updateDisplay()
+//         }` setzte `currentView` bei JEDEM Aufgehen des alten Fensters
+//         zwangsweise auf "main" zurueck. ShellSeite kennt kein
+//         Pendant dazu (`bauen()` hat keinen Rueckkanal fuer "wird jetzt
+//         aktiv", nur einen fuer "wird einmal gebaut") - die
+//         naechstbeste Entsprechung ist `win.connect("notify::visible",
+//         ...)` auf Ebene der GANZEN Schale: bei jedem Oeffnen der Schale
+//         wird `currentView` fuer DIESE Seite zurueckgesetzt, unabhaengig
+//         davon, ob Netzwerk gerade die aktive Seite ist. Harmlos, weil
+//         der Zustand erst sichtbar wird, wenn man wirklich zur
+//         Netzwerk-Seite wechselt - aber eine eigene Entscheidung, nicht
+//         aus dem Aufgabenblatt ableitbar (siehe Bericht).
 
-import { Gtk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import { interval } from "ags/time"
 import GLib from "gi://GLib"
@@ -82,7 +161,13 @@ import GLib from "gi://GLib"
 //     Name, der zu lang ist, endet mit drei Punkten - statt hinter der
 //     Kante zu liegen.
 import Pango from "gi://Pango"
-import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
+// `import type`, nicht `import`: ShellSeite ist ausschliesslich ein Typ
+// (siehe ags-overlay-utils.template), diese Seite ruft weder
+// createOverlayWindow() noch createShellWindow() selbst - sie WIRD nur
+// so getypt. tests/src/test_modal_rule.py unterscheidet genau daran, wer
+// die Fabrik umgeht (siehe die Begruendung in ags-bluetooth.template,
+// Aufgabe 7, an derselben Stelle).
+import type { ShellSeite } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
 import { zepButton, zepRow, zepSectionLabel, zepDivider } from "../utils/kit"
 
@@ -122,67 +207,7 @@ import { zepButton, zepRow, zepSectionLabel, zepDivider } from "../utils/kit"
 //     dieses Fenster fuer sich treffen sollte.
 
 const HOME = GLib.get_home_dir()
-const WINDOW_NAME = "network"
 const UPDATE_INTERVAL = 5000
-
-// Die Masse, die dieses Fenster sich WUENSCHT. utils/overlay.ts deckelt
-// sie auf MEASURE_MODAL_SHARE des Schirms und auf die gemessene
-// natuerliche Hoehe des Inhalts - auf 1080 Zeilen kommt davon 540 an,
-// auf 1440 sind es 550, weil dann der Wunsch die kleinere der beiden
-// Zahlen ist.
-//
-// DIE BREITE IST AM 17.08.2026 VON 460 AUF 480 GEGANGEN, und es sind
-// zwei gemessene Punkte gewesen.
-//
-//     NACHGEMESSEN im verschachtelten Compositor auf einem Schirm, auf
-//     dem weder MODAL_SHARE noch der Wunsch bindet, und ZWEIMAL
-//     geoeffnet - die Fabrik misst in show() VOR onShow und sieht beim
-//     ersten Mal den leeren Inhalt:
-//
-//         erstes Aufgehen    450x365
-//         zweites Aufgehen   462x365   mit der Statuszeile darin
-//
-//     462 gegen 460 heisst: eine waagerechte Bildlaufleiste fuer zwei
-//     Punkte, und die drei Knoepfe ueber der Liste stehen ganz rechts.
-//
-//     Dazu kommt die SENKRECHTE Leiste, die neben dem Inhalt liegt
-//     (overlay_scrolling: false in der Fabrik) und deshalb Breite
-//     kostet. Mit einem Wunsch von 620, unter dem weder er noch
-//     MODAL_SHARE bindet, steht das Fenster 486 breit da; 500 ist die
-//     naechste Zehnerstufe darueber und dieselbe Zahl wie im
-//     Bluetooth-Fenster nebenan, weil es dieselbe Sorte Fenster ist.
-//
-// NACHTRAG VOM 17.08.2026, NACHMITTAG: DIE BREITE WAR NIE DAS PROBLEM
-//     GEMELDET: "die ags fenster die du gebaut hast sind so
-//     eingequetscht das man nach rechts und nach unten scrollen muss".
-//
-//     GEMESSEN mit einem Messfuehler in der erzeugten utils/overlay.ts,
-//     Schirm 1920x1200, mit "WLAN-Router 4711 AX Gastnetz" in der Liste
-//     (derselbe Kunstname wie oben, aus demselben Grund):
-//     der Inhalt meldete 660 Punkte MINDESTbreite in einem 500 Punkte
-//     breiten Fenster - 186 lagen hinter der Kante, darunter alle drei
-//     Knoepfe ueber der Liste. Kein Fenster ist breit genug fuer eine
-//     Mindestbreite, die mit dem Namen des Routers waechst; die Antwort
-//     steht deshalb bei `ellipsize` im Kopf dieser Datei und nicht hier.
-//
-//     Nach der Aenderung, derselbe Aufbau: Mindestbreite 430,
-//     Sichtfenster 474, hadj oben == Seitenbreite - keine waagerechte
-//     Bildlaufleiste mehr.
-const WIN_WIDTH = 500
-
-// DIE HOEHE, DIESELBE ZAHL WIE IM BLUETOOTH-FENSTER NEBENAN UND AUS
-// DEMSELBEN GRUND (17.08.2026)
-//     MEASURE_MODAL_SHARE mal 1200 - die Schirmhoehe des Nutzers - ist
-//     genau 600, und das Kontrollzentrum steht dort ebenso hoch da. Auf
-//     Schirmen unter 1200 Zeilen entscheidet weiter MODAL_SHARE, auf
-//     groesseren dieser Wunsch.
-//
-//     Dass die WLAN-Liste darunter trotzdem senkrecht blaettert, ist
-//     kein Rest: GEMESSEN wollte sie mit fuenf Netzen 745 Punkte, mit
-//     zwoelf (der Deckel in updateDisplay) ueber 1300. Eine Liste, die
-//     laenger ist als der halbe Schirm, GEHOERT in eine Bildlaufleiste -
-//     das ist der Fall, fuer den es sie gibt. Waagerecht ist es nie.
-const WIN_HEIGHT = 600
 
 // Skripte
 const SCRIPTS = {
@@ -295,435 +320,456 @@ function removeAllChildren(box: Gtk.Box) {
   while (child) { const next = child.get_next_sibling(); box.remove(child); child = next }
 }
 
-export default function NetworkManager(): OverlayWidget {
-  // Die Widgets, die spaeter beschrieben werden. Sie stehen hier und
-  // nicht in buildContent(), weil updateDisplay() und die drei
-  // Ansichtswechsel sie von aussen erreichen muessen.
-  // statusIcon/statusLabel/ipLabel und detailSsidLabel/detailSignalLabel/
-  // detailSignalIcon sind mit dem Umbau auf die Bauteile (18.08.2026,
-  // task-C) gegangen: zepRow nimmt Titel und Nebenzeile nur als TEXT
-  // entgegen, es gibt keinen Griff, sie nachtraeglich zu aendern -
-  // statusWrap und detailHeaderWrap tragen darum jeden Takt genau eine
-  // frische zepRow, derselbe Kunstgriff wie in ags-bluetooth.template.
-  let statusWrap: Gtk.Box, wifiToggle: Gtk.Button
-  let networkList: Gtk.Box, passwordBox: Gtk.Box, passwordEntry: Gtk.Entry
-  let passwordSsidLabel: Gtk.Label, passwordErrorLabel: Gtk.Label, mainContent: Gtk.Box
-  let detailBox: Gtk.Box, detailHeaderWrap: Gtk.Box
-  let detailSecurityLabel: Gtk.Label, detailIpLabel: Gtk.Label, detailGatewayLabel: Gtk.Label, detailDnsLabel: Gtk.Label
-  let currentConnectionInfo: { type: string; name: string; ip: string; signal: number } = { type: "none", name: "", ip: "", signal: 0 }
+/** Die Netzwerk-Seite der Schale, unter VERBINDUNGEN.
+ *
+ * `gruppe` traegt denselben englischen msgid wie `gruppeVerbindungen` in
+ * ags-control-center.template ("CONNECTIONS") - siehe die Begruendung in
+ * ags-bluetooth.template, Aufgabe 7, an derselben Stelle.
+ */
+export const networkSeite: ShellSeite = {
+  id: "network",
+  titel: _("Network"),
+  symbol: ICONS.network,
+  gruppe: _("CONNECTIONS"),
 
-  // Steht das Fenster gerade auf dem Schirm? Gesetzt in onShow und
-  // onHide, und die beiden sind vollstaendig: die Fabrik ruft onHide bei
-  // ESC, beim Schliesskreuz und bei hide() aus app.ts.
-  let windowIsUp = false
+  bauen: (win, schliessen) => {
+    // Die Widgets, die spaeter beschrieben werden. Sie stehen hier und
+    // nicht weiter unten im Rueckgabewert, weil updateDisplay() und die
+    // drei Ansichtswechsel sie von aussen erreichen muessen.
+    // statusIcon/statusLabel/ipLabel und detailSsidLabel/detailSignalLabel/
+    // detailSignalIcon sind mit dem Umbau auf die Bauteile (18.08.2026,
+    // task-C) gegangen: zepRow nimmt Titel und Nebenzeile nur als TEXT
+    // entgegen, es gibt keinen Griff, sie nachtraeglich zu aendern -
+    // statusWrap und detailHeaderWrap tragen darum jeden Takt genau eine
+    // frische zepRow, derselbe Kunstgriff wie in ags-bluetooth.template.
+    let statusWrap: Gtk.Box, wifiToggle: Gtk.Button
+    let networkList: Gtk.Box, passwordBox: Gtk.Box, passwordEntry: Gtk.Entry
+    let passwordSsidLabel: Gtk.Label, passwordErrorLabel: Gtk.Label, mainContent: Gtk.Box
+    let detailBox: Gtk.Box, detailHeaderWrap: Gtk.Box
+    let detailSecurityLabel: Gtk.Label, detailIpLabel: Gtk.Label, detailGatewayLabel: Gtk.Label, detailDnsLabel: Gtk.Label
+    let currentConnectionInfo: { type: string; name: string; ip: string; signal: number } = { type: "none", name: "", ip: "", signal: 0 }
 
-  const showPassword = (ssid: string) => {
-    connectingSsid = ssid
-    currentView = "password"
-    passwordSsidLabel.set_text(
-      format(_("Password for \"{ssid}\""), { ssid }))
-    passwordEntry.set_text("")
-    passwordErrorLabel.set_text("")
-    passwordBox.set_visible(true)
-    mainContent.set_visible(false)
-    detailBox.set_visible(false)
-    passwordEntry.grab_focus()
-  }
-
-  const showDetail = async () => {
-    currentView = "detail"
-    mainContent.set_visible(false)
-    passwordBox.set_visible(false)
-    detailBox.set_visible(true)
-
-    // Kopf der Detailansicht als frische zepRow (18.08.2026, task-C) -
-    // dieselbe Form wie statusWrap in updateDisplay(), aus demselben
-    // Grund: zepRow nimmt Titel und Nebenzeile nur als Text entgegen.
-    removeAllChildren(detailHeaderWrap)
-    detailHeaderWrap.append(zepRow({
-      symbol: getSignalIcon(currentConnectionInfo.signal),
-      titel: currentConnectionInfo.name,
-      unterzeile: `${currentConnectionInfo.signal}%`,
-    }))
-    detailIpLabel.set_text(currentConnectionInfo.ip || NOTHING)
-
-    try {
-      const gatewayOut = await execAsync("bash -c \"ip route | grep default | awk '{print \\$3}'\"")
-      detailGatewayLabel.set_text(gatewayOut.trim() || NOTHING)
-    } catch { detailGatewayLabel.set_text(NOTHING) }
-
-    try {
-      const dnsOut = await execAsync("bash -c \"cat /etc/resolv.conf | grep nameserver | head -1 | awk '{print \\$2}'\"")
-      detailDnsLabel.set_text(dnsOut.trim() || NOTHING)
-    } catch { detailDnsLabel.set_text(NOTHING) }
-
-    try {
-      const secOut = await execAsync(`bash -c "LANG=C nmcli -t -f 802-11-wireless-security.key-mgmt connection show '${currentConnectionInfo.name}' 2>/dev/null | cut -d: -f2"`)
-      detailSecurityLabel.set_text(
-        secOut.trim() ? secOut.trim().toUpperCase() : _("Open"))
-    } catch { detailSecurityLabel.set_text(NOTHING) }
-  }
-
-  const showMain = () => {
-    currentView = "main"
-    connectingSsid = ""
-    passwordBox.set_visible(false)
-    detailBox.set_visible(false)
-    mainContent.set_visible(true)
-  }
-
-  const tryConnect = async () => {
-    const password = passwordEntry.get_text()
-    if (!password) {
-      passwordErrorLabel.set_text(_("Please enter the password"))
-      return
-    }
-    passwordErrorLabel.set_text(_("Connecting ..."))
-    const success = await connectToNetwork(connectingSsid, password)
-    if (success) { showMain(); setTimeout(updateDisplay, 1000) }
-    else {
-      passwordErrorLabel.set_text(_("Connection failed"))
+    const showPassword = (ssid: string) => {
+      connectingSsid = ssid
+      currentView = "password"
+      passwordSsidLabel.set_text(
+        format(_("Password for \"{ssid}\""), { ssid }))
       passwordEntry.set_text("")
-    }
-  }
-
-  /** Eine WLAN-Zeile: zepButton(umrandet) um eine zepRow, dieselbe
-   * Zusammensetzung wie createDeviceRow() in ags-bluetooth.template
-   * (18.08.2026, task-C). Das verbundene Netz hebt sich ueber
-   * "ausgewaehlt" an zepRow ab statt ueber eine eigene .active-Klasse. */
-  const createNetworkRow = (network: WifiNetwork): Gtk.Button => {
-    // Zeilenende: Haekchen bei Verbindung, Schloss bei Sicherung ohne
-    // Verbindung, sonst nichts - unveraendert gegenueber vorher, nur
-    // jetzt als `ende` an zepRow statt direkt in einer eigenen Box.
-    let ende: Gtk.Widget | undefined
-    if (network.active) {
-      const connIcon = new Gtk.Label({ label: ICONS.connected })
-      connIcon.add_css_class("net-connected-icon")
-      ende = connIcon
-    } else if (network.security) {
-      const lockIcon = new Gtk.Label({ label: ICONS.lock })
-      lockIcon.add_css_class("net-lock-icon")
-      ende = lockIcon
+      passwordErrorLabel.set_text("")
+      passwordBox.set_visible(true)
+      mainContent.set_visible(false)
+      detailBox.set_visible(false)
+      passwordEntry.grab_focus()
     }
 
-    const row = zepButton("", "umrandet", async () => {
-      if (network.active) { await disconnect(); setTimeout(updateDisplay, 1000) }
-      else if (network.security) {
-        const success = await connectToNetwork(network.ssid)
-        if (!success) showPassword(network.ssid)
-        else setTimeout(updateDisplay, 1000)
-      } else { await connectToNetwork(network.ssid); setTimeout(updateDisplay, 1000) }
-    })
-    // Der Netzname kommt von einem fremden Router und ist beliebig lang;
-    // zepRow kuerzt Titel und Nebenzeile selbst (STYLE_MEASURE_LINE aus
-    // ags-kit.template) - keine eigene ellipsize/max_width_chars-Stuetze
-    // mehr noetig.
-    row.set_child(zepRow({
-      symbol: getSignalIcon(network.signal),
-      titel: network.ssid,
-      unterzeile: format(_("{signal}% • {security}"), {
-        signal: network.signal,
-        security: network.security || _("open"),
-      }),
-      ausgewaehlt: network.active,
-      ende,
-    }))
+    const showDetail = async () => {
+      currentView = "detail"
+      mainContent.set_visible(false)
+      passwordBox.set_visible(false)
+      detailBox.set_visible(true)
 
-    return row
-  }
+      // Kopf der Detailansicht als frische zepRow (18.08.2026, task-C) -
+      // dieselbe Form wie statusWrap in updateDisplay(), aus demselben
+      // Grund: zepRow nimmt Titel und Nebenzeile nur als Text entgegen.
+      removeAllChildren(detailHeaderWrap)
+      detailHeaderWrap.append(zepRow({
+        symbol: getSignalIcon(currentConnectionInfo.signal),
+        titel: currentConnectionInfo.name,
+        unterzeile: `${currentConnectionInfo.signal}%`,
+      }))
+      detailIpLabel.set_text(currentConnectionInfo.ip || NOTHING)
 
-  const updateDisplay = async () => {
-    if (currentView !== "main") return
-    // Ein geschlossenes Fenster wird nicht aufgefrischt.
-    //
-    // GEMESSEN am 12.08.2026: der Takt unten laeuft ab dem Aufbau der
-    // Oberflaeche und ohne Ende, und jeder Durchlauf ruft
-    // `ags-network-scripts list rescan`. Das ist ein WLAN-Suchlauf des
-    // NetworkManagers alle fuenf Sekunden, den ganzen Tag, fuer ein
-    // Fenster, das die meiste Zeit zu ist. Der Akku und die laufende
-    // Verbindung zahlen dafuer.
-    if (!windowIsUp) return
+      try {
+        const gatewayOut = await execAsync("bash -c \"ip route | grep default | awk '{print \\$3}'\"")
+        detailGatewayLabel.set_text(gatewayOut.trim() || NOTHING)
+      } catch { detailGatewayLabel.set_text(NOTHING) }
 
-    const connInfo = await getConnectionInfo()
-    currentConnectionInfo = connInfo
-    const networks = await scanWifi()
-    const wifiEnabled = (await execAsync("nmcli radio wifi").catch(() => "disabled")).trim() === "enabled"
+      try {
+        const dnsOut = await execAsync("bash -c \"cat /etc/resolv.conf | grep nameserver | head -1 | awk '{print \\$2}'\"")
+        detailDnsLabel.set_text(dnsOut.trim() || NOTHING)
+      } catch { detailDnsLabel.set_text(NOTHING) }
 
-    // Der Zustandskopf als frische zepRow (18.08.2026, task-C) - siehe
-    // die Begruendung bei der Deklaration von statusWrap oben. Das
-    // Info-Symbol (net-detail-btn, Rolle "still") steht als `ende`
-    // dabei, dieselbe Stelle wie buildPowerToggle() im Bluetoothfenster.
-    const buildDetailButton = (): Gtk.Widget =>
-      zepButton(ICONS.info, "still", () => {
-        if (currentConnectionInfo.type !== "none") showDetail()
+      try {
+        const secOut = await execAsync(`bash -c "LANG=C nmcli -t -f 802-11-wireless-security.key-mgmt connection show '${currentConnectionInfo.name}' 2>/dev/null | cut -d: -f2"`)
+        detailSecurityLabel.set_text(
+          secOut.trim() ? secOut.trim().toUpperCase() : _("Open"))
+      } catch { detailSecurityLabel.set_text(NOTHING) }
+    }
+
+    const showMain = () => {
+      currentView = "main"
+      connectingSsid = ""
+      passwordBox.set_visible(false)
+      detailBox.set_visible(false)
+      mainContent.set_visible(true)
+    }
+
+    const tryConnect = async () => {
+      const password = passwordEntry.get_text()
+      if (!password) {
+        passwordErrorLabel.set_text(_("Please enter the password"))
+        return
+      }
+      passwordErrorLabel.set_text(_("Connecting ..."))
+      const success = await connectToNetwork(connectingSsid, password)
+      if (success) { showMain(); setTimeout(updateDisplay, 1000) }
+      else {
+        passwordErrorLabel.set_text(_("Connection failed"))
+        passwordEntry.set_text("")
+      }
+    }
+
+    /** Eine WLAN-Zeile: zepButton(umrandet) um eine zepRow, dieselbe
+     * Zusammensetzung wie createDeviceRow() in ags-bluetooth.template
+     * (18.08.2026, task-C). Das verbundene Netz hebt sich ueber
+     * "ausgewaehlt" an zepRow ab statt ueber eine eigene .active-Klasse. */
+    const createNetworkRow = (network: WifiNetwork): Gtk.Button => {
+      // Zeilenende: Haekchen bei Verbindung, Schloss bei Sicherung ohne
+      // Verbindung, sonst nichts - unveraendert gegenueber vorher, nur
+      // jetzt als `ende` an zepRow statt direkt in einer eigenen Box.
+      let ende: Gtk.Widget | undefined
+      if (network.active) {
+        const connIcon = new Gtk.Label({ label: ICONS.connected })
+        connIcon.add_css_class("net-connected-icon")
+        ende = connIcon
+      } else if (network.security) {
+        const lockIcon = new Gtk.Label({ label: ICONS.lock })
+        lockIcon.add_css_class("net-lock-icon")
+        ende = lockIcon
+      }
+
+      const row = zepButton("", "umrandet", async () => {
+        if (network.active) { await disconnect(); setTimeout(updateDisplay, 1000) }
+        else if (network.security) {
+          const success = await connectToNetwork(network.ssid)
+          if (!success) showPassword(network.ssid)
+          else setTimeout(updateDisplay, 1000)
+        } else { await connectToNetwork(network.ssid); setTimeout(updateDisplay, 1000) }
       })
+      // Der Netzname kommt von einem fremden Router und ist beliebig lang;
+      // zepRow kuerzt Titel und Nebenzeile selbst (STYLE_MEASURE_LINE aus
+      // ags-kit.template) - keine eigene ellipsize/max_width_chars-Stuetze
+      // mehr noetig.
+      row.set_child(zepRow({
+        symbol: getSignalIcon(network.signal),
+        titel: network.ssid,
+        unterzeile: format(_("{signal}% • {security}"), {
+          signal: network.signal,
+          security: network.security || _("open"),
+        }),
+        ausgewaehlt: network.active,
+        ende,
+      }))
 
-    removeAllChildren(statusWrap)
-    if (connInfo.type === "ethernet") {
-      statusWrap.append(zepRow({
-        symbol: ICONS.ethernet, titel: WIRED_NAME,
-        unterzeile: connInfo.ip || NOTHING, ende: buildDetailButton(),
-      }))
-    } else if (connInfo.type === "wifi") {
-      statusWrap.append(zepRow({
-        symbol: getSignalIcon(connInfo.signal), titel: connInfo.name,
-        unterzeile: connInfo.ip || NOTHING, ende: buildDetailButton(),
-      }))
-    } else {
-      statusWrap.append(zepRow({
-        symbol: ICONS.wifiOff, titel: NOT_CONNECTED,
-        unterzeile: NOTHING, ende: buildDetailButton(),
-      }))
+      return row
     }
 
-    if (wifiEnabled) { wifiToggle.add_css_class("active"); wifiToggle.remove_css_class("inactive") }
-    else { wifiToggle.remove_css_class("active"); wifiToggle.add_css_class("inactive") }
+    const updateDisplay = async () => {
+      if (currentView !== "main") return
+      // Eine Unteransicht wird nicht aufgefrischt - dieselbe Zeile wie
+      // vorher, nur der Grund "ein geschlossenes Fenster wird nicht
+      // aufgefrischt" ist mit dem `windowIsUp`-Feld gegangen (siehe Kopf
+      // der Datei): DAS entscheidet jetzt, WER updateDisplay() ueberhaupt
+      // ruft (der Takt unten fragt `win.visible` selbst), nicht mehr
+      // diese Funktion selbst.
 
-    removeAllChildren(networkList)
-    for (const network of networks.slice(0, 12)) { networkList.append(createNetworkRow(network)) }
-  }
+      const connInfo = await getConnectionInfo()
+      currentConnectionInfo = connInfo
+      const networks = await scanWifi()
+      const wifiEnabled = (await execAsync("nmcli radio wifi").catch(() => "disabled")).trim() === "enabled"
 
-  return createOverlayWindow({
-    name: WINDOW_NAME,
-    width: WIN_WIDTH,
-    height: WIN_HEIGHT,
-    cssClass: "NetworkManager",
-    headerIcon: ICONS.network,
-    headerTitle: _("Network"),
-    accentCssClass: "network-accent",
-    // ESC geht aus einer Unteransicht ZURUECK und nicht ZU. Ohne diese
-    // vier Zeilen haette dieses Fenster einen zweiten Grund gebraucht,
-    // sich selbst zu bauen - und genau der war der erste.
-    onEscape: () => {
-      if (currentView === "main") return false
-      showMain()
-      return true
-    },
-    onShow: () => {
-      windowIsUp = true
-      showMain()
-      updateDisplay()
-    },
-    onHide: () => {
-      windowIsUp = false
-    },
-    buildContent: (_win, closeWindow) => {
-      // ----- Die Passwortabfrage -----
-      passwordBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, visible: false })
-      passwordBox.add_css_class("net-password-box")
+      // Der Zustandskopf als frische zepRow (18.08.2026, task-C) - siehe
+      // die Begruendung bei der Deklaration von statusWrap oben. Das
+      // Info-Symbol (net-detail-btn, Rolle "still") steht als `ende`
+      // dabei, dieselbe Stelle wie buildPowerToggle() im Bluetoothfenster.
+      const buildDetailButton = (): Gtk.Widget =>
+        zepButton(ICONS.info, "still", () => {
+          if (currentConnectionInfo.type !== "none") showDetail()
+        })
 
-      // "Zurueck" ist ein Nebenweg aus dieser Ansicht - Rolle "still"
-      // (Schritt 5 des Musters, 18.08.2026, task-C).
-      const pwBackBtn = zepButton(`${ICONS.back} ${_("Back")}`, "still", showMain)
+      removeAllChildren(statusWrap)
+      if (connInfo.type === "ethernet") {
+        statusWrap.append(zepRow({
+          symbol: ICONS.ethernet, titel: WIRED_NAME,
+          unterzeile: connInfo.ip || NOTHING, ende: buildDetailButton(),
+        }))
+      } else if (connInfo.type === "wifi") {
+        statusWrap.append(zepRow({
+          symbol: getSignalIcon(connInfo.signal), titel: connInfo.name,
+          unterzeile: connInfo.ip || NOTHING, ende: buildDetailButton(),
+        }))
+      } else {
+        statusWrap.append(zepRow({
+          symbol: ICONS.wifiOff, titel: NOT_CONNECTED,
+          unterzeile: NOTHING, ende: buildDetailButton(),
+        }))
+      }
 
-      // Auch hier steht ein fremder Name darin: `Passwort für "<SSID>"`.
-      passwordSsidLabel = new Gtk.Label({
-        label: _("Password for network"),
+      if (wifiEnabled) { wifiToggle.add_css_class("active"); wifiToggle.remove_css_class("inactive") }
+      else { wifiToggle.remove_css_class("active"); wifiToggle.add_css_class("inactive") }
+
+      removeAllChildren(networkList)
+      for (const network of networks.slice(0, 12)) { networkList.append(createNetworkRow(network)) }
+    }
+
+    // ----- Die Passwortabfrage -----
+    passwordBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, visible: false })
+    passwordBox.add_css_class("net-password-box")
+
+    // "Zurueck" ist ein Nebenweg aus dieser Ansicht - Rolle "still"
+    // (Schritt 5 des Musters, 18.08.2026, task-C).
+    const pwBackBtn = zepButton(`${ICONS.back} ${_("Back")}`, "still", showMain)
+
+    // Auch hier steht ein fremder Name darin: `Passwort für "<SSID>"`.
+    passwordSsidLabel = new Gtk.Label({
+      label: _("Password for network"),
+      ellipsize: Pango.EllipsizeMode.END,
+      max_width_chars: {{STYLE_MEASURE_LINE}},
+    })
+    passwordSsidLabel.add_css_class("net-pw-title")
+
+    passwordEntry = new Gtk.Entry({
+      visibility: false,
+      placeholder_text: _("Enter the Wi-Fi password ..."),
+    })
+    passwordEntry.add_css_class("net-pw-entry")
+    passwordEntry.connect("activate", tryConnect)
+
+    // Die Hauptsache dieser Ansicht: das Passwort bestaetigen und
+    // verbinden - Rolle "voll" (Schritt 5 des Musters, genau EIN
+    // voll je Ansicht).
+    const pwConnectBtn = zepButton(`${ICONS.connect} ${_("Connect")}`, "voll", tryConnect)
+
+    passwordErrorLabel = new Gtk.Label({ label: "" })
+    passwordErrorLabel.add_css_class("net-pw-error")
+
+    passwordBox.append(pwBackBtn)
+    passwordBox.append(passwordSsidLabel)
+    passwordBox.append(passwordEntry)
+    passwordBox.append(pwConnectBtn)
+    passwordBox.append(passwordErrorLabel)
+
+    // ----- Die Hauptansicht -----
+    mainContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
+
+    // Der Zustandskopf: eine zepRow statt der alten .net-current-Box
+    // (18.08.2026, task-C). Die BREITESTE der gemessenen Zeilen - 660
+    // Punkte Mindestbreite standen hier, weil in dieser Beschriftung
+    // der Netzname stand (siehe Kopf dieser Datei) - traegt jetzt die
+    // Kuerzung aus ags-kit.template (STYLE_MEASURE_LINE), nicht mehr
+    // eine eigene ellipsize/max_width_chars-Stuetze. statusWrap
+    // traegt jeden Takt genau eine frische zepRow, gebaut in
+    // updateDisplay().
+    statusWrap = new Gtk.Box({})
+
+    // ----- Die Zeile ueber der Liste: Ueberschrift und drei Knoepfe -----
+    //
+    // DER KNOPF FUER DIE NETZWERKVERWALTUNG STAND BIS ZUM 12.08.2026 IM KOPF
+    //     Er war das einzige zusaetzliche Ding in einem der elf
+    //     Koepfe: neun tragen Zeichen, Titel, Luecke, Schliesskreuz -
+    //     dieser trug davor noch ein Zahnrad. Ein zehnter Kopf mit
+    //     einem zehnten Aufbau ist der Anfang von zehn verschiedenen
+    //     Koepfen, und der Kopf ist das, was der Nutzer bei jedem
+    //     Fenster zuerst sieht.
+    //
+    //     Hier unten gehoert er ohnehin hin: er oeffnet dieselbe
+    //     Oberflaeche, die auch das Netzmodul der Leiste oeffnet, und
+    //     steht damit neben den beiden anderen Knoepfen, die etwas mit
+    //     dem WLAN tun.
+    const toggleRow = new Gtk.Box({ spacing: 12 })
+    // hexpand an der Ueberschrift, damit die drei Knoepfe rechts
+    // stehen - dieselbe Aufteilung wie im Kopf, wo eine leere Box die
+    // Luecke haelt. zepSectionLabel statt einer eigenen Klasse
+    // (18.08.2026, task-C), wie listHeader im Bluetoothfenster.
+    const wifiHeader = zepSectionLabel(_("Wi-Fi networks"))
+    wifiHeader.set_hexpand(true)
+
+    // net-wifi-toggle bleibt ausserhalb des Bauteil-Kits: er ist keine
+    // der sechs benannten Klassen dieser Aufgabe und traegt kein
+    // "btn"/"-button" im Namen (zaehlt also nicht zur Ratsche in
+    // tests/src/test_button_kit.py). Siehe die Begruendung am Kopf
+    // dieser Datei.
+    wifiToggle = new Gtk.Button({ can_focus: false })
+    wifiToggle.add_css_class("net-wifi-toggle")
+    wifiToggle.set_child(new Gtk.Label({ label: ICONS.wifi }))
+    wifiToggle.set_tooltip_text(_("Turn Wi-Fi on or off"))
+    wifiToggle.connect("clicked", () => { toggleWifi(); setTimeout(updateDisplay, 1000) })
+
+    // "Erneut suchen" ist die Hauptsache dieser Zeile - dieselbe Rolle
+    // wie "Geraete suchen" (scanBtn) im Bluetoothfenster fuer dieselbe
+    // Handlung: die Liste neu aufbauen. Rolle "voll" (18.08.2026,
+    // task-C).
+    const refreshBtn = zepButton(ICONS.refresh, "voll", () => { updateDisplay() })
+    refreshBtn.set_tooltip_text(_("Scan again"))
+
+    // GEMESSEN am 12.08.2026: hier stand `nm-connection-editor`. Das
+    // Paket gleichen Namens liefert ZepOS nicht aus - es ist GTK3 und
+    // steht in keinem Rezept -, also war dieser Knopf auf jeder
+    // Installation einer, hinter dem nichts passiert. Spec §7.4.
+    //
+    // Die Oberflaeche fuer dieselbe Aufgabe ist unsere und wird
+    // erzeugt: network-manager-gui-config.template schreibt sie nach
+    // ~/.local/bin/network-manager-gui, und das Netzmodul der Leiste
+    // oeffnet sie mit demselben Klick. Zwei Wege zu einer Aufgabe, von
+    // denen der eine ins Leere fuehrt, sind ein Weg und ein Fehler.
+    // Rolle "still": die Nebenfunktion, wie bluemanBtn im
+    // Bluetoothfenster.
+    //
+    // `schliessen()` statt `closeWindow()`: seit Aufgabe 8 ist das der
+    // Rueckruf, den `bauen()` von der Schale bekommt - er schliesst die
+    // GANZE Schale, aus demselben Grund wie vorher (ein fremdes Programm
+    // soll nicht hinter dem eigenen Fenster auftauchen).
+    const nmBtn = zepButton(ICONS.settings, "still", () => {
+      execAsync(`${HOME}/.local/bin/network-manager-gui`)
+      schliessen()
+    })
+    nmBtn.set_tooltip_text(_("Open network management"))
+
+    toggleRow.append(wifiHeader)
+    toggleRow.append(wifiToggle)
+    toggleRow.append(refreshBtn)
+    toggleRow.append(nmBtn)
+
+    // ----- Die Liste, OHNE eigene Bildlaufleiste -----
+    //
+    // WARUM HIER KEIN Gtk.ScrolledWindow MEHR STEHT
+    //     Es stand eines hier, mit `.net-scroll { min-height: 350px }`
+    //     aus ags-style.template. Diese 350 Punkte waren der Grund fuer
+    //     die gemessenen 721: ein Mindestmass, das eine leere Liste
+    //     genauso beansprucht wie eine volle. Auf dem Bild vom
+    //     12.08.2026 war das eine handtellergrosse leere Flaeche unter
+    //     der Zeile "WLAN-Netzwerke".
+    //
+    //     Die Fabrik haengt eine Bildlaufleiste um den GANZEN Inhalt der
+    //     Schale, und zwar eine, die neben dem Inhalt liegt statt
+    //     darueber (overlay_scrolling: false). Zwei Bildlaufleisten
+    //     ineinander sind ausserdem zwei Raeder unter einem Finger:
+    //     GTK schickt das Scrollen an die innere, und die aeussere
+    //     bewegt sich erst, wenn die innere am Anschlag ist.
+    networkList = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
+    networkList.add_css_class("net-list")
+
+    // zepDivider() statt einer eigenen Box mit net-divider-Klasse
+    // (18.08.2026, task-C): ein Gtk.Separator meldet sich den
+    // Hilfsmitteln als Trenner, eine leere Box nicht.
+    const divider = zepDivider()
+
+    mainContent.append(statusWrap)
+    mainContent.append(divider)
+    mainContent.append(toggleRow)
+    mainContent.append(networkList)
+
+    // ----- Die Detailansicht -----
+    detailBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, visible: false })
+    detailBox.add_css_class("net-detail-box")
+
+    // "Zurueck" ist ein Nebenweg aus dieser Ansicht - Rolle "still"
+    // (18.08.2026, task-C).
+    const detailBackBtn = zepButton(`${ICONS.back} ${_("Back")}`, "still", showMain)
+
+    // Kopf der Detailansicht: eine zepRow statt eigener Klassen
+    // (net-detail-header/-icon/-ssid/-signal), dieselbe Form wie
+    // statusWrap oben - Zeichen, Titel, Nebenzeile. detailHeaderWrap
+    // traegt jeden Aufruf von showDetail() genau eine frische zepRow.
+    detailHeaderWrap = new Gtk.Box({})
+
+    const detailGrid = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
+    detailGrid.add_css_class("net-detail-grid")
+
+    const createDetailRow = (labelText: string): [Gtk.Box, Gtk.Label] => {
+      const row = new Gtk.Box({ spacing: 12 })
+      row.add_css_class("net-detail-row")
+      const lbl = new Gtk.Label({ label: labelText, xalign: 0 })
+      lbl.add_css_class("net-detail-label")
+      lbl.set_size_request(90, -1)
+      // Der WERT kommt von aussen - eine IPv6-Adresse ist 39 Zeichen
+      // lang, und `nmcli` gibt bei einem Unternehmensnetz auch schon
+      // einmal "wpa-eap-suite-b-192" zurueck.
+      const val = new Gtk.Label({
+        label: NOTHING, xalign: 0, hexpand: true,
         ellipsize: Pango.EllipsizeMode.END,
         max_width_chars: {{STYLE_MEASURE_LINE}},
       })
-      passwordSsidLabel.add_css_class("net-pw-title")
+      val.add_css_class("net-detail-value")
+      row.append(lbl)
+      row.append(val)
+      return [row, val]
+    }
 
-      passwordEntry = new Gtk.Entry({
-        visibility: false,
-        placeholder_text: _("Enter the Wi-Fi password ..."),
+    const [ipRow, ipVal] = createDetailRow(_("IP address"))
+    detailIpLabel = ipVal
+    const [gwRow, gwVal] = createDetailRow(_("Gateway"))
+    detailGatewayLabel = gwVal
+    const [dnsRow, dnsVal] = createDetailRow(_("DNS"))
+    detailDnsLabel = dnsVal
+    const [secRow, secVal] = createDetailRow(_("Security"))
+    detailSecurityLabel = secVal
+
+    detailGrid.append(ipRow)
+    detailGrid.append(gwRow)
+    detailGrid.append(dnsRow)
+    detailGrid.append(secRow)
+
+    // Trennen ist zerstoerend - Rolle "kritisch", nicht "umrandet"
+    // (Task-C-Auftrag, ausdruecklich genannt).
+    const disconnectBtn = zepButton(
+      `${ICONS.disconnect} ${_("Disconnect")}`, "kritisch",
+      async () => { await disconnect(); showMain(); setTimeout(updateDisplay, 1000) })
+
+    detailBox.append(detailBackBtn)
+    detailBox.append(detailHeaderWrap)
+    detailBox.append(detailGrid)
+    detailBox.append(disconnectBtn)
+
+    // ----- Die drei Ansichten untereinander, immer genau eine sichtbar -----
+    const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
+    container.append(passwordBox)
+    container.append(detailBox)
+    container.append(mainContent)
+
+    // DIE ZWEISTUFIGE ESC-WEITERLEITUNG (Aufgabe 8, 18.08.2026) - siehe
+    // die ausfuehrliche Begruendung am Kopf dieser Datei und die drei
+    // ESC-Wege, VOR dieser Aenderung im Bericht zu Aufgabe 8
+    // aufgeschrieben.
+    //
+    // Angehaengt an `container` - das Wurzel-Widget, das `bauen()`
+    // zurueckgibt - und NICHT an `win`: nur so laeuft dieser Controller
+    // (Bubble-Phase, GTK4-Standard) VOR dem der Schale, die ihren
+    // eigenen Controller an `win` selbst haengt (createOverlayWindow in
+    // ags-overlay-utils.template).
+    const escController = new Gtk.EventControllerKey()
+    escController.connect("key-pressed",
+      (_controller: Gtk.EventControllerKey, keyval: number) => {
+        if (keyval !== Gdk.KEY_Escape) return false
+        // Hauptansicht: NICHT verbrauchen - das Ereignis bubbelt weiter
+        // zum Controller der Schale, die schliesst (kein eigenes
+        // onEscape dort). Genau das war das Verhalten der Hauptansicht
+        // schon vorher (onEscape gab hier `false` zurueck).
+        if (currentView === "main") return false
+        showMain()
+        return true
       })
-      passwordEntry.add_css_class("net-pw-entry")
-      passwordEntry.connect("activate", tryConnect)
+    container.add_controller(escController)
 
-      // Die Hauptsache dieser Ansicht: das Passwort bestaetigen und
-      // verbinden - Rolle "voll" (Schritt 5 des Musters, genau EIN
-      // voll je Ansicht).
-      const pwConnectBtn = zepButton(`${ICONS.connect} ${_("Connect")}`, "voll", tryConnect)
+    // DER TAKT LAEUFT FUER DIE LEBENSDAUER DER SCHALE, NICHT MEHR NUR
+    // "SOLANGE DIESE SEITE OFFEN IST" - siehe ags-bluetooth.template
+    // (Aufgabe 7) und ags-control-center.template (Aufgabe 6) fuer
+    // dasselbe Muster und dieselbe Messung (300 Prozessstarts/Minute im
+    // Leerlauf, Fix vom 12.08.2026, hier wie dort NICHT rueckgaengig
+    // gemacht). `windowIsUp` (das eigene Feld, das diese Seite vorher
+    // als eigenstaendiges Fenster fuehrte) faellt weg, `win.visible`
+    // reicht.
+    //
+    // UND DER ERSATZ FUER onShow (siehe Kopf der Datei): bei jedem
+    // Sichtbarwerden der Schale wird diese Seite auf die Hauptansicht
+    // zurueckgesetzt und sofort neu gelesen - dieselbe Ansage wie das
+    // alte `onShow: () => { windowIsUp = true; showMain();
+    // updateDisplay() }`, nur auf Schalenebene statt Fensterebene.
+    interval(UPDATE_INTERVAL, () => { if (win.visible) updateDisplay() })
+    win.connect("notify::visible", () => {
+      if (win.visible) { showMain(); updateDisplay() }
+    })
 
-      passwordErrorLabel = new Gtk.Label({ label: "" })
-      passwordErrorLabel.add_css_class("net-pw-error")
-
-      passwordBox.append(pwBackBtn)
-      passwordBox.append(passwordSsidLabel)
-      passwordBox.append(passwordEntry)
-      passwordBox.append(pwConnectBtn)
-      passwordBox.append(passwordErrorLabel)
-
-      // ----- Die Hauptansicht -----
-      mainContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
-
-      // Der Zustandskopf: eine zepRow statt der alten .net-current-Box
-      // (18.08.2026, task-C). Die BREITESTE der gemessenen Zeilen - 660
-      // Punkte Mindestbreite standen hier, weil in dieser Beschriftung
-      // der Netzname stand (siehe Kopf dieser Datei) - traegt jetzt die
-      // Kuerzung aus ags-kit.template (STYLE_MEASURE_LINE), nicht mehr
-      // eine eigene ellipsize/max_width_chars-Stuetze. statusWrap
-      // traegt jeden Takt genau eine frische zepRow, gebaut in
-      // updateDisplay().
-      statusWrap = new Gtk.Box({})
-
-      // ----- Die Zeile ueber der Liste: Ueberschrift und drei Knoepfe -----
-      //
-      // DER KNOPF FUER DIE NETZWERKVERWALTUNG STAND BIS ZUM 12.08.2026 IM KOPF
-      //     Er war das einzige zusaetzliche Ding in einem der elf
-      //     Koepfe: neun tragen Zeichen, Titel, Luecke, Schliesskreuz -
-      //     dieser trug davor noch ein Zahnrad. Ein zehnter Kopf mit
-      //     einem zehnten Aufbau ist der Anfang von zehn verschiedenen
-      //     Koepfen, und der Kopf ist das, was der Nutzer bei jedem
-      //     Fenster zuerst sieht.
-      //
-      //     Hier unten gehoert er ohnehin hin: er oeffnet dieselbe
-      //     Oberflaeche, die auch das Netzmodul der Leiste oeffnet, und
-      //     steht damit neben den beiden anderen Knoepfen, die etwas mit
-      //     dem WLAN tun.
-      const toggleRow = new Gtk.Box({ spacing: 12 })
-      // hexpand an der Ueberschrift, damit die drei Knoepfe rechts
-      // stehen - dieselbe Aufteilung wie im Kopf, wo eine leere Box die
-      // Luecke haelt. zepSectionLabel statt einer eigenen Klasse
-      // (18.08.2026, task-C), wie listHeader im Bluetoothfenster.
-      const wifiHeader = zepSectionLabel(_("Wi-Fi networks"))
-      wifiHeader.set_hexpand(true)
-
-      // net-wifi-toggle bleibt ausserhalb des Bauteil-Kits: er ist keine
-      // der sechs benannten Klassen dieser Aufgabe und traegt kein
-      // "btn"/"-button" im Namen (zaehlt also nicht zur Ratsche in
-      // tests/src/test_button_kit.py). Siehe die Begruendung am Kopf
-      // dieser Datei.
-      wifiToggle = new Gtk.Button({ can_focus: false })
-      wifiToggle.add_css_class("net-wifi-toggle")
-      wifiToggle.set_child(new Gtk.Label({ label: ICONS.wifi }))
-      wifiToggle.set_tooltip_text(_("Turn Wi-Fi on or off"))
-      wifiToggle.connect("clicked", () => { toggleWifi(); setTimeout(updateDisplay, 1000) })
-
-      // "Erneut suchen" ist die Hauptsache dieser Zeile - dieselbe Rolle
-      // wie "Geraete suchen" (scanBtn) im Bluetoothfenster fuer dieselbe
-      // Handlung: die Liste neu aufbauen. Rolle "voll" (18.08.2026,
-      // task-C).
-      const refreshBtn = zepButton(ICONS.refresh, "voll", () => { updateDisplay() })
-      refreshBtn.set_tooltip_text(_("Scan again"))
-
-      // GEMESSEN am 12.08.2026: hier stand `nm-connection-editor`. Das
-      // Paket gleichen Namens liefert ZepOS nicht aus - es ist GTK3 und
-      // steht in keinem Rezept -, also war dieser Knopf auf jeder
-      // Installation einer, hinter dem nichts passiert. Spec §7.4.
-      //
-      // Die Oberflaeche fuer dieselbe Aufgabe ist unsere und wird
-      // erzeugt: network-manager-gui-config.template schreibt sie nach
-      // ~/.local/bin/network-manager-gui, und das Netzmodul der Leiste
-      // oeffnet sie mit demselben Klick. Zwei Wege zu einer Aufgabe, von
-      // denen der eine ins Leere fuehrt, sind ein Weg und ein Fehler.
-      // Rolle "still": die Nebenfunktion, wie bluemanBtn im
-      // Bluetoothfenster.
-      const nmBtn = zepButton(ICONS.settings, "still", () => {
-        execAsync(`${HOME}/.local/bin/network-manager-gui`)
-        closeWindow()
-      })
-      nmBtn.set_tooltip_text(_("Open network management"))
-
-      toggleRow.append(wifiHeader)
-      toggleRow.append(wifiToggle)
-      toggleRow.append(refreshBtn)
-      toggleRow.append(nmBtn)
-
-      // ----- Die Liste, OHNE eigene Bildlaufleiste -----
-      //
-      // WARUM HIER KEIN Gtk.ScrolledWindow MEHR STEHT
-      //     Es stand eines hier, mit `.net-scroll { min-height: 350px }`
-      //     aus ags-style.template. Diese 350 Punkte waren der Grund fuer
-      //     die gemessenen 721: ein Mindestmass, das eine leere Liste
-      //     genauso beansprucht wie eine volle. Auf dem Bild vom
-      //     12.08.2026 war das eine handtellergrosse leere Flaeche unter
-      //     der Zeile "WLAN-Netzwerke".
-      //
-      //     Die Fabrik haengt eine Bildlaufleiste um den GANZEN Inhalt,
-      //     und zwar eine, die neben dem Inhalt liegt statt darueber
-      //     (overlay_scrolling: false). Zwei Bildlaufleisten
-      //     ineinander sind ausserdem zwei Raeder unter einem Finger:
-      //     GTK schickt das Scrollen an die innere, und die aeussere
-      //     bewegt sich erst, wenn die innere am Anschlag ist.
-      networkList = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
-      networkList.add_css_class("net-list")
-
-      // zepDivider() statt einer eigenen Box mit net-divider-Klasse
-      // (18.08.2026, task-C): ein Gtk.Separator meldet sich den
-      // Hilfsmitteln als Trenner, eine leere Box nicht.
-      const divider = zepDivider()
-
-      mainContent.append(statusWrap)
-      mainContent.append(divider)
-      mainContent.append(toggleRow)
-      mainContent.append(networkList)
-
-      // ----- Die Detailansicht -----
-      detailBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, visible: false })
-      detailBox.add_css_class("net-detail-box")
-
-      // "Zurueck" ist ein Nebenweg aus dieser Ansicht - Rolle "still"
-      // (18.08.2026, task-C).
-      const detailBackBtn = zepButton(`${ICONS.back} ${_("Back")}`, "still", showMain)
-
-      // Kopf der Detailansicht: eine zepRow statt eigener Klassen
-      // (net-detail-header/-icon/-ssid/-signal), dieselbe Form wie
-      // statusWrap oben - Zeichen, Titel, Nebenzeile. detailHeaderWrap
-      // traegt jeden Aufruf von showDetail() genau eine frische zepRow.
-      detailHeaderWrap = new Gtk.Box({})
-
-      const detailGrid = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
-      detailGrid.add_css_class("net-detail-grid")
-
-      const createDetailRow = (labelText: string): [Gtk.Box, Gtk.Label] => {
-        const row = new Gtk.Box({ spacing: 12 })
-        row.add_css_class("net-detail-row")
-        const lbl = new Gtk.Label({ label: labelText, xalign: 0 })
-        lbl.add_css_class("net-detail-label")
-        lbl.set_size_request(90, -1)
-        // Der WERT kommt von aussen - eine IPv6-Adresse ist 39 Zeichen
-        // lang, und `nmcli` gibt bei einem Unternehmensnetz auch schon
-        // einmal "wpa-eap-suite-b-192" zurueck.
-        const val = new Gtk.Label({
-          label: NOTHING, xalign: 0, hexpand: true,
-          ellipsize: Pango.EllipsizeMode.END,
-          max_width_chars: {{STYLE_MEASURE_LINE}},
-        })
-        val.add_css_class("net-detail-value")
-        row.append(lbl)
-        row.append(val)
-        return [row, val]
-      }
-
-      const [ipRow, ipVal] = createDetailRow(_("IP address"))
-      detailIpLabel = ipVal
-      const [gwRow, gwVal] = createDetailRow(_("Gateway"))
-      detailGatewayLabel = gwVal
-      const [dnsRow, dnsVal] = createDetailRow(_("DNS"))
-      detailDnsLabel = dnsVal
-      const [secRow, secVal] = createDetailRow(_("Security"))
-      detailSecurityLabel = secVal
-
-      detailGrid.append(ipRow)
-      detailGrid.append(gwRow)
-      detailGrid.append(dnsRow)
-      detailGrid.append(secRow)
-
-      // Trennen ist zerstoerend - Rolle "kritisch", nicht "umrandet"
-      // (Task-C-Auftrag, ausdruecklich genannt).
-      const disconnectBtn = zepButton(
-        `${ICONS.disconnect} ${_("Disconnect")}`, "kritisch",
-        async () => { await disconnect(); showMain(); setTimeout(updateDisplay, 1000) })
-
-      detailBox.append(detailBackBtn)
-      detailBox.append(detailHeaderWrap)
-      detailBox.append(detailGrid)
-      detailBox.append(disconnectBtn)
-
-      // ----- Die drei Ansichten untereinander, immer genau eine sichtbar -----
-      const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
-      container.append(passwordBox)
-      container.append(detailBox)
-      container.append(mainContent)
-
-      // Derselbe Takt wie beim Akku, beim Speicherplatz und im
-      // Kontrollzentrum, an derselben Stelle. updateDisplay() steigt
-      // oben aus, solange das Fenster zu ist.
-      interval(UPDATE_INTERVAL, updateDisplay)
-
-      return container
-    },
-  })
+    return container
+  },
 }

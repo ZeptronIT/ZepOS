@@ -1238,6 +1238,11 @@ export function BarContent(monitorName: string,
       //     statt eines Prozessstarts. Der Weg zum grossen Werkzeug
       //     bleibt - er steht jetzt IM Fenster, neben den anderen
       //     Knoepfen, die dasselbe Geraet betreffen.
+      // GEPRUEFT, NICHT VERGESSEN (Aufgabe 8, 18.08.2026, "Netzwerk wird
+      // eine Seite"): dieselbe Begruendung wie bei "bluetooth" darunter -
+      // `toggles: "network"` braucht keinen Codewechsel, toggleByName
+      // leitet seit Aufgabe 8 auch "network" auf
+      // `widgets.control.zeigeSeite("network", anker)` um.
       case "network": return sharedModule(name, "network", {
         toggles: "network",
       })
