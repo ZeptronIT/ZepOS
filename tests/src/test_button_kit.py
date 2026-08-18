@@ -175,7 +175,68 @@ AUSGANGSZAHL = 52
 #                   GEZAEHLT mit _knopfklassen/_ist_knopfname aus diesem
 #                   Modul (VORHER 32, NACHHER 23, `git show HEAD` gegen
 #                   den Arbeitsbaum), nicht abgeschrieben.
-ERLAUBT = 23
+#    9  18.08.2026  Task E (VPN und VPN-Einstellungen), der letzte Auftrag
+#                   von UI-1 Stufe 4. Dreizehn der vierzehn genannten
+#                   Klassen auf zepButton umgestellt und entfernt:
+#                   vpn-add-btn, vpn-back-btn, vpn-cancel-btn,
+#                   vpn-connect-btn (Rolle voll), vpn-delete-btn (Rolle
+#                   kritisch, wie verlangt), vpn-disconnect-btn (Rolle
+#                   kritisch - Trennen ist zerstoerend, dieselbe
+#                   Einordnung wie net-disconnect-btn, Task C),
+#                   vpn-reset-btn (Rolle kritisch, wie verlangt),
+#                   vpn-save-btn (Rolle voll), vpn-save-psk-btn,
+#                   vpn-settings-btn, vpn-tab-btn (Rolle umrandet - ANDERS
+#                   als se-tab-btn, Task B, blieb dieser Reiter nicht
+#                   stehen: die waagerechte Innenabstand ist woertlich
+#                   derselbe Platzhalter STYLE_SPACE_16 in beiden Regeln,
+#                   und WIN_WIDTH von ags-vpn-settings.template haengt an
+#                   den vier Fussknoepfen, nicht an der Reiterleiste - die
+#                   Kopplung, die se-tab-btn stehen liess, griff hier
+#                   nicht), vpn-toggle-btn und vpn-visibility-btn (Rolle
+#                   still - GEPRUEFT wie beim x in Task A: .vpn-entry-row
+#                   haengt an der Hoehe von .vpn-entry, ~60px aufgeloest
+#                   mit dem ausgelieferten Faktor 1.85, groesser als
+#                   zep-btns min-height von 49px - die Zeile bleibt vom
+#                   Eingabefeld bestimmt, nicht vom Knopf, anders als bei
+#                   overlay-close-btn keine harte Massvorgabe, die
+#                   zep-btn unterlaeuft). Die vierzehnte genannte Klasse,
+#                   vpn-list-btn, war repo-weit OHNE Leser (GEPRUEFT vor
+#                   jeder Aenderung, `grep -rn` gegen alle Vorlagen) -
+#                   Ueberbleibsel eines aelteren Listeneintrags-Entwurfs,
+#                   einfach entfernt statt umgebaut (dieselbe Lage wie
+#                   sechs der zehn Klassen in Task D).
+#                   GEFUNDEN, WO DER WAECHTER UNERWARTET ANSCHLUG: die
+#                   Ratsche zaehlte vpn-tab-btn nach dem Umbau weiter,
+#                   weil ein ZWEITER Fundort auf ihn zeigte - die globale
+#                   Uebergangsregel-Liste ("DIE BEWEGUNG") trug
+#                   `.vpn-tab-btn.active` neben `.se-tab-btn.active`.
+#                   REPARIERT im Code, nicht im Test: die verwaiste Zeile
+#                   entfernt, dieselbe Reparatur, die Task D fuer
+#                   cc-toggle-btn.active bereits an derselben Stelle
+#                   gemacht hat. Die "aktiv"-Faerbung selbst lebt jetzt in
+#                   `.vpn-tab-bar .zep-btn.active` (dieselbe Sprache wie
+#                   `.battery-profile-buttons .zep-btn.active`, Task A,
+#                   und `.wp-monitor-selector .zep-btn.active`, Task B)
+#                   sowie `.vpn-toggle-group .zep-btn.active` fuer
+#                   vpn-toggle-btn, mit denselben Farbwerten wie vorher.
+#                   PLAN-VS-BAUM-ABWEICHUNG: der Auftrag verspricht "die
+#                   Ratsche steht danach auf 5", weil er annimmt, alle
+#                   anderen Fenster liessen keine eigene Klasse mehr
+#                   stehen. Der Baum zeigt vier Klassen aus fruehen,
+#                   bereits committeten Auftraegen, die bewusst NICHT zu
+#                   den fuenf zep-Namen gehoeren und ausserhalb der
+#                   Dateiliste dieses Auftrags liegen: overlay-close-btn
+#                   (Task A - das x in jeder Fensterkopfzeile, haerte
+#                   Massvorgabe als zep-btn), se-tab-btn und cp-preset-btn
+#                   (Task B - Reiter bzw. Farbkachel, siehe deren
+#                   Eintraege oben) und cc-action-btn (Task D - gehoert zu
+#                   ags-notifications.template, nicht zu diesem Auftrag).
+#                   ERLAUBT steht darum auf 9, nicht auf 5 - siehe
+#                   gruppe-E-report.md.
+#                   GEZAEHLT mit _knopfklassen/_ist_knopfname aus diesem
+#                   Modul (VORHER 23, NACHHER 9, `git show HEAD` gegen den
+#                   Arbeitsbaum), nicht abgeschrieben.
+ERLAUBT = 9
 
 
 def _without_comments(css: str) -> str:

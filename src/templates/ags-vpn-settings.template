@@ -8,6 +8,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
+import { zepButton } from "../utils/kit"
 
 const WINDOW_NAME = "vpn-settings"
 
@@ -497,15 +498,16 @@ function createToggleGroup(label: string, options: { label: string; value: any }
   const buttons: Gtk.Button[] = []
 
   for (const opt of options) {
-    const btn = new Gtk.Button({ label: opt.label, can_focus: false })
-    btn.add_css_class("vpn-toggle-btn")
-    if (opt.value === currentValue) btn.add_css_class("active")
-
-    btn.connect("clicked", () => {
+    // Rolle umrandet: gleichrangige Auswahlmoeglichkeiten, keine
+    // Hauptsache - dieselbe Einordnung wie wp-monitor-btn (Task B). Wer
+    // gerade gewaehlt ist, zeigt weiterhin die Klasse "active", nicht
+    // die Rolle.
+    const btn = zepButton(opt.label, "umrandet", () => {
       for (const b of buttons) b.remove_css_class("active")
       btn.add_css_class("active")
       onChange(opt.value)
     })
+    if (opt.value === currentValue) btn.add_css_class("active")
 
     buttons.push(btn)
     toggleBox.append(btn)
@@ -580,11 +582,10 @@ function buildGeneralTab(): Gtk.Box {
   pskEntry.add_css_class("vpn-entry")
 
   let pskVisible = false
-  const pskVisibilityBtn = new Gtk.Button({ can_focus: false })
-  pskVisibilityBtn.add_css_class("vpn-visibility-btn")
-  pskVisibilityBtn.set_child(new Gtk.Label({ label: ICONS.eye }))
-  pskVisibilityBtn.set_tooltip_text(_("Show PSK"))
-  pskVisibilityBtn.connect("clicked", () => {
+  // Rolle still, wie passwordVisBtn in ags-vpn.template (Zeichen-Knopf am
+  // Rand der Eingabezeile) - dieselbe Hoehenpruefung gilt hier: .vpn-entry
+  // bestimmt die Zeilenhoehe von .vpn-entry-row, nicht der Knopf.
+  const pskVisibilityBtn = zepButton(ICONS.eye, "still", () => {
     if (!pskVisible) {
       // Read straight from the user's own file - no privilege involved
       const psk = loadPsk()
@@ -602,6 +603,7 @@ function buildGeneralTab(): Gtk.Box {
       icon.set_text(ICONS.eye)
     }
   })
+  pskVisibilityBtn.set_tooltip_text(_("Show PSK"))
 
   // Status label showing if PSK exists. Declared before the save
   // button, which now updates it: a save that failed has to change what
@@ -609,11 +611,10 @@ function buildGeneralTab(): Gtk.Box {
   const pskStatus = new Gtk.Label({ label: "", xalign: 0 })
   pskStatus.add_css_class("vpn-psk-status")
 
-  const pskSaveBtn = new Gtk.Button({ can_focus: false })
-  pskSaveBtn.add_css_class("vpn-save-psk-btn")
-  pskSaveBtn.set_child(new Gtk.Label({ label: ICONS.save }))
-  pskSaveBtn.set_tooltip_text(_("Save PSK"))
-  pskSaveBtn.connect("clicked", async () => {
+  // Rolle umrandet: eine wirkliche, sofort wirksame Handlung (PSK
+  // speichern), aber nicht die Hauptsache des Fensters (das ist
+  // vpn-save-btn unten) - dieselbe Einordnung wie privacyMicBtn (Task D).
+  const pskSaveBtn = zepButton(ICONS.save, "umrandet", async () => {
     const psk = pskEntry.get_text()
     if (psk) {
       // The success message is now sent only if the file is really
@@ -644,6 +645,7 @@ function buildGeneralTab(): Gtk.Box {
       }
     }
   })
+  pskSaveBtn.set_tooltip_text(_("Save PSK"))
 
   pskRow.append(pskEntry)
   pskRow.append(pskVisibilityBtn)
@@ -734,9 +736,14 @@ function buildPhase2Tab(): Gtk.Box {
   const netTitle = new Gtk.Label({ label: _("Routed networks"), xalign: 0, hexpand: true })
   netTitle.add_css_class("vpn-section-title")
 
-  const addNetBtn = new Gtk.Button({ can_focus: false })
-  addNetBtn.add_css_class("vpn-add-btn")
-  addNetBtn.set_child(new Gtk.Label({ label: ICONS.add }))
+  // Rolle umrandet: eine wirkliche Handlung (Eintrag hinzufuegen), keine
+  // Navigation. rebuildNetList ist eine Funktionsdeklaration und darum
+  // gehoben (hoisted) - der Aufruf hier loest erst beim Klick auf, lange
+  // nachdem sie weiter unten definiert ist.
+  const addNetBtn = zepButton(ICONS.add, "umrandet", () => {
+    currentSettings.routed_networks.push("")
+    rebuildNetList()
+  })
   addNetBtn.set_tooltip_text(_("Add network"))
 
   netHeader.append(netTitle)
@@ -776,10 +783,8 @@ function buildPhase2Tab(): Gtk.Box {
         currentSettings.routed_networks[idx] = netEntry.get_text()
       })
 
-      const deleteBtn = new Gtk.Button({ can_focus: false })
-      deleteBtn.add_css_class("vpn-delete-btn")
-      deleteBtn.set_child(new Gtk.Label({ label: ICONS.delete }))
-      deleteBtn.connect("clicked", () => {
+      // Rolle kritisch, wie vom Auftrag verlangt (loeschen ist zerstoerend).
+      const deleteBtn = zepButton(ICONS.delete, "kritisch", () => {
         currentSettings.routed_networks.splice(idx, 1)
         rebuildNetList()
       })
@@ -789,11 +794,6 @@ function buildPhase2Tab(): Gtk.Box {
       netList.append(netItem)
     }
   }
-
-  addNetBtn.connect("clicked", () => {
-    currentSettings.routed_networks.push("")
-    rebuildNetList()
-  })
 
   rebuildNetList()
   box.append(netList)
@@ -816,9 +816,11 @@ function buildDnsTab(): Gtk.Box {
   const dnsTitle = new Gtk.Label({ label: _("DNS servers"), xalign: 0, hexpand: true })
   dnsTitle.add_css_class("vpn-field-label")
 
-  const addDnsBtn = new Gtk.Button({ can_focus: false })
-  addDnsBtn.add_css_class("vpn-add-btn")
-  addDnsBtn.set_child(new Gtk.Label({ label: ICONS.add }))
+  // Rolle umrandet, wie addNetBtn oben. rebuildDnsList ist gehoben.
+  const addDnsBtn = zepButton(ICONS.add, "umrandet", () => {
+    currentSettings.dns.servers.push("")
+    rebuildDnsList()
+  })
   addDnsBtn.set_tooltip_text(_("Add DNS server"))
 
   dnsHeader.append(dnsTitle)
@@ -850,10 +852,8 @@ function buildDnsTab(): Gtk.Box {
         currentSettings.dns.servers[idx] = dnsEntry.get_text()
       })
 
-      const deleteBtn = new Gtk.Button({ can_focus: false })
-      deleteBtn.add_css_class("vpn-delete-btn")
-      deleteBtn.set_child(new Gtk.Label({ label: ICONS.delete }))
-      deleteBtn.connect("clicked", () => {
+      // Rolle kritisch, wie vom Auftrag verlangt (loeschen ist zerstoerend).
+      const deleteBtn = zepButton(ICONS.delete, "kritisch", () => {
         currentSettings.dns.servers.splice(idx, 1)
         rebuildDnsList()
       })
@@ -863,11 +863,6 @@ function buildDnsTab(): Gtk.Box {
       dnsList.append(dnsItem)
     }
   }
-
-  addDnsBtn.connect("clicked", () => {
-    currentSettings.dns.servers.push("")
-    rebuildDnsList()
-  })
 
   rebuildDnsList()
   box.append(dnsList)
@@ -917,11 +912,17 @@ export default function VpnSettings(): OverlayWidget {
         { id: "dns", label: _("DNS") }
       ]
 
+      // Rolle umrandet je Reiter, siehe Task B (se-tab-btn). ANDERS als
+      // dort: die waagerechte Innenabstand von vpn-tab-btn und zep-btn ist
+      // NICHT nur rechnerisch gleich, sondern derselbe Platzhalter
+      // (STYLE_SPACE_16 auf beiden Seiten in beiden Regeln) - und
+      // WIN_WIDTH dieses Fensters haengt (siehe Dateikopf) ausschliesslich
+      // an den vier Knoepfen der Fusszeile, nicht an dieser Leiste. Die
+      // Kopplung, die se-tab-btn stehen liess, gilt hier nicht - GEPRUEFT
+      // am 18.08.2026, siehe Gruppe-E-Bericht.
       for (const tab of tabs) {
-        const btn = new Gtk.Button({ label: tab.label, can_focus: false })
-        btn.add_css_class("vpn-tab-btn")
+        const btn = zepButton(tab.label, "umrandet", () => switchTab(tab.id))
         if (tab.id === "general") btn.add_css_class("active")
-        btn.connect("clicked", () => switchTab(tab.id))
         tabButtons.set(tab.id, btn)
         tabBar.append(btn)
       }
@@ -959,38 +960,54 @@ export default function VpnSettings(): OverlayWidget {
       const actionsBox = new Gtk.Box({ spacing: 12, halign: Gtk.Align.END })
       actionsBox.add_css_class("vpn-settings-actions")
 
-      const resetBtn = new Gtk.Button({ can_focus: false })
+      // VIER FUSSKNOEPFE, UND WARUM DIE UMSTELLUNG DIE BREITE NICHT
+      // SPRENGT (WIN_WIDTH = 642, siehe Dateikopf)
+      //
+      //     Die vier Knoepfe unten trugen vorher je eigene Innenabstaende
+      //     (STYLE_SPACE_8/12 bei back-btn, STYLE_SPACE_12/20 bei
+      //     reset/cancel/save-btn). zep-btn erzwingt fuer alle vier
+      //     dieselben 0/STYLE_SPACE_16. Mit dem ausgelieferten Faktor
+      //     1.85 aufgeloest (STYLE_SPACE_12=18px, STYLE_SPACE_16=25px,
+      //     STYLE_SPACE_20=31px):
+      //
+      //         back-btn:            36px -> 50px   (+14px)
+      //         reset/cancel/save:   62px -> 50px    (-12px je Knopf)
+      //
+      //     macht in Summe -22px auf die Fusszeile - die drei breiteren
+      //     Knoepfe schrumpfen mehr, als der schmalste waechst. Die im
+      //     Dateikopf gemessene Zeilenbreite (566px) wird durch die
+      //     Umstellung also NICHT ueberschritten, sondern mit Abstand
+      //     unterschritten - anders als bei se-tab-btn (Task B) haengt
+      //     WIN_WIDTH hier an GENAU diesen vier Knoepfen, aber die
+      //     Rechnung geht in die sichere Richtung. GEPRUEFT (nicht im
+      //     Compositor gemessen, tests/render verboten), siehe
+      //     Gruppe-E-Bericht.
+      const resetBtn = zepButton("", "kritisch", resetSettings)
       const resetBtnBox = new Gtk.Box({ spacing: 6 })
       resetBtnBox.append(new Gtk.Label({ label: ICONS.reset }))
       resetBtnBox.append(new Gtk.Label({ label: _("Reset") }))
       resetBtn.set_child(resetBtnBox)
-      resetBtn.add_css_class("vpn-reset-btn")
-      resetBtn.connect("clicked", resetSettings)
 
-      const cancelBtn = new Gtk.Button({ label: _("Cancel"), can_focus: false })
-      cancelBtn.add_css_class("vpn-cancel-btn")
-      cancelBtn.connect("clicked", () => closeFn?.())
+      const cancelBtn = zepButton(_("Cancel"), "umrandet", () => closeFn?.())
 
-      // Back to VPN button
-      const backBtn = new Gtk.Button({ can_focus: false })
-      backBtn.add_css_class("vpn-back-btn")
-      backBtn.set_child(new Gtk.Label({ label: _("← VPN") }))
-      backBtn.set_tooltip_text(_("Back to the VPN connection"))
-      backBtn.connect("clicked", () => {
+      // Back to VPN button. Rolle still: reine Navigation.
+      const backBtn = zepButton(_("← VPN"), "still", () => {
         closeFn?.()
         execAsync("ags request vpn")
       })
+      backBtn.set_tooltip_text(_("Back to the VPN connection"))
 
-      const saveBtn = new Gtk.Button({ can_focus: false })
+      // Rolle voll: die Hauptsache dieses Fensters - alle vier Reiter
+      // teilen sich diese eine Fusszeile, genau EIN voll fuer das ganze
+      // Fenster (nicht je Reiter).
+      const saveBtn = zepButton("", "voll", async () => {
+        await saveSettings()
+        // Note: saveSettings() already closes overlay and opens VPN
+      })
       const saveBtnBox = new Gtk.Box({ spacing: 6 })
       saveBtnBox.append(new Gtk.Label({ label: ICONS.save }))
       saveBtnBox.append(new Gtk.Label({ label: _("Save") }))
       saveBtn.set_child(saveBtnBox)
-      saveBtn.add_css_class("vpn-save-btn")
-      saveBtn.connect("clicked", async () => {
-        await saveSettings()
-        // Note: saveSettings() already closes overlay and opens VPN
-      })
 
       actionsBox.append(backBtn)
       actionsBox.append(resetBtn)

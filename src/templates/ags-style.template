@@ -2095,16 +2095,14 @@ $overlay-border: $border;
   border-color: $red;
 }
 
-.vpn-visibility-btn {
-  background: transparent;
-  border: none;
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  color: $subtext;
-
-  &:hover {
-    color: $vpn-accent;
-  }
-}
+// ENTFERNT am 18.08.2026 (Task E, Umbau auf zepButton): vpn-visibility-btn
+// (Passwort/PSK sichtbar machen, zweimal benutzt: ags-vpn.template und
+// ags-vpn-settings.template) - Rolle still. GEPRUEFT: .vpn-entry-row hat
+// keine eigene Hoehe, sie haengt am groessten Kind; .vpn-entry (Padding
+// STYLE_SPACE_12 oben/unten plus Textzeile, ~60px mit dem ausgelieferten
+// Faktor 1.85) bleibt groesser als zep-btns min-height (STYLE_CONTROL_HEIGHT,
+// 49px) - die Zeilenhoehe bleibt vom Eingabefeld bestimmt, nicht vom Knopf.
+// Eine der vierzehn Klassen aus dem Auftrag, siehe gruppe-E-report.md.
 
 .vpn-remember-row {
   padding: {{STYLE_SPACE_8}} 0;
@@ -2137,46 +2135,17 @@ $overlay-border: $border;
   border-top: 1px solid rgba($surface, 0.3);
 }
 
-.vpn-connect-btn {
-  background: rgba($vpn-accent, 0.3);
-  border: 1px solid $vpn-accent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_24}};
-  color: $text;
-  font-weight: bold;
-
-  &:hover {
-    background: rgba($vpn-accent, 0.5);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-  }
-}
-
-.vpn-disconnect-btn {
-  background: rgba($red, 0.2);
-  border: 1px solid rgba($red, 0.5);
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_24}};
-  color: $red;
-
-  &:hover {
-    background: rgba($red, 0.4);
-  }
-}
-
-.vpn-settings-btn {
-  background: rgba($surface, 0.4);
-  border: none;
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_16}};
-  color: $subtext;
-
-  &:hover {
-    background: rgba($vpn-accent, 0.2);
-    color: $vpn-accent;
-  }
-}
+// ENTFERNT am 18.08.2026 (Task E, Umbau auf zepButton): drei
+// zusammengehoerige Regeln der Formular-/verbundenen Ansicht in
+// ags-vpn.template.
+//   - vpn-connect-btn (Rolle voll, die Hauptsache der Formularansicht) -
+//     Kontrastpruefung im Gruppe-E-Bericht, kein eigenes Kind-Label mit
+//     eigener color-Klasse, keine Kollision.
+//   - vpn-disconnect-btn (Rolle kritisch - Trennen ist zerstoerend,
+//     dieselbe Einordnung wie net-disconnect-btn, Task C).
+//   - vpn-settings-btn (Rolle still - oeffnet ein anderes Fenster, reine
+//     Navigation, zweimal benutzt: connectedSettingsBtn/formSettingsBtn).
+// Alle drei aus den vierzehn Klassen des Auftrags, siehe gruppe-E-report.md.
 
 // ===== VPN CONNECTED VIEW =====
 .vpn-connected-view {
@@ -2246,26 +2215,28 @@ $overlay-border: $border;
   padding: {{STYLE_SPACE_8}} 0;
   background: rgba($surface, 0.3);
   margin: {{STYLE_SPACE_12}} 0;
-}
 
-.vpn-tab-btn {
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_16}};
-  color: $subtext;
-
-  &:hover {
-    background: rgba($surface, 0.5);
-    color: $text;
-  }
-
-  &.active {
+  // Der gewaehlte Reiter, in der Akzentfarbe dieses Fensters (Task E,
+  // 18.08.2026): zepButton kennt selbst keinen "aktiv"-Zustand, nur
+  // Rollen - dieselbe Sprache wie .battery-profile-buttons .zep-btn.active
+  // (Task A) und .wp-monitor-selector .zep-btn.active (Task B). Dieselben
+  // Werte, die vorher auf vpn-tab-btn.active standen.
+  .zep-btn.active {
     background: rgba($vpn-accent, 0.2);
     border-color: $vpn-accent;
     color: $vpn-accent;
   }
 }
+
+// ENTFERNT am 18.08.2026 (Task E, Umbau auf zepButton): vpn-tab-btn
+// (Rolle umrandet, plus die vom Kit weiterhin getragene Klasse "active").
+// ANDERS als bei se-tab-btn (Task B): die waagerechte Innenabstand war
+// nicht nur rechnerisch, sondern woertlich derselbe Platzhalter
+// (STYLE_SPACE_16 auf beiden Seiten in vpn-tab-btn UND in zep-btn), und
+// WIN_WIDTH von ags-vpn-settings.template haengt (siehe Dateikopf) an den
+// vier Fussknoepfen, nicht an dieser Leiste - die Kopplung, die se-tab-btn
+// stehen liess, gilt hier nicht. Eine der vierzehn Klassen aus dem
+// Auftrag, siehe gruppe-E-report.md.
 
 .vpn-tab-content {
   padding: {{STYLE_SPACE_12}} 0;
@@ -2282,24 +2253,24 @@ $overlay-border: $border;
 
 .vpn-toggle-group {
   padding: {{STYLE_SPACE_8}} 0;
-}
 
-.vpn-toggle-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_16}};
-  color: $subtext;
-
-  &:hover {
-    background: rgba($surface, 0.6);
-  }
-
-  &.active {
+  // Dieselbe Sprache wie .vpn-tab-bar .zep-btn.active oben, mit den
+  // Werten, die vorher auf vpn-toggle-btn.active standen (die
+  // Beschriftung bleibt hier $text statt $vpn-accent).
+  .zep-btn.active {
     background: rgba($vpn-accent, 0.3);
     border-color: $vpn-accent;
     color: $text;
   }
 }
+
+// ENTFERNT am 18.08.2026 (Task E, Umbau auf zepButton): vpn-toggle-btn
+// (Rolle umrandet - gleichrangige Auswahlmoeglichkeiten wie Aggressive/
+// Main, IKEv1/IKEv2, Tunnel/Transport, keine Hauptsache; dieselbe
+// Einordnung wie wp-monitor-btn, Task B). Die bestehende add_css_class/
+// remove_css_class("active")-Logik in createToggleGroup() blieb dabei
+// unveraendert. Eine der vierzehn Klassen aus dem Auftrag, siehe
+// gruppe-E-report.md.
 
 .vpn-checkbox-row {
   padding: {{STYLE_SPACE_8}} 0;
@@ -2332,113 +2303,48 @@ $overlay-border: $border;
   font-family: monospace;
 }
 
-.vpn-list-item-actions {
-  .vpn-list-btn {
-    background: transparent;
-    border: none;
-    padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_8}};
-    color: $subtext;
-
-    &:hover {
-      color: $vpn-accent;
-    }
-
-    &.delete:hover {
-      color: $red;
-    }
-  }
-}
-
-.vpn-add-btn {
-  background: rgba($surface, 0.4);
-  border: 1px dashed rgba($vpn-accent, 0.5);
-  padding: {{STYLE_SPACE_12}};
-  color: $vpn-accent;
-
-  &:hover {
-    background: rgba($vpn-accent, 0.1);
-    border-style: solid;
-  }
-}
+// ENTFERNT am 18.08.2026 (Task E): vpn-list-item-actions samt der darin
+// verschachtelten vpn-list-btn. GEPRUEFT repo-weit vor jeder Aenderung
+// (`grep -rn` gegen `src/templates/*.template`): vpn-list-btn hatte KEINEN
+// Leser in irgendeiner Vorlage - Ueberbleibsel eines aelteren
+// Listeneintrags-Entwurfs (Name/Wert/Aktionen), den ags-vpn-settings.
+// template in seiner heutigen Form (Gtk.Entry + ein Loeschknopf direkt im
+// Eintrag, siehe rebuildNetList()/rebuildDnsList()) nie benutzt hat -
+// vpn-list-item-actions umschloss ausschliesslich diese eine tote Regel
+// und wird darum mitentfernt. Eine der vierzehn genannten Klassen aus dem
+// Auftrag, siehe gruppe-E-report.md ("Vermutete Dubletten koennen schon
+// tot sein" - hier keine Dublette, sondern schlicht kein Leser mehr).
+//
+// ENTFERNT, ebenfalls am 18.08.2026 (Task E, Umbau auf zepButton):
+// vpn-add-btn (Rolle umrandet - eine wirkliche Handlung, Eintrag
+// hinzufuegen, keine Hauptsache; zweimal benutzt: Netzwerke und
+// DNS-Server in ags-vpn-settings.template).
 
 .vpn-settings-actions {
   padding-top: {{STYLE_SPACE_12}};
   border-top: 1px solid rgba($surface, 0.3);
 }
 
-.vpn-save-btn {
-  background: rgba($vpn-accent, 0.3);
-  border: 1px solid $vpn-accent;
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_20}};
-  color: $text;
-  font-weight: bold;
-
-  &:hover {
-    background: rgba($vpn-accent, 0.5);
-  }
-}
-
-.vpn-reset-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid rgba($surface, 0.6);
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_20}};
-  color: $subtext;
-
-  &:hover {
-    background: rgba($red, 0.2);
-    border-color: rgba($red, 0.5);
-    color: $red;
-  }
-}
-
-.vpn-cancel-btn {
-  background: transparent;
-  border: none;
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_20}};
-  color: $subtext;
-
-  &:hover {
-    color: $text;
-  }
-}
-
-.vpn-back-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid rgba($vpn-accent, 0.5);
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  color: $vpn-accent;
-  font-size: {{STYLE_FONT_BODY}};
-
-  &:hover {
-    background: rgba($vpn-accent, 0.2);
-    border-color: $vpn-accent;
-  }
-}
-
-.vpn-delete-btn {
-  background: transparent;
-  border: none;
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  color: $subtext;
-  min-width: 32px;
-
-  &:hover {
-    color: $red;
-    background: rgba($red, 0.1);
-  }
-}
-
-.vpn-save-psk-btn {
-  background: rgba($vpn-accent, 0.2);
-  border: 1px solid rgba($vpn-accent, 0.5);
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  color: $vpn-accent;
-
-  &:hover {
-    background: rgba($vpn-accent, 0.3);
-    border-color: $vpn-accent;
-  }
-}
+// ENTFERNT am 18.08.2026 (Task E, Umbau auf zepButton): die vier
+// Fussknoepfe von ags-vpn-settings.template.
+//   - vpn-save-btn (Rolle voll - die Hauptsache des gesamten Fensters,
+//     alle vier Reiter teilen sich diese eine Fusszeile). Kontrastpruefung
+//     im Gruppe-E-Bericht.
+//   - vpn-reset-btn (Rolle kritisch, wie vom Auftrag verlangt).
+//   - vpn-cancel-btn (Rolle umrandet, dieselbe Einordnung wie cp-cancel-btn,
+//     Task B).
+//   - vpn-back-btn (Rolle still - reine Navigation zurueck zum
+//     VPN-Fenster).
+// Breitenrechnung (WIN_WIDTH = 642, Dateikopf von ags-vpn-settings.
+// template) im Gruppe-E-Bericht: die Umstellung unterschreitet die
+// gemessene Fusszeilenbreite, statt sie zu ueberschreiten.
+//
+// ENTFERNT, ebenfalls am 18.08.2026 (Task E, Umbau auf zepButton):
+//   - vpn-delete-btn (Rolle kritisch, wie vom Auftrag verlangt - loeschen
+//     eines Netzwerk-/DNS-Eintrags, zweimal benutzt).
+//   - vpn-save-psk-btn (Rolle umrandet - eine wirkliche, sofort wirksame
+//     Handlung, aber nicht die Hauptsache des Fensters).
+// Sechs der vierzehn Klassen aus dem Auftrag, siehe gruppe-E-report.md.
 
 .vpn-mini-label {
   font-size: {{STYLE_FONT_CAPTION}};
@@ -2658,9 +2564,13 @@ button:hover,
 
 // cc-toggle-btn.active stand hier bis zum 18.08.2026 (Task D) - mit
 // cc-toggle-btn selbst entfernt (siehe dort), da diese Zeile nur mit
-// jener Klasse zusammen eine Wirkung hatte.
+// jener Klasse zusammen eine Wirkung hatte. vpn-tab-btn.active stand
+// ebenso hier bis zum 18.08.2026 (Task E) - mit vpn-tab-btn selbst
+// entfernt (siehe .vpn-tab-bar weiter oben), aus demselben Grund. Der
+// GEFUNDENE Waechteranschlag (Ratsche zaehlte vpn-tab-btn trotz
+// entfernter Basisregel weiter, weil dieser zweite Fundort ihn noch
+// trug) ist damit behoben - der Code wurde repariert, nicht der Test.
 .se-tab-btn.active,
-.vpn-tab-btn.active,
 .se-res-tab.active {
   transition: background-color {{STYLE_MOTION_BASE}} {{STYLE_MOTION_CURVE}},
               border-color {{STYLE_MOTION_BASE}} {{STYLE_MOTION_CURVE}};

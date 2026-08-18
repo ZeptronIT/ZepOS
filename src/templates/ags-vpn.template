@@ -8,6 +8,7 @@ import { interval } from "ags/time"
 import GLib from "gi://GLib"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
+import { zepButton } from "../utils/kit"
 
 const WINDOW_NAME = "vpn-manager"
 const UPDATE_INTERVAL = 5000
@@ -573,17 +574,14 @@ export default function VpnManager(): OverlayWidget {
       connectedInfoBox.append(connectedServerLabel)
       connectedInfoBox.append(connectedNameLabel)
 
-      // Disconnect button (full width)
-      disconnectBtn = new Gtk.Button({ label: _("Disconnect"), can_focus: false })
-      disconnectBtn.add_css_class("vpn-disconnect-btn")
+      // Disconnect button (full width). Rolle kritisch: Trennen ist
+      // zerstoerend (dieselbe Einordnung wie net-disconnect-btn, Task C).
+      disconnectBtn = zepButton(_("Disconnect"), "kritisch", disconnectVpn)
       disconnectBtn.add_css_class("vpn-disconnect-full")
-      disconnectBtn.connect("clicked", disconnectVpn)
 
-      // Settings button
-      const connectedSettingsBtn = new Gtk.Button({ can_focus: false })
-      connectedSettingsBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
-      connectedSettingsBtn.add_css_class("vpn-settings-btn")
-      connectedSettingsBtn.connect("clicked", openVpnSettings)
+      // Settings button. Rolle still: oeffnet ein anderes Fenster, reine
+      // Navigation (dieselbe Einordnung wie netBtn/vpnBtn, Task D).
+      const connectedSettingsBtn = zepButton(ICONS.settings, "still", openVpnSettings)
 
       connectedView.append(connectedIcon)
       connectedView.append(connectedStatusLabel)
@@ -610,10 +608,7 @@ export default function VpnManager(): OverlayWidget {
       disconnectedLabel = new Gtk.Label({ label: _("Not connected"), xalign: 0 })
       disconnectedLabel.add_css_class("vpn-status-label")
 
-      const formSettingsBtn = new Gtk.Button({ can_focus: false })
-      formSettingsBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
-      formSettingsBtn.add_css_class("vpn-settings-btn")
-      formSettingsBtn.connect("clicked", openVpnSettings)
+      const formSettingsBtn = zepButton(ICONS.settings, "still", openVpnSettings)
 
       statusRow.append(disconnectedIcon)
       statusRow.append(disconnectedLabel)
@@ -655,10 +650,18 @@ export default function VpnManager(): OverlayWidget {
       passwordEntry = new Gtk.Entry({ hexpand: true, visibility: false, placeholder_text: _("Password ...") })
       passwordEntry.add_css_class("vpn-entry")
 
-      const passwordVisBtn = new Gtk.Button({ can_focus: false })
-      passwordVisBtn.set_child(new Gtk.Label({ label: ICONS.eye }))
-      passwordVisBtn.add_css_class("vpn-visibility-btn")
-      passwordVisBtn.connect("clicked", () => togglePasswordVisibility(passwordEntry, passwordVisBtn, true))
+      // Rolle still: ein Zeichen-Knopf am Rand der Eingabezeile, kein
+      // Hauptweg (dieselbe Einordnung wie se-edit-btn/notif-close-btn) -
+      // GEPRUEFT (18.08.2026): .vpn-entry-row hat keine eigene Hoehe, sie
+      // haengt am groessten Kind. .vpn-entry traegt STYLE_SPACE_12 oben/
+      // unten (18px, aufgeloest mit dem ausgelieferten Faktor 1.85) plus
+      // Textzeile (STYLE_FONT_BODY 20px, Zeilenhoehe 1.2 ~ 24px) ~ 60px
+      // Grundhoehe - groesser als zep-btns min-height (STYLE_CONTROL_HEIGHT,
+      // 49px). Die Zeile bleibt also von .vpn-entry bestimmt, nicht vom
+      // Knopf; anders als bei overlay-close-btn keine harte Massvorgabe,
+      // die zep-btn unterlaeuft.
+      const passwordVisBtn = zepButton(ICONS.eye, "still",
+        () => togglePasswordVisibility(passwordEntry, passwordVisBtn, true))
 
       passwordRow.append(passwordEntry)
       passwordRow.append(passwordVisBtn)
@@ -715,10 +718,10 @@ export default function VpnManager(): OverlayWidget {
       formBox.append(rememberRow)
       formBox.append(errorLabel)
 
-      // Connect button
-      connectBtn = new Gtk.Button({ label: _("Connect"), can_focus: false })
-      connectBtn.add_css_class("vpn-connect-btn")
-      connectBtn.connect("clicked", connectVpn)
+      // Connect button. Rolle voll: die Hauptsache der Formularansicht,
+      // genau EIN voll in dieser Ansicht (die verbundene Ansicht hat
+      // keins, siehe disconnectBtn oben).
+      connectBtn = zepButton(_("Connect"), "voll", connectVpn)
 
       const connectActions = new Gtk.Box({ spacing: 12, halign: Gtk.Align.END })
       connectActions.add_css_class("vpn-actions")
