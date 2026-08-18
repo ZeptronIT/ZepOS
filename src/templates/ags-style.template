@@ -91,10 +91,15 @@ $overlay-border: $border;
 
   // AUSGEWAEHLT, 18.08.2026: task-5 (Bluetooth) ist der erste
   // Verbraucher - das verbundene Geraet muss sich von den uebrigen
-  // abheben. Dieselbe Sprache wie .net-item.active und
-  // .cc-toggle-btn.active (siehe dort): Farbtoenung im Hintergrund plus
-  // ein Randstreifen, aus $accent statt einem fenstereigenen Akzent,
-  // weil zepRow ein geteiltes Bauteil ist und keinem Fenster gehoert.
+  // abheben. Dieselbe Sprache wie .se-tab-btn.active: Farbtoenung im
+  // Hintergrund plus ein Randstreifen, aus $accent statt einem
+  // fenstereigenen Akzent, weil zepRow ein geteiltes Bauteil ist und
+  // keinem Fenster gehoert.
+  //
+  // BERICHTIGT am 18.08.2026 (Task D): die zwei anderen hier genannten
+  // Beispiele, .net-item.active (Task C) und .cc-toggle-btn.active
+  // (Task D), sind inzwischen selbst entfernt - der Vergleich zeigt
+  // jetzt nur noch das verbliebene .se-tab-btn.active.
   &.active {
     background: rgba($accent, 0.15);
     border-left-color: $accent;
@@ -860,17 +865,11 @@ $overlay-border: $border;
   font-family: monospace;
 }
 
-.cc-mini-btn {
-  background: rgba($surface, 0.4);
-  border: none;
-  padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_8}};
-  font-size: {{STYLE_FONT_BODY}};
-  color: $control-accent;
-
-  &:hover {
-    background: rgba($control-accent, 0.2);
-  }
-}
+// ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): cc-mini-btn
+// hatte repo-weit KEINEN Leser mehr (kein .add_css_class("cc-mini-btn")
+// in irgendeiner Vorlage) - Ueberbleibsel eines aelteren
+// Kontrollzentrum-Entwurfs vor dem heutigen Aufbau. Eine der zehn
+// Klassen aus dem Auftrag, siehe gruppe-D-report.md.
 
 .cc-toggle-box {
   background: rgba($surface, 0.3);
@@ -927,81 +926,33 @@ $overlay-border: $border;
   font-family: monospace;
 }
 
-.cc-svc-row {
-  padding: {{STYLE_SPACE_8}} 0;
-  margin-top: {{STYLE_SPACE_4}};
-  border-top: 1px solid rgba($surface, 0.3);
-}
-
-.cc-svc-btn {
-  background: rgba($surface, 0.3);
-  border: none;
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_4}};
-
-  &:hover {
-    background: rgba($control-accent, 0.2);
-  }
-}
-
-.cc-svc-icon {
-  font-size: {{STYLE_ICON_BODY}};
-  color: $control-accent;
-}
-
-.cc-svc-label {
-  font-size: {{STYLE_FONT_MICRO}};
-  color: $subtext;
-}
-
-.cc-power-row {
-  padding: {{STYLE_SPACE_8}} 0;
-  margin-top: {{STYLE_SPACE_4}};
-  border-top: 1px solid rgba($surface, 0.3);
-}
-
-.cc-pwr-btn {
-  background: rgba($surface, 0.3);
-  border: none;
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_4}};
-  font-size: {{STYLE_FONT_LEAD}};
-  color: $text;
-
-  &.shutdown:hover { background: rgba($red, 0.3); color: $red; }
-  &.reboot:hover { background: rgba($yellow, 0.3); color: $yellow; }
-  &.suspend:hover { background: rgba($launcher-accent, 0.3); color: $launcher-accent; }
-  &.lock:hover { background: rgba($network-accent, 0.3); color: $network-accent; }
-  &.logout:hover { background: rgba($subtext, 0.3); }
-}
-
-.cc-toggles {
-  padding: {{STYLE_SPACE_12}} 0;
-}
-
-.cc-toggle-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_16}};
-
-  &.active {
-    background: rgba($control-accent, 0.3);
-    border-color: $control-accent;
-  }
-
-  &.inactive {
-    opacity: 0.6;
-  }
-
-  .cc-toggle-icon {
-    font-size: {{STYLE_ICON_TITLE}};
-    color: $control-accent;
-  }
-
-  .cc-toggle-label {
-    font-size: {{STYLE_FONT_CAPTION}};
-    color: $text;
-  }
-}
+// ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): vier zusammen-
+// gehoerige Regeln aus demselben alten Kontrollzentrum-Entwurf, alle
+// repo-weit ohne Leser - cc-svc-row (die Zeile, die den Knopf trug),
+// cc-svc-btn (eine der zehn Klassen aus dem Auftrag, siehe
+// gruppe-D-report.md), cc-svc-icon und cc-svc-label (dessen Symbol/
+// Beschriftung darin). Keins der vier hat ausserhalb dieses
+// Vierergespanns eine Bedeutung.
+//
+// ENTFERNT, ebenfalls am 18.08.2026, aus demselben Grund und derselben
+// Pruefung: cc-power-row (die Zeile eines aelteren Abschaltblocks) und
+// cc-pwr-btn (eine der zehn Klassen). NICHT zu verwechseln mit dem
+// HEUTIGEN cc-power-grid/cc-power-btn/cc-power-icon/cc-power-label
+// weiter unten in dieser Datei (der Knoepfe, die ags-control-center.
+// template tatsaechlich noch am 17.08.2026 gebaut hat) - cc-pwr-btn
+// ist ein ANDERER, schon vorher toter Namensvetter mit demselben
+// Fuenferschema (shutdown/reboot/suspend/lock/logout), nicht dieselbe
+// Regel zweimal gemeldet.
+//
+// ENTFERNT, ebenfalls am 18.08.2026: cc-toggles (die Reihe, die den
+// Schalter trug) und cc-toggle-btn samt seiner zwei verschachtelten
+// Kindregeln .cc-toggle-icon/.cc-toggle-label - eine der zehn Klassen.
+// Die STANDALONE .cc-toggle-btn.active in der globalen Uebergangsliste
+// weiter unten in dieser Datei ist mitentfernt (siehe dort); die
+// eigenstaendige .cc-toggle-label (ohne cc-toggle-btn davor, Teil von
+// cc-toggle-box) bleibt UNVERAENDERT stehen - sie ist zwar ebenfalls
+// ohne Leser, aber nicht Teil dieses Auftrags (siehe Bericht,
+// Abschnitt "weitere gefundene tote Regeln").
 
 .cc-sliders {
   padding: {{STYLE_SPACE_12}} 0;
@@ -1014,17 +965,11 @@ $overlay-border: $border;
   min-width: 24px;
 }
 
-.cc-icon-btn {
-  background: transparent;
-  border: none;
-  padding: {{STYLE_SPACE_4}};
-  min-width: 32px;
-  min-height: 32px;
-
-  label {
-    min-width: 20px;
-      }
-}
+// ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): die ERSTE der
+// zwei gleichnamigen cc-icon-btn-Regeln in dieser Datei (die zweite
+// steht weiter unten, direkt vor .cc-ip-row) - beide repo-weit ohne
+// Leser, seit volBtn/micBtn (die einzigen bisherigen Verbraucher) auf
+// zepButton umgestellt sind. Eine der zehn Klassen aus dem Auftrag.
 
 .cc-slider {
   min-height: 8px;
@@ -1104,25 +1049,11 @@ $overlay-border: $border;
   color: $text;
 }
 
-.cc-button {
-  background: rgba($surface, 0.4);
-  border: 1px solid rgba($control-accent, 0.2);
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  font-size: {{STYLE_FONT_BODY}};
-  color: $control-accent;
-  min-width: 32px;
-  min-height: 32px;
-
-  label {
-    min-width: 18px;
-  }
-
-  &:hover {
-    background: rgba($control-accent, 0.2);
-    border-color: rgba($control-accent, 0.5);
-  }
-}
+// ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): cc-button trug
+// dreizehn Knoepfe in ags-control-center.template (netBtn, vpnBtn,
+// btBtn, displayBtn, printerBtn, watchdogBtn, helpersBtn, styleBtn,
+// updateBtn, die deskRow- und mediaButton-Knoepfe) - alle jetzt
+// zepButton mit einer Rolle. Eine der zehn Klassen aus dem Auftrag.
 
 .cc-toggle {
   background: rgba($surface, 0.4);
@@ -1156,33 +1087,13 @@ $overlay-border: $border;
   padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
 }
 
-.cc-expand-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  font-size: {{STYLE_FONT_BODY}};
-  color: $subtext;
-
-  &:hover {
-    background: rgba($control-accent, 0.2);
-    border-color: rgba($control-accent, 0.5);
-    color: $control-accent;
-  }
-}
-
-.cc-icon-btn {
-  background: transparent;
-  border: none;
-  padding: {{STYLE_SPACE_4}};
-  min-width: 32px;
-  min-height: 32px;
-
-  label {
-    min-width: 24px;
-    min-height: 24px;
-  }
-}
+// ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): cc-expand-btn
+// hatte repo-weit KEINEN Leser (Ueberbleibsel eines aelteren Entwurfs,
+// wie cc-mini-btn oben). Eine der zehn Klassen aus dem Auftrag.
+//
+// ENTFERNT, ebenfalls am 18.08.2026: die ZWEITE der zwei gleichnamigen
+// cc-icon-btn-Regeln dieser Datei (siehe die erste, weiter oben vor
+// .cc-slider, mit derselben Begruendung).
 
 .cc-ip-row {
   padding: 0 0 {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
@@ -1255,94 +1166,33 @@ $overlay-border: $border;
   color: $text;
 }
 
-.cc-service-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
-
-  &:hover {
-    background: rgba($control-accent, 0.2);
-    border-color: rgba($control-accent, 0.5);
-  }
-}
-
-.cc-service-icon {
-  font-size: {{STYLE_ICON_BODY}};
-  color: $control-accent;
-}
-
-.cc-service-label {
-  font-size: {{STYLE_FONT_BODY}};
-  color: $text;
-}
+// ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): drei
+// zusammengehoerige Regeln aus demselben alten Kontrollzentrum-Entwurf
+// wie cc-svc-*, alle repo-weit ohne Leser - cc-service-btn (eine der
+// zehn Klassen aus dem Auftrag, siehe gruppe-D-report.md),
+// cc-service-icon und cc-service-label.
 
 .cc-power-grid {
   padding: {{STYLE_SPACE_8}} 0;
 }
 
-.cc-power-btn {
-  background: rgba($surface, 0.3);
-  border: 1px solid rgba($surface, 0.6);
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_8}};
-  min-width: 60px;
-
-  &:hover {
-    background: rgba($surface, 0.6);
-  }
-
-  &.shutdown {
-    border-bottom: 2px solid rgba($red, 0.4);
-    .cc-power-icon { color: rgba($red, 0.7); }
-    &:hover {
-      background: rgba($red, 0.25);
-      border-color: rgba($red, 0.5);
-      .cc-power-icon { color: $red; }
-    }
-  }
-
-  &.reboot {
-    border-bottom: 2px solid rgba($yellow, 0.4);
-    .cc-power-icon { color: rgba($yellow, 0.7); }
-    &:hover {
-      background: rgba($yellow, 0.25);
-      border-color: rgba($yellow, 0.5);
-      .cc-power-icon { color: $yellow; }
-    }
-  }
-
-  &.suspend {
-    border-bottom: 2px solid rgba($control-accent, 0.4);
-    .cc-power-icon { color: rgba($control-accent, 0.7); }
-    &:hover {
-      background: rgba($control-accent, 0.25);
-      border-color: rgba($control-accent, 0.5);
-      .cc-power-icon { color: $control-accent; }
-    }
-  }
-
-  &.lock {
-    border-bottom: 2px solid rgba($launcher-accent, 0.4);
-    .cc-power-icon { color: rgba($launcher-accent, 0.7); }
-    &:hover {
-      background: rgba($launcher-accent, 0.25);
-      border-color: rgba($launcher-accent, 0.5);
-      .cc-power-icon { color: $launcher-accent; }
-    }
-  }
-
-  &.logout {
-    border-bottom: 2px solid rgba($subtext, 0.4);
-    .cc-power-icon { color: rgba($subtext, 0.7); }
-    &:hover {
-      background: rgba($subtext, 0.25);
-      border-color: rgba($subtext, 0.5);
-      .cc-power-icon { color: $subtext; }
-    }
-  }
-}
-
+// ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): cc-power-btn
+// selbst - eine der zehn Klassen des Auftrags, seit createPowerBtn()
+// zepButton mit der Rolle "kritisch" (Neustart/Herunterfahren/
+// Abmelden) bzw. "umrandet" (Ruhezustand/Sperren) benutzt statt der
+// Klasse und einer eigenen Zusatzklasse je Knopf.
+//
+// DIE FUENF VERSCHIEDENEN AKZENTFARBEN (rot/gelb/Akzent/Akzent/
+// gedaempft, je Zustand eine andere Farbe im Rahmen UND im Symbol)
+// sind damit ABSICHTLICH nicht in eine neue, gleichwertige Form
+// ueberfuehrt worden - siehe die Begruendung im Kommentar ueber
+// POWER_BUTTONS in ags-control-center.template: genau diese
+// Uneinheitlichkeit (fuenf verschiedene Knopf-Erscheinungen fuer
+// dieselbe Handlungsart) ist es, die die vier gemeinsamen Rollen
+// (.zep-btn-voll/-umrandet/-still/-kritisch) ersetzen sollen. Die
+// Unterscheidung der fuenf Knoepfe bleibt ueber Symbol und
+// Beschriftung erhalten (cc-power-icon/cc-power-label, unveraendert
+// unten), nur die Farbe ist jetzt einheitlich die der Rolle.
 .cc-power-icon {
   font-size: {{STYLE_ICON_LEAD}};
   color: $text;
@@ -2806,7 +2656,9 @@ button:hover,
               color {{STYLE_MOTION_INSTANT}} {{STYLE_MOTION_CURVE}};
 }
 
-.cc-toggle-btn.active,
+// cc-toggle-btn.active stand hier bis zum 18.08.2026 (Task D) - mit
+// cc-toggle-btn selbst entfernt (siehe dort), da diese Zeile nur mit
+// jener Klasse zusammen eine Wirkung hatte.
 .se-tab-btn.active,
 .vpn-tab-btn.active,
 .se-res-tab.active {

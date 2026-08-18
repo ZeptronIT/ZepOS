@@ -57,7 +57,7 @@ export function zepButton(
 // Fenster tragen unbegrenzte Fremdtexte (VPN-Profilnamen, WLAN-Namen,
 // Themennamen) - ohne Deckel haette das Kit diesen Fehler elfmal
 // wiederholt, statt ihn zu verhindern. Vorgabe ist darum KUERZEN, mit
-// {{STYLE_MEASURE_LINE}} als Grenze (dieselbe schmale Spalte wie in
+// STYLE_MEASURE_LINE als Grenze (dieselbe schmale Spalte wie in
 // ags-network.template und ags-bluetooth.template). Ein Fenster, das
 // ausnahmsweise den vollen Text braucht, setzt `vollerText: true`.
 export function zepRow(opts: {

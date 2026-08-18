@@ -18,10 +18,18 @@ import GLib from "gi://GLib"
 // wurde so breit - und gestellt wurde es fuer 495. Die Fabrik deckelt
 // das seit demselben Tag (siehe ags-overlay-utils.template), aber ein
 // Deckel schneidet nur ab; damit KEINE Zeile abgeschnitten werden muss,
-// endet sie hier bei {{STYLE_MEASURE_LINE}} Zeichen mit drei Punkten.
+// endet sie hier bei STYLE_MEASURE_LINE Zeichen mit drei Punkten.
+//
+// BERICHTIGT am 18.08.2026 (Task D): hier stand der Platzhalter noch
+// mit geschweiften Klammern - genau der Fehler, den Task C an
+// ags-kit.template:60 gemeldet hat (template_processor.py ersetzt ihn
+// auch in einem Kommentar, still, durch die skalierte Pixelzahl). Der
+// Fund lag diesmal im eigenen Auftragsfenster, darum repariert statt
+// nur gemeldet.
 import Pango from "gi://Pango"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
+import { zepButton, ZepRolle } from "../utils/kit"
 
 const HOME = GLib.get_home_dir()
 // Das Widget laeuft eigenstaendig unter AGS und kann paths.py nicht
@@ -625,7 +633,7 @@ export default function ControlCenter(
        *
        * Vier Eigenschaften, die zusammengehoeren: sie nimmt den freien
        * Platz (hexpand), sie steht links (xalign) und sie hoert nach
-       * {{STYLE_MEASURE_LINE}} Zeichen mit drei Punkten auf, statt das
+       * STYLE_MEASURE_LINE Zeichen mit drei Punkten auf, statt das
        * Fenster zu verbreitern.
        *
        * AUSGESCHRIEBEN STANDEN SIE NEUNMAL DA, UND ZWEIMAL VOLLSTAENDIG
@@ -715,14 +723,15 @@ export default function ControlCenter(
       const privacyMicText = new Gtk.Label({ label: _("Microphone:") })
       privacyMicText.add_css_class("cc-label")
       privacyMicLabel = ccLabel("")
-      const privacyMicBtn = new Gtk.Button({ can_focus: false })
-      privacyMicBtn.add_css_class("cc-button")
-      privacyMicBtn.set_child(new Gtk.Label({ label: ICONS.micMute }))
-      privacyMicBtn.set_tooltip_text(_("Mute the microphone"))
-      privacyMicBtn.connect("clicked", async () => {
+      // zepButton, Rolle "umrandet" (Task D, 18.08.2026): eine wirkliche,
+      // sofort wirksame Handlung (die Quelle stummschalten) und keine
+      // blosse Navigation zu einem anderen Fenster - dieselbe Einordnung
+      // wie die Geraetezeilen in ags-bluetooth.template.
+      const privacyMicBtn = zepButton(ICONS.micMute, "umrandet", async () => {
         await execAsync("pamixer --default-source -m")
         updateDisplay()
       })
+      privacyMicBtn.set_tooltip_text(_("Mute the microphone"))
       privacyMicRow.append(privacyMicIcon)
       privacyMicRow.append(privacyMicText)
       privacyMicRow.append(privacyMicLabel)
@@ -801,11 +810,12 @@ export default function ControlCenter(
       networkIcon = new Gtk.Label({ label: ICONS.wifi })
       networkIcon.add_css_class("cc-icon")
       networkLabel = ccLabel(_("Loading …"))
-      const netBtn = new Gtk.Button({ can_focus: false })
-      netBtn.add_css_class("cc-button")
-      netBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
+      // zepButton, Rolle "still" (Task D, 18.08.2026): oeffnet nur das
+      // Netzfenster, dieselbe Einordnung wie nmBtn in
+      // ags-network.template (Navigation zu einem bestehenden Fenster,
+      // keine Handlung fuer sich).
+      const netBtn = zepButton(ICONS.settings, "still", opens("network"))
       netBtn.set_tooltip_text(_("Wi-Fi networks - the same window as above"))
-      netBtn.connect("clicked", opens("network"))
       netRow.append(networkIcon)
       netRow.append(networkLabel)
       netRow.append(netBtn)
@@ -836,10 +846,9 @@ export default function ControlCenter(
       vpnIcon = new Gtk.Label({ label: ICONS.vpnOff })
       vpnIcon.add_css_class("cc-icon")
       vpnLabel = ccLabel(_("VPN: off"))
-      const vpnBtn = new Gtk.Button({ can_focus: false })
-      vpnBtn.add_css_class("cc-button")
-      vpnBtn.set_child(new Gtk.Label({ label: ICONS.power }))
-      vpnBtn.connect("clicked", opens("vpn"))
+      // zepButton, Rolle "still" (Task D, 18.08.2026): Navigation zum
+      // VPN-Fenster, wie netBtn/btBtn/styleBtn in dieser Datei.
+      const vpnBtn = zepButton(ICONS.power, "still", opens("vpn"))
       vpnRow.append(vpnIcon)
       vpnRow.append(vpnLabel)
       vpnRow.append(vpnBtn)
@@ -850,11 +859,10 @@ export default function ControlCenter(
       const btIcon = new Gtk.Label({ label: ICONS.bluetooth })
       btIcon.add_css_class("cc-icon")
       btLabel = ccLabel(_("Bluetooth"))
-      const btBtn = new Gtk.Button({ can_focus: false })
-      btBtn.add_css_class("cc-button")
-      btBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
+      // zepButton, Rolle "still" (Task D, 18.08.2026): Navigation zum
+      // Bluetooth-Fenster.
+      const btBtn = zepButton(ICONS.settings, "still", opens("bluetooth"))
       btBtn.set_tooltip_text(_("Bluetooth devices - the same window as above"))
-      btBtn.connect("clicked", opens("bluetooth"))
       btRow.append(btIcon)
       btRow.append(btLabel)
       btRow.append(btBtn)
@@ -872,13 +880,18 @@ export default function ControlCenter(
       volumeIcon = new Gtk.Label({ label: ICONS.volume })
       volumeIcon.add_css_class("cc-icon")
       volumeIcon.add_css_class("volume-icon")
-      const volBtn = new Gtk.Button({ can_focus: false })
-      volBtn.add_css_class("cc-icon-btn")
-      volBtn.set_child(volumeIcon)
-      volBtn.connect("clicked", async () => {
+      // zepButton, Rolle "still" (Task D, 18.08.2026): ein kleiner
+      // Nebenweg neben dem Regler, nicht die Hauptsache der Zeile -
+      // .zep-btn-still ist ebenso randlos wie das bisherige
+      // cc-icon-btn. set_child() ueberschreibt die Beschriftung von
+      // zepButton mit volumeIcon selbst (derselbe Kunstgriff wie
+      // btnBox in ags-battery.template), weil updateDisplay() dessen
+      // Text laufend zwischen ICONS.volume/ICONS.volumeMute wechselt.
+      const volBtn = zepButton("", "still", async () => {
         await execAsync("pamixer -t")
         updateDisplay()
       })
+      volBtn.set_child(volumeIcon)
       volumeSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
       volumeSlider.set_range(0, 100)
       volumeSlider.add_css_class("cc-slider")
@@ -899,13 +912,13 @@ export default function ControlCenter(
       micIcon = new Gtk.Label({ label: ICONS.mic })
       micIcon.add_css_class("cc-icon")
       micIcon.add_css_class("mic-icon")
-      const micBtn = new Gtk.Button({ can_focus: false })
-      micBtn.add_css_class("cc-icon-btn")
-      micBtn.set_child(micIcon)
-      micBtn.connect("clicked", async () => {
+      // zepButton, Rolle "still" (Task D, 18.08.2026): wie volBtn oben,
+      // derselbe Kunstgriff mit set_child(micIcon).
+      const micBtn = zepButton("", "still", async () => {
         await execAsync("pamixer --default-source -t")
         updateDisplay()
       })
+      micBtn.set_child(micIcon)
       micSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
       micSlider.set_range(0, 100)
       micSlider.add_css_class("cc-slider")
@@ -921,14 +934,24 @@ export default function ControlCenter(
       micRow.append(micLabel)
 
       // Zeile: die Helligkeit
+      //
+      // GEFUNDEN am 18.08.2026 (Task D) beim Umbau von cc-icon-btn auf
+      // zepButton: brightBtn war ein Gtk.Button OHNE
+      // connect("clicked", ...) - ein Knopf, hinter dem nichts
+      // passiert, nach Spec §7.4 "der schlimmste Fehler, den ZepOS
+      // erzeugen kann" (Wortlaut siehe Kommentar zu deskRow weiter
+      // unten in dieser Datei). zepButton verlangt eine Aktion im
+      // Aufruf selbst und macht so einen tatenlosen Knopf unmoeglich -
+      // und anders als Lautstaerke/Mikrofon kennt Helligkeit kein
+      // Stummschalten, also keine Handlung, die dieser Knopf sinnvoll
+      // uebernehmen koennte. Er wird darum kein Knopf mehr, nur noch
+      // das Zeichen selbst - wie printerIcon/watchdogIcon/helpersIcon
+      // in diesem Fenster, die ebenfalls ohne Knopf auskommen.
       const brightRow = new Gtk.Box({ spacing: 8 })
       brightRow.add_css_class("cc-row")
       const brightIcon = new Gtk.Label({ label: ICONS.brightness })
       brightIcon.add_css_class("cc-icon")
       brightIcon.add_css_class("brightness-icon")
-      const brightBtn = new Gtk.Button({ can_focus: false })
-      brightBtn.add_css_class("cc-icon-btn")
-      brightBtn.set_child(brightIcon)
       brightnessSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
       brightnessSlider.set_range(5, 100)
       brightnessSlider.add_css_class("cc-slider")
@@ -939,7 +962,7 @@ export default function ControlCenter(
       })
       brightnessLabel = new Gtk.Label({ label: "100%" })
       brightnessLabel.add_css_class("cc-value")
-      brightRow.append(brightBtn)
+      brightRow.append(brightIcon)
       brightRow.append(brightnessSlider)
       brightRow.append(brightnessLabel)
 
@@ -983,16 +1006,16 @@ export default function ControlCenter(
         spacing: 8, halign: Gtk.Align.CENTER, homogeneous: true,
       })
 
+      // zepButton, Rolle "still" (Task D, 18.08.2026): Wiedergabe ist
+      // ein Nebenweg dieses Fensters (siehe Kommentar am Kopf des
+      // Abschnitts WIEDERGABE oben), keine Hauptsache.
       const mediaButton = (icon: string, tooltip: string,
                            command: string): Gtk.Button => {
-        const button = new Gtk.Button({ can_focus: false })
-        button.add_css_class("cc-button")
-        button.set_child(new Gtk.Label({ label: icon }))
-        button.set_tooltip_text(tooltip)
-        button.connect("clicked", async () => {
+        const button = zepButton(icon, "still", async () => {
           await execAsync(["bash", "-c", command])
           updateDisplay()
         })
+        button.set_tooltip_text(tooltip)
         return button
       }
 
@@ -1000,15 +1023,16 @@ export default function ControlCenter(
         ICONS.previous, _("Previous track"), "playerctl previous")
       // Der mittlere Knopf traegt sein Zeichen als eigene Beschriftung,
       // weil es sich mit dem Zustand aendert - die anderen beiden nicht.
+      // set_child(mediaPlayLabel) ueberschreibt die Beschriftung von
+      // zepButton mit der eigenen, von aussen aktualisierbaren Label-
+      // Instanz (derselbe Kunstgriff wie volBtn/micBtn oben).
       mediaPlayLabel = new Gtk.Label({ label: ICONS.play })
-      const mediaPlayBtn = new Gtk.Button({ can_focus: false })
-      mediaPlayBtn.add_css_class("cc-button")
-      mediaPlayBtn.set_child(mediaPlayLabel)
-      mediaPlayBtn.set_tooltip_text(_("Pause / resume"))
-      mediaPlayBtn.connect("clicked", async () => {
+      const mediaPlayBtn = zepButton("", "still", async () => {
         await execAsync(["bash", "-c", "playerctl play-pause"])
         updateDisplay()
       })
+      mediaPlayBtn.set_child(mediaPlayLabel)
+      mediaPlayBtn.set_tooltip_text(_("Pause / resume"))
       const mediaNextBtn = mediaButton(
         ICONS.next, _("Next track"), "playerctl next")
 
@@ -1042,15 +1066,14 @@ export default function ControlCenter(
       const displayIcon = new Gtk.Label({ label: ICONS.displays })
       displayIcon.add_css_class("cc-icon")
       const displayLabel = ccLabel(_("Displays"))
-      const displayBtn = new Gtk.Button({ can_focus: false })
-      displayBtn.add_css_class("cc-button")
-      displayBtn.set_child(new Gtk.Label({ label: ICONS.launch }))
-      displayBtn.set_tooltip_text(
-        _("Set arrangement, resolution and refresh rate"))
-      displayBtn.connect("clicked", () => {
+      // zepButton, Rolle "still" (Task D, 18.08.2026): oeffnet ein
+      // fremdes Werkzeug (zepos-settings-gui), reine Navigation.
+      const displayBtn = zepButton(ICONS.launch, "still", () => {
         execAsync(["zepos-settings-gui", "--page", "bildschirme"])
         closeFn?.()
       })
+      displayBtn.set_tooltip_text(
+        _("Set arrangement, resolution and refresh rate"))
       displayRow.append(displayIcon)
       displayRow.append(displayLabel)
       displayRow.append(displayBtn)
@@ -1104,11 +1127,11 @@ export default function ControlCenter(
         row.append(iconLabel)
         row.append(label)
         if (action) {
-          const button = new Gtk.Button({ can_focus: false })
-          button.add_css_class("cc-button")
-          button.set_child(new Gtk.Label({ label: ICONS.launch }))
+          // zepButton, Rolle "still" (Task D, 18.08.2026): jede Zeile
+          // dieses Bausteins oeffnet ein anderes Fenster oder startet
+          // ein Werkzeug - Navigation, keine Hauptsache.
+          const button = zepButton(ICONS.launch, "still", action)
           button.set_tooltip_text(tooltip)
-          button.connect("clicked", action)
           row.append(button)
         }
         return [row, label]
@@ -1165,9 +1188,9 @@ export default function ControlCenter(
       printerIcon.add_css_class("cc-icon")
       printerIcon.add_css_class("printer-icon")
       printerLabel = ccLabel(_("Printer"))
-      const printerBtn = new Gtk.Button({ can_focus: false })
-      printerBtn.add_css_class("cc-button")
-      printerBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
+      // zepButton, Rolle "still" (Task D, 18.08.2026): oeffnet ein
+      // eigenes Werkzeug, Navigation.
+      //
       // GEMESSEN am 12.08.2026: hier stand `system-config-printer`, und
       // packaging/zepos-apps/PKGBUILD nennt genau diesen Namen in der
       // Liste dessen, was ABSICHTLICH fehlt ("GTK3, alle gemessen").
@@ -1179,7 +1202,7 @@ export default function ControlCenter(
       // manager, das ueber lpstat/lpinfo/lpadmin geht und sein Menue mit
       // zepos-menu zeichnet. Es ist der Grund, aus dem cups ueberhaupt
       // in der Auswahl steht.
-      printerBtn.connect("clicked", () => {
+      const printerBtn = zepButton(ICONS.settings, "still", () => {
         execAsync(`${HOME}/.local/bin/printer-manager`)
         closeFn?.()
       })
@@ -1193,10 +1216,9 @@ export default function ControlCenter(
       watchdogIcon = new Gtk.Label({ label: ICONS.watchdog })
       watchdogIcon.add_css_class("cc-icon")
       watchdogLabel = ccLabel(_("Network watchdog"))
-      const watchdogBtn = new Gtk.Button({ can_focus: false })
-      watchdogBtn.add_css_class("cc-button")
-      watchdogBtn.set_child(new Gtk.Label({ label: ICONS.launch }))
-      watchdogBtn.connect("clicked", () => {
+      // zepButton, Rolle "still" (Task D, 18.08.2026): startet ein
+      // Werkzeug in einem eigenen Terminalfenster, Navigation.
+      const watchdogBtn = zepButton(ICONS.launch, "still", () => {
         // OHNE das kaufmaennische Und, das hier bis zum 12.08.2026
         // stand. execAsync startet KEINE Shell - es zerlegt die
         // Zeichenkette mit GLib.shell_parse_argv und startet argv
@@ -1219,10 +1241,9 @@ export default function ControlCenter(
       helpersIcon.add_css_class("cc-icon")
       helpersIcon.add_css_class("helpers-icon")
       helpersLabel = ccLabel(_("Helper scripts"))
-      const helpersBtn = new Gtk.Button({ can_focus: false })
-      helpersBtn.add_css_class("cc-button")
-      helpersBtn.set_child(new Gtk.Label({ label: ICONS.launch }))
-      helpersBtn.connect("clicked", () => {
+      // zepButton, Rolle "still" (Task D, 18.08.2026): oeffnet den
+      // Hilfsskripte-Starter, Navigation.
+      const helpersBtn = zepButton(ICONS.launch, "still", () => {
         execAsync(SCRIPTS.helpersLauncher)
         closeFn?.()
       })
@@ -1240,7 +1261,7 @@ export default function ControlCenter(
       // Der Befund, der zur Loeschung gefuehrt hat, bleibt richtig:
       // unter einer Ueberschrift "Systemdienste" sucht niemand das
       // Aussehen, und deshalb traegt die Leiste seit demselben Tag ein
-      // eigenes Modul dafuer (custom/theme, {{ICON_PALETTE}} - dasselbe
+      // eigenes Modul dafuer (custom/theme, ICON_PALETTE - dasselbe
       // Zeichen wie hier). Der Fehler war nur die Folgerung. Beide
       // Knoepfe rufen `opens("style")`, also DASSELBE widgets.style;
       // eine zweite Fassung gibt es nicht.
@@ -1255,12 +1276,11 @@ export default function ControlCenter(
       const styleIcon = new Gtk.Label({ label: ICONS.palette })
       styleIcon.add_css_class("cc-icon")
       const styleLabel = ccLabel(_("Style editor"))
-      const styleBtn = new Gtk.Button({ can_focus: false })
-      styleBtn.add_css_class("cc-button")
-      styleBtn.set_child(new Gtk.Label({ label: ICONS.launch }))
+      // zepButton, Rolle "still" (Task D, 18.08.2026): Navigation zum
+      // Stil-Editor, wie netBtn/btBtn oben.
+      const styleBtn = zepButton(ICONS.launch, "still", opens("style"))
       styleBtn.set_tooltip_text(
         _("Appearance and colors - the same window as above"))
-      styleBtn.connect("clicked", opens("style"))
       styleRow.append(styleIcon)
       styleRow.append(styleLabel)
       styleRow.append(styleBtn)
@@ -1292,10 +1312,24 @@ export default function ControlCenter(
         max_width_chars: {{STYLE_MEASURE_LINE}},
       })
       updateLabel.add_css_class("cc-label")
-      updateBtn = new Gtk.Button({ can_focus: false })
-      updateBtn.add_css_class("cc-button")
-      updateBtn.set_child(new Gtk.Label({ label: ICONS.launch }))
-      updateBtn.connect("clicked", () => {
+      // DER EINE `voll`-KNOPF DIESES FENSTERS (Task D, 18.08.2026)
+      //
+      // Alle anderen Knoepfe hier oeffnen entweder ein anderes Fenster
+      // (still: netBtn/vpnBtn/btBtn/styleBtn/displayBtn/printerBtn/
+      // watchdogBtn/helpersBtn/die deskRow-Zeilen), sind ein kleiner
+      // Nebenweg (still: Wiedergabe, Stummschalten) oder beenden die
+      // Sitzung (kritisch: die drei Abschaltknoepfe unten). Keiner
+      // davon ist "die Hauptsache" dieses Fensters im Sinne des
+      // Musters - sie bestehen, ob man sie anschaut oder nicht.
+      //
+      // updateRow dagegen ist NUR sichtbar, wenn wirklich etwas
+      // ansteht (siehe updateDisplay oben, updateRow.set_visible), und
+      // dieser Knopf tut genau DAS, weswegen die Zeile ueberhaupt
+      // aufgegangen ist - die einzige Zeile des ganzen Fensters, die
+      // auf einen Zustand reagiert statt bloss Auskunft zu geben oder
+      // woanders hinzufuehren. Ein Kontrollzentrum, das etwas zu
+      // melden hat, soll genau darauf hinweisen - das ist "voll".
+      updateBtn = zepButton(ICONS.launch, "voll", () => {
         if (!updateAction) return
         // Im Terminal und nicht im Hintergrund: drei der vier Befehle
         // fragen nach etwas - sudo nach dem Passwort, pacman nach der
@@ -1320,7 +1354,7 @@ export default function ControlCenter(
       //
       // GEMESSEN am 12.08.2026: in einer Reihe ist der Kasten so breit
       // wie sein laengstes Wort mal fuenf. "Herunterfahren" sind bei
-      // {{STYLE_FONT_MICRO}} vierzehn Zeichen, mit dem Rand des Knopfes
+      // STYLE_FONT_MICRO vierzehn Zeichen, mit dem Rand des Knopfes
       // rund 150 Punkte - fuenfmal das plus Abstand haetten das Fenster
       // von gemessenen 545 auf ueber 800 Punkte verbreitert, nur weil
       // die Beschriftungen jetzt deutsch sind. Ein Fenster, das breiter
@@ -1336,10 +1370,14 @@ export default function ControlCenter(
       })
       powerGrid.add_css_class("cc-power-grid")
 
-      const createPowerBtn = (icon: string, label: string, cssClass: string, cmd: string): Gtk.Button => {
-        const btn = new Gtk.Button({ can_focus: false })
-        btn.add_css_class("cc-power-btn")
-        btn.add_css_class(cssClass)
+      // zepButton, Rolle je Knopf (Task D, 18.08.2026, siehe
+      // POWER_BUTTONS unten). "" als Beschriftung und set_child(box)
+      // direkt danach: derselbe Kunstgriff wie bei den Profilknoepfen
+      // in ags-battery.template - die eigene, senkrechte Box aus
+      // Zeichen ueber Text ersetzt die einzelne Gtk.Label, die
+      // zepButton selbst erzeugt.
+      const createPowerBtn = (icon: string, label: string, rolle: ZepRolle, cmd: string): Gtk.Button => {
+        const btn = zepButton("", rolle, () => execAsync(cmd))
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
         const iconLbl = new Gtk.Label({ label: icon })
         iconLbl.add_css_class("cc-power-icon")
@@ -1348,7 +1386,6 @@ export default function ControlCenter(
         box.append(iconLbl)
         box.append(textLbl)
         btn.set_child(box)
-        btn.connect("clicked", () => execAsync(cmd))
         return btn
       }
 
@@ -1365,15 +1402,30 @@ export default function ControlCenter(
       // beim Durchlaufen zu einem Argument, und die Suche nach
       // Eigenschaften und Setzern hat sie deshalb NICHT gesehen. Gefunden
       // hat sie die zweite Suche - die nach deutschen Woertern.
-      const POWER_BUTTONS: Array<[string, string, string, string]> = [
-        [ICONS.shutdown, _("Shut down"), "shutdown", "systemctl poweroff"],
-        [ICONS.reboot, _("Restart"), "reboot", "systemctl reboot"],
-        [ICONS.suspend, _("Suspend"), "suspend", "systemctl suspend"],
-        [ICONS.lock, _("Lock"), "lock", "zepos-lock"],
-        [ICONS.logout, _("Log out"), "logout", "hyprctl dispatch exit"],
+      // ROLLEN (Task D, 18.08.2026): Neustart, Herunterfahren und
+      // Abmelden sind die Abschaltknoepfe des Auftrags und tragen
+      // "kritisch" - sie beenden die laufende Sitzung, ungesichertes
+      // geht dabei verloren, und das ist nach dem Muster ("kritisch
+      // nur fuer Zerstoerendes") genau der Fall. Ruhezustand und
+      // Sperren sind beide vollstaendig umkehrbar (nichts geht
+      // verloren, die Sitzung laeuft weiter) und tragen darum
+      // "umrandet" - eine wirkliche Handlung, aber keine zerstoerende.
+      // Die frueheren fuenf verschiedenen Akzentfarben (rot/gelb/
+      // Akzent/Akzent/gedaempft, je Knopf eine andere) sind mit dem
+      // Umbau entfallen: die vier Rollen des Kits sollen genau diese
+      // Art von Uneinheitlichkeit ersetzen (siehe Modul-Docstring von
+      // tests/src/test_button_kit.py, "wirken so billig") - "kritisch"
+      // markiert alle drei Abschaltknoepfe gleich statt jedem eine
+      // eigene Farbe zu geben.
+      const POWER_BUTTONS: Array<[string, string, ZepRolle, string]> = [
+        [ICONS.shutdown, _("Shut down"), "kritisch", "systemctl poweroff"],
+        [ICONS.reboot, _("Restart"), "kritisch", "systemctl reboot"],
+        [ICONS.suspend, _("Suspend"), "umrandet", "systemctl suspend"],
+        [ICONS.lock, _("Lock"), "umrandet", "zepos-lock"],
+        [ICONS.logout, _("Log out"), "kritisch", "hyprctl dispatch exit"],
       ]
-      POWER_BUTTONS.forEach(([icon, label, cssClass, cmd], index) => {
-        powerGrid.attach(createPowerBtn(icon, label, cssClass, cmd),
+      POWER_BUTTONS.forEach(([icon, label, rolle, cmd], index) => {
+        powerGrid.attach(createPowerBtn(icon, label, rolle, cmd),
                          index % 3, Math.floor(index / 3), 1, 1)
       })
 

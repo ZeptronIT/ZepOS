@@ -150,7 +150,32 @@ AUSGANGSZAHL = 52
 #                   GEZAEHLT mit _knopfklassen/_ist_knopfname aus diesem
 #                   Modul (VORHER 38, NACHHER 32, `git show HEAD` gegen
 #                   den Arbeitsbaum), nicht abgeschrieben.
-ERLAUBT = 32
+#   23  18.08.2026  Task D (Kontrollzentrum): cc-button, cc-icon-btn,
+#                   cc-power-btn (drei der zehn benannten Klassen, in
+#                   ags-control-center.template tatsaechlich benutzt)
+#                   sowie cc-expand-btn, cc-mini-btn, cc-pwr-btn,
+#                   cc-service-btn, cc-svc-btn, cc-toggle-btn (sechs
+#                   weitere der zehn genannten Klassen, aber OHNE Leser
+#                   in irgendeiner Vorlage - Ueberbleibsel eines
+#                   aelteren Kontrollzentrum-Entwurfs, nie von
+#                   ags-control-center.template in seiner heutigen Form
+#                   benutzt) sind gefallen - neun der zehn benannten
+#                   Klassen. cc-action-btn (die zehnte) bleibt stehen:
+#                   sie gehoert nicht zu ags-control-center.template
+#                   (Plan-vs-Baum-Abweichung, siehe gruppe-D-report.md),
+#                   sondern zu ags-notifications.template
+#                   (clearButton, "Clear all") und wird dort weiterhin
+#                   gebraucht. cc-power-btn/cc-pwr-btn (Dubletten-
+#                   Verdacht laut Auftrag) waren beide keine Dubletten
+#                   im eigentlichen Sinn: cc-power-btn war die einzige
+#                   der beiden mit einem Leser, cc-pwr-btn war schon
+#                   VOR diesem Auftrag tot. Ebenso cc-service-btn neben
+#                   cc-svc-btn: BEIDE waren bereits tot, keine
+#                   Dublette mit einer lebenden Seite.
+#                   GEZAEHLT mit _knopfklassen/_ist_knopfname aus diesem
+#                   Modul (VORHER 32, NACHHER 23, `git show HEAD` gegen
+#                   den Arbeitsbaum), nicht abgeschrieben.
+ERLAUBT = 23
 
 
 def _without_comments(css: str) -> str:
