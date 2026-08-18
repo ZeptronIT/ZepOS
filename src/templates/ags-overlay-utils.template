@@ -25,6 +25,11 @@
 import Astal from "gi://Astal?version=4.0"
 import { Gtk, Gdk } from "ags/gtk4"
 import { execAsync } from "ags/process"
+// Fuer die Schale (createShellWindow() weiter unten) - kit.ts liegt
+// neben overlay.ts unter ags/utils/ (generate_config.sh, beide auf
+// "$ZEPOS_OUTPUT_ROOT/ags/utils"), darum der Geschwister-Pfad "./kit"
+// und nicht "../utils/kit" wie in den Fenstern ausserhalb von utils/.
+import { zepSidebar, ZepNavGruppe, ZepNavEintrag } from "./kit"
 
 const CLOSE_ICON = "{{ICON_CLOSE}}"
 
@@ -686,4 +691,274 @@ export function createOverlayWindow(config: OverlayConfig): OverlayWidget {
   }
 
   return { window: win, show, hide }
+}
+
+// ============================================================================
+// DIE SCHALE: SEITENLEISTE LINKS, EINE SEITE RECHTS
+// ============================================================================
+//
+// NACHGETRAGEN am 18.08.2026, Aufgabe 5 (Gestaltungssystem, Stufe 3): ein
+// zweiter Bauplan neben createOverlayWindow() oben - ein Fenster mit
+// Seitenleiste (zepSidebar, ags-kit.template) links und genau einer
+// aktiven Seite rechts. Das Kontrollzentrum WIRD dieses Fenster
+// (Spezifikation docs/superpowers/specs/2026-08-18-ags-gestaltungssystem-
+// design.md, Abschnitt 2.2); Netzwerk, Bluetooth und VPN ziehen als
+// Seiten hinein. DIESE Aufgabe baut nur die Fabrik dafuer - noch kein
+// Fenster ruft sie, noch keine Seite existiert (das ist beabsichtigt,
+// siehe Bericht dieser Aufgabe).
+//
+// `createShellWindow` BAUT KEIN ZWEITES ASTAL.WINDOW VON HAND. Es ruft
+// `createOverlayWindow` wie jedes andere Fenster auch - der Grund steht
+// oben bei OverlayConfig.onEscape: genau das hat ags-network.template
+// bis zum 12.08.2026 getan (sein eigenes Fenster, an der Fabrik vorbei)
+// und dabei den Hoehendeckel UND die Bildlaufleiste verloren (721pt
+// hoch auf einem 540er Deckel, als einziges von elf Fenstern ohne
+// Bildlaufleiste). Wer die Fabrik umgeht, verliert alles andere gleich
+// mit - die Schale bekommt Deckel, Bildlaufleiste und Monitorwahl also
+// GESCHENKT, nicht nachgebaut.
+
+export interface ShellSeite {
+  id: string
+  titel: string
+  symbol: string
+  /** "VERBINDUNGEN" | "SYSTEM" | ... - siehe Spezifikation Abschnitt 2.2 */
+  gruppe: string
+  /**
+   * Baut den Inhalt EINMAL, wenn die Schale entsteht - wie
+   * config.buildContent() bei createOverlayWindow, nicht bei jedem
+   * Seitenwechsel neu (siehe seitenStapel weiter unten: ein
+   * Gtk.Stack haelt jede Seite dauerhaft, wechselt nur die Sichtbarkeit).
+   * Eine Seite, die einen eigenen Zeittakt oder D-Bus-Zuhoerer braucht
+   * (wie heute Bluetooth/Netzwerk in ihrem buildContent), richtet ihn
+   * HIER ein - er laeuft danach fuer die Lebensdauer der Schale weiter,
+   * auch waehrend eine ANDERE Seite aktiv ist, genau wie es bei einem
+   * eigenstaendigen Fenster auch waere. Wuerde bauen() stattdessen bei
+   * jedem Wechsel neu gerufen, legte jeder Besuch einer Seite einen
+   * weiteren Zeittakt an, den nichts je wieder abraeumt - bauen() hat
+   * keinen Rueckkanal fuer "wird jetzt verlassen".
+   *
+   * Liefert KEINEN Fenstertitel und KEINEN zepStateHeader von sich aus -
+   * "der Kopf ist der Zustand" (Schritt 3 des Aufgabenblatts) ist eine
+   * Vorgabe an das, was bauen() zurueckgibt, nicht an createShellWindow():
+   * die Schale zeigt nur, was bauen() liefert, und baut nichts Eigenes
+   * darueber (siehe headerTitle/headerIcon unten).
+   */
+  bauen: (win: Astal.Window, schliessen: () => void) => Gtk.Widget
+}
+
+export interface ShellConfig {
+  name: string
+  cssClass: string
+  seiten: ShellSeite[]
+  startSeite: string
+}
+
+export interface ShellWidget extends OverlayWidget {
+  /** Oeffnet die Schale und springt auf diese Seite. */
+  zeigeSeite: (id: string, at?: OverlayAnchor) => void
+}
+
+// Die Breite: die Sprosse, die die Spezifikation fuer die Schale vorsieht
+// (dort "XL" genannt). DER BAUM KENNT NUR DREI SPROSSEN, NICHT VIER - die
+// Spezifikation (Abschnitt 2.5) listet S/M/L/XL = 420/560/720/880, aber
+// src/sizes.py (MODAL_WIDTHS) fuehrt nur S/M/L = 500/660/880. Laut dem
+// Kommentar dort ist das eine bereits getroffene, begruendete Korrektur
+// ("Nachdem Netzwerk, Bluetooth und VPN in die Schale gezogen sind, wohnt
+// auf 720 niemand mehr") und keine Luecke - der Baum gilt, darum hier
+// STYLE_MODAL_WIDTH_L und nicht STYLE_MODAL_WIDTH_XL (letzteres
+// existiert im Baum gar nicht - jeder Platzhalter wird auch in
+// Kommentaren ersetzt, ein Versuch mit geschweiften Klammern um den
+// nicht existierenden Namen wirft beim Erzeugen). Siehe Bericht dieser
+// Aufgabe.
+//
+// KEINE EINHEIT, UND DAS IST ABSICHT. STYLE_MODAL_WIDTH_L liefert die
+// Zahl 880, keine Laenge - OverlayConfig.width ist vom Typ `number`.
+// GEMESSEN in Aufgabe 3, 18.08.2026: eine erste Fassung schrieb an
+// anderer Stelle die Einheit versehentlich mit (`const WIN_WIDTH =
+// 500px`), und `node --check` hat den entstandenen Syntaxfehler NICHT
+// gemeldet, weil jede erzeugte .ts-Datei mit einem `import` beginnt und
+// Node dadurch in den ESM-Modus mit Type-Stripping wechselt (siehe
+// Blattkopf dieser Aufgabe). Darum hier ohne "px" geschrieben, und darum
+// gehoert das Gegenlesen der erzeugten Zeile zur Erzeugungsprobe dazu.
+const SHELL_WIDTH = {{STYLE_MODAL_WIDTH_L}}
+
+// Die Hoehe ist ein WUNSCH, kein Versprechen - wie winWidth/winHeight in
+// getOverlayPosition() oben: MEASURE_MODAL_SHARE deckelt ohnehin auf die
+// halbe Bildschirmhoehe, und eine Seite, die mehr braucht, bekommt ihre
+// Bildlaufleiste von der Fabrik wie jedes andere Fenster. 900, weil
+// keines der drei Fenster, die als erste Seiten einziehen sollen
+// (Netzwerk 600, Bluetooth 600, VPN-Einstellungen 600 - je in der
+// eigenen `const WIN_HEIGHT`-Zeile nachgezaehlt), mehr braucht, mit Luft
+// fuer den Zustandskopf obendrauf. Eine spaetere Aufgabe mit echtem
+// Seiteninhalt darf diese Zahl nachmessen und aendern - "Wunsch, kein
+// Versprechen" gilt fuer sie genauso wie fuer jedes andere Fenster.
+const SHELL_HEIGHT = 900
+
+// Die Gruppen der Seitenleiste, aus den Seiten selbst - in der
+// Reihenfolge ihres ERSTEN Auftretens in config.seiten. Keine zweite
+// Liste, die jemand von Hand synchron halten muesste: die Reihenfolge
+// der uebergebenen Seiten bestimmt die Reihenfolge der Gruppen.
+function gruppenAus(seiten: ShellSeite[]): ZepNavGruppe[] {
+  const reihenfolge: string[] = []
+  const eintraege = new Map<string, ZepNavEintrag[]>()
+  for (const seite of seiten) {
+    if (!eintraege.has(seite.gruppe)) {
+      reihenfolge.push(seite.gruppe)
+      eintraege.set(seite.gruppe, [])
+    }
+    eintraege.get(seite.gruppe)!.push(
+      { id: seite.id, titel: seite.titel, symbol: seite.symbol })
+  }
+  return reihenfolge.map(titel => ({ titel, eintraege: eintraege.get(titel)! }))
+}
+
+/**
+ * Die Schale: Seitenleiste links (zepSidebar, 208px), eine Seite rechts.
+ *
+ * - jede Seite wird EINMAL gebaut (Gtk.Stack haelt alle, wechselt nur
+ *   die Sichtbarkeit) - nicht bei jedem Wechsel neu, siehe bauen() oben
+ * - kein Fenstertitel: headerTitle/headerIcon bleiben leer, weil
+ *   ShellConfig absichtlich keine Felder dafuer traegt (Schritt 3 -
+ *   "der Fenstertitel waere ohnehin redundant", die Seitenleiste sagt
+ *   schon, wo man ist)
+ * - ESC in zwei Stufen: siehe der Kommentar bei buildContent unten
+ */
+export function createShellWindow(config: ShellConfig): ShellWidget {
+  let aktivId = config.startSeite
+
+  const gruppen = gruppenAus(config.seiten)
+
+  const seitenSuche = (id: string): ShellSeite => {
+    const treffer = config.seiten.find(seite => seite.id === id)
+    if (!treffer) {
+      throw new Error(`createShellWindow("${config.name}"): keine Seite "${id}"`)
+    }
+    return treffer
+  }
+  // Wirft frueh, wenn schon startSeite falsch ist - derselbe Grundsatz
+  // wie bei MODAL_WIDTH() in src/sizes.py: ein Tippfehler soll auffallen,
+  // solange er noch billig ist, und nicht als leere Flaeche enden.
+  seitenSuche(config.startSeite)
+
+  // Ein Gtk.Stack statt "Kinder entfernen und neu bauen" (das Muster,
+  // das removeAllChildren() in ags-bluetooth.template/ags-network.template/
+  // ags-disk.template/ags-wallpaper.template je fuer sich wiederholt):
+  // bauen() hat keinen Rueckkanal fuer "wird jetzt verlassen", also darf
+  // ein Seitenwechsel ihre Widgets nicht wegwerfen und bei Rueckkehr neu
+  // aufrufen - das legte jeden eigenen Zeittakt/D-Bus-Zuhoerer einer
+  // Seite bei jedem Besuch ein weiteres Mal an, ohne dass je etwas
+  // abgeraeumt wuerde. Ein Stack haelt jede Seite als eigenes Kind
+  // dauerhaft und wechselt nur, welches sichtbar ist.
+  //
+  // NICHT HOMOGEN: eine Schale, deren Seiten sich in der Groesse stark
+  // unterscheiden (eine Geraeteliste vs. eine Handvoll Schalter), soll
+  // sich nach der AKTIVEN Seite richten - wie es jede Seite als
+  // eigenstaendiges Fenster heute auch tut (Bluetooth 600, VPN 520,
+  // zwei verschiedene Zahlen). Ein homogener Stack (GTKs Vorgabe) wuerde
+  // jede Seite auf die Groesse der groessten zwingen.
+  const seitenStapel = new Gtk.Stack({
+    hexpand: true,
+    vexpand: true,
+    hhomogeneous: false,
+    vhomogeneous: false,
+    transition_type: Gtk.StackTransitionType.NONE,
+  })
+
+  // Haelt genau EIN Kind: die Seitenleiste. Ein eigener Behaelter statt
+  // sie direkt in den Rumpf zu haengen, weil zepSidebar() zustandslos ist
+  // (sie merkt sich nicht, welcher Eintrag "ausgewaehlt" ist) und bei
+  // jedem Wechsel komplett neu gebaut wird, um die Markierung zu
+  // aktualisieren - derselbe Grund, aus dem ags-bluetooth.template seine
+  // Statuszeile bei jedem Takt neu baut, statt sie umzufaerben.
+  const sidebarSlot = new Gtk.Box({})
+
+  const zeichneSidebar = () => {
+    const alt = sidebarSlot.get_first_child()
+    if (alt) sidebarSlot.remove(alt)
+    sidebarSlot.append(zepSidebar(gruppen, aktivId, (id) => wechsleSeite(id)))
+  }
+
+  const wechsleSeite = (id: string) => {
+    // Wirft bei einem unbekannten id - siehe seitenSuche() oben, derselbe
+    // Grundsatz wie bei der Pruefung von startSeite dort: zeigeSeite() ist
+    // die oeffentliche Schnittstelle, ueber die spaetere Aufgaben (die
+    // Leiste, ein Knopf in einer anderen Seite) hierher springen - ein
+    // getippter id soll sofort auffallen, nicht als Seitenleiste ohne
+    // markierten Eintrag und ein Stapel, der stillschweigend bei der
+    // vorigen Seite bleibt.
+    seitenSuche(id)
+    if (id === aktivId) return
+    aktivId = id
+    seitenStapel.set_visible_child_name(id)
+    zeichneSidebar()
+  }
+
+  const overlay = createOverlayWindow({
+    name: config.name,
+    width: SHELL_WIDTH,
+    height: SHELL_HEIGHT,
+    cssClass: config.cssClass,
+    // Kein Fenstertitel - siehe Funktionskopf. Die Fabrik braucht die
+    // beiden Felder trotzdem (sie sind in OverlayConfig nicht optional),
+    // darum leer statt mit einem Namen, der ohnehin nur EINE der
+    // mehreren Seiten treffen koennte.
+    headerIcon: "",
+    headerTitle: "",
+    // ESC HAT ZWEI STUFEN, UND DIE REIHENFOLGE IST DIE GANZE SACHE
+    //
+    // Hier wird ABSICHTLICH KEIN eigenes onEscape gesetzt. Die Fabrik
+    // haengt ihren EINEN Gtk.EventControllerKey an `win` selbst (siehe
+    // keyController weiter oben) - ohne einen eigenen Aufruf von
+    // set_propagation_phase() lauft er in der GTK4-Standardphase
+    // GTK_PHASE_BUBBLE (https://docs.gtk.org/gtk4/enum.PropagationPhase.html:
+    // "the event is delivered to each widget from the target to the
+    // top-most"). `win` ist die WURZEL dieses Baums; ein
+    // Bubble-Controller darauf kommt darum IMMER ALS LETZTES dran -
+    // erst nachdem jeder Vorfahre des fokussierten Widgets seine
+    // eigenen Bubble-Controller gefragt hat.
+    //
+    // Eine Seite mit Unteransicht (das Passwortfeld im Netzwerk,
+    // vorgesehen fuer Aufgabe 8) haengt darum IHREN EIGENEN
+    // Gtk.EventControllerKey an das Widget, das ihre eigene
+    // bauen()-Funktion zurueckgibt - NICHT an `win`. Dieses Widget ist
+    // ein NACHFAHRE von `win` (es haengt am Stapel, der Stapel am
+    // Rumpf, der Rumpf im Inhalt der Fabrik-ScrolledWindow, siehe
+    // outerBox weiter oben), und ein Bubble-Controller darauf laeuft
+    // darum VOR dem der Fabrik. Die Reihenfolge ergibt sich aus dem
+    // Baum selbst, nicht aus einer Zeile Code hier - genau deshalb kann
+    // sie sich nicht versehentlich umdrehen, SOLANGE keine Seite ihren
+    // Controller an `win` haengt oder mit GTK_PHASE_CAPTURE ueberholt.
+    // Baut eine Seite es andersherum, faellt das in keinem Test dieser
+    // Aufgabe auf, und die Ruecknahme aus ihrer Unteransicht wirft
+    // stattdessen die ganze Schale zu.
+    //
+    // NICHT AM ECHTEN COMPOSITOR NACHGEMESSEN: tests/render/ und
+    // tests/lock/ sind fuer diese Aufgabe verboten (Blattkopf). Diese
+    // Zeilen sind eine Lesart der GTK4-Dokumentation zur
+    // Ereignisausbreitung, keine eigene Messung - wer die Passwort-
+    // Unteransicht baut, sollte die Reihenfolge am echten Fenster
+    // gegenpruefen.
+    buildContent: (win, schliessen) => {
+      for (const seite of config.seiten) {
+        seitenStapel.add_named(seite.bauen(win, schliessen), seite.id)
+      }
+      seitenStapel.set_visible_child_name(aktivId)
+      zeichneSidebar()
+
+      // Seitenleiste links, aktive Seite rechts - ein Gtk.Box in seiner
+      // Standardausrichtung HORIZONTAL reicht dafuer, ohne dass hier ein
+      // Wert dafuer benannt werden muesste.
+      const rumpf = new Gtk.Box({ spacing: 0 })
+      rumpf.append(sidebarSlot)
+      rumpf.append(seitenStapel)
+      return rumpf
+    },
+  })
+
+  const zeigeSeite = (id: string, at?: OverlayAnchor) => {
+    wechsleSeite(id)
+    void overlay.show(at)
+  }
+
+  return { ...overlay, zeigeSeite }
 }
