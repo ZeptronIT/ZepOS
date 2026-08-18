@@ -145,3 +145,110 @@ export function zepDivider(): Gtk.Widget {
   trenner.add_css_class("zep-divider")
   return trenner
 }
+
+// NACHGETRAGEN am 18.08.2026, task-4 (die Schale, Stufe 3): das
+// Kontrollzentrum bekommt eine Seitenleiste, Netzwerk/Bluetooth/VPN
+// ziehen als Seiten hinein. Zwei Bauteile dafuer, keins davon ein
+// zweites Zeilenbauteil.
+export interface ZepNavEintrag {
+  id: string
+  titel: string
+  symbol: string
+}
+
+export interface ZepNavGruppe {
+  titel: string          // "VERBINDUNGEN", "SYSTEM", "EINSTELLUNGEN"
+  eintraege: ZepNavEintrag[]
+}
+
+// Die Seitenleiste. 208 px breit (siehe .zep-sidebar in
+// ags-style.template), Gruppen mit Zwischenueberschrift.
+//
+// JEDER EINTRAG IST EINE ZEPROW - GEBAUT WIE JEDE ANKLICKBARE ZEILE
+// DIESES PROJEKTS
+//     GEMESSEN am 18.08.2026: createNetworkRow() in ags-network.template
+//     und createDeviceRow() in ags-bluetooth.template loesen "eine Zeile,
+//     die man anklicken kann" beide gleich - zepButton("", "umrandet",
+//     aktion) fuer den Klick, .set_child(zepRow({...})) fuer den Inhalt.
+//     zepRow traegt "ausgewaehlt" seit 208e32a bereits (task-5,
+//     Bluetooth) und deckelt die natuerliche Breite von Fremdtexten
+//     selbst. Eine dritte, eigene Zeilenform fuer die Seitenleiste waere
+//     genau die Doppelung, die dieses Vorhaben gerade fuer Knoepfe
+//     abgeraeumt hat (sieben Auftraege, siehe test_button_kit.py) - hier
+//     also keine.
+export function zepSidebar(
+  gruppen: ZepNavGruppe[],
+  aktiv: string,
+  aufSeite: (id: string) => void,
+): Gtk.Widget {
+  const leiste = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 0,
+  })
+  leiste.add_css_class("zep-sidebar")
+
+  for (const gruppe of gruppen) {
+    const block = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      spacing: 0,
+    })
+    block.add_css_class("zep-sidebar-group")
+    block.append(zepSectionLabel(gruppe.titel))
+
+    for (const eintrag of gruppe.eintraege) {
+      const knopf = zepButton("", "umrandet", () => aufSeite(eintrag.id))
+      knopf.set_child(zepRow({
+        symbol: eintrag.symbol,
+        titel: eintrag.titel,
+        ausgewaehlt: eintrag.id === aktiv,
+      }))
+      block.append(knopf)
+    }
+
+    leiste.append(block)
+  }
+
+  return leiste
+}
+
+/**
+ * Der Kopf einer Seite. Er IST der Zustand, nicht eine Titelzeile
+ * darueber: "Bluetooth ist an" als Ueberschrift, darunter die Nebenzeile
+ * "1 von 2 Geraeten verbunden", rechts das Bedienelement.
+ *
+ * `ende` ist frei - ein zepToggle, ein zepButton, oder nichts.
+ *
+ * Der Titel traegt KEINE eigene Klasse - seine Schrift (19px) kommt aus
+ * .zep-state-head selbst, per Vererbung (siehe ags-style.template). Die
+ * Nebenzeile bekommt darum ausdruecklich .zep-row-sub zurueck (dasselbe
+ * Bauteil-CSS wie in zepRow), sonst waere sie ebenfalls 19px gross.
+ */
+export function zepStateHeader(opts: {
+  titel: string
+  unterzeile?: string
+  ende?: Gtk.Widget
+}): Gtk.Widget {
+  const kopf = new Gtk.Box({ spacing: 0 })
+  kopf.add_css_class("zep-state-head")
+
+  const texte = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 0,
+  })
+
+  const titel = new Gtk.Label({ label: opts.titel, xalign: 0 })
+  texte.append(titel)
+
+  if (opts.unterzeile) {
+    const unter = new Gtk.Label({ label: opts.unterzeile, xalign: 0 })
+    unter.add_css_class("zep-row-sub")
+    texte.append(unter)
+  }
+  kopf.append(texte)
+
+  const luecke = new Gtk.Box({ hexpand: true })
+  kopf.append(luecke)
+
+  if (opts.ende) kopf.append(opts.ende)
+  return kopf
+}

@@ -145,6 +145,63 @@ $overlay-border: $border;
   }
 }
 
+// NACHGETRAGEN am 18.08.2026, task-4 (die Schale, Stufe 3): Seitenleiste
+// und Zustandskopf, aus zepSidebar/zepStateHeader in ags-kit.template.
+// Nur diese drei Regeln - siehe Aufgabenblatt.
+
+// 208px steht in der Spezifikation, Abschnitt 2.2, GEMESSEN (nicht
+// gerechnet) - der einzige Ort, an dem die Zahl stehen darf
+// (tests/src/test_schale.py::test_die_seitenleiste_ist_208_breit).
+// min-width statt width: derselbe Weg wie jede andere feste Spalte in
+// dieser Datei (GEPRUEFT `grep -c "  width:" ags-style.template` = 0,
+// nur min-width kommt vor). border-right statt border-left, weil die
+// Leiste links vom Inhalt steht - die erste ihrer Art in dieser Datei
+// (GEPRUEFT `grep -c border-right` = 0 vor dieser Zeile), kein
+// Widerspruch zum Bestand, nur die erste Gelegenheit dafuer.
+.zep-sidebar {
+  min-width: 208px;
+  border-right: 1px solid $border;
+}
+
+// Abstand zwischen zwei Gruppen (VERBINDUNGEN/SYSTEM/EINSTELLUNGEN).
+// zepSectionLabel traegt bereits einen eigenen oberen Rand
+// ({{STYLE_SPACE_8}}, siehe .zep-section oben) - dieser hier ist der
+// Abstand zur VORIGEN Gruppe, nicht zur eigenen Marke, darum eine
+// zusaetzliche, groessere Sprosse.
+.zep-sidebar-group {
+  margin-top: {{STYLE_SPACE_16}};
+}
+
+// Der Kopf einer Seite - Polsterung wie .overlay-header (SPACE_12/16,
+// siehe dort), Schrift 19 (STYLE_FONT_TITLE, siehe FONT_ROLES in
+// sizes.py) fuer den Titel. Der Titel traegt dafuer KEINE eigene
+// Klasse: font-size/-weight/color stehen hier auf .zep-state-head
+// selbst und vererben sich auf sein einziges unmarkiertes Label -
+// GENAU wie .disk-stat-value/.disk-ring-percent (bold, $text, TITLE)
+// es fuer ihre eigene grosse Zahl schon tun, nur hier auf dem
+// Container statt auf dem Label direkt, weil "nur diese drei Regeln"
+// keine vierte Klasse fuer den Titel allein erlaubt. Die Nebenzeile
+// bricht das bewusst wieder herunter, indem sie ihre EIGENE Klasse
+// traegt (.zep-row-sub, wiederverwendet aus zepRow) - eine direkt am
+// Element stehende Regel schlaegt eine geerbte.
+.zep-state-head {
+  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
+  font-size: {{STYLE_FONT_TITLE}};
+  font-weight: bold;
+  color: $text;
+
+  // `ende` ist laut Schnittstelle frei - auch ein zepButton. Dessen
+  // .zep-btn setzt font-size und (ueber seine vier Rollen) color schon
+  // selbst, aber NICHT font-weight ausser bei der Rolle "voll". Ohne
+  // diese Zeile wuerde die fette Titelschrift auf einen umrandeten/
+  // stillen/kritischen Knopf als `ende` durchschlagen - GEPRUEFT gegen
+  // .zep-btn-voll/-umrandet/-still/-kritisch weiter oben in dieser
+  // Datei. Kein neuer Klassenname, nur eine bestehende Klasse
+  // (.zep-btn) in einem neuen Kontext, derselbe Kunstgriff wie
+  // ".vpn-tab-bar .zep-btn.active" weiter unten.
+  .zep-btn { font-weight: normal; }
+}
+
 // ===== SHARED OVERLAY STYLES (Muted Dark / HyprLaunch / HyprClipX) =====
 //
 // DIE PLATTE ALLER ELF UEBERLAGERUNGEN
