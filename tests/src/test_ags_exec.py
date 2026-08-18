@@ -217,8 +217,20 @@ def test_the_dialog_only_reports_a_save_it_can_see():
 # --------------------------------------------------------------------
 
 def _connect_argv_literal(text: str) -> str:
-    """The connectArgv array as it stands in the template."""
-    match = re.search(r"const connectArgv = \[(.*?)\n    \]", text, re.S)
+    """The connectArgv array as it stands in the template.
+
+    CORRECTED on 2026-08-18 (Aufgabe 9, "VPN wird eine Seite"): the
+    closing bracket used to sit at a fixed indentation of four spaces,
+    because `connectArgv` lived two function bodies deep
+    (`VpnManager()` -> `connectVpn()`). Aufgabe 9 nests it one level
+    deeper still (`vpnSeite.bauen()` -> `connectVpn()`), which shifted
+    every line - including the closing bracket - two spaces to the
+    right. The array itself did not change; only where it sits did.
+    `\\s*` reads any indentation instead of hard-coding the one that
+    happened to be true before this refactor, so the NEXT legitimate
+    re-indentation does not fail this assertion either.
+    """
+    match = re.search(r"const connectArgv = \[(.*?)\n\s*\]", text, re.S)
     assert match, "connectArgv is no longer an array this test can read"
     return match.group(1)
 

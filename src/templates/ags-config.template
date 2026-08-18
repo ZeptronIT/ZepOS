@@ -25,7 +25,6 @@ import DiskUsage from "./widget/DiskUsage"
 import ControlCenter from "./widget/ControlCenter"
 import WallpaperSelector from "./widget/WallpaperSelector"
 import StyleEditor from "./widget/StyleEditor"
-import VpnManager from "./widget/VpnManager"
 import VpnSettings from "./widget/VpnSettings"
 // Zwei Ausfuhren aus EINER Datei, und das ist kein Sparzwang: der
 // Einblendstapel und das Zentrum teilen sich den Verlauf. Die
@@ -35,12 +34,13 @@ import Notifications, {
 } from "./widget/Notifications"
 
 // Store overlay widget references
-// "bluetooth" (Aufgabe 7) und "network" (Aufgabe 8, 18.08.2026) fallen:
-// weder BluetoothManager.tsx noch NetworkManager.tsx bauen ein eigenes
-// Fenster mehr, beide exportieren nur noch ihre ShellSeite, die
+// "bluetooth" (Aufgabe 7), "network" (Aufgabe 8) und "vpn" (Aufgabe 9,
+// 18.08.2026) fallen: keine der drei Vorlagen baut ein eigenes Fenster
+// mehr, alle drei exportieren nur noch ihre ShellSeite, die
 // ControlCenter() direkt in die Schale einhaengt. toggleByName()
-// erreicht beide ueber widgets.control.zeigeSeite(), nicht mehr ueber
-// diese Tabelle.
+// erreicht alle drei ueber widgets.control.zeigeSeite(), nicht mehr
+// ueber diese Tabelle. "vpnSettings" BLEIBT: die VPN-Einstellungen sind
+// ein eigenes Fenster, kein Verbindungsziel (siehe VpnManager.tsx).
 let widgets: Record<string, OverlayWidget | null> = {
   calendar: null,
   shortcuts: null,
@@ -49,7 +49,6 @@ let widgets: Record<string, OverlayWidget | null> = {
   control: null,
   wallpaper: null,
   style: null,
-  vpn: null,
   vpnSettings: null,
   notifications: null,
 }
@@ -84,12 +83,12 @@ async function toggleWidget(widget: OverlayWidget | null,
 // toggleWidget aufrief. Sechs Module taten das. Jetzt rufen sie diese
 // Funktion.
 //
-// SEIT AUFGABE 7/8 (18.08.2026) LEITET SIE "bluetooth" UND "network" IN
-// DIE SCHALE UM, STATT EIN FENSTER ZU TOGGELN
-//     Weder BluetoothManager.tsx noch NetworkManager.tsx bauen ein
-//     eigenes Astal.Window mehr - beide exportieren nur noch ihre
-//     ShellSeite (bluetoothSeite/networkSeite), die ControlCenter() als
-//     Seite unter VERBINDUNGEN einhaengt (ags-control-center.template).
+// SEIT AUFGABE 7/8/9 (18.08.2026) LEITET SIE "bluetooth", "network" UND
+// "vpn" IN DIE SCHALE UM, STATT EIN FENSTER ZU TOGGELN
+//     Keine der drei Vorlagen baut ein eigenes Astal.Window mehr - alle
+//     drei exportieren nur noch ihre ShellSeite (bluetoothSeite/
+//     networkSeite/vpnSeite), die ControlCenter() als Seite unter
+//     VERBINDUNGEN einhaengt (ags-control-center.template).
 //     `widgets.control` ist zur Laufzeit ein ShellWidget (ControlCenter()
 //     ruft seit Aufgabe 6 createShellWindow()); die Tabelle bleibt als
 //     `Record<string, OverlayWidget | null>` typisiert (ShellWidget
@@ -97,15 +96,16 @@ async function toggleWidget(widget: OverlayWidget | null,
 //     hier am Aufruf und nicht an der Tabelle selbst.
 //
 //     EIN Aenderungsort fuer DREI Aufrufer je Name: die Leiste
-//     (`toggles: "bluetooth"`/`"network"` in ags-bar.template), die
-//     Tastenbindung (`reqStr.includes(...)` im requestHandler unten) und
-//     die jeweilige Zeile auf der Seite "general" des Kontrollzentrums
-//     selbst (btRow/netRow, rufen `toggle(name)` ueber denselben Weg) -
-//     alle drei gehen durch toggleByName(). VPN bleibt bis zu seiner
-//     eigenen Aufgabe (9) ein echtes, eigenes Fenster und nimmt
-//     weiterhin den toggleWidget-Weg.
+//     (`toggles: "bluetooth"`/`"network"` in ags-bar.template - VPN hat
+//     kein eigenes Leistenmodul), die Tastenbindung
+//     (`reqStr.includes(...)` im requestHandler unten) und die jeweilige
+//     Zeile auf der Seite "general" des Kontrollzentrums selbst
+//     (btRow/netRow/vpnRow, rufen `toggle(name)` ueber denselben Weg) -
+//     alle gehen durch toggleByName(). "vpn-settings" bleibt AUSSEN vor
+//     und nimmt weiterhin den toggleWidget-Weg: die VPN-Einstellungen
+//     sind ein eigenes Fenster, kein Verbindungsziel.
 function toggleByName(name: string, at?: OverlayAnchor): void {
-  if (name === "bluetooth" || name === "network") {
+  if (name === "bluetooth" || name === "network" || name === "vpn") {
     (widgets.control as ShellWidget | null)?.zeigeSeite(name, at)
     return
   }
@@ -199,12 +199,13 @@ app.start({
       console.error("Failed to create ControlCenter:", e)
     }
 
-    // Netzwerk (Aufgabe 8) und Bluetooth (Aufgabe 7) bauen seit
-    // 18.08.2026 kein eigenes Fenster mehr - networkSeite/bluetoothSeite
-    // haengen bereits INNERHALB von ControlCenter() (wenige Zeilen weiter
-    // oben) in der Schale, es gibt hier nichts mehr eigenstaendig zu
-    // erzeugen. Die Leistenklicks auf die beiden Module finden ihr Ziel
-    // weiterhin ueber toggleByName().
+    // Bluetooth (Aufgabe 7), Netzwerk (Aufgabe 8) und VPN (Aufgabe 9)
+    // bauen seit 18.08.2026 kein eigenes Fenster mehr -
+    // bluetoothSeite/networkSeite/vpnSeite haengen bereits INNERHALB von
+    // ControlCenter() (wenige Zeilen weiter oben) in der Schale, es gibt
+    // hier nichts mehr eigenstaendig zu erzeugen. Die Leistenklicks auf
+    // Bluetooth/Netzwerk und die VPN-Zeile im Kontrollzentrum selbst
+    // finden ihr Ziel weiterhin ueber toggleByName().
 
     // Create wallpaper selector widget
     try {
@@ -220,14 +221,6 @@ app.start({
       console.log("StyleEditor loaded successfully")
     } catch (e) {
       console.error("Failed to create StyleEditor:", e)
-    }
-
-    // Create VPN manager widget
-    try {
-      widgets.vpn = VpnManager()
-      console.log("VpnManager loaded successfully")
-    } catch (e) {
-      console.error("Failed to create VpnManager:", e)
     }
 
     // Create VPN settings widget
@@ -330,7 +323,15 @@ app.start({
     } else if (reqStr.includes("vpn-settings")) {
       toggleWidget(widgets.vpnSettings).then(r => res(r))
     } else if (reqStr.includes("vpn")) {
-      toggleWidget(widgets.vpn).then(r => res(r))
+      // Seit Aufgabe 9 (18.08.2026) keine eigene widgets.vpn mehr -
+      // toggleByName() leitet auf widgets.control.zeigeSeite("vpn") um
+      // (siehe dort). Die Tastenbindung, die diesen Zweig ausloest,
+      // bleibt darum wirksam, sie oeffnet nur die Schale statt eines
+      // eigenen Fensters. Der Zweig "vpn-settings" steht bewusst DAVOR
+      // (siehe dort) und faengt sein eigenes Fenster weiterhin ab, bevor
+      // dieser hier ueberhaupt geprueft wird.
+      toggleByName("vpn")
+      res("toggled")
     } else {
       res("unknown request: " + reqStr)
     }

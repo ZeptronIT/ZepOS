@@ -1164,10 +1164,13 @@ $overlay-border: $border;
 }
 
 // ===== NETWORK MANAGER =====
-.NetworkManager {
-  background: transparent;
-  min-width: 450px;
-}
+// NetworkManager (Fensterhuelle) ist am 18.08.2026 (Aufgabe 9) gefallen:
+// ags-network.template baut seit Aufgabe 8 kein eigenes Astal.Window
+// mehr und traegt darum kein cssClass fuer eine eigene Huelle - die
+// Seite liegt in der Platte der Schale (ControlCenter, cssClass
+// "ControlCenter"). Aufgeschoben bis Aufgabe 9 (alle drei
+// Fensterhuellen in einem Zug, siehe .BluetoothManager/.VpnManager
+// weiter unten), nicht sofort in Aufgabe 8 entfernt.
 
 // .net-header, .net-header-icon und .net-header-title standen hier und
 // waren am 17.08.2026 tot: ags-network.template baut seinen Kopf seit
@@ -1343,9 +1346,10 @@ $overlay-border: $border;
 // Breite), und eine vierte Zahl daneben waere eine, die keine der drei
 // kennt. GEMESSEN am 17.08.2026 auf 1920x7200: 465 Punkte, also ohnehin
 // mehr.
-.BluetoothManager {
-  background: transparent;
-}
+// BluetoothManager (Fensterhuelle) ist am 18.08.2026 (Aufgabe 9)
+// gefallen: ags-bluetooth.template baut seit Aufgabe 7 kein eigenes
+// Astal.Window mehr - dieselbe Begruendung wie bei NetworkManager
+// oben.
 
 // GEGANGEN am 18.08.2026 (task-5): "bt-current", "bt-status-icon"
 // (+ "bt-off"/"bt-broken" darin), "bt-status-label", "bt-status-detail",
@@ -1931,10 +1935,15 @@ $overlay-border: $border;
 }
 
 // ===== VPN MANAGER =====
-.VpnManager {
-  background: transparent;
-}
-
+// VpnManager (Fensterhuelle) ist am 18.08.2026 (Aufgabe 9) gefallen:
+// ags-vpn.template baut seit derselben Aufgabe kein eigenes
+// Astal.Window mehr - dieselbe Begruendung wie bei NetworkManager/
+// BluetoothManager oben. Damit sind alle drei Fensterhuellen der
+// Verbindungsfenster (Bluetooth, Netzwerk, VPN) aus diesem Stylesheet
+// verschwunden - .vpn-container darunter bleibt: es ist der
+// INHALTSKASTEN der Seite, keine Fensterhuelle, und traegt weiterhin
+// die Eckenrundung, die die Schale von der Seite erwartet (siehe
+// tests/src/test_overlay_windows.py, _INHALTSKAESTEN).
 .vpn-container {
   background: transparent;
   border: none;

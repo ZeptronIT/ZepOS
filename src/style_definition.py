@@ -2214,7 +2214,12 @@ GLASS_LAYERS = (
     "control",
     "wallpaper",
     "style-editor",
-    "vpn",
+    # "vpn" ist am 18.08.2026 (Aufgabe 9, "VPN wird eine Seite, die drei
+    # Fenster fallen") gefallen - dieselbe Begruendung wie bei "network"
+    # (Aufgabe 8) und "bluetooth" (Aufgabe 7) oben: ags-vpn.template baut
+    # kein eigenes Astal.Window mehr und teilt sich seither die
+    # Glasplatte des Namensraums "control". "vpn-settings" bleibt: die
+    # VPN-Einstellungen sind ein eigenes Fenster, kein Verbindungsziel.
     "vpn-settings",
     "hyprlaunch",
     "clipboard-manager",
@@ -2316,7 +2321,9 @@ GLASS_PLATES = {
     "control": _OVERLAY,
     "wallpaper": _OVERLAY,
     "style-editor": _OVERLAY,
-    "vpn": _OVERLAY,
+    # "vpn" ist am 18.08.2026 (Aufgabe 9) gefallen - siehe der Kommentar
+    # bei GLASS_LAYERS oben. VPN malt sich seither auf der Platte des
+    # Namensraums "control".
     "vpn-settings": _OVERLAY,
     "hyprlaunch": GlassPlate("styles/hyprlaunch-style.template",
                              ".launcher-container", ("overlay_subtext",),

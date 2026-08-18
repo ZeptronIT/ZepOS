@@ -174,6 +174,15 @@ def test_every_overlay_declares_a_size_that_was_measured():
 # Verschiedenes messen - der Deckel des Fensters und der Anspruch des
 # Inhalts. Beim Kalender waren beide 420, und daran ist der Sonntag
 # verlorengegangen.
+# "ags-vpn.template" ist am 18.08.2026 (Aufgabe 9) aus dieser Tabelle
+# gefallen: die Vorlage meldet ueberhaupt keine `const WIN_WIDTH` mehr
+# an (sie ist eine Seite der Schale, keine eigene Fensterbreite mehr -
+# siehe Kopf der Vorlage), darum landet sie gar nicht mehr in
+# `erklaert` unten. ".vpn-container" bleibt trotzdem die min-width
+# tragende Klasse ihres Inhalts (siehe _INHALTSKAESTEN weiter unten in
+# dieser Datei) - nur die BREITENPRUEFUNG hier braucht sie nicht mehr,
+# weil niemand mehr eine `WIN_WIDTH` fuer sie anmeldet, gegen die man
+# rechnen koennte.
 FENSTER_UND_KASTEN = {
     "ags-calendar.template": ".calendar-container",
     "ags-shortcuts.template": ".shortcuts-container",
@@ -181,7 +190,6 @@ FENSTER_UND_KASTEN = {
     "ags-disk.template": ".disk-container",
     "ags-wallpaper.template": ".wp-container",
     "ags-style-editor.template": ".se-container",
-    "ags-vpn.template": ".vpn-container",
     "ags-vpn-settings.template": ".vpn-settings-container",
 }
 

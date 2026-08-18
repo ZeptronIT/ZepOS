@@ -44,6 +44,11 @@ import { bluetoothSeite } from "./BluetoothManager"
 // AUFGABE 8 (18.08.2026): die echte Netzwerk-Seite statt des
 // Umzugshinweises - dieselbe Form wie bluetoothSeite oben.
 import { networkSeite } from "./NetworkManager"
+// AUFGABE 9 (18.08.2026): die echte VPN-Seite statt des
+// Umzugshinweises - dieselbe Form wie bluetoothSeite/networkSeite oben.
+// VpnSettings (das Formular) bleibt ein eigenes Fenster und wird NICHT
+// von hier importiert - siehe die Begruendung dort.
+import { vpnSeite } from "./VpnManager"
 
 const HOME = GLib.get_home_dir()
 // Das Widget laeuft eigenstaendig unter AGS und kann paths.py nicht
@@ -558,14 +563,12 @@ export default function ControlCenter(
     bauen: () => zepStateHeader({ titel, unterzeile: UMZUGSHINWEIS }),
   })
 
-  // VERBINDUNGEN: "vpn" noch leer, Aufgabe 9 fuellt sie (dieselbe
-  // stubSeite()-Form wie bisher). "bluetooth" und "network" sind seit
-  // Aufgabe 7/8 (18.08.2026) die echten, importierten Seiten - siehe die
+  // VERBINDUNGEN: "bluetooth", "network" und "vpn" sind seit Aufgabe 7/8/9
+  // (18.08.2026) alle drei die echten, importierten Seiten - siehe die
   // Importe am Kopf dieser Datei. Ihre `gruppe` traegt denselben msgid
   // "CONNECTIONS" wie gruppeVerbindungen hier (zwei `_()`-Aufrufe auf
   // denselben msgid ergeben denselben Text; gruppenAus() gruppiert nach
   // dem TEXT), darum keine eigene Uebergabe von aussen.
-  const vpnSeite = stubSeite("vpn", _("VPN"), ICONS.vpn, gruppeVerbindungen)
 
   // SYSTEM: Ton und Anzeige, ausserhalb des Umfangs dieses Plans (siehe
   // Bericht) - beide bleiben Umzugshinweise, bis eine spaetere Aufgabe
@@ -799,9 +802,19 @@ export default function ControlCenter(
       //     Die Antwort ist deshalb, dass beide Wege AUF DIESELBE
       //     FUNKTION zeigen und nicht, dass einer verschwindet:
       //
-      //       netRow    opens("network")    -> widgets.network
-      //       btRow     opens("bluetooth")  -> widgets.bluetooth
+      //       netRow    opens("network")    -> widgets.network   [STAND 17.08.2026]
+      //       btRow     opens("bluetooth")  -> widgets.bluetooth [STAND 17.08.2026]
       //       Leiste    toggles: "network" / "bluetooth"
+      //
+      //     STAND SEIT AUFGABE 7/8 (18.08.2026): netRow/btRow rufen
+      //     `zeigtSeite("network")`/`zeigtSeite("bluetooth")` (siehe dort)
+      //     statt `opens(...)`, und es gibt kein `widgets.network`/
+      //     `widgets.bluetooth` mehr - beide Ziele sind Seiten DERSELBEN
+      //     Schale geworden. Die Zeile bleibt trotzdem stehen: sie erklaert
+      //     WARUM es ueberhaupt zwei Wege zu einer Funktion gibt (die
+      //     Meldung vom 17.08.2026), nicht WELCHE Funktion heute gerufen
+      //     wird - das aendert nichts an der Reihenfolge, in der die drei
+      //     Wege entstanden sind.
       //
       //     `opens()` ruft `toggle`, und `toggle` ist toggleByName aus
       //     ags-config.template - DIESELBE Funktion, die die Leiste
@@ -869,9 +882,17 @@ export default function ControlCenter(
       vpnIcon = new Gtk.Label({ label: ICONS.vpnOff })
       vpnIcon.add_css_class("cc-icon")
       vpnLabel = ccLabel(_("VPN: off"))
-      // zepButton, Rolle "still" (Task D, 18.08.2026): Navigation zum
-      // VPN-Fenster, wie netBtn/btBtn/styleBtn in dieser Datei.
-      const vpnBtn = zepButton(ICONS.power, "still", opens("vpn"))
+      // zepButton, Rolle "still" (Task D, 18.08.2026): Navigation zur
+      // VPN-Seite dieser Schale.
+      //
+      // `zeigtSeite("vpn")` statt `opens("vpn")` seit Aufgabe 9
+      // (18.08.2026, siehe der Kommentar bei zeigtSeite() oben sowie
+      // btBtn/netBtn, Aufgabe 7/8, dieselbe Begruendung) - VPN ist kein
+      // zweites Fenster mehr. Die VPN-EINSTELLUNGEN (ein anderes
+      // Fenster, siehe VpnManager.tsx/openVpnSettings) bleiben
+      // unberuehrt - diese Zeile hier fuehrt zur VPN-Seite selbst,
+      // nicht zu ihrem Formular.
+      const vpnBtn = zepButton(ICONS.power, "still", zeigtSeite("vpn"))
       vpnRow.append(vpnIcon)
       vpnRow.append(vpnLabel)
       vpnRow.append(vpnBtn)
