@@ -102,14 +102,56 @@ const EDITOR = "gnome-text-editor"
 //         ist deshalb genau eines: ab 2152 Punkten Schirmbreite
 //         (zweimal 1076) steht das Fenster vollstaendig da statt auf
 //         1020 gedeckelt. Auf 1920 aendern sie nichts.
-const WIN_WIDTH = 1076
+//
+//     SEIT DEM 18.08.2026 (Aufgabe 3, Breitenleiter): DAS RASTER STEHT
+//     AUF ZWEI SPALTEN STATT DREI, UND DER DECKEL GREIFT NICHT MEHR
+//
+//         COLUMNS ist unten von 3 auf 2 gesetzt. Die homogene
+//         Spaltenleiste (columnsBox, spacing 12) macht jede Spalte
+//         gleich breit - so breit wie die breiteste Zeile im GANZEN
+//         Fenster, unabhaengig davon, in welche Spalte sie faellt. Aus
+//         den oben gemessenen 1000 (fuer drei Spalten) laesst sich diese
+//         Spaltenbreite W zurueckrechnen, ohne den verbotenen
+//         Bildschirmtest, weil W spaltenzahl-unabhaengig ist:
+//
+//             3 * W + 2 * 12 (spacing) = 1000
+//             W = (1000 - 24) / 3 = 325,33, aufgerundet 326
+//
+//         Vorwaerts fuer zwei Spalten, mit demselben W:
+//
+//             .shortcuts-container { min-width: 664px }    664
+//                 (= 2 * 326 + 1 * 12, aufgerundet)
+//             dessen padding {{STYLE_SPACE_16}}, zweimal    +50
+//                                                          ----
+//             Inhalt, gerechnet                             714
+//             .overlay-outer, Rahmen 1px, zweimal             +2
+//             senkrechte Bildlaufleiste (immer reserviert)   +24
+//                                                          ----
+//                                                            740
+//
+//         740 passen in L (880, MODAL_WIDTHS in sizes.py), mit 140
+//         Punkten Luft. `.shortcuts-container` in ags-style.template
+//         steht entsprechend auf 664px statt 1000px.
+//
+//         DAMIT AENDERT SICH AUCH DIE OBIGE GESCHICHTE: die 1076
+//         gehoeren der Vergangenheit (drei Spalten), und der Deckel aus
+//         MEASURE_MODAL_SHARE greift auf 1920 nicht mehr - 880 (L) ist
+//         WENIGER als sein 960 dort, nicht mehr. Der Absatz oben
+//         ("DIESES FENSTER IST DER EINE FALL...") beschreibt damit einen
+//         Fehler, den DIESE Aenderung behebt, und keinen Zustand, der
+//         weiter gilt - er bleibt stehen, weil er erklaert, WARUM drei
+//         Spalten zu breit waren.
+const WIN_WIDTH = {{STYLE_MODAL_WIDTH_L}}
 const WIN_HEIGHT = 680
 
 // Wieviele Spalten die Gruppen fuellen. Die Gruppen selbst kommen aus
 // der Konfiguration und werden hier nur verteilt - eine feste Zuordnung
 // "welche Gruppe in welche Spalte" waere wieder eine Liste, die jemand
 // nachtragen muesste.
-const COLUMNS = 3
+//
+// SEIT DEM 18.08.2026 zwei statt drei (Aufgabe 3, Breitenleiter) - die
+// Breitenrechnung dazu steht am Dateikopf bei WIN_WIDTH.
+const COLUMNS = 2
 
 // Icons
 const ICONS = {

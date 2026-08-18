@@ -69,7 +69,13 @@ import { zepButton } from "../utils/kit"
 //     259 breit. Die Datumszeile ebenso: "August 17, 2026" und
 //     "17. August 2026" sind beide fuenfzehn Zeichen, und die Schrift
 //     dieser Oberflaeche ist Fira Code, also dicktengleich.
-const WIN_WIDTH = 496
+//
+//     SEIT DEM 18.08.2026 nennt dieses Fenster nicht mehr seine eigene
+//     Rechnung, sondern die Sprosse darueber: die gemessenen 496
+//     passen in S (siehe MODAL_WIDTHS in sizes.py). Die Rechnung
+//     bleibt hier stehen, weil sie begruendet, WARUM diese Sprosse und
+//     nicht die kleinere.
+const WIN_WIDTH = {{STYLE_MODAL_WIDTH_S}}
 const WIN_HEIGHT = 678
 
 // Zeichen

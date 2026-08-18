@@ -822,6 +822,32 @@ _FIXED_STYLE_VARIABLES = {
     "STYLE_ROW_HEIGHT": size_value("STYLE_ROW_HEIGHT"),
 
     # ============================================================================
+    # DIE BREITENLEITER - drei Sprossen fuer alle Aufklappfenster
+    # ============================================================================
+    #
+    # Eine Sprosse haengt an keinem Bildschirm, deshalb hier bei den
+    # FESTEN Werten und nicht in _monitor_style_variables(). Die Tabelle,
+    # die Rechnung und die Begruendung stehen in src/sizes.py bei
+    # MODAL_WIDTHS; hier wird daraus nur, was ein {{STYLE_*}}-Platzhalter
+    # sein muss, weil acht Fenstervorlagen (task-1u5, 18.08.2026) ihn
+    # direkt in `const WIN_WIDTH = ...` lesen.
+    #
+    # OHNE "px", UND DAS IST GEPRUEFT UND KEINE VERMUTUNG: alle acht
+    # Leser stehen in TypeScript-Zahlenkontext (`const WIN_WIDTH = ...`,
+    # das dann als `width: WIN_WIDTH` in createOverlayWindow() landet,
+    # typisiert als `width: number` in ags-overlay-utils.template) -
+    # nie in einer CSS-Regel. "500px" waere dort keine Zahl, sondern ein
+    # Syntaxfehler (bestaetigt: `node --check` isoliert wirft "Identifier
+    # cannot follow number"; im vollen, Modul-praefixierten Fenster
+    # bleibt derselbe Fehler unbemerkt, siehe Bericht). STYLE_GAPS_OUT,
+    # STYLE_BAR_THICKNESS und STYLE_DOCK_ICON_SIZE sind derselbe Fall
+    # daneben: alle drei bleiben unitless, weil ihre Leser ebenfalls
+    # `const X = {{STYLE_*}}` in TypeScript oder ein zahliges Feld in
+    # hyprland-universal-config.template sind.
+    **{f"STYLE_MODAL_WIDTH_{name}": str(px)
+       for name, px in sizes.MODAL_WIDTHS.items()},
+
+    # ============================================================================
     # DIE ABGESETZTE KANTE - der 3D-Effekt aus summer-day-and-night
     # ============================================================================
     #

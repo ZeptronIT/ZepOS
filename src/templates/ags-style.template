@@ -346,7 +346,11 @@ $overlay-border: $border;
   border: none;
   border-radius: {{STYLE_RADIUS_PANEL}};
   padding: {{STYLE_SPACE_16}};
-  min-width: 1000px;
+  // SEIT DEM 18.08.2026 (Aufgabe 3, Breitenleiter) 664 statt 1000: das
+  // Raster in ags-shortcuts.template steht jetzt auf zwei statt drei
+  // Spalten. Die Rechnung, die die 664 aus den vorher gemessenen 1000
+  // zurueckholt, steht dort am Dateikopf bei WIN_WIDTH.
+  min-width: 664px;
   min-height: 650px;
 }
 

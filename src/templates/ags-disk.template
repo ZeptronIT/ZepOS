@@ -36,7 +36,13 @@ import { zepButton } from "../utils/kit"
 //     Bei 500 blieb davon ein Sichtfenster von 500 - 2 - 24 = 474; die
 //     fehlenden 56 Punkte lagen hinter der rechten Kante, und auf dem
 //     Bild endete jede Partitionszeile mitten in ihrer Prozentzahl.
-const WIN_WIDTH = 556
+//
+//     SEIT DEM 18.08.2026 nennt dieses Fenster nicht mehr seine eigene
+//     Rechnung, sondern die Sprosse darueber: die gemessenen 556
+//     passen in M (siehe MODAL_WIDTHS in sizes.py). Die Rechnung
+//     bleibt hier stehen, weil sie begruendet, WARUM diese Sprosse und
+//     nicht die kleinere.
+const WIN_WIDTH = {{STYLE_MODAL_WIDTH_M}}
 const WIN_HEIGHT = 580
 const UPDATE_INTERVAL = 30000 // 30 seconds
 

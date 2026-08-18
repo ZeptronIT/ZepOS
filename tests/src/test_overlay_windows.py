@@ -236,6 +236,23 @@ def _space(placeholder: str) -> int:
         sys.path.remove(str(SRC))
 
 
+def _breite(wert: str) -> int:
+    """Eine angemeldete Fensterbreite, in Punkten.
+
+    Seit Aufgabe 3 (Breitenleiter, 18.08.2026) tippt ein Fenster seine
+    Breite nicht mehr als Zahl, sondern nennt eine Sprosse ueber
+    {{STYLE_MODAL_WIDTH_S/_M/_L}} - siehe die Zuordnung in
+    src/style_definition.py und die Tabelle in src/sizes.py bei
+    MODAL_WIDTHS. Diese Funktion loest beide Schreibweisen zur selben
+    Zahl auf, genau wie _space() es fuer {{STYLE_SPACE_*}} tut; die
+    Rechnung unten bleibt dieselbe, unabhaengig davon, woher die Zahl
+    kommt.
+    """
+    if wert.isdigit():
+        return int(wert)
+    return _space(wert.strip("{}"))
+
+
 def test_every_overlay_is_wider_than_the_box_its_content_sits_in():
     """Sechs Fenster meldeten weniger Breite an, als ihr Inhalt braucht.
 
@@ -286,9 +303,9 @@ def test_every_overlay_is_wider_than_the_box_its_content_sits_in():
 
     erklaert = {path.name: found.group(1)
                 for path in sorted((SRC / "templates").glob("ags-*.template"))
-                for found in [re.search(r"^const WIN_WIDTH = (\d+)$",
-                                        path.read_text(encoding="utf-8"),
-                                        re.M)]
+                for found in [re.search(
+                    r"^const WIN_WIDTH = (\d+|\{\{STYLE_MODAL_WIDTH_[SML]\}\})$",
+                    path.read_text(encoding="utf-8"), re.M)]
                 if found}
     vergessen = set(erklaert) - set(FENSTER_UND_KASTEN) - OHNE_MIN_WIDTH
     assert not vergessen, (
@@ -315,7 +332,7 @@ def test_every_overlay_is_wider_than_the_box_its_content_sits_in():
                   + 2 * int(rahmen.group(1)) + BILDLAUFLEISTE)
         assert vorlage in erklaert, (
             f"{vorlage} meldet keine Breite mehr an")
-        assert int(erklaert[vorlage]) >= noetig, (
+        assert _breite(erklaert[vorlage]) >= noetig, (
             f"{vorlage} meldet {erklaert[vorlage]} Punkte Breite an, der "
             f"Kasten darin braucht {noetig} ({innen.group(1)} min-width "
             f"+ 2x{space} padding + 2x{rahmen.group(1)} Rahmen "

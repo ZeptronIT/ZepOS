@@ -510,6 +510,11 @@ export default function Notifications(): Astal.Window {
 // haengen an derselben Uhr, und zwei Fenster hinter einem Modul, die
 // verschieden breit aufgehen, sehen aus wie zwei Programme.
 //
+// SEIT DEM 18.08.2026 nennt dieses Fenster nicht mehr seine eigene
+// Rechnung, sondern die Sprosse darueber: die gemessenen 420 passen in
+// S (siehe MODAL_WIDTHS in sizes.py). Die Rechnung bleibt hier stehen,
+// weil sie begruendet, WARUM diese Sprosse und nicht die kleinere.
+//
 // DIE HOEHE IST GEMESSEN UND NICHT GESCHAETZT, am 12.08.2026 im
 // verschachtelten Compositor auf einem 2160 Zeilen hohen Schirm - so
 // hoch, damit der Deckel aus MEASURE_MODAL_SHARE (dort 1080) erst spaet
@@ -536,7 +541,7 @@ export default function Notifications(): Astal.Window {
 // die Fabrik ohnehin um jeden Inhalt haengt. Eine kleinere Zahl waere
 // hier nicht ehrlicher, sondern eine zweite, unbegruendete Grenze neben
 // der des Entwurfssystems.
-const CENTER_WIDTH = 420
+const CENTER_WIDTH = {{STYLE_MODAL_WIDTH_S}}
 const CENTER_HEIGHT = 7566
 
 /** Der Verlauf, "Nicht stoeren" und ein Loeschknopf.

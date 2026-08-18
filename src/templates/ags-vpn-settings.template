@@ -52,7 +52,13 @@ const WINDOW_NAME = "vpn-settings"
 //     englische Installation bekommt damit ihre 570 und keinen leeren
 //     Streifen von 72 Punkten; eine Sprache mit noch laengeren Woertern
 //     als dem Deutschen bekaeme 642 und rollte den Rest.
-const WIN_WIDTH = 642
+//
+//     SEIT DEM 18.08.2026 nennt dieses Fenster nicht mehr seine eigene
+//     Rechnung, sondern die Sprosse darueber: die gemessenen 642
+//     passen in M (siehe MODAL_WIDTHS in sizes.py). Die Rechnung
+//     bleibt hier stehen, weil sie begruendet, WARUM diese Sprosse und
+//     nicht die kleinere.
+const WIN_WIDTH = {{STYLE_MODAL_WIDTH_M}}
 
 const HOME = GLib.get_home_dir()
 // The widgets run standalone under AGS and cannot import paths.py, so
@@ -961,7 +967,13 @@ export default function VpnSettings(): OverlayWidget {
       actionsBox.add_css_class("vpn-settings-actions")
 
       // VIER FUSSKNOEPFE, UND WARUM DIE UMSTELLUNG DIE BREITE NICHT
-      // SPRENGT (WIN_WIDTH = 642, siehe Dateikopf)
+      // SPRENGT (WIN_WIDTH = Sprosse M = 660, siehe Dateikopf)
+      //
+      //     Hier stand 642 - der Wert, den dieses Fenster am 18.08.2026
+      //     vormittags noch als eigene ausgemessene Zahl trug. Seit der
+      //     Breitenleiter vom selben Tag nennt es die Sprosse M, und die
+      //     ist 660. Die Rechnung darunter wird dadurch nur grosszuegiger,
+      //     nicht knapper: achtzehn Punkte mehr, nicht weniger.
       //
       //     Die vier Knoepfe unten trugen vorher je eigene Innenabstaende
       //     (STYLE_SPACE_8/12 bei back-btn, STYLE_SPACE_12/20 bei

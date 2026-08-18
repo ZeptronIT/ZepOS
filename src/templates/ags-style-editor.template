@@ -61,7 +61,16 @@ const WINDOW_NAME = "style-editor"
 //     nicht neu vermessen und deshalb absichtlich UNVERAENDERT gelassen.
 //     Vor der naechsten Beruehrung dieses Fensters (Stufe 5,
 //     Breitenleiter) neu messen.
-const WIN_WIDTH = 474
+//
+//     SEIT DEM 18.08.2026 nennt dieses Fenster nicht mehr seine eigene
+//     Rechnung, sondern die Sprosse darueber: die gemessenen 474
+//     passen in S (siehe MODAL_WIDTHS in sizes.py). Die Rechnung
+//     bleibt hier stehen, weil sie begruendet, WARUM diese Sprosse und
+//     nicht die kleinere - inklusive der Warnung darueber, dass 474
+//     selbst aus der FALSCHEN (Drei-Reiter-)Rechnung stammt. Das
+//     Nachmessen, das dieser Absatz fordert, braucht tests/render/ und
+//     ist damit dieser Aufgabe verboten; siehe Bericht.
+const WIN_WIDTH = {{STYLE_MODAL_WIDTH_S}}
 
 const HOME = GLib.get_home_dir()
 // The widgets run standalone under AGS and cannot import paths.py, so
