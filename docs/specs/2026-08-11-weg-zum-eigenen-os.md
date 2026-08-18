@@ -108,7 +108,46 @@ GTK4.
 | — | `zepos-lock` - Sperrbildschirm (ersetzt hyprlock) | **erledigt** 12.08.2026 |
 | — | Terminal (ersetzt kitty) | offen, **Entscheidung** |
 | UI-1 | Alle zwoelf AGS-Fenster auf EIN Gestaltungssystem: ein Knopf, eine Zeile, eine Breitenleiter, Seitenleiste fuer die Hauptfunktionen. Das Kontrollzentrum ist dabei die Schale. | offen, **in Planung** 18.08.2026 |
+| UI-3 | Die wiederkehrenden FORMEN ins Kit, nicht nur die Knoepfe: Kopfzeile, Container, Abschnittstitel, Trenner, Bildlauf. 67 Klassen in elf Formen, die je drei bis zehn Fenster einzeln nachgebaut haben. | offen, **vertagt** 18.08.2026 |
 | UI-2 | Farben global und an EINER Stelle einstellbar, rund zehn statt der heutigen 69. Der Stil-Editor listet sie heute einzeln auf; gebraucht wird eine kleine Zahl benannter Rollen, aus denen sich der Rest ableitet. | offen, **vertagt** 18.08.2026 |
+
+**UI-3 ist am 18.08.2026 aufgefallen, waehrend UI-1 lief**, und zwar
+durch dieselbe Frage des Nutzers, die schon UI-1 ausgeloest hat: "benutzt
+du eine zentrale css fuer alle modales?"
+
+Die ehrliche Antwort war teils. EINE Datei ist es laengst -
+`src/templates/ags-style.template`, 2996 Zeilen, 366 Klassen, von allen
+zwoelf Fenstern geteilt. Aber eine Datei ist nicht dasselbe wie
+gemeinsame Bauteile: geteilt sind davon 13.
+
+GEMESSEN am selben Tag, Klassen mit gleicher Endung in mehreren Fenstern:
+
+    -container         10 Fenster
+    -header             8      -header-icon 8, -header-title 8
+    -section-title      7
+    -actions            6      -icon 6
+    -divider            4      -scroll 4
+    -row                3      -action-icon 3
+
+    67 Klassen in 11 wiederkehrenden Formen
+
+Zehn Fenster haben sich ihren eigenen Container gebaut. Acht ihre eigene
+Kopfzeile - obwohl die Kopfzeile aus der Fabrik kommt und dort
+`overlay-header` heisst.
+
+Es ist derselbe Befund wie bei den Knoepfen, nur eine Ebene hoeher. Er
+fiel bei UI-1 nicht auf, weil dort nur auf `-btn` gezaehlt wurde.
+
+WARUM NACH UI-1 UND NICHT MIT IHM: dieselbe Begruendung wie bei UI-2.
+Welche Formen das Kit tragen MUSS, zeigt sich erst, wenn die Fenster
+ihre Knoepfe teilen - vorher waeren es elf geratene Bauteile statt elf
+gemessener. Und ein Aenderungsblock ueber 67 Klassen zugleich mit 45
+anderen waere einer, den niemand mehr pruefen kann.
+
+WAS NICHT DAZUGEHOERT: die rund 250 Klassen, die danach uebrig bleiben.
+Ein Monatsgitter, ein Farbwaehler, eine Partitionsliste sind wirklich
+fensterspezifisch. Das Kit ist kein Ort fuer alles, was zweimal
+vorkommt.
 
 **UI-2 ist bewusst vertagt** - der Nutzer am 18.08.2026: "das bitte
 irgendwie besser machen bzw als task anlegen das machen wir spaeter
