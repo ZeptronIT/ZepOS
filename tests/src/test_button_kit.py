@@ -97,6 +97,33 @@ AUSGANGSZAHL = 52
 ERLAUBT = 50
 
 
+def _without_comments(css: str) -> str:
+    """CSS ohne Kommentare.
+
+    Wortgleich zu tests/src/test_spacing.py und aus demselben Grund: jede
+    Datei in diesem Baum ERKLAERT, was sie nicht mehr tut, und eine Suche
+    nach einem Klassennamen wird von der Erklaerung wahr, in der steht,
+    dass die Regel verschwunden ist.
+
+    NACHGETRAGEN am 18.08.2026, task-6: GEMELDET war ein Zaehler, der
+    Klassennamen auch in einem Loeschprotokoll findet - ein frueherer
+    Umsetzer hatte sein Vorgehen als `// entfernt: .bt-power-btn`
+    festgehalten, und der ungefilterte Zaehler zaehlte diesen Kommentar
+    mit, obwohl die Regel selbst laengst weg war. Elf weitere Fenster
+    stehen noch bevor, und jedes davon wird so ein Protokoll schreiben.
+    NACHGEMESSEN mit `_knopfklassen` VOR und NACH diesem Filter auf dem
+    heutigen Bestand von ags-style.template: 50 Klassen in beiden
+    Faellen (siehe test_no_window_invents_another_button) - der Filter
+    entfernt hier keinen echten Treffer, weil der Bestand heute keinen
+    Kommentar dieser Art enthaelt. Er verhindert nur, dass einer der
+    naechsten elf Auftraege die Ratsche scheinbar haelt, obwohl eine
+    Regel gefallen ist.
+    """
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
+    return "\n".join(line for line in css.splitlines()
+                     if not line.lstrip().startswith("//"))
+
+
 def _knopfklassen(text: str) -> set[str]:
     """Jede Klasse, deren Name auf einen Knopf hindeutet.
 
@@ -117,8 +144,13 @@ def _knopfklassen(text: str) -> set[str]:
     oder ein Bindestrich schliesst eine Fundstelle aus - das ist genau
     der Fall bei einem angehaengten Compound-Selektor wie
     ".cc-toggle-btn.active", wo ".active" kein eigener Treffer sein darf.
+
+    Kommentare zaehlen NICHT mit (siehe _without_comments) - ein Name,
+    der nur in einem Loeschprotokoll wie `// entfernt: .foo-btn` steht,
+    ist kein Treffer.
     """
-    return set(re.findall(r"(?<![a-z0-9-])\.([a-z][a-z0-9-]*)", text, re.M))
+    return set(re.findall(r"(?<![a-z0-9-])\.([a-z][a-z0-9-]*)",
+                          _without_comments(text), re.M))
 
 
 def _ist_knopfname(name: str) -> bool:
@@ -154,6 +186,12 @@ def test_the_counter_would_notice_a_new_class():
     18.08.2026 vorbeigesehen hat (siehe Modul-Docstring): Einrueckung,
     das zweite Glied einer Komma-Liste, und die Endung "-button". Dazu
     den Gegenfall "-buttons" (Mehrzahl), der NICHT zaehlen darf.
+
+    NACHGETRAGEN am 18.08.2026, task-6: den vierten blinden Fleck, den
+    _without_comments schliesst - ein Klassenname, der NUR in einem
+    Kommentar steht (`// entfernt: .commented-btn`), darf ebenfalls
+    NICHT zaehlen. Das ist das Loeschprotokoll aus der Meldung, nur mit
+    einem Namen, der sonst nirgends im Beispiel vorkommt.
     """
     beispiel = (
         ".a-btn {\n"                # unveraendert: eigene, unverschachtelte Zeile
@@ -176,12 +214,14 @@ def test_the_counter_would_notice_a_new_class():
         ".group-buttons {\n"        # Gegenfall: Mehrzahl darf NICHT zaehlen
         "  color: grey;\n"
         "}\n"
+        "// entfernt: .commented-btn\n"  # 4. nur im Kommentar - kein Treffer
     )
     kandidaten = _knopfklassen(beispiel)
     gefunden = {name for name in kandidaten if _ist_knopfname(name)}
     assert gefunden == {
         "a-btn", "indent-btn", "first-btn", "second-btn", "solo-button",
     }
+    assert "commented-btn" not in gefunden
 
 
 def test_the_shared_button_exists_and_has_four_roles():

@@ -38,10 +38,28 @@ export function zepButton(
 
 // Eine Zeile: Symbol, Titel, optionale Nebenzeile, optionales Ende.
 //
-// Der Titel kuerzt. Das ist keine Kosmetik - am 17.08.2026 hat eine
-// Beschriftung ohne Kuerzen das Netzfenster auf 660 Punkte
-// aufgeblasen, weil die Mindestbreite einer solchen Beschriftung ihre
-// GANZE Zeile ist.
+// Titel und Nebenzeile kuerzen UND deckeln ihre natuerliche Breite -
+// beides zusammen, nicht nur das eine. `ellipsize` senkt bei GTK nur
+// die MINDESTBREITE eines Labels, nicht seine NATUERLICHE; ohne
+// `max_width_chars` blaeht ein langer Text die Zeile und damit das
+// ganze Fenster auf, bis etwas von aussen deckelt. GENAU DAS war ein
+// gemessener Fehler dieses Projekts: am 17.08.2026 hat eine
+// Beschriftung ohne `max_width_chars` das Netzfenster auf 660 Punkte
+// Mindestbreite aufgeblasen (ags-network.template, Kopf der Datei,
+// `.net-current min=660`) und dieselbe Ursache in ags-bluetooth.template
+// das Fenster auf 460 statt 312 Punkte gebracht (dort, Kopf der Datei,
+// vor der Umstellung auf zepRow).
+//
+// NACHGETRAGEN am 18.08.2026, task-6: zepRow selbst rief bis hierher
+// `set_ellipsize(3)` ohne `set_max_width_chars` - also GENAU die
+// Luecke, die die beiden Fenster oben aufgeblasen hat, nur diesmal im
+// geteilten Bauteil statt in einem einzelnen Fenster. Elf der zwoelf
+// Fenster tragen unbegrenzte Fremdtexte (VPN-Profilnamen, WLAN-Namen,
+// Themennamen) - ohne Deckel haette das Kit diesen Fehler elfmal
+// wiederholt, statt ihn zu verhindern. Vorgabe ist darum KUERZEN, mit
+// {{STYLE_MEASURE_LINE}} als Grenze (dieselbe schmale Spalte wie in
+// ags-network.template und ags-bluetooth.template). Ein Fenster, das
+// ausnahmsweise den vollen Text braucht, setzt `vollerText: true`.
 export function zepRow(opts: {
   symbol: string
   titel: string
@@ -55,6 +73,11 @@ export function zepRow(opts: {
   // .se-tab-btn.active, ...), zepRow bekommt darum dieselbe Klasse statt
   // einer eigenen.
   ausgewaehlt?: boolean
+  // NACHGETRAGEN am 18.08.2026, task-6: die Abschaltung fuer die
+  // Kuerzung oben - siehe die Begruendung am Funktionskopf. Vorgabe ist
+  // KUERZEN (also `false`/nicht gesetzt); nur ein Fenster, das
+  // ausdruecklich den vollen Text braucht, setzt hier `true`.
+  vollerText?: boolean
 }): Gtk.Box {
   const zeile = new Gtk.Box({ spacing: 0 })
   zeile.add_css_class("zep-row")
@@ -73,12 +96,16 @@ export function zepRow(opts: {
   const titel = new Gtk.Label({ label: opts.titel, xalign: 0 })
   titel.add_css_class("zep-row-title")
   titel.set_ellipsize(3)  // Pango.EllipsizeMode.END
+  // Vorgabe ist KUERZEN (siehe Funktionskopf) - `ellipsize` allein
+  // deckelt nicht die natuerliche Breite, erst dieser Aufruf tut das.
+  if (!opts.vollerText) titel.set_max_width_chars({{STYLE_MEASURE_LINE}})
   texte.append(titel)
 
   if (opts.unterzeile) {
     const unter = new Gtk.Label({ label: opts.unterzeile, xalign: 0 })
     unter.add_css_class("zep-row-sub")
     unter.set_ellipsize(3)
+    if (!opts.vollerText) unter.set_max_width_chars({{STYLE_MEASURE_LINE}})
     texte.append(unter)
   }
   zeile.append(texte)

@@ -42,3 +42,42 @@ def test_the_kit_defines_no_colour_of_its_own():
                       if not z.lstrip().startswith("//"))
     assert not re.search(r"#[0-9a-fA-F]{6}\b", rumpf), (
         "eine Hexfarbe im Kit - Farben kommen aus brand.py")
+
+
+def test_zep_row_titles_are_capped_not_only_ellipsized():
+    """NACHGETRAGEN am 18.08.2026, task-6.
+
+    `ellipsize` senkt bei GTK nur die MINDESTBREITE eines Labels, nicht
+    seine natuerliche - GEMESSEN am 17.08.2026: genau die fehlende
+    Deckelung hat das Netzfenster auf 660 Punkte und (vor der Umstellung
+    auf zepRow) ags-bluetooth.template auf 460 statt 312 Punkte
+    aufgeblasen (Kopf beider Dateien). Elf der zwoelf Fenster tragen
+    unbegrenzte Fremdtexte (VPN-Profilnamen, WLAN-Namen, Themennamen) -
+    ohne `max_width_chars` wiederholt das Kit diesen Fehler elfmal,
+    statt ihn zu verhindern. Titel UND Nebenzeile bekommen darum
+    {{STYLE_MEASURE_LINE}} als Vorgabe, nicht nur eine von beiden.
+    """
+    text = KIT.read_text(encoding="utf-8")
+    assert "titel.set_max_width_chars({{STYLE_MEASURE_LINE}})" in text, (
+        "der Titel deckelt seine natuerliche Breite nicht mehr - "
+        "ellipsize allein reicht nicht (siehe Funktionskopf von zepRow)")
+    assert "unter.set_max_width_chars({{STYLE_MEASURE_LINE}})" in text, (
+        "die Nebenzeile deckelt ihre natuerliche Breite nicht mehr")
+
+
+def test_zep_row_can_opt_out_of_the_cap():
+    """Ein Fenster, das ausnahmsweise den vollen Text braucht, muss
+    abschalten koennen - Vorgabe bleibt KUERZEN, der Deckel greift nur,
+    solange `opts.vollerText` nicht gesetzt ist.
+    """
+    text = KIT.read_text(encoding="utf-8")
+    assert "vollerText?: boolean" in text, (
+        "zepRow bietet kein opts-Feld, um die Kuerzung abzuschalten")
+    # Die Abschaltung muss auch WIRKEN, nicht nur im Namen bestehen:
+    # beide Deckel stehen hinter derselben Bedingung.
+    assert ("if (!opts.vollerText) "
+            "titel.set_max_width_chars({{STYLE_MEASURE_LINE}})") in text, (
+        "die Abschaltung wirkt nicht auf den Titel")
+    assert ("if (!opts.vollerText) "
+            "unter.set_max_width_chars({{STYLE_MEASURE_LINE}})") in text, (
+        "die Abschaltung wirkt nicht auf die Nebenzeile")
