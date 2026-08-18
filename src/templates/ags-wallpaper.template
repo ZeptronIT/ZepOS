@@ -3,7 +3,7 @@
 // Features: Per-monitor selection, Portrait/Landscape detection, Import, Delete
 // Clean minimal design — Astal.Window overlay
 
-import { Gtk, Gdk } from "ags/gtk4"
+import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
@@ -212,87 +212,77 @@ export default function WallpaperSelector(): OverlayWidget {
   let wallpaperGrid: Gtk.Box
   let wallpaperScrollContent: Gtk.Box
 
-  // Confirmation dialog state
-  let confirmDialog: Gtk.Window | null = null
+  // ============================================================================
+  // LOESCHBESTAETIGUNG - UNTERANSICHT STATT EIGENEM FENSTER
+  // ============================================================================
+  //
+  // GEFUNDEN am 18.08.2026 (Aufgabe 10): dieser Dialog baute sich bis
+  // heute sein eigenes Fenster direkt aus der GTK-Fensterklasse (statt
+  // aus Astal.Window, der Layer-Shell-Klasse der Fabrik). Auf Wayland
+  // ist das ein xdg-toplevel und keine Layer-Shell-Flaeche - er bekam Hyprlands
+  // Fensterregeln statt der Glasregeln, stand nicht ueber der Leiste,
+  // und die Rundung dieses Vorhabens ging an ihm vorbei. Dazu trug er
+  // fuenf CSS-Klassen (wp-confirm-dialog/-content/-title/-detail/-btn,
+  // destructive), zu denen es in ags-style.template keine einzige Regel
+  // gab (GEMESSEN: `grep -c "wp-confirm" ags-style.template` = 0) - ein
+  // Knopf in blankem GTK-Standard mitten im ZepOS-Desktop.
+  //
+  // Die Fensterfrage ist ueber ags-network.template entschieden: dessen
+  // Passwortabfrage ist derselbe Fall (eine Rueckfrage in einem schon
+  // offenen Fenster) und loest ihn ohne zweites Fenster, ueber eine
+  // Unteransicht, `currentView` und `onEscape` (siehe dort, showPassword/
+  // showMain). Dieser Weg traegt hier genauso: mainContent und
+  // confirmBox liegen als zwei Kinder desselben Astal.Window
+  // uebereinander, immer genau eines sichtbar - der Dialog verschwindet
+  // damit als eigenes Fenster ganz.
+  let currentView: "main" | "confirm" = "main"
+  let pendingDeletePath = ""
+  let pendingDeleteRefresh: (() => void) | null = null
+  let mainContent: Gtk.Box
+  let confirmBox: Gtk.Box
+  let confirmDetailLabel: Gtk.Label
+  let confirmNoBtn: Gtk.Button
 
-  // ============================================================================
-  // CONFIRMATION DIALOG (GTK4 custom implementation)
-  // ============================================================================
+  const showMain = () => {
+    currentView = "main"
+    confirmBox.set_visible(false)
+    mainContent.set_visible(true)
+  }
+
   const showDeleteConfirmation = (filename: string, path: string, refreshFn: () => void) => {
-    if (confirmDialog) {
-      confirmDialog.destroy()
-    }
+    pendingDeletePath = path
+    pendingDeleteRefresh = refreshFn
+    currentView = "confirm"
 
-    confirmDialog = new Gtk.Window({
-      title: _("Confirmation"),
-      default_width: 300,
-      default_height: 120,
-      decorated: false,
-      modal: true,
-    })
-    confirmDialog.add_css_class("wp-confirm-dialog")
+    // Kein Template-Literal (uebernommen vom 17.08.2026, dieselbe
+    // Stelle): xgettext liest eine Zeichenkette mit ${...} nicht aus,
+    // sie bekaeme keinen Katalogeintrag. Der Dateiname kommt als
+    // benannter Platzhalter herein.
+    confirmDetailLabel.set_text(format(_("Really delete \"{name}\"?"), { name: filename }))
 
-    const dialogBox = new Gtk.Box({
-      orientation: Gtk.Orientation.VERTICAL,
-      spacing: 16,
-    })
-    dialogBox.add_css_class("wp-confirm-content")
+    mainContent.set_visible(false)
+    confirmBox.set_visible(true)
 
-    const questionLabel = new Gtk.Label({ label: _("Delete wallpaper?") })
-    questionLabel.add_css_class("wp-confirm-title")
-
-    // Kein Template-Literal mehr (17.08.2026): xgettext liest eine
-    // Zeichenkette mit ${...} gar nicht aus, sie bekaeme also keinen
-    // Katalogeintrag und niemand merkte es. Der Dateiname kommt als
-    // benannter Platzhalter herein - dieselbe Schreibweise wie im
-    // Katalog des Installers, siehe utils/i18n.ts.
-    const detailLabel = new Gtk.Label({ label: format(_("Really delete \"{name}\"?"), { name: filename }) })
-    detailLabel.add_css_class("wp-confirm-detail")
-
-    const buttonBox = new Gtk.Box({ spacing: 10, halign: Gtk.Align.CENTER })
-
-    const noBtn = new Gtk.Button({ label: _("No"), can_focus: false })
-    noBtn.add_css_class("wp-confirm-btn")
-    noBtn.connect("clicked", () => {
-      confirmDialog?.destroy()
-      confirmDialog = null
-    })
-
-    const yesBtn = new Gtk.Button({ label: _("Yes"), can_focus: false })
-    yesBtn.add_css_class("wp-confirm-btn")
-    yesBtn.add_css_class("destructive")
-    yesBtn.connect("clicked", () => {
-      deleteWallpaper(path)
-      confirmDialog?.destroy()
-      confirmDialog = null
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-        refreshFn()
-        return GLib.SOURCE_REMOVE
-      })
-    })
-
-    buttonBox.append(noBtn)
-    buttonBox.append(yesBtn)
-
-    dialogBox.append(questionLabel)
-    dialogBox.append(detailLabel)
-    dialogBox.append(buttonBox)
-
-    confirmDialog.set_child(dialogBox)
-
-    // ESC to close dialog
-    const dialogKeyController = new Gtk.EventControllerKey()
-    dialogKeyController.connect("key-pressed", (_: Gtk.EventControllerKey, keyval: number) => {
-      if (keyval === Gdk.KEY_Escape) {
-        confirmDialog?.destroy()
-        confirmDialog = null
-        return true
-      }
-      return false
-    })
-    confirmDialog.add_controller(dialogKeyController)
-
-    confirmDialog.present()
+    // SICHERUNG GEGEN VERSEHENTLICHES BESTAETIGEN (Aufgabe 10,
+    // 18.08.2026): der alte Dialog setzte `can_focus: false` auf BEIDEN
+    // Knoepfen - keiner von beiden war je per Tastatur erreichbar, nur
+    // per Klick. zepButton() (ags-kit.template) setzt dagegen immer
+    // `can_focus: true`, und GtkButton traegt `receives-default: true`
+    // als eigenen GTK-Standard (GEPRUEFT per PyGObject-Introspektion,
+    // 18.08.2026: `Gtk.Button().get_receives_default()` -> True). Die
+    // amtliche Beschreibung dieser Eigenschaft (Gtk-4.0.gir,
+    // GtkWidget::receives-default): "Whether the widget will receive
+    // the default action when it is focused" - das FOKUSSIERTE Widget
+    // bekommt also die Eingabetaste, unabhaengig von einem gesetzten
+    // Standardknopf des Fensters (den createOverlayWindow() nirgends
+    // setzt). Ohne Gegenmassnahme wuerde die Eingabetaste den Knopf
+    // treffen, der zufaellig zuletzt den Fokus hielt.
+    //
+    // Die Gegenmassnahme ist dieselbe wie in ags-network.template,
+    // showPassword(): explizit fokussieren, hier auf "Nein" statt auf
+    // ein Eingabefeld. Eingabetaste UND Leertaste treffen damit
+    // deterministisch den sicheren Knopf, nicht "Ja".
+    confirmNoBtn.grab_focus()
   }
 
   // ============================================================================
@@ -481,18 +471,33 @@ export default function WallpaperSelector(): OverlayWidget {
     headerIcon: ICONS.wallpaper,
     headerTitle: _("Wallpapers"),
     accentCssClass: "wallpaper-accent",
-    onShow: () => { updateDisplay() },
+    // ESC geht aus der Loeschbestaetigung ZURUECK und nicht ZU -
+    // dieselben vier Zeilen wie in ags-network.template (dort: showMain
+    // aus der Passwort-/Detailansicht). Ohne sie muesste dieses Fenster
+    // sich wieder ein eigenes Astal.Window bauen, um ESC selbst
+    // abzufangen - genau der Umweg, den die Fabrik seit dem 12.08.2026
+    // ueber `onEscape` erspart.
+    onEscape: () => {
+      if (currentView === "main") return false
+      showMain()
+      return true
+    },
+    // showMain() zuerst (18.08.2026, Aufgabe 10): ein Fenster, das ueber
+    // das Schliesskreuz waehrend offener Loeschbestaetigung zugeht,
+    // darf beim naechsten Aufgehen nicht wieder in der Unteransicht
+    // stehen.
+    onShow: () => { showMain(); updateDisplay() },
     buildContent: (_win, closeWindow) => {
       closeFn = closeWindow
 
       // ============================================================================
       // BUILD UI
       // ============================================================================
-      const mainBox = new Gtk.Box({
+      mainContent = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 8,
       })
-      mainBox.add_css_class("wp-container")
+      mainContent.add_css_class("wp-container")
 
       // ===== MONITOR SELECTOR =====
       monitorSelector = new Gtk.Box({ spacing: 8, halign: Gtk.Align.CENTER })
@@ -616,12 +621,78 @@ export default function WallpaperSelector(): OverlayWidget {
       actionsBox.append(refreshBtn)
 
       // ===== ASSEMBLE =====
-      mainBox.append(monitorSelector)
-      mainBox.append(wallpaperSection)
-      mainBox.append(divider2)
-      mainBox.append(actionsBox)
+      mainContent.append(monitorSelector)
+      mainContent.append(wallpaperSection)
+      mainContent.append(divider2)
+      mainContent.append(actionsBox)
 
-      return mainBox
+      // ===== LOESCHBESTAETIGUNG (Unteransicht, siehe Begruendung bei
+      // showDeleteConfirmation() oben) =====
+      confirmBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 16,
+        halign: Gtk.Align.CENTER,
+        margin_top: 24,
+        margin_bottom: 24,
+      })
+      confirmBox.set_visible(false)
+
+      // Keine eigene CSS-Klasse fuer die beiden Beschriftungen dieser
+      // Unteransicht (18.08.2026): dieser Auftrag darf nur
+      // ags-wallpaper.template, tests/src/test_schale.py und
+      // tests/src/test_button_kit.py aendern, nicht ags-style.template -
+      // eine neue Klasse ohne Regel waere genau der Fehler, den dieser
+      // Auftrag beseitigt (siehe der Fund zu wp-confirm-btn oben). Das
+      // ist keine Verschlechterung gegenueber vorher: `grep -c
+      // "wp-confirm" ags-style.template` war schon vorher 0 - auch die
+      // alten Klassen (wp-confirm-title/-detail) trugen nie eine Regel.
+      const questionLabel = new Gtk.Label({
+        label: _("Delete wallpaper?"), halign: Gtk.Align.CENTER,
+      })
+
+      // Text kommt bei jedem Aufruf von showDeleteConfirmation() frisch.
+      confirmDetailLabel = new Gtk.Label({
+        label: "", halign: Gtk.Align.CENTER, wrap: true,
+      })
+
+      const confirmButtonBox = new Gtk.Box({ spacing: 10, halign: Gtk.Align.CENTER })
+
+      // "Nein" zuerst, Rolle "still": der sichere Nebenweg, und der
+      // Knopf, auf den showDeleteConfirmation() den Tastaturfokus legt
+      // (siehe dort).
+      confirmNoBtn = zepButton(_("No"), "still", () => showMain())
+
+      // "Ja" in der Rolle "kritisch" - dieselbe Rolle wie disconnectBtn
+      // in ags-network.template fuer eine zerstoerende Handlung. Nach
+      // Regel 14 wurden die frueheren Klassen "wp-confirm-btn" und
+      // "destructive" vollstaendig entfernt statt umbenannt - zepButton
+      // traegt die Rolle jetzt selbst (zep-btn-kritisch).
+      const confirmYesBtn = zepButton(_("Yes"), "kritisch", () => {
+        deleteWallpaper(pendingDeletePath)
+        const refresh = pendingDeleteRefresh
+        showMain()
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+          refresh?.()
+          return GLib.SOURCE_REMOVE
+        })
+      })
+
+      confirmButtonBox.append(confirmNoBtn)
+      confirmButtonBox.append(confirmYesBtn)
+
+      confirmBox.append(questionLabel)
+      confirmBox.append(confirmDetailLabel)
+      confirmBox.append(confirmButtonBox)
+
+      // ----- Zwei Ansichten uebereinander, immer genau eine sichtbar -----
+      // Derselbe Aufbau wie der `container` in ags-network.template
+      // (passwordBox/detailBox/mainContent als direkte Kinder, ueber
+      // set_visible() umgeschaltet).
+      const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
+      container.append(mainContent)
+      container.append(confirmBox)
+
+      return container
     },
   })
 }

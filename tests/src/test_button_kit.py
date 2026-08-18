@@ -266,6 +266,20 @@ def _without_comments(css: str) -> str:
                      if not line.lstrip().startswith("//"))
 
 
+# WAS DIESER ZAEHLER NICHT SIEHT
+#     Er liest die Knopf-Klassen aus dem STYLESHEET. Eine Klasse, die
+#     eine Vorlage an ein Widget haengt, zu der es aber gar keine Regel
+#     gibt, kommt hier nie vor - sie ist unsichtbar und zugleich
+#     schlimmer als eine doppelte Regel, weil der Knopf dann in blankem
+#     GTK-Standard steht.
+#
+#     GEMESSEN am 18.08.2026: genau so lag wp-confirm-btn in
+#     ags-wallpaper.template, durch fuenf Umbauten hindurch. Gefunden hat
+#     es nicht dieser Zaehler, sondern der Auftrag, der totes CSS suchte
+#     und auf die Gegenrichtung stiess.
+#
+#     Den Fall deckt seit dem 18.08.2026 tests/src/test_schale.py ab:
+#     test_kein_ags_fenster_baut_sich_ein_gtk_window.
 def _knopfklassen(text: str) -> set[str]:
     """Jede Klasse, deren Name auf einen Knopf hindeutet.
 

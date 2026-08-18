@@ -71,3 +71,22 @@ def test_dieser_waechter_wuerde_ueberhaupt_ausloesen():
     assert verboten.search('spalte.add_css_class("cc-sidebar")')
     assert verboten.search('  cssClass: "net-side-nav",')
     assert not verboten.search('const sidebarBreite = 208')
+
+
+def test_kein_ags_fenster_baut_sich_ein_gtk_window():
+    """Auf Wayland ist ein Gtk.Window keine Layer-Shell-Flaeche.
+
+    GEMESSEN am 18.08.2026: ags-wallpaper.template baute sein
+    Loeschbestaetigung als blankes Gtk.Window. Es bekam damit Hyprlands
+    Fensterregeln statt der Glasregeln, stand nicht ueber der Leiste, und
+    die Rundung dieses Vorhabens ging daran vorbei.
+
+    Astal.Window ist erlaubt - das ist die Layer-Shell-Klasse. Verboten
+    ist nur der xdg-toplevel-Weg.
+    """
+    for vorlage in (WURZEL / "src" / "templates").glob("ags-*.template"):
+        text = vorlage.read_text(encoding="utf-8")
+        treffer = re.findall(r"new\s+Gtk\.Window\b", text)
+        assert not treffer, (
+            f"{vorlage.name} baut ein Gtk.Window - auf Wayland ist das "
+            f"keine Layer-Shell-Flaeche")
