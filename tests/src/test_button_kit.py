@@ -30,8 +30,8 @@ Mit dem reparierten Zaehler (siehe _knopfklassen) neu gemessen, ebenfalls
 am 18.08.2026: 51 Knopfregeln in 47 verschiedenen Klassen. Die Namen, die
 der alte Zaehler nicht sah: bt-tool-btn, calendar-action-btn, cc-button,
 net-refresh-btn, sc-edit-btn, vpn-list-btn - genau die sechs, die aus den
-drei blinden Flecken oben folgen. AUSGANGSZAHL ist darum jetzt 47, nicht
-41; wer die Differenz spaeter als Verschlechterung liest, findet hier den
+drei blinden Flecken oben folgen. AUSGANGSZAHL war darum 47, nicht 41;
+wer die Differenz spaeter als Verschlechterung liest, findet hier den
 Grund.
 
 WARUM EINE RATSCHE UND NICHT "GENAU EINE": UI-1 stellt zwoelf Fenster
@@ -44,6 +44,18 @@ Die Ratsche laesst die Zahl nur SINKEN. Wer eine Klasse hinzufuegt,
 faellt sofort auf; wer eine entfernt, muss die Zahl hier senken und
 sieht dabei, wie weit es noch ist. Die letzte Stufe von UI-1 setzt sie
 auf 1.
+
+DIE EINE AUSNAHME, NOCH AM 18.08.2026 (Ruling 1 des Controllers): task-1u4
+hat die gemeinsame Knopfregel selbst angelegt - .zep-btn und seine vier
+Rollen .zep-btn-voll/-umrandet/-still/-kritisch, aus ags-kit.template.
+Das sind fuenf neue Klassennamen, die alle "btn" im Namen tragen, und sie
+mussten VOR jeder Umstellung eines Fensters existieren, damit ueberhaupt
+etwas da ist, worauf ein Fenster umgestellt werden kann. Gezaehlt nach
+demselben _knopfklassen wie oben ergab das 52 statt 47 - kein Fenster hat
+sich einen eigenen Knopf gebaut, das Bauteil-Kit selbst ist neu.
+AUSGANGSZAHL und ERLAUBT stehen darum ab hier auf 52, und das ist die
+EINZIGE Richtung, in der diese Ratsche je nach oben geht: einmal, fuer
+das Fundament, nicht fuer ein einzelnes Fenster.
 """
 from __future__ import annotations
 
@@ -57,14 +69,27 @@ STIL = ROOT / "src" / "templates" / "ags-style.template"
 # umgestellt war. Der urspruengliche Zaehler hatte an dieser Stelle
 # faelschlich 41 stehen (siehe Modul-Docstring) - das war kein anderer
 # Ausgangszustand, sondern derselbe Zustand, falsch gezaehlt.
-AUSGANGSZAHL = 47
+#
+# NOCH AM 18.08.2026, task-1u4: das Bauteil-Kit selbst (.zep-btn und
+# seine vier Rollen) kam dazu, BEVOR ein Fenster umgestellt ist - siehe
+# Modul-Docstring, Abschnitt "DIE EINE AUSNAHME". Gemessen mit
+# _knopfklassen: 52. AUSGANGSZAHL zieht mit, weil sie sonst eine
+# Obergrenze waere, die schon der erste erlaubte Schritt reisst - und
+# test_the_ratchet_is_not_secretly_loose faende dann die Ausnahme, die
+# der Controller ausdruecklich erlaubt hat, ununterscheidbar von einem
+# Missbrauch.
+AUSGANGSZAHL = 52
 
-# Die Zahl, die HEUTE gilt. Sie darf nur kleiner werden, und wer sie
-# senkt, schreibt dazu, welches Fenster er umgestellt hat.
+# Die Zahl, die HEUTE gilt. Sie darf nur kleiner werden - mit der einen
+# Ausnahme oben, dem Bauteil-Kit selbst -, und wer sie senkt, schreibt
+# dazu, welches Fenster er umgestellt hat.
 #
 #   41  18.08.2026  Ausgangszustand (Zaehler kaputt, siehe Docstring)
 #   47  18.08.2026  Zaehler repariert, echter Ausgangswert
-ERLAUBT = 47
+#   52  18.08.2026  task-1u4: .zep-btn + vier Rollen, das Bauteil-Kit
+#                   selbst (Ruling 1 des Controllers - die eine erlaubte
+#                   Ausnahme, siehe Modul-Docstring)
+ERLAUBT = 52
 
 
 def _knopfklassen(text: str) -> set[str]:
@@ -152,3 +177,22 @@ def test_the_counter_would_notice_a_new_class():
     assert gefunden == {
         "a-btn", "indent-btn", "first-btn", "second-btn", "solo-button",
     }
+
+
+def test_the_shared_button_exists_and_has_four_roles():
+    text = STIL.read_text(encoding="utf-8")
+    assert re.search(r"^\.zep-btn\s*\{", text, re.M), (
+        "die gemeinsame Knopfregel fehlt")
+    for rolle in ("voll", "umrandet", "still", "kritisch"):
+        assert re.search(rf"^\.zep-btn-{rolle}\s*\{{", text, re.M), (
+            f"die Rolle {rolle} fehlt")
+
+
+def test_the_shared_button_uses_the_rungs():
+    """Hoehe und Radius als Platzhalter, nicht als Zahl."""
+    block = re.search(r"^\.zep-btn\s*\{(.*?)^\}", 
+                      STIL.read_text(encoding="utf-8"), re.M | re.S)
+    assert block, "die Regel .zep-btn ist verschwunden"
+    rumpf = block.group(1)
+    assert "{{STYLE_CONTROL_HEIGHT}}" in rumpf, "die Hoehe ist keine Sprosse"
+    assert "{{STYLE_RADIUS_CONTROL}}" in rumpf, "der Radius ist keine Sprosse"

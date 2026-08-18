@@ -941,3 +941,24 @@ def test_a_named_icon_size_still_wins():
     """
     section = {"scale": 1.0, "values": {"STYLE_DOCK_ICON_SIZE": "24"}}
     assert sizes.value_of("STYLE_DOCK_ICON_SIZE", section) == "24"
+
+
+def test_the_control_and_row_heights_follow_the_scale():
+    """Knopf und Zeile folgen dem Groessenregler.
+
+    GEMESSEN am 18.08.2026: das Stylesheet trug 45 Knopfregeln, und
+    ihre Hoehen ergaben sich aus Polstern statt aus einem Mass. Ein
+    Knopf, der bei Faktor 1.85 gleich hoch bleibt, ist dort ein Knopf
+    fuer Ameisen.
+
+    Geprueft wird die DEKLARATION, nicht eine Rechnung: sizes fuehrt
+    seine Masse als Size(wert, einheit, folgt-dem-faktor), und SCALED
+    ist die Zusicherung, um die es hier geht.
+    """
+    for name, wert in (("STYLE_CONTROL_HEIGHT", 32),
+                       ("STYLE_ROW_HEIGHT", 48)):
+        mass = sizes.TABLE[name]
+        assert mass.base == wert, f"{name} steht auf {mass.base}"
+        assert mass.unit == "px", f"{name} ist in {mass.unit}"
+        assert mass.scales is True, (
+            f"{name} folgt dem Groessenregler nicht")

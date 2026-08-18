@@ -1196,6 +1196,24 @@ TABLE: dict[str, Size] = {
     # src/user_settings.py zieht eine vorhandene Einstellung mit
     # RENAMED_SIZE_VALUES auf den neuen Namen.
     "STYLE_MODULE_SPACING": Size(10, PX, SCALED),
+
+    # Die zwei Masse, die UI-1 gebraucht hat und die es vorher nicht
+    # gab. Beide SCALED, aus demselben Grund wie STYLE_MODULE_SPACING:
+    # sie umschliessen Text.
+    #
+    # GEMESSEN am 18.08.2026: im Stylesheet standen 45 Knopfregeln, und
+    # ihre Hoehen ergaben sich aus Polstern - 8+8, 9+9, 4+4 plus
+    # Schriftgrad. Deshalb war kein Knopf so hoch wie der daneben, und
+    # deshalb wirkte die Reihe zusammengewuerfelt.
+    #
+    # 32 und 48 sind nicht gewaehlt, sondern nachgerechnet: 32 =
+    # Schrift 13 plus zweimal Abstand 8 plus Rand; 48 = Symbol 18 plus
+    # zweimal Abstand 12 plus Rand. Sie stehen trotzdem als eigene
+    # Eintraege da, weil sie an zwei Dutzend Stellen gebraucht werden
+    # und eine Rechnung im CSS kein Mass ist.
+    "STYLE_CONTROL_HEIGHT": Size(32, PX, SCALED),
+    "STYLE_ROW_HEIGHT": Size(48, PX, SCALED),
+
     # STYLE_BAR_EDGE_SPACING stand hier, mit dem Grundwert 20 - also 31
     # px bei der ausgelieferten Groesse, links vor dem ersten und rechts
     # hinter dem letzten Modul, ZUSAETZLICH zu dem Rand, den die Platte

@@ -25,6 +25,83 @@ $style-accent: {{STYLE_COLOR_STYLE_ACCENT}};
 $vpn-accent: {{STYLE_COLOR_VPN_ACCENT}};
 $overlay-border: $border;
 
+// ── DIE BAUTEILE ────────────────────────────────────────────────────
+//
+// Was hier steht, gehoert zu ags-kit.template. Die Regeln darunter mit
+// eigenen Praefixen (.cc-, .net-, .vpn- …) sind der Bestand, der nach
+// und nach hierher wandert - siehe die Ratsche in
+// tests/src/test_button_kit.py.
+
+.zep-btn {
+  min-height: {{STYLE_CONTROL_HEIGHT}};
+  padding: 0 {{STYLE_SPACE_16}};
+  border-radius: {{STYLE_RADIUS_CONTROL}};
+  font-size: {{STYLE_FONT_BODY}};
+  border: 1px solid transparent;
+  transition: background-color {{STYLE_MOTION_INSTANT}} {{STYLE_MOTION_CURVE}},
+              border-color {{STYLE_MOTION_INSTANT}} {{STYLE_MOTION_CURVE}};
+}
+
+// Die Hauptsache je Fenster. Genau EINE je Ansicht - zwei volle Knoepfe
+// nebeneinander heissen, dass keiner die Hauptsache ist.
+.zep-btn-voll {
+  background: $accent;
+  color: $bg;
+  font-weight: 500;
+
+  &:hover { background: $control-accent; }
+}
+
+.zep-btn-umrandet {
+  background: rgba($surface, 0.55);
+  border-color: $border;
+  color: $text;
+
+  &:hover { background: rgba($surface, 0.75); }
+}
+
+.zep-btn-still {
+  background: transparent;
+  color: $subtext;
+
+  &:hover { background: rgba($surface, 0.4); color: $text; }
+}
+
+.zep-btn-kritisch {
+  background: rgba($red, 0.14);
+  border-color: rgba($red, 0.5);
+  color: $red;
+
+  &:hover { background: rgba($red, 0.24); }
+}
+
+.zep-btn:disabled {
+  background: rgba($surface, 0.3);
+  border-color: rgba($border, 0.5);
+  color: $subtext;
+}
+
+.zep-row {
+  min-height: {{STYLE_ROW_HEIGHT}};
+  padding: 0 {{STYLE_SPACE_12}};
+  border-radius: {{STYLE_RADIUS_CARD}};
+
+  &:hover { background: $item-hover; }
+}
+
+.zep-row-icon { font-size: {{STYLE_ICON_CAPTION}}; color: $subtext; }
+.zep-row-texts { margin-left: {{STYLE_SPACE_12}}; }
+.zep-row-title { font-size: {{STYLE_FONT_BODY}}; color: $text; }
+.zep-row-sub { font-size: {{STYLE_FONT_CAPTION}}; color: $subtext; }
+
+.zep-section {
+  font-size: {{STYLE_FONT_CAPTION}};
+  color: $subtext;
+  margin: {{STYLE_SPACE_8}} 0 {{STYLE_SPACE_4}} 0;
+}
+
+.zep-divider { background: $border; margin: {{STYLE_SPACE_8}} 0; }
+
 // ===== SHARED OVERLAY STYLES (Muted Dark / HyprLaunch / HyprClipX) =====
 //
 // DIE PLATTE ALLER ELF UEBERLAGERUNGEN

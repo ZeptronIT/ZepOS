@@ -872,6 +872,12 @@ _FIXED_STYLE_VARIABLES = {
     "STYLE_GAPS_IN": size_value("STYLE_GAPS_IN"),
     "STYLE_GAPS_OUT": size_value("STYLE_GAPS_OUT"),
     "STYLE_WINDOW_ROUNDING": size_value("STYLE_WINDOW_ROUNDING"),
+    # Fuer .zep-btn und .zep-row aus ags-kit.template (task-1u4,
+    # 18.08.2026). Die Sprossen stehen in src/sizes.py bei
+    # STYLE_MODULE_SPACING; ohne diesen Eintrag hier kennt kein Lauf den
+    # Wert, und die Vorlage scheitert mit UnresolvedPlaceholders.
+    "STYLE_CONTROL_HEIGHT": size_value("STYLE_CONTROL_HEIGHT"),
+    "STYLE_ROW_HEIGHT": size_value("STYLE_ROW_HEIGHT"),
 
     # ============================================================================
     # DIE ABGESETZTE KANTE - der 3D-Effekt aus summer-day-and-night
