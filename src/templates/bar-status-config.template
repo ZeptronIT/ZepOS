@@ -1,0 +1,563 @@
+#!/bin/bash
+# Ton, Mikrofon, Akku, Netz und Bluetooth - in einer Antwort
+# Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+# Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/bar-status-config.template kopieren
+#
+# WARUM FUENF MODULE IN EINEM SKRIPT
+#     Waybar hatte fuer diese fuenf eingebaute C++-Module und startete
+#     dafuer keinen einzigen Prozess. Die AGS-Leiste hat keine
+#     eingebauten Module; jede Angabe kommt aus einem Aufruf. Fuenf
+#     einzelne Skripte im Zweisekundentakt waeren 150 Prozessstarts je
+#     Minute, dauerhaft, fuer eine Zeile Text.
+#
+#     Dieses Skript ist EIN Start je Takt und beantwortet alle fuenf
+#     Fragen. Es ist damit auch die einzige Stelle, an der die Antworten
+#     gemeinsam gemessen werden koennen - was ein einzelnes Skript je
+#     Modul nicht erlaubte, weil jedes seinen eigenen Zeitpunkt haette.
+#
+# DIE FORM DER ANTWORT
+#     Ein JSON-Objekt mit fuenf Schluesseln, jeder mit derselben Form,
+#     die auch die uebrigen Leistenskripte benutzen:
+#
+#         {"text": "...", "tooltip": "...", "class": "..."}
+#
+#     Ein leeres "text" heisst "dieses Modul hat nichts zu sagen" - die
+#     Leiste blendet es dann aus. Das ist der Weg, auf dem der Akku auf
+#     einem Rechner ohne Akku und das Bluetooth ohne Adapter
+#     verschwinden, ohne dass irgendwo eine Fallunterscheidung
+#     hartverdrahtet stuende.
+#
+# DREI ZUSTAENDE UND NICHT ZWEI (13.08.2026)
+#     GEMELDET, viermal an einem Tag: "rechts ist zu leer", "es fehlt
+#     auch ein batterie icon ich weiss nicht wie voll der laptop ist
+#     sollte im header stehen", "und lautstaerke und mikrofon auch".
+#
+#     Bis dahin kannte dieses Skript ZWEI Antworten: einen Wert oder
+#     nichts. Damit war "diese Maschine hat keinen Akku" von "ich konnte
+#     den Akku nicht lesen" nicht zu unterscheiden - auf der Leiste sieht
+#     beides gleich aus, naemlich nach gar nichts. Der Nutzer hat einen
+#     Akku und sah nichts; er konnte daraus nichts schliessen, und genau
+#     das schreibt er.
+#
+#     Seither:
+#
+#       NICHT VORHANDEN   leeres "text". Kein Akkuverzeichnis unter
+#                         /sys, kein Bluetooth-Adapter, keine
+#                         Tonquelle. Das Modul verschwindet, und das ist
+#                         richtig - es gibt nichts, worueber es berichten
+#                         koennte.
+#       GELESEN           Zeichen und Wert wie bisher.
+#       VORHANDEN, ABER NICHT LESBAR
+#                         das Warnzeichen und die Klasse "broken". Der
+#                         Grund steht im Kurzhinweis. Ein Fehler, der
+#                         sich versteckt, ist der teuerste Fehler dieses
+#                         Projekts - Spec §7.4.
+#
+#     Welcher Fall vorliegt, entscheidet nicht eine Vermutung, sondern
+#     eine zweite Frage an dasselbe Werkzeug: `wpctl status` sagt, ob
+#     der Tondienst ueberhaupt antwortet, und erst DANACH heisst eine
+#     leere Antwort auf `get-volume` "dieses Geraet gibt es nicht".
+#
+# DIE ZAHL STEHT SEIT DEM 12.08.2026 IM TOOLTIP UND NICHT AUF DER LEISTE
+#     BESTELLT an dem Tag: die drei Prozentzahlen "kosten viel Breite und
+#     sagen selten etwas. Symbol allein, Zahl im Tooltip - so macht es
+#     macOS."
+#
+#     DER AKKU IST SEIT DEM 13.08.2026 WIEDER AUSGENOMMEN, und der
+#     Nutzer hat den Unterschied selbst benannt: "ich will auch eine
+#     prozentzahl haben fuer die batterie nicht nur ein symbol", davor
+#     "ich weiss nicht wie voll der laptop ist".
+#
+#     Der Unterschied ist nicht Geschmack, sondern die Art der Auskunft.
+#     Lautstaerke und Mikrofonpegel sind EINSTELLUNGEN - man hat sie
+#     selbst gerade gemacht, das Symbol bestaetigt sie, und die genaue
+#     Zahl braucht man nur beim Nachjustieren. Der Ladestand ist eine
+#     MESSUNG, die sich von selbst aendert und ueber die man planen
+#     muss. Ein Zeichen mit fuenf Fuellstufen sagt dafuer "ungefaehr
+#     halb", und genau das hat der Nutzer als zu wenig gemeldet.
+#
+#     Was das kostet, ist gemessen und steht in
+#     tests/src/test_bar_headless.py: der Akku wird von einem
+#     Zeichenknopf zu einem Modul mit Zahl.
+#
+#     GEMESSEN, was das zurueckgibt (tests/src/test_bar_headless.py,
+#     Vorgabegroesse, mit Glyphen): der Ton 104 px, das Netz 92, der
+#     Akku 92 - zusammen 288. Ohne Zahl misst sich jedes wie die
+#     Zeichenknoepfe rechts, also 48 px: zusammen 144. ZURUECK KOMMEN
+#     144 px, also mehr als ein Zehntel eines 1366 px breiten Schirms.
+#
+#     DAS GEHT NUR, WEIL DAS ZEICHEN DIE STUFE TRAEGT. Ein Symbol ohne
+#     Zahl ist nur dann dieselbe Auskunft, wenn man ihm den groben Stand
+#     ansieht: der Akku hat fuenf Stufen plus Laden und Netzteil, der Ton
+#     drei plus stumm, und das Netz bekommt seit heute die vier
+#     Feldstaerkezeichen (nf-md-wifi_strength_1..4), die
+#     src/icon_definition.py laengst kennt und die bis heute niemand
+#     benutzt hat. Wer es GENAU wissen will, faehrt darueber - dort
+#     steht die Zahl unveraendert.
+#
+# WIE EIN FEHLENDES GERAET AUFGEFANGEN WIRD
+#     Jedes der fuenf Werkzeuge darf fehlen oder schweigen - kein
+#     Adapter, kein Akku, NetworkManager nicht gestartet -, und dann soll
+#     GENAU DIESES Modul leer bleiben und die anderen vier nicht.
+#
+#     Getragen wird das von den `|| { module "" "" ""; return; }` an
+#     jedem Aufruf, der scheitern kann. NICHT von der Abwesenheit von
+#     `set -e`:
+#     GEMESSEN am 11.08.2026, indem die Zeile darunter zu
+#     `set -euo pipefail` geaendert wurde - alle sechzehn Tests in
+#     tests/src/test_bar_status.py blieben gruen. Die Auffanglinien sind
+#     also vollstaendig, und `-e` waere hier weder Schutz noch Gefahr.
+#
+#     `-e` steht trotzdem nicht da, und der Grund ist ein anderer als
+#     der, der frueher hier stand: mit ihm haenge die Vollstaendigkeit
+#     dieser Auffanglinien an bashs genauen errexit-Regeln - welche
+#     Verkettung von && und || ihn aussetzt und welche nicht -, statt an
+#     Zeilen, die man lesen kann.
+set -uo pipefail
+
+# OHNE jq SCHREIBT DIESES SKRIPT KEIN JSON, UND DANN SOLL ES AUCH NICHTS
+# SCHREIBEN
+#
+#     Alle fuenf Antworten gehen durch module() und damit durch jq. Fehlt
+#     es, gab jede dieser Funktionen einen leeren String zurueck, das
+#     abschliessende `jq -n --argjson audio ""` scheiterte, und auf
+#     stdout stand NICHTS - fuenf Module verschwanden gemeinsam und
+#     lautlos von der Leiste. Genau dieses Bild hat der Nutzer am
+#     13.08.2026 gemeldet.
+#
+#     Ein Rueckfall, der hier von Hand ein JSON zusammensetzt, waere die
+#     zweite Fassung derselben Ausgabe - und ausgerechnet die
+#     ungetestete. Stattdessen endet der Lauf mit einer Zeile auf stderr
+#     und einem Rueckgabewert: die Leiste faengt das ab (sharedStatus in
+#     ags-bar.template), zeigt alle fuenf Module mit dem Warnzeichen und
+#     schreibt diesen Satz in den Kurzhinweis.
+if ! command -v jq >/dev/null 2>&1; then
+    echo "jq ist nicht installiert - ohne es kann dieses Skript kein JSON" \
+         "schreiben (Paket jq, harte Abhaengigkeit von zepos-desktop)" >&2
+    exit 1
+fi
+
+ICON_ALERT="{{ICON_ALERT}}"
+ICON_VOLUME_LOW="{{ICON_VOLUME_LOW}}"
+ICON_VOLUME_MID="{{ICON_VOLUME_MID}}"
+ICON_VOLUME_HIGH="{{ICON_VOLUME_HIGH}}"
+ICON_VOLUME_MUTE="{{ICON_VOLUME_MUTE}}"
+ICON_HEADPHONE="{{ICON_HEADPHONE}}"
+ICON_MIC="{{ICON_MIC}}"
+ICON_MIC_MUTE="{{ICON_MIC_MUTE}}"
+# Die vier Feldstaerken. Sie tragen seit dem 12.08.2026 das, was vorher
+# als "72%" neben dem Zeichen stand - siehe den Kopf dieser Datei.
+#
+# ICON_WIFI stand hier und ist MIT der Zahl gegangen: das eine
+# Wellenzeichen war der Balken ohne Staerkeangabe, und daneben stand die
+# Prozentzahl. Ohne sie waere es ein Zeichen, das vier verschiedene
+# Zustaende gleich malt.
+ICON_WIFI_1="{{ICON_WIFI_1}}"
+ICON_WIFI_2="{{ICON_WIFI_2}}"
+ICON_WIFI_3="{{ICON_WIFI_3}}"
+ICON_WIFI_4="{{ICON_WIFI_4}}"
+ICON_ETHERNET="{{ICON_ETHERNET}}"
+ICON_DISCONNECTED="{{ICON_DISCONNECTED}}"
+ICON_BLUETOOTH="{{ICON_BLUETOOTH}}"
+ICON_BLUETOOTH_CONNECTED="{{ICON_BLUETOOTH_CONNECTED}}"
+ICON_BATTERY_CHARGING="{{ICON_BATTERY_CHARGING}}"
+ICON_PLUG="{{ICON_PLUG}}"
+ICON_BATTERY_EMPTY="{{ICON_BATTERY_EMPTY}}"
+ICON_BATTERY_LOW="{{ICON_BATTERY_LOW}}"
+ICON_BATTERY_MID="{{ICON_BATTERY_MID}}"
+ICON_BATTERY_HIGH="{{ICON_BATTERY_HIGH}}"
+ICON_BATTERY_FULL="{{ICON_BATTERY_FULL}}"
+
+# Ein Modul als JSON. Ueber jq und nicht ueber printf, weil tooltip
+# Geraetenamen enthaelt: eine SSID darf ein Anfuehrungszeichen tragen,
+# und ein printf-gebautes JSON waere davon zerbrochen - die ganze Leiste
+# haette dann nichts mehr angezeigt, nicht nur dieses Modul.
+module() {
+    jq -n -c --arg text "$1" --arg tooltip "$2" --arg class "$3" \
+        '{text: $text, tooltip: $tooltip, class: $class}'
+}
+
+# Der dritte Zustand: das Geraet ist da, die Auskunft nicht.
+#
+# Eine eigene Funktion und kein `module "$ICON_ALERT" ... broken` an
+# sieben Stellen: die Klasse ist die, an der bar-style.template faerbt
+# (.bar-module.broken), und sieben Abschriften davon waeren sieben
+# Gelegenheiten, sie zu vertippen - und ein Modul, das dann zwar dasteht,
+# aber nicht auffaellt.
+broken() {
+    module "$ICON_ALERT" "$1" "broken"
+}
+
+# ---------------------------------------------------------------------
+# Jede Frage an ein fremdes Werkzeug bekommt eine Frist
+# ---------------------------------------------------------------------
+#
+# GEMELDET am 17.08.2026, auf echter Hardware: "ich sehe in der waybar
+# btop das drive und das zahnrad icon mehr nicht" - und auf die Bitte,
+# dieses Skript von Hand aufzurufen: "wenn ich auf meinem zepos system
+# versuche das auszufuehren stuckt er freeze es passiert nichts".
+#
+# DAS ERKLAERT DAS BILD VOLLSTAENDIG
+#     btop, Platte und Zahnrad sind EIGENE Skripte je Modul. Ton,
+#     Mikrofon, Akku, Netz und Bluetooth kommen alle aus DIESEM einen.
+#     Haengt es, bekommt die Leiste nie eine Antwort - und genau diese
+#     fuenf bleiben leer, waehrend die drei anderen weiterlaufen.
+#
+#     Der Schirm des Nutzers ist 1920x1200 bei Faktor 1.00, gemessen mit
+#     `hyprctl monitors -j`. Es ist also NICHT der Einklapp-Knopf; dafuer
+#     waere reichlich Platz.
+#
+# WARUM ES HAENGEN KANN
+#     Gezaehlt in dieser Datei am 17.08.2026: NULL Aufrufe mit einer
+#     Frist. `nmcli` wartet, wenn der NetworkManager nicht laeuft;
+#     `bluetoothctl show` wartet auf einen Controller und auf D-Bus;
+#     `wpctl` wartet auf wireplumber. Jedes davon blockiert ohne
+#     Zeitgrenze, und ein blockierter Aufruf haelt das GANZE Skript an -
+#     also alle fuenf Module, nicht nur seines.
+#
+#     Auf einem Rechner, auf dem alle Dienste laufen, faellt das nie auf.
+#     Genau deshalb hat es niemand gesehen: auf der Entwicklungsmaschine
+#     lief dasselbe Skript sauber durch und lieferte Akku, Netz, Ton und
+#     Bluetooth.
+#
+# DREI SEKUNDEN, UND DIE ZAHL IST EINE ENTSCHEIDUNG
+#     Die Leiste fragt im Sekundentakt. Eine Frist laenger als der Takt
+#     staut Aufrufe; eine zu kurze macht aus einem langsamen Werkzeug
+#     einen Fehler. Drei Sekunden sind lang genug fuer jedes der fuenf
+#     Werkzeuge auf einer traegen Maschine und kurz genug, dass die
+#     Leiste nach spaetestens drei Sekunden wieder etwas zeigt, statt
+#     fuer immer zu schweigen.
+#
+# WAS BEI ABLAUF PASSIERT
+#     `timeout` gibt 124 zurueck. Der Aufrufer sieht damit einen
+#     Fehlschlag wie jeden anderen und geht in seinen eigenen
+#     Fehlerzweig - der MELDET, statt sich auszublenden. Ein Werkzeug,
+#     das nicht antwortet, ist eine fehlende Auskunft und kein fehlendes
+#     Geraet; der Unterschied steht bei battery_module ausgeschrieben.
+ANTWORTFRIST=3
+
+frag() {
+    timeout "$ANTWORTFRIST" "$@"
+}
+
+# ---------------------------------------------------------------------
+# Ton
+# ---------------------------------------------------------------------
+#
+# wpctl und nicht pamixer, obwohl pamixer eine harte Abhaengigkeit ist
+# und die Klicks der Leiste ihn aufrufen: wpctl gehoert zu wireplumber,
+# also zu dem Dienst, der die Antwort HAT. pamixer spricht ueber
+# pipewire-pulse mit ihm, also ueber eine Uebersetzungsschicht mehr, und
+# meldet auf einem Rechner ohne laufenden pipewire-pulse einen Fehler,
+# wo wireplumber selbst noch antwortet.
+#
+# Die Ausgabe von `wpctl get-volume` ist "Volume: 0.45" oder
+# "Volume: 0.45 [MUTED]".
+volume_of() {
+    local node="$1" raw
+    raw=$(frag wpctl get-volume "$node" 2>/dev/null) || return 1
+    [[ "$raw" == Volume:* ]] || return 1
+
+    local fraction muted=no
+    fraction=$(printf '%s' "$raw" | awk '{print $2}')
+    [[ "$raw" == *MUTED* ]] && muted=yes
+
+    # Ganze Prozent, kaufmaennisch gerundet. awk und nicht bash, weil
+    # bash keine Fliesskommazahlen kann und 0.45 sonst zu 0 wuerde.
+    printf '%s %s\n' \
+        "$(awk -v value="$fraction" 'BEGIN { printf "%d", value * 100 + 0.5 }')" \
+        "$muted"
+}
+
+# Antwortet der Tondienst ueberhaupt?
+#
+# DIE FRAGE, DIE DEN DRITTEN ZUSTAND VOM ERSTEN TRENNT. `wpctl
+# get-volume` scheitert aus zwei ganz verschiedenen Gruenden mit
+# demselben Rueckgabewert: es gibt dieses Geraet nicht (ein Rechner ohne
+# Mikrofon), oder wireplumber laeuft nicht (ein Rechner, auf dem der Ton
+# kaputt ist). Erst die zweite Frage trennt sie.
+#
+# `wpctl status` und nicht `wpctl --version`: die Version beantwortet
+# jedes installierte Programm, auch wenn der Dienst dahinter tot ist -
+# und genau der Fall ist der interessante.
+#
+# EINMAL JE LAUF und nicht je Modul: Ton und Mikrofon fragen dasselbe,
+# und zwei Aufrufe waeren zwei Antworten auf eine Frage, die sich
+# zwischen ihnen aendern kann.
+AUDIO_SERVICE=unbekannt
+
+audio_service_state() {
+    if ! command -v wpctl >/dev/null 2>&1; then
+        AUDIO_SERVICE=fehlt
+    elif frag wpctl status >/dev/null 2>&1; then
+        AUDIO_SERVICE=da
+    else
+        AUDIO_SERVICE=stumm
+    fi
+}
+
+# Was der dritte Zustand fuer Ton und Mikrofon bedeutet, in einem Satz.
+audio_service_complaint() {
+    case "$AUDIO_SERVICE" in
+        fehlt) printf '%s' "wpctl ist nicht installiert (Paket wireplumber)" ;;
+        *)     printf '%s' "wireplumber antwortet nicht - kein Tondienst" ;;
+    esac
+}
+
+audio_module() {
+    local reading percent muted
+    if [ "$AUDIO_SERVICE" != da ]; then
+        broken "Lautstaerke nicht lesbar: $(audio_service_complaint)"
+        return
+    fi
+    # Der Dienst antwortet, dieses Geraet aber nicht: dann gibt es das
+    # Geraet nicht, und das Modul verschwindet.
+    reading=$(volume_of @DEFAULT_AUDIO_SINK@) || { module "" "" ""; return; }
+    percent=${reading% *}
+    muted=${reading#* }
+
+    if [ "$muted" = yes ]; then
+        # "Muted" stand hier neben dem Zeichen. Das durchgestrichene
+        # Lautsprechersymbol sagt dasselbe und braucht kein Wort dafuer -
+        # und es ist das einzige Wort, das dieses Skript je geschrieben
+        # hat, also auch das einzige, das je uebersetzt werden muesste.
+        module "$ICON_VOLUME_MUTE" "Ton stumm ($percent%)" "audio-muted"
+        return
+    fi
+
+    # Ein Kopfhoerersymbol, wenn der Ton in einen geht. Der Knotenname
+    # ist die einzige maschinenlesbare Angabe darueber, was angeschlossen
+    # ist - `wpctl inspect` nennt ihn, und bei Bluetooth-Kopfhoerern
+    # faengt er mit bluez_output an.
+    local node icon
+    node=$(frag wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null \
+           | grep -m1 'node.name' | tr 'A-Z' 'a-z')
+    case "$node" in
+        *headphone*|*headset*|*bluez*) icon="$ICON_HEADPHONE" ;;
+        *) if   [ "$percent" -ge 66 ]; then icon="$ICON_VOLUME_HIGH"
+           elif [ "$percent" -ge 33 ]; then icon="$ICON_VOLUME_MID"
+           else                             icon="$ICON_VOLUME_LOW"
+           fi ;;
+    esac
+
+    module "$icon" "Ausgabe: $percent%" "audio"
+}
+
+microphone_module() {
+    local reading percent muted
+    if [ "$AUDIO_SERVICE" != da ]; then
+        broken "Mikrofon nicht lesbar: $(audio_service_complaint)"
+        return
+    fi
+    reading=$(volume_of @DEFAULT_AUDIO_SOURCE@) || { module "" "" ""; return; }
+    percent=${reading% *}
+    muted=${reading#* }
+
+    if [ "$muted" = yes ]; then
+        module "$ICON_MIC_MUTE" "Mikrofon stumm ($percent%)" "microphone-muted"
+    else
+        module "$ICON_MIC" "Mikrofon: $percent%" "microphone"
+    fi
+}
+
+# ---------------------------------------------------------------------
+# Akku
+# ---------------------------------------------------------------------
+#
+# Direkt aus sysfs und nicht ueber upower: der Kern schreibt die Werte
+# dorthin, upower liest sie von dort, und ein Dienst weniger auf dem Weg
+# ist ein Dienst weniger, der nicht laufen kann. Dasselbe Verfahren, das
+# ags-battery.template schon benutzt.
+#
+# WARUM DIE WURZEL EINE VARIABLE IST
+#     Sie ist die einzige Angabe in diesem Skript, die weder aus einem
+#     Werkzeug noch aus HOME kommt: `[ -r /sys/... ]` beantwortet bash
+#     selbst, und kein Attrappenverzeichnis der Welt kommt dazwischen.
+#     Ohne die Variable haenge die Antwort daran, ob der Rechner, auf dem
+#     die Suite laeuft, einen Akku hat - und der eine Zweig, den man
+#     dort gerade nicht messen kann, waere immer der ungetestete.
+#     Dieselbe Bauart wie ZEPOS_PLUGIN_ROOT, aus demselben Grund.
+POWER_SUPPLY_ROOT="${ZEPOS_POWER_SUPPLY_ROOT:-/sys/class/power_supply}"
+
+battery_module() {
+    local battery capacity status ac icon class
+
+    battery=""
+    for candidate in "$POWER_SUPPLY_ROOT"/BAT*; do
+        [ -r "$candidate/capacity" ] && { battery="$candidate"; break; }
+    done
+    # Kein Akku - ein Standrechner. Leeres Modul, kein Fehler.
+    [ -n "$battery" ] || { module "" "" ""; return; }
+
+    # Ab hier gibt es einen Akku. Was jetzt noch schiefgeht, ist ein
+    # FEHLER und kein fehlendes Geraet - und wird angezeigt statt
+    # ausgeblendet. Bis zum 13.08.2026 stand hier `module "" "" ""`, und
+    # damit sah ein Notebook, dessen capacity sich nicht lesen laesst,
+    # aus wie ein Standrechner.
+    capacity=$(cat "$battery/capacity" 2>/dev/null) || capacity=""
+    [[ "$capacity" =~ ^[0-9]+$ ]] || {
+        broken "$battery/capacity ist nicht lesbar oder keine Zahl: '$capacity'"
+        return
+    }
+    status=$(cat "$battery/status" 2>/dev/null || echo Unknown)
+
+    ac=0
+    for adapter in "$POWER_SUPPLY_ROOT"/A{C,DP}*; do
+        [ -r "$adapter/online" ] && ac=$(cat "$adapter/online") && break
+    done
+
+    class="battery"
+    if   [ "$capacity" -le 15 ]; then class="battery-critical"
+    elif [ "$capacity" -le 30 ]; then class="battery-warning"
+    fi
+
+    if [ "$status" = Charging ]; then
+        icon="$ICON_BATTERY_CHARGING"
+        class="battery-charging"
+    elif [ "$status" = Full ] || { [ "$ac" = 1 ] && [ "$status" != Discharging ]; }; then
+        icon="$ICON_PLUG"
+    elif [ "$capacity" -le 10 ]; then icon="$ICON_BATTERY_EMPTY"
+    elif [ "$capacity" -le 30 ]; then icon="$ICON_BATTERY_LOW"
+    elif [ "$capacity" -le 60 ]; then icon="$ICON_BATTERY_MID"
+    elif [ "$capacity" -le 85 ]; then icon="$ICON_BATTERY_HIGH"
+    else                              icon="$ICON_BATTERY_FULL"
+    fi
+
+    # Zeichen UND Zahl - siehe den Kopf dieser Datei. Der Kurzhinweis
+    # behaelt den Ladezustand im Wortlaut ("Charging", "Discharging"),
+    # denn den kann kein Zeichen mit fuenf Stufen tragen.
+    module "$icon $capacity%" "Akku $capacity% ($status)" "$class"
+}
+
+# ---------------------------------------------------------------------
+# Netz
+# ---------------------------------------------------------------------
+#
+# nmcli, weil NetworkManager auf diesem Schreibtisch die Verbindungen
+# haelt - dieselbe Quelle, die der Netzwerk-Assistent und der
+# Watchdog befragen. Zwei Quellen fuer denselben Zustand waeren zwei
+# Antworten auf dem Bildschirm, die einander widersprechen koennen.
+network_module() {
+    local line device type state connection listing
+
+    # ERST FRAGEN, OB NETWORKMANAGER ANTWORTET, DANN, WAS ER SAGT.
+    #
+    # Bis zum 13.08.2026 lief die Ausgabe von nmcli direkt in die
+    # Schleife. Ein fehlendes oder totes nmcli war damit dasselbe wie
+    # eine leere Liste, und beides ergab "Keine Verbindung" - eine
+    # AUSKUNFT ueber den Netzzustand, wo in Wahrheit gar keine vorlag.
+    # Das ist die gefaehrlichere Haelfte des Fehlers: ein Modul, das
+    # etwas Falsches sagt, faellt niemandem auf.
+    if ! command -v nmcli >/dev/null 2>&1; then
+        broken "nmcli ist nicht installiert (Paket networkmanager)"
+        return
+    fi
+    listing=$(frag nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status 2>&1) || {
+        broken "NetworkManager antwortet nicht: $listing"
+        return
+    }
+
+    while IFS=: read -r device type state connection; do
+        [ "$state" = connected ] || continue
+        case "$type" in
+            wifi|ethernet) line="$device:$type:$connection"; break ;;
+        esac
+    done <<< "$listing"
+
+    if [ -z "${line:-}" ]; then
+        module "$ICON_DISCONNECTED" "Keine Verbindung" "network-disconnected"
+        return
+    fi
+
+    device=${line%%:*}
+    type=$(printf '%s' "$line" | cut -d: -f2)
+    connection=$(printf '%s' "$line" | cut -d: -f3-)
+
+    local address
+    address=$(frag nmcli -t -f IP4.ADDRESS device show "$device" 2>/dev/null \
+              | head -1 | cut -d: -f2)
+    address=${address%%/*}
+
+    if [ "$type" = wifi ]; then
+        local signal icon
+        signal=$(frag nmcli -t -f IN-USE,SIGNAL device wifi list --rescan no 2>/dev/null \
+                 | awk -F: '$1 == "*" { print $2; exit }')
+        [ -n "$signal" ] || signal=0
+        # Vier Stufen zu 25 Prozentpunkten. Die Grenzen sind die des
+        # Zeichensatzes und nicht gewaehlt: nf-md-wifi_strength_1..4
+        # sind vier Balken, also viertelt sich das Band. Bei 0 bleibt
+        # der erste - eine Verbindung mit schlechtem Empfang IST eine
+        # Verbindung, und das leere Zeichen gehoert dem Zustand "gar
+        # nicht verbunden" darueber.
+        if   [ "$signal" -ge 75 ]; then icon="$ICON_WIFI_4"
+        elif [ "$signal" -ge 50 ]; then icon="$ICON_WIFI_3"
+        elif [ "$signal" -ge 25 ]; then icon="$ICON_WIFI_2"
+        else                            icon="$ICON_WIFI_1"
+        fi
+        module "$icon" \
+               "$connection ($device) - ${address:-keine Adresse} - Signal $signal%" \
+               "network-wifi"
+    else
+        # Die Adresse stand auf der Leiste und ist mit derselben
+        # Begruendung in den Tooltip gezogen wie die drei Prozentzahlen:
+        # eine IPv4-Adresse sind bis zu fuenfzehn Zeichen fuer eine
+        # Angabe, die man einmal am Tag braucht.
+        module "$ICON_ETHERNET" \
+               "$connection ($device) - ${address:-verbunden}" \
+               "network-ethernet"
+    fi
+}
+
+# ---------------------------------------------------------------------
+# Bluetooth
+# ---------------------------------------------------------------------
+#
+# bluetoothctl, das mit bluez-utils kommt. Ohne Adapter meldet es "No
+# default controller available" und das Modul bleibt leer - genau das,
+# was `format-disabled: ""` in der Waybar-Fassung tat.
+bluetooth_module() {
+    local show powered connected
+
+    show=$(frag bluetoothctl show 2>/dev/null) || { module "" "" ""; return; }
+    [ -n "$show" ] || { module "" "" ""; return; }
+
+    # Ein Adapter, der AUS ist, ist etwas anderes als kein Adapter.
+    #
+    # Hier stand `module "" "" ""`, also dasselbe wie fuer eine Maschine
+    # ohne Bluetooth. Das Modul war damit auf jedem Rechner unsichtbar,
+    # bei dem der Adapter gerade nicht laeuft - und der Nutzer hatte
+    # keinen Weg zu sehen, dass er ihn nur einschalten muss. Seit dem
+    # 13.08.2026 steht das Zeichen da, abgeblendet (siehe
+    # bar-style.template, .bluetooth-off).
+    powered=$(printf '%s' "$show" | awk -F': ' '/Powered:/ { print $2; exit }')
+    if [ "$powered" != yes ]; then
+        module "$ICON_BLUETOOTH" "Bluetooth ist ausgeschaltet" "bluetooth-off"
+        return
+    fi
+
+    # Ohne Vorgabewert, und das ist gemessen: `grep -c` schreibt auch bei
+    # null Treffern eine 0 auf stdout (und kehrt mit 1 zurueck, was hier
+    # niemanden interessiert). Ein `${connected:-0}` stand hier und
+    # konnte nicht greifen - eine Auffanglinie fuer einen Fall, den es
+    # nicht gibt, ist eine Zeile, die beim naechsten Lesen als "das ist
+    # abgesichert" gelesen wird.
+    connected=$(frag bluetoothctl devices Connected 2>/dev/null | grep -c '^Device ')
+    if [ "$connected" -gt 0 ]; then
+        local names
+        names=$(frag bluetoothctl devices Connected 2>/dev/null | cut -d' ' -f3-)
+        module "$ICON_BLUETOOTH_CONNECTED $connected" "$names" "bluetooth-connected"
+    else
+        module "$ICON_BLUETOOTH" "Bluetooth an, nichts verbunden" "bluetooth"
+    fi
+}
+
+audio_service_state
+
+jq -n -c \
+    --argjson audio "$(audio_module)" \
+    --argjson microphone "$(microphone_module)" \
+    --argjson battery "$(battery_module)" \
+    --argjson network "$(network_module)" \
+    --argjson bluetooth "$(bluetooth_module)" \
+    '{audio: $audio, microphone: $microphone, battery: $battery,
+      network: $network, bluetooth: $bluetooth}'

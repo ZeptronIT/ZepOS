@@ -1,0 +1,147 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# zepos-menu - das GTK4-Auswahlfenster, mit dem ZepOS waehlen laesst.
+#
+# WARUM ES DIESES PAKET GIBT
+#     Der Nutzer hat am 11.08.2026 entschieden, dass ZepOS durchgehend
+#     GTK4 benutzt und fehlende Stuecke selbst baut. Der bisherige
+#     Traeger war wofi, und wofi ist GTK3 - gemessen am ausgelieferten
+#     Objekt des angehefteten Schnappschusses:
+#
+#         objdump -p /usr/bin/wofi | grep NEEDED | grep gtk
+#         NEEDED  libgtk-3.so.0
+#
+#     Im Schnappschuss 2026/08/04 steht kein GTK4-Ersatz. `tar tzf
+#     extra.db` zaehlt 14860 Pakete; darunter ist kein walker, kein tofi,
+#     kein anyrun und kein rofi-wayland. fuzzel ist da (1.14.1) und
+#     benutzt gar kein GTK, sondern zeichnet selbst - was dieses Fenster
+#     vom Stylesheet abschneiden wuerde, das src/brand.py fuellt.
+#
+#     Es war auch nicht optional: sechs erzeugte Stellen riefen wofi auf,
+#     darunter der Rueckfall fuer SUPER+SPACE (Spec §7.4). Dieselbe Lage
+#     wie bei packaging/wlogout - eine Taste, die nichts tut, ist die
+#     schlimmste Folge, die ZepOS erzeugen kann, weil niemand sie meldet.
+#
+# WARUM PYTHON UND NICHT C
+#     Weil PyGObject schon da ist und die Alternative ein zweiter
+#     Uebersetzungsvorgang waere, dessen einziger Vorteil ein paar
+#     Millisekunden Startzeit sind. zepos-installer-gui ist aus demselben
+#     Grund Python: eine GTK4-Oberflaeche in diesem Projekt ist `gi`, und
+#     zwei Sprachen fuer dieselbe Aufgabe sind zwei Werkzeugketten.
+#
+# WARUM DIE MODULE NICHT IN site-packages LIEGEN
+#     Dieselbe Regel wie bei packaging/zepos-installer, hier aus einem
+#     schwaecheren, aber gleichgerichteten Grund: nichts anderes soll je
+#     `import zepos_menu` schreiben. Es ist ein Programm, keine
+#     Bibliothek, und ein Modulname im globalen Suchpfad ist ein
+#     Versprechen, das dieses Paket nicht geben will. /usr/bin/zepos-menu
+#     legt sich das Verzeichnis vor dem ersten Import selbst hin - siehe
+#     seinen Kopf.
+#
+# WARUM gtk4-layer-shell EINE HARTE ABHAENGIGKEIT IST
+#     Ohne sie ist das Auswahlfenster ein gewoehnliches Fenster: der
+#     Compositor platziert es, gibt ihm einen Rahmen und laesst die
+#     Tastatur dort, wo sie war. menu/zepos_menu/window.py faellt genau
+#     darauf zurueck und schreibt eine Zeile auf stderr - aber ein
+#     Rueckfall, der auf jeder Installation genommen wird, ist kein
+#     Rueckfall, sondern das Verhalten. wlogout hat dieselbe Falle in
+#     seinem eigenen Rezept dokumentiert.
+#
+# WARUM DIE VERSION NICHT HIER STEHT
+#     Wie bei zepos-config und zepos-installer: sie liegt in VERSION an
+#     der Wurzel und wird relativ zur Lage DIESER Datei gelesen, damit
+#     `makepkg` in diesem Verzeichnis und packaging/build.sh von der
+#     Wurzel aus dieselbe Zahl sehen.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-menu
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="Das GTK4-Auswahlfenster von ZepOS: Anwendungsstarter und dmenu"
+arch=('any')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+# python-gobject ist das, was `import gi` ueberhaupt existieren laesst;
+# gtk4 und gtk4-layer-shell sind die beiden Typbibliotheken, die
+# menu/zepos_menu/window.py namentlich mit gi.require_version anfordert.
+#
+# Die drei Schriften stehen hier aus demselben Grund wie bei
+# zepos-installer-gui: das erzeugte Stylesheet nennt die Familien aus
+# src/brand.py, und fontconfig beantwortet eine fehlende Familie durch
+# Ersatz. Das faellt nicht auf - es rendert nur in irgendetwas anderem.
+# adwaita-icon-theme traegt die Symbole, die der Starter fuer
+# .desktop-Dateien zeichnet, deren eigenes Symbol das Thema nicht hat.
+#
+# zepos-config ist seit dem 12.08.2026 dabei, und zwar hart und nicht als
+# optdepend: `--show all` zeigt neben den Anwendungen jede beschriebene
+# Tastenbindung dieser Sitzung, und gelesen werden sie von
+# /usr/share/zepos/keybinds.py - einer Datei aus zepos-config. Fehlt sie,
+# geht das Fenster mit den Anwendungen allein auf und sagt nichts (siehe
+# menu/zepos_menu/index.py). Genau das ist der Grund gegen optdepend: ein
+# halb gefuelltes Suchfenster ist von einem vollstaendigen nicht zu
+# unterscheiden, und die Beschwerde, aus der diese Betriebsart entstanden
+# ist, lautete "das Werkzeug fehlt" ueber ein Werkzeug, das da war.
+depends=('python' 'python-gobject' 'gtk4' 'gtk4-layer-shell'
+         'ttf-roboto' 'ttf-jetbrains-mono-nerd' 'adwaita-icon-theme'
+         'zepos-config')
+
+# Erzeugt von packaging/build.sh aus dem Arbeitsbaum, mit auf
+# SOURCE_DATE_EPOCH festgeklemmten Zeitstempeln. SKIP aus demselben
+# Grund wie bei zepos-config: eine Pruefsumme ueber eine Datei, die
+# dasselbe Skript Sekunden vorher geschrieben hat, prueft nichts.
+source=("zepos-menu-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_root="usr/share/zepos-menu"
+
+_src() { printf '%s/zepos-menu-%s' "$srcdir" "$pkgver"; }
+
+package() {
+    # Das Modulverzeichnis. __pycache__ bleibt draussen: Bytecode fuer
+    # eine Python-Fassung ist auf der naechsten still falsch - derselbe
+    # Grund, aus dem zepos-config und zepos-installer es ausschliessen.
+    install -d "$pkgdir/$_root/zepos_menu"
+    install -Dm644 -t "$pkgdir/$_root/zepos_menu" \
+        "$(_src)/zepos_menu"/*.py
+
+    test -f "$pkgdir/$_root/zepos_menu/__init__.py" || {
+        echo "zepos_menu hat im Paket kein __init__.py;" >&2
+        echo "der Import in /usr/bin/zepos-menu loeste sich nicht auf" >&2
+        return 1
+    }
+
+    install -Dm755 "$(_src)/bin/zepos-menu" "$pkgdir/usr/bin/zepos-menu"
+
+    # Die Pruefung, die die Abhaengigkeit oben erst zu einer macht.
+    #
+    # Bei einem uebersetzten Programm fragte man das Objekt mit `readelf
+    # -d` - so macht es packaging/wlogout, weil dessen meson.build
+    # gtk-layer-shell optional laesst. Ein Python-Programm hat kein
+    # Objekt; was es stattdessen hat, ist die Zeile, mit der es die
+    # Typbibliothek namentlich und mit Version anfordert. Fehlt sie oder
+    # nennt sie eine andere Fassung, ist das Paket etwas anderes als das,
+    # was diese depends beschreiben.
+    local window="$pkgdir/$_root/zepos_menu/window.py"
+    local needed=('gi.require_version("Gtk", "4.0")'
+                  'gi.require_version("Gtk4LayerShell", "1.0")')
+    local line
+    for line in "${needed[@]}"; do
+        grep -qxF "$line" "$window" || {
+            echo "zepos_menu/window.py enthaelt nicht: $line" >&2
+            echo "Damit stimmt das Paket nicht mehr mit seinen" >&2
+            echo "Abhaengigkeiten ueberein." >&2
+            return 1
+        }
+    done
+    # `if` und nicht `grep ... && { ... }`: makepkg laeuft mit errexit,
+    # und ein `&&`, dessen linke Seite fehlschlaegt, gibt 1 zurueck -
+    # der GUTE Fall haette den Bau abgebrochen.
+    if grep -qE "require_version\(.Gtk., .3" "$window"; then
+        echo "zepos_menu/window.py fordert GTK3 an. ZepOS ist GTK4." >&2
+        return 1
+    fi
+
+    install -Dm644 "$(_src)/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

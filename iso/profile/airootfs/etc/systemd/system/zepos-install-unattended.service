@@ -1,0 +1,41 @@
+# The unattended installation, as a system service.
+#
+# WHY A SERVICE AND NOT THE LOGIN SHELL
+#     archinstall requires root and says so before doing anything else,
+#     and this image has no sudo - `sudo` is not in packages.x86_64, and
+#     the package that would bring it in (zepos-desktop) is what gets
+#     installed onto the TARGET rather than into the live medium. The
+#     live user exists to run a desktop session; handing it passwordless
+#     root so that it can erase a disk would change the thing under test.
+#
+# WHY IT RUNS ON EVERY LIVE BOOT
+#     Because deciding is cheaper than configuring. The script's first
+#     two checks are /run/archiso and a disk at
+#     /dev/disk/by-id/virtio-zepos-target; an ordinary session run has
+#     the first and not the second, and exits within a second having said
+#     so on the serial line. A ConditionPathExists on the device would
+#     be evaluated once, at the moment systemd starts the unit, and would
+#     turn a udev race into a run that silently does nothing.
+#
+# WHY THERE IS NO TIMEOUT
+#     pacstrap downloads the base system and forty-odd dependencies of
+#     zepos-desktop over the network. systemd's default TimeoutStartSec
+#     would kill that mid-transaction and leave a half-installed target -
+#     which is a worse outcome than a run the harness eventually times
+#     out on, because the harness times out with a serial log and a
+#     screenshot while systemd would leave a partitioned disk and a
+#     SIGTERM.
+[Unit]
+Description=ZepOS unattended installation
+Documentation=file:///usr/local/bin/zepos-install-unattended
+After=network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=infinity
+ExecStart=/usr/local/bin/zepos-install-unattended
+
+[Install]
+WantedBy=multi-user.target

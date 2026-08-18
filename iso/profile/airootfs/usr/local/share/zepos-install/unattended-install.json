@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "language": "de",
+  "keymap": "de-latin1",
+  "timezone": "Europe/Berlin",
+  "locale": "de_DE",
+  "hostname": "zepos",
+  "disk": {
+    "device": "",
+    "wipe": true,
+    "filesystem": "ext4",
+    "size_bytes": 0
+  },
+  "users": [
+    {
+      "username": "zepos",
+      "password": "zepos-unattended",
+      "sudo": true
+    }
+  ],
+  "root_password": "zepos-unattended-root",
+  "wifi": null,
+  "zepos": {
+    "enable_plugins": true,
+    "weather_location": "Wien"
+  }
+}

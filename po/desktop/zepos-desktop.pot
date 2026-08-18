@@ -1,0 +1,1114 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the zepos-desktop package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: zepos-desktop\n"
+"Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
+"POT-Creation-Date: 2026-08-17 18:50+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: src/templates/ags-bar.template:449
+msgid "{module} is not answering: {error}"
+msgstr ""
+
+#: src/templates/ags-bar.template:514
+msgid "{script} is not answering: {reason}"
+msgstr ""
+
+#: src/templates/ags-bar.template:1269
+#: src/templates/ags-control-center.template:1151
+#: src/templates/ags-disk.template:335
+msgid "Disk space"
+msgstr ""
+
+#: src/templates/ags-bar.template:1272
+#: src/templates/ags-control-center.template:1148
+#: src/templates/ags-style-editor.template:99
+#: src/templates/ags-wallpaper.template:299
+msgid "Wallpaper"
+msgstr ""
+
+#: src/templates/ags-bar.template:1296
+msgid "Appearance and colors"
+msgstr ""
+
+#: src/templates/ags-bar.template:1300
+#: src/templates/ags-control-center.template:588
+msgid "Control center"
+msgstr ""
+
+#: src/templates/ags-bar.template:1351
+msgid "What no longer fits on this screen"
+msgstr ""
+
+#: src/templates/ags-bar.template:1608
+msgid "Do not disturb is on - it is recorded, but nothing is shown"
+msgstr ""
+
+#: src/templates/ags-bar.template:1616
+msgid "{count} message since you last looked"
+msgid_plural "{count} messages since you last looked"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/templates/ags-bar.template:1829
+msgid "Keyboard layout: {layout} - click switches to the next of {count}"
+msgstr ""
+
+#: src/templates/ags-bar.template:1832
+msgid "Keyboard layout: {layout} - it is the only one configured"
+msgstr ""
+
+#: src/templates/ags-bar.template:1846
+msgid "hyprctl did not name the keyboard layout"
+msgstr ""
+
+#: src/templates/ags-battery.template:54
+msgid "Power Saver"
+msgstr ""
+
+#: src/templates/ags-battery.template:56
+msgid "Balanced"
+msgstr ""
+
+#: src/templates/ags-battery.template:58
+msgid "Performance"
+msgstr ""
+
+#: src/templates/ags-battery.template:149
+msgid "Power profile"
+msgstr ""
+
+#: src/templates/ags-battery.template:153
+msgid "Error: {message}"
+msgstr ""
+
+#: src/templates/ags-battery.template:184
+msgid "Charging"
+msgstr ""
+
+#: src/templates/ags-battery.template:185
+msgid "Discharging"
+msgstr ""
+
+#: src/templates/ags-battery.template:186
+msgid "Full"
+msgstr ""
+
+#: src/templates/ags-battery.template:187
+msgid "On mains"
+msgstr ""
+
+#: src/templates/ags-battery.template:215
+#: src/templates/ags-style-editor.template:93
+msgid "Battery"
+msgstr ""
+
+#: src/templates/ags-battery.template:263
+msgid "Time left"
+msgstr ""
+
+#: src/templates/ags-battery.template:274
+msgid "Power"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:245
+msgid ""
+"bluetoothctl is not answering ({error}). Usually the service is not running: "
+"systemctl enable --now bluetooth.service"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:312
+msgid "Unnamed device"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:371
+msgid "Bluetooth is not answering"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:383
+msgid "No Bluetooth adapter"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:384
+msgid "This machine reports no controller"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:406
+msgid "Bluetooth is off"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:406
+msgid "Bluetooth is on"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:421
+msgid "Turn Bluetooth on to see devices"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:429
+#: src/templates/ags-bluetooth.template:630
+msgid "Searching …"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:430
+msgid "No device known - search for devices"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:485
+msgid "Disconnect {device}"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:486
+msgid "Connect to {device}"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:493
+msgid "Connecting …"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:493
+msgid "Disconnecting …"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:505
+msgid "Disconnecting failed"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:506
+msgid "Connecting failed - is it paired?"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:521
+#: src/templates/ags-control-center.template:852
+msgid "Bluetooth"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:566
+#: src/templates/ags-control-center.template:803
+msgid "Loading …"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:585
+msgid "Turn Bluetooth on or off"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:616
+msgid "DEVICES"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:624
+msgid "Search for devices for {seconds} seconds"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:648
+msgid "Read the list again"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:662
+msgid "Open Blueman - pairing, sending files"
+msgstr ""
+
+#: src/templates/ags-calendar.template:152
+#: src/templates/ags-calendar.template:274
+#: src/templates/ags-style-editor.template:96
+msgid "Calendar"
+msgstr ""
+
+#: src/templates/ags-calendar.template:153
+msgid "Open GNOME Calendar"
+msgstr ""
+
+#: src/templates/ags-calendar.template:158
+msgid "Mail"
+msgstr ""
+
+#: src/templates/ags-calendar.template:159
+msgid "Open Thunderbird"
+msgstr ""
+
+#: src/templates/ags-calendar.template:174
+msgid "%B %-d, %Y"
+msgstr ""
+
+#: src/templates/ags-calendar.template:362
+msgid "Previous month"
+msgstr ""
+
+#: src/templates/ags-calendar.template:378
+msgid "Next month"
+msgstr ""
+
+#: src/templates/ags-control-center.template:357
+msgid "VPN: {status}"
+msgstr ""
+
+#: src/templates/ags-control-center.template:386
+msgid "Network watchdog: {status}"
+msgstr ""
+
+#: src/templates/ags-control-center.template:394
+msgid "Helper scripts ({count})"
+msgstr ""
+
+#: src/templates/ags-control-center.template:442
+msgid "Regenerate the configuration"
+msgstr ""
+
+#: src/templates/ags-control-center.template:445
+msgid "Try the update again"
+msgstr ""
+
+#: src/templates/ags-control-center.template:454
+msgid "Update the Arch base - in the terminal, with a prompt"
+msgstr ""
+
+#: src/templates/ags-control-center.template:457
+msgid "Configure the self-update"
+msgstr ""
+
+#: src/templates/ags-control-center.template:487
+#: src/templates/ags-control-center.template:1136
+msgid "Hardware"
+msgstr ""
+
+#: src/templates/ags-control-center.template:695
+msgid "PRIVACY"
+msgstr ""
+
+#: src/templates/ags-control-center.template:715
+msgid "Microphone:"
+msgstr ""
+
+#: src/templates/ags-control-center.template:721
+msgid "Mute the microphone"
+msgstr ""
+
+#: src/templates/ags-control-center.template:735
+msgid "Camera:"
+msgstr ""
+
+#: src/templates/ags-control-center.template:794
+msgid "NETWORK & CONNECTIONS"
+msgstr ""
+
+#: src/templates/ags-control-center.template:807
+msgid "Wi-Fi networks - the same window as above"
+msgstr ""
+
+#: src/templates/ags-control-center.template:838
+msgid "VPN: off"
+msgstr ""
+
+#: src/templates/ags-control-center.template:856
+msgid "Bluetooth devices - the same window as above"
+msgstr ""
+
+#: src/templates/ags-control-center.template:866
+msgid "SOUND & DISPLAY"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1000
+msgid "Previous track"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1007
+msgid "Pause / resume"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1013
+msgid "Next track"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1044
+msgid "Displays"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1049
+msgid "Set arrangement, resolution and refresh rate"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1082
+msgid "DESKTOP"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1118
+msgid "Set the location for the weather"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1136
+msgid "Open btop"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1140
+#: src/templates/ags-shortcuts.template:264
+msgid "Keyboard shortcuts"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1141
+msgid "Show all keyboard shortcuts"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1144
+msgid "Floating windows"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1145
+msgid "Restore the saved arrangement"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1148
+msgid "Choose another image"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1151
+msgid "Show how the drives are filled"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1158
+msgid "SYSTEM SERVICES"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1167
+msgid "Printer"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1195
+msgid "Network watchdog"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1221
+msgid "Helper scripts"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1257
+msgid "Style editor"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1262
+msgid "Appearance and colors - the same window as above"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1369
+msgid "Shut down"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1370
+msgid "Restart"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1371
+msgid "Suspend"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1372
+msgid "Lock"
+msgstr ""
+
+#: src/templates/ags-control-center.template:1373
+msgid "Log out"
+msgstr ""
+
+#: src/templates/ags-disk.template:111
+msgid "{count} partition"
+msgid_plural "{count} partitions"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/templates/ags-disk.template:118 src/templates/ags-disk.template:448
+msgid "System"
+msgstr ""
+
+#: src/templates/ags-disk.template:280
+msgid "{size} used"
+msgstr ""
+
+#: src/templates/ags-disk.template:284
+msgid "{size} free"
+msgstr ""
+
+#: src/templates/ags-disk.template:374
+msgid "in use"
+msgstr ""
+
+#: src/templates/ags-disk.template:402
+msgid "Used"
+msgstr ""
+
+#: src/templates/ags-disk.template:421
+msgid "Available"
+msgstr ""
+
+#: src/templates/ags-disk.template:440
+msgid "Total"
+msgstr ""
+
+#: src/templates/ags-disk.template:462
+msgid "PARTITIONS"
+msgstr ""
+
+#: src/templates/ags-disk.template:491
+msgid "Open the root directory"
+msgstr ""
+
+#: src/templates/ags-disk.template:495
+msgid "Files"
+msgstr ""
+
+#: src/templates/ags-disk.template:504
+msgid "Analyze disk usage with Baobab"
+msgstr ""
+
+#: src/templates/ags-disk.template:508
+msgid "Analyze"
+msgstr ""
+
+#: src/templates/ags-network.template:268
+msgid "Password for \"{ssid}\""
+msgstr ""
+
+#: src/templates/ags-network.template:311
+msgid "Open"
+msgstr ""
+
+#: src/templates/ags-network.template:326
+msgid "Please enter the password"
+msgstr ""
+
+#: src/templates/ags-network.template:329 src/templates/ags-vpn.template:333
+msgid "Connecting ..."
+msgstr ""
+
+#: src/templates/ags-network.template:333 src/templates/ags-vpn.template:402
+msgid "Connection failed"
+msgstr ""
+
+#: src/templates/ags-network.template:359
+msgid "{signal}% • {security}"
+msgstr ""
+
+#: src/templates/ags-network.template:361
+msgid "open"
+msgstr ""
+
+#: src/templates/ags-network.template:436
+#: src/templates/ags-style-editor.template:95
+msgid "Network"
+msgstr ""
+
+#: src/templates/ags-network.template:462
+#: src/templates/ags-network.template:624
+msgid "Back"
+msgstr ""
+
+#: src/templates/ags-network.template:467
+msgid "Password for network"
+msgstr ""
+
+#: src/templates/ags-network.template:475
+msgid "Enter the Wi-Fi password ..."
+msgstr ""
+
+#: src/templates/ags-network.template:481 src/templates/ags-vpn.template:693
+msgid "Connect"
+msgstr ""
+
+#: src/templates/ags-network.template:553
+msgid "Wi-Fi networks"
+msgstr ""
+
+#: src/templates/ags-network.template:560
+msgid "Turn Wi-Fi on or off"
+msgstr ""
+
+#: src/templates/ags-network.template:566
+msgid "Scan again"
+msgstr ""
+
+#: src/templates/ags-network.template:572
+msgid "Open network management"
+msgstr ""
+
+#: src/templates/ags-network.template:668
+msgid "IP address"
+msgstr ""
+
+#: src/templates/ags-network.template:670
+msgid "Gateway"
+msgstr ""
+
+#: src/templates/ags-network.template:672
+#: src/templates/ags-vpn-settings.template:874
+msgid "DNS"
+msgstr ""
+
+#: src/templates/ags-network.template:674
+msgid "Security"
+msgstr ""
+
+#: src/templates/ags-network.template:686 src/templates/ags-vpn.template:248
+#: src/templates/ags-vpn.template:444 src/templates/ags-vpn.template:551
+msgid "Disconnect"
+msgstr ""
+
+#: src/templates/ags-notifications.template:555
+msgid "Do not disturb is on - nothing is shown, everything is recorded"
+msgstr ""
+
+#: src/templates/ags-notifications.template:556
+msgid "Turn on do not disturb"
+msgstr ""
+
+#: src/templates/ags-notifications.template:599
+msgid "Notifications"
+msgstr ""
+
+#: src/templates/ags-notifications.template:641
+msgid "Do not disturb"
+msgstr ""
+
+#: src/templates/ags-notifications.template:666
+msgid "Nothing missed."
+msgstr ""
+
+#: src/templates/ags-notifications.template:672
+msgid "Clear the whole history"
+msgstr ""
+
+#: src/templates/ags-notifications.template:676
+msgid "Clear all"
+msgstr ""
+
+#: src/templates/ags-shortcuts.template:296
+msgid "Edit keybinds"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:94
+msgid "Control Panel"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:97
+msgid "Shortcuts"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:98
+msgid "Disk Usage"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:100
+#: src/templates/ags-style-editor.template:878
+msgid "Style Editor"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:101
+msgid "VPN"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:102
+msgid "VPN Settings"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:218
+msgid "The factory setting: petrol, cyan and yellow"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:223
+msgid "Futuristic neon theme with cyan and magenta"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:252
+msgid "Natural theme with green and brown tones"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:281
+msgid "Warm theme with orange and red tones"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:310
+msgid "Cool theme with blue and turquoise tones"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:339
+msgid "Elegant theme with violet and gold"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:422
+msgid "ZepOS Style"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:423
+#: src/templates/ags-vpn-settings.template:260
+msgid "Not saved: {error}"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:686
+msgctxt "widget size, width"
+msgid "W"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:716
+msgctxt "widget size, height"
+msgid "H"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:815
+#: src/templates/ags-style-editor.template:1332
+msgid "Reset all colors"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:825
+#: src/templates/ags-style-editor.template:1198
+msgid "Reset widget sizes for {width}px"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:906
+msgid "Colors"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:916
+msgid "Sizes"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:926
+msgid "Themes"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:978
+msgid "← Back"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:1117
+msgid "Presets"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:1152
+#: src/templates/ags-vpn-settings.template:927
+msgid "Cancel"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:1156
+#: src/templates/ags-style-editor.template:1321
+msgid "Apply"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:1205
+msgid "Width and height for each widget (in pixels)"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:1238
+msgid "Predefined themes"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:1242
+msgid "Choose a theme to change all colors at once"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:1318
+msgid "Regenerate all configs"
+msgstr ""
+
+#: src/templates/ags-style-editor.template:1335
+#: src/templates/ags-vpn-settings.template:922
+msgid "Reset"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:259
+#: src/templates/ags-vpn-settings.template:294
+#: src/templates/ags-vpn-settings.template:850
+msgid "VPN settings"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:294
+msgid "Settings saved"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:503
+msgid "Connection settings"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:507
+msgid "VPN server"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:508
+msgid "Connection name"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:509
+msgid "Default username"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:512
+msgid "Test host (optional)"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:517
+msgid "Enable XAuth"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:523
+msgid "Show debug terminal"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:530
+msgid "Pre-shared key"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:536
+msgid "Enter or show the PSK ..."
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:543
+msgid "Show PSK"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:572
+msgid "Save PSK"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:582
+msgid "The PSK was stored securely"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:582
+#: src/templates/ags-vpn-settings.template:596
+msgid "VPN PSK"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:584
+#: src/templates/ags-vpn-settings.template:611
+msgid "✓ PSK present in {path}"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:596
+msgid "The PSK could not be saved"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:598
+msgid "⚠ The PSK could not be saved"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:614
+msgid "⚠ No PSK saved - please enter one and save it"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:630
+msgid "IKE phase 1 settings"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:635
+#: src/templates/ags-vpn-settings.template:676
+msgid "Mode"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:636
+msgid "Aggressive"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:637
+msgid "Main"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:641
+msgid "IKE version"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:642
+msgid "IKEv1"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:643
+msgid "IKEv2"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:651
+msgid "IKE proposals"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:652
+msgid "Key lifetime (seconds)"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:653
+msgid "DPD delay (seconds)"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:654
+msgid "DPD timeout (seconds)"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:658
+msgid "NAT encapsulation"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:659
+msgid "MOBIKE"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:669
+msgid "ESP phase 2 settings"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:673
+msgid "Rekey time (seconds)"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:674
+msgid "Life time (seconds)"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:677
+msgid "Tunnel"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:678
+msgid "Transport"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:681
+msgid "Replay window"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:682
+msgid "ESP proposals"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:691
+msgid "Routed networks"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:697
+msgid "Add network"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:704
+msgid ""
+"Without at least one network the tunnel comes up and carries no traffic."
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:730
+msgid "e.g. 10.0.0.0/8"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:765
+msgid "DNS settings"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:769
+msgid "Search domain"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:773
+msgid "DNS servers"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:779
+msgid "Add DNS server"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:804
+msgid "IP address ..."
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:871
+msgid "General"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:872
+msgid "Phase 1"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:873
+msgid "Phase 2"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:934
+msgid "← VPN"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:935
+msgid "Back to the VPN connection"
+msgstr ""
+
+#: src/templates/ags-vpn-settings.template:944
+msgid "Save"
+msgstr ""
+
+#: src/templates/ags-vpn.template:244 src/templates/ags-vpn.template:537
+msgid "IP: {ip}"
+msgstr ""
+
+#: src/templates/ags-vpn.template:245 src/templates/ags-vpn.template:540
+msgid "Server: {server}"
+msgstr ""
+
+#: src/templates/ags-vpn.template:246 src/templates/ags-vpn.template:543
+msgid "Connection: {connection}"
+msgstr ""
+
+#: src/templates/ags-vpn.template:263
+msgid "VPN incomplete – please reconnect"
+msgstr ""
+
+#: src/templates/ags-vpn.template:274 src/templates/ags-vpn.template:584
+msgid "Not connected"
+msgstr ""
+
+#: src/templates/ags-vpn.template:302
+msgid "Username required"
+msgstr ""
+
+#: src/templates/ags-vpn.template:306
+msgid "Password required"
+msgstr ""
+
+#: src/templates/ags-vpn.template:314
+msgid "PSK not found! Please save it in the VPN settings."
+msgstr ""
+
+#: src/templates/ags-vpn.template:418
+msgid "Disconnecting ..."
+msgstr ""
+
+#: src/templates/ags-vpn.template:467
+msgid "VPN connection"
+msgstr ""
+
+#: src/templates/ags-vpn.template:527
+msgid "Connected"
+msgstr ""
+
+#: src/templates/ags-vpn.template:606
+msgid "Username"
+msgstr ""
+
+#: src/templates/ags-vpn.template:612
+msgid "Username ..."
+msgstr ""
+
+#: src/templates/ags-vpn.template:623
+msgid "Password"
+msgstr ""
+
+#: src/templates/ags-vpn.template:629
+msgid "Password ..."
+msgstr ""
+
+#: src/templates/ags-vpn.template:656
+msgid "2FA token (optional)"
+msgstr ""
+
+#: src/templates/ags-vpn.template:662
+msgid "6-digit code ..."
+msgstr ""
+
+#: src/templates/ags-vpn.template:674
+msgid "Remember username"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:156
+msgid "Unknown"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:187
+msgid "Confirmation"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:201
+msgid "Delete wallpaper?"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:209
+msgid "Really delete \"{name}\"?"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:214
+msgid "No"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:221
+msgid "Yes"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:300
+msgid "Setting: {name}"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:333
+#: src/templates/ags-wallpaper.template:469
+msgid "LANDSCAPE"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:333
+msgid "PORTRAIT"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:371
+#: src/templates/ags-wallpaper.template:473
+msgid "Landscape Wallpapers"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:371
+msgid "Portrait Wallpapers"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:395
+msgid "{icon} Monitor:"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:405
+msgctxt "monitor orientation, portrait"
+msgid "P"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:406
+msgctxt "monitor orientation, landscape"
+msgid "L"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:413
+msgid "{monitor} ({orientation})"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:415
+msgid "Landscape"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:415
+msgid "Portrait"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:437
+msgid "Wallpapers"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:481
+msgid "Import wallpaper"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:525
+msgid "Random wallpaper for this monitor"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:533
+msgid "Random"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:549
+msgid "Regenerate thumbnails"
+msgstr ""
+
+#: src/templates/ags-wallpaper.template:557
+msgid "Refresh"
+msgstr ""

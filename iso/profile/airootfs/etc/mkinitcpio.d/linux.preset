@@ -1,0 +1,12 @@
+# mkinitcpio preset for the 'linux' package inside the live image.
+# Verbatim from archiso's baseline profile: it names the archiso HOOKS
+# file next to it and the image path mkarchiso then copies out of the
+# rootfs. Both halves have to agree with archiso's expectations, so this
+# is not a file to improve on.
+
+PRESETS=('archiso')
+
+ALL_kver='/boot/vmlinuz-linux'
+archiso_config='/etc/mkinitcpio.conf.d/archiso.conf'
+
+archiso_image="/boot/initramfs-linux.img"

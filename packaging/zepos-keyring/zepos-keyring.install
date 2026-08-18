@@ -1,0 +1,38 @@
+# The three commands packaging/verify-install.sh and iso/build.sh both
+# perform by hand, done here for a machine that has just installed this
+# package. `pacman-key --populate zepos` imports
+# /usr/share/pacman/keyrings/zepos.gpg and then locally signs every
+# fingerprint listed in zepos-trusted next to it - the import alone would
+# leave pacman rejecting every signature from a key it has but does not
+# trust.
+#
+# WHY THE GUARD, AND WHY IT IS NOT A BUG THAT IT SOMETIMES SKIPS
+#     A scriptlet runs chrooted into the root pacman is installing into,
+#     which is not always a root with a pacman keyring in it. The two
+#     cases that matter here both have none:
+#
+#       * mkarchiso builds the ISO with `pacstrap -G`, which
+#         deliberately does not copy a keyring into the image;
+#       * archinstall pacstraps the target before it has run
+#         `pacman-key --init` there.
+#
+#     `pacman-key -l` fails on a root with no /etc/pacman.d/gnupg, so the
+#     population is skipped rather than attempted against a keyring that
+#     does not exist - and it happens on the next `pacman -Syu`, once
+#     `pacman-key --init` has been run, because a reinstall or an upgrade
+#     of this package runs the same function. This is the guard
+#     archlinux-keyring uses, for exactly these situations.
+#
+#     Paths are relative on purpose: the scriptlet runs with / as its
+#     working directory inside the chroot, and an absolute /usr/bin/...
+#     would name the HOST's pacman-key on a --root installation.
+post_upgrade() {
+    if usr/bin/pacman-key -l >/dev/null 2>&1; then
+        usr/bin/pacman-key --populate zepos
+        usr/bin/pacman-key --updatedb
+    fi
+}
+
+post_install() {
+    post_upgrade "$@"
+}

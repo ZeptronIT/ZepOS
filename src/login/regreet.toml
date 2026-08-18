@@ -1,0 +1,122 @@
+# Das Aussehen der Anmeldung - installiert nach
+# /etc/greetd/zepos-regreet.toml
+#
+# WARUM NICHT /etc/greetd/regreet.toml
+#     Denselben Grund wie bei greetd.toml, und er ist wieder gemessen:
+#     das Paket greetd-regreet 0.5.0-1 besitzt /etc/greetd/regreet.toml
+#     selbst. src/bin/zepos-greeter ruft regreet deshalb mit "--config"
+#     auf; regreet(1) --help nennt die Vorgabe
+#     "[default: /etc/greetd/regreet.toml]" und laesst sie ueberschreiben.
+#
+# WAS DIE ANMELDUNG MIT DEM INSTALLER TEILT
+#     Das Bild, die Schrift UND die Marke. Hier stand bis zum 11.08.2026
+#     etwas anderes: geteilt seien nur Bild und Schrift, und regreet nehme
+#     ansonsten "libadwaita dunkel, was dieselbe Familie ist, aus der auch
+#     der Installer seine Widgets nimmt".
+#
+#     Das stimmte fuer die WIDGETS und nicht fuer ihre FARBEN, und
+#     iso/out/run-release-installed/key-01-01-anmeldung.png zeigt den
+#     Unterschied: der Hintergrund war richtig, und davor stand eine
+#     graue Kachel mit einem blauen "Login" und zwei gleich roten
+#     Endknoepfen. Dieselbe Widget-Bibliothek in ihren Vorgabefarben ist
+#     nicht dieselbe Marke.
+#
+#     Die Schlussfolgerung von damals war trotzdem richtig: eine KOPIE
+#     des Installer-Stylesheets hierher waere eine zweite Definition
+#     derselben Marke gewesen. Es ist deshalb keine Kopie, sondern eine
+#     Erzeugung - src/greeter.py baut ein Blatt je Thema nach
+#     /etc/greetd/zepos-greeter-<thema>.css, aus theme.py und
+#     sizes.py, also derselben Mitte, aus der auch
+#     installer/gui/branding.py seine Werte nimmt. src/bin/zepos-greeter
+#     reicht die Datei mit "--style" an regreet; regreet(1) des Tags
+#     0.5.0 kennt "-s, --style <PATH>".
+
+# Die Sitzung und der Benutzername werden jedes Mal gefragt. "anmeldung
+# immer" heisst nicht nur ein Passwortfeld: ein Greeter, der die letzte
+# Auswahl stillschweigend uebernimmt, zeigt beim naechsten Start nicht
+# mehr, wer da eigentlich angemeldet wird.
+skip_selection = false
+
+[background]
+# Dasselbe Bild wie hinter dem Installer, aus dem Paket zepos-config -
+# nicht aus dem Installerpaket, das auf einer Installation fehlt.
+# packaging/zepos-config/PKGBUILD legt src/branding/ genau hierhin.
+path = "/usr/share/zepos/branding/zepos-backdrop.png"
+
+# "Cover" ist die ContentFit-Entsprechung zu dem, was der Installer mit
+# CSS macht: `background-size: cover; background-position: center`
+# (installer/gui/branding.py, css()). Das Bild ist 16:9; auf einem 4:3
+# Bildschirm wuerde "Fill" die Wortmarke ein Drittel zu breit ziehen.
+fit = "Cover"
+
+[GTK]
+application_prefer_dark_theme = true
+cursor_theme_name = "Adwaita"
+cursor_blink = true
+# brand.FONT_TEXT. Steht in packaging/zepos-desktop/PKGBUILD als harte
+# Abhaengigkeit (ttf-roboto), weil fontconfig eine fehlende Familie
+# ersetzt statt sie zu melden.
+font_name = "Roboto 16"
+icon_theme_name = "Adwaita"
+theme_name = "Adwaita"
+
+[commands]
+# Ausgeschrieben, obwohl es die Vorgaben des Pakets sind: diese Datei
+# ERSETZT die Paketdatei vollstaendig (--config), also ist alles, was
+# hier fehlt, auf der Anmeldemaske nicht da. Ein Anmeldebildschirm ohne
+# "Ausschalten" ist ein Rechner, den man nur ueber den Netzschalter los
+# wird.
+reboot = ["systemctl", "reboot"]
+poweroff = ["systemctl", "poweroff"]
+
+[appearance]
+# DIE VORGABE UND NICHT MEHR DIE ANSAGE FUER JEDE MASCHINE (17.08.2026)
+#     Diese Zeile stand bis heute fest fuer jede Installation, und der
+#     i18n-Lauf hat gezeigt, was das heisst: wer ZepOS auf Englisch
+#     installiert, bekommt eine englische Konsole, einen englischen
+#     Assistenten, eine englische Oberflaeche - und dazwischen einen
+#     deutschen Gruss.
+#
+#     src/bin/zepos-greeter liest jetzt die Sprache DIESER Maschine (LANG
+#     aus der Umgebung, sonst aus /etc/locale.conf) und legt sich, wenn
+#     sie eine andere ist, eine eigene Fassung dieser Datei in
+#     XDG_RUNTIME_DIR ab. Diese Datei hier wird dabei nur GELESEN: sie
+#     steht in backup= des Pakets, also ist sie die, an der ein
+#     Administrator dreht, und sie bleibt die Vorgabe fuer alles, was
+#     sich nicht aufloesen laesst.
+greeting_msg = "Willkommen bei ZepOS"
+
+[widget.clock]
+# Die Uhr oben am Bildschirmrand. Sie stand auf "Tue 20:09" - gemessen
+# auf key-01-01-anmeldung.png -, und das ist keine Vorgabe, die jemand
+# gesetzt hat, sondern ein Rueckfall: src/gui/widget/clock.rs des Tags
+# 0.5.0 fragt sys_locale::get_locale() und nimmt Locale::en_US, wenn
+# nichts antwortet. In der Umgebung, die greetd dem Benutzer "greeter"
+# gibt, antwortet nichts.
+#
+# WARUM DAS OHNE /etc/locale.gen FUNKTIONIERT
+#     Weil chrono seine Sprachdaten nicht von glibc holt. regreets
+#     Cargo.toml aktiviert das Merkmal "unstable-locales", und
+#     Cargo.lock nennt dazu pure-rust-locales 0.8.2 - die Namen der
+#     Wochentage sind in das Programm einkompiliert. Ein nicht erzeugtes
+#     de_DE.UTF-8 kann diese Zeile also nicht kosten, und das ist genau
+#     der Fehler, den src/clocks.py fuer `date` beschreibt.
+#
+# Die zwei einzigen Zeichenketten dieser Maske, die ueberhaupt
+# einstellbar sind, sind diese und der Gruss darueber. "User:",
+# "Session:", "Cancel", "Login", "Reboot" und "Power Off" sind es nicht:
+# gemessen an den 1183 Zeilen GUI-Quelltext des Tags 0.5.0 stehen sie
+# dort als gewoehnliche Rust-Zeichenketten, mit NULL Aufrufen von gettext
+# oder einer anderen Uebersetzungsfunktion. Es gibt keinen Katalog zu
+# fuellen.
+#
+# WEIL ES NUR DIESE ZWEI SIND, SIND SIE SEIT DEM 17.08.2026 AUCH DIE
+# GANZE UEBERSETZUNG DIESER MASKE
+#     Beide sind ab hier eine VORGABE: src/bin/zepos-greeter setzt sie
+#     fuer die Sprache dieser Maschine ein - siehe den Block ueber
+#     greeting_msg. GEMESSEN am 17.08.2026 an
+#     out/anmeldung/NACHHER-zeptronit-auswahl.png: die Uhr stand auf "Do
+#     14:05", also auf dem deutschen Wochentag, den GENAU diese Zeile
+#     erzeugt. Auf einer englischen Installation ist "Do" der einzige
+#     deutsche Rest neben sechs englischen Beschriftungen.
+locale = "de_DE"

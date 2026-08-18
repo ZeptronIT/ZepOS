@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""
+Helper Scripts Module for the bar
+Zeigt ein Icon an mit allen verfügbaren Helper-Scripts
+Klick öffnet Wofi zur Script-Auswahl
+"""
+import json
+import os
+import subprocess
+import html
+
+
+def helpers_dir():
+    """Das Verzeichnis, in das generate_config.sh die Helper schreibt.
+
+    Zur Laufzeit aufgeloest und nicht einkompiliert: das Modul liegt in
+    den Leistenskripten und kann nicht wissen, wohin der Nutzer seine
+    Wurzel gelegt hat. Dieselbe Reihenfolge wie in paths.py und im
+    Generator - ZEPOS_USER_ROOT, sonst das Unterverzeichnis "zepos" in
+    XDG_CONFIG_HOME, das seinerseits auf den XDG-Standardwert
+    zurueckfaellt.
+
+    Gescannt wurde frueher ~/.local/bin/helpers. Dieses Verzeichnis legt
+    nichts in diesem Projekt an, also meldete das Modul auf einem frisch
+    erzeugten System " 0" und "Keine Helper-Scripts gefunden" - direkt
+    neben sieben Skripten, die derselbe Lauf gerade geschrieben hatte.
+    """
+    user_root = os.environ.get("ZEPOS_USER_ROOT")
+    if not user_root:
+        config_home = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+        user_root = os.path.join(config_home, "zepos")
+    return os.path.join(user_root, "helpers")
+
+
+def display_dir():
+    """Dasselbe Verzeichnis, mit ~ statt des Home-Pfads im Tooltip."""
+    path = helpers_dir()
+    home = os.path.expanduser("~")
+    if path == home or path.startswith(home + os.sep):
+        return "~" + path[len(home):]
+    return path
+
+
+def get_helper_scripts():
+    """Scannt das helpers Verzeichnis nach ausführbaren Scripts"""
+    helpers_dir_path = helpers_dir()
+    scripts = []
+
+    if os.path.exists(helpers_dir_path):
+        for file in sorted(os.listdir(helpers_dir_path)):
+            # Skip backup files
+            if '.backup.' in file:
+                continue
+            filepath = os.path.join(helpers_dir_path, file)
+            if os.path.isfile(filepath) and os.access(filepath, os.X_OK):
+                # Lese erste Zeile für Beschreibung
+                try:
+                    with open(filepath, 'r') as f:
+                        lines = f.readlines()
+                        description = ""
+                        # Suche nach Kommentar mit Beschreibung
+                        for line in lines[:10]:  # Nur erste 10 Zeilen
+                            if line.startswith('#') and not line.startswith('#!'):
+                                description = line.strip('# \n')
+                                break
+                        scripts.append((file, description))
+                except:
+                    scripts.append((file, ""))
+    
+    return scripts
+
+def format_tooltip():
+    """Formatiert die Script-Liste für den Tooltip"""
+    scripts = get_helper_scripts()
+    
+    # Das Verzeichnis gehoert in beide Antworten: steht es nur im
+    # Erfolgsfall da, sagt der leere Fall nicht, wo nachgesehen wurde -
+    # und genau das war der Fehler, den niemand bemerkt hat.
+    directory = display_dir()
+
+    if not scripts:
+        return f"Keine Helper-Scripts in {directory} gefunden"
+
+    # Sammle zuerst alle Zeilen um die maximale Länge zu finden
+    content_lines = []
+    content_lines.append("│")
+    content_lines.append(f"│ {{ICON_FOLDER}} {directory}/")
+    content_lines.append("│")
+    
+    # Gruppiere nach Kategorien basierend auf Dateinamen
+    categorized = {
+        "{{ICON_SETTINGS}} System": [],
+        "{{ICON_WRENCH}} Tools": [],
+        "{{ICON_TERMINAL}} Scripts": []
+    }
+    
+    for script, desc in scripts:
+        # Kategorisiere basierend auf Namen
+        if any(x in script.lower() for x in ['monitor', 'display', 'system', 'backup']):
+            category = "{{ICON_SETTINGS}} System"
+        elif any(x in script.lower() for x in ['convert', 'generate', 'build', 'tool']):
+            category = "{{ICON_WRENCH}} Tools"
+        else:
+            category = "{{ICON_TERMINAL}} Scripts"
+        
+        categorized[category].append((script, desc))
+    
+    # Zeige nur Kategorien mit Inhalt
+    for category, items in categorized.items():
+        if items:
+            content_lines.append(f"├─ {category}")
+            content_lines.append("│")
+            
+            # Finde längste Script-Namen für Ausrichtung
+            max_len = max(len(name) for name, _ in items) if items else 0
+            
+            for name, desc in items:
+                formatted_name = f"{name:<{max_len}}"
+                if desc:
+                    line = f"│  {formatted_name}  →  {desc}"
+                else:
+                    line = f"│  {formatted_name}"
+                content_lines.append(line)
+            
+            content_lines.append("│")
+    
+    # Info-Zeilen
+    info_lines = []
+    info_lines.append("  {{ICON_INFO}} Klick → Script auswählen")
+    info_lines.append(f"  {{ICON_HASHTAG}} {len(scripts)} Scripts verfügbar")
+    
+    # Finde die längste Zeile (ohne die Rahmenzeichen zu zählen)
+    all_lines = content_lines + info_lines
+    max_length = max(len(line.replace("│", "").replace("├─", "  ")) for line in all_lines if line.strip())
+    
+    # Erstelle Header und Footer mit passender Länge
+    header = "╭───── HELPER SCRIPTS " + "─" * (max_length - 21) + "╮"
+    footer = "╰" + "─" * (max_length) + "╯"
+    
+    # Baue finalen Tooltip
+    lines = []
+    lines.append(header)
+    lines.extend(content_lines)
+    lines.append(footer)
+    lines.append("")
+    lines.extend(info_lines)
+    
+    return "\n".join(lines)
+
+def main():
+    # Anzahl der Scripts für das Badge
+    scripts = get_helper_scripts()
+    count = len(scripts)
+    
+    output = {
+        "text": f"{{ICON_CODE}}  {count}",  # Icon mit Anzahl der Scripts
+        "tooltip": html.escape(format_tooltip()),
+        "class": "custom-helpers",
+        "on-click": "hyprctl hyprlaunch:helpers"  # Startet HyprLaunch im Helpers-Modus
+    }
+    
+    print(json.dumps(output))
+
+if __name__ == "__main__":
+    main()

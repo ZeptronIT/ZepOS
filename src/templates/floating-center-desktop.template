@@ -1,0 +1,26 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Terminal (Floating)
+GenericName=Terminal emulator
+Comment=Floating terminal window for Hyprland
+TryExec=kitty
+StartupNotify=true
+# --directory ~, damit dieses Terminal im Heimatverzeichnis aufgeht und
+# nicht dort, wo der Starter zufaellig steht. Es ist hier kein
+# theoretischer Fall: gestartet wird dieser Eintrag von der
+# Anwendungsuebersicht, die im AGS-Prozess laeuft, und den startet
+# hyprland-universal-config.template mit `cd ~/.config/ags && ags run`.
+# Ohne diese Angabe oeffnete das Terminal also verlaesslich im
+# Konfigurationsverzeichnis der Leiste.
+#
+# Path= waere der Schluessel der Desktop-Entry-Spezifikation dafuer und
+# kommt trotzdem nicht in Frage: er verlangt einen ABSOLUTEN Pfad, und
+# der Name des Heimatverzeichnisses gehoert dem Konto und nicht der
+# Vorlage. Die Tilde loest kitty selbst auf (kitty/child.py:
+# expandvars(expanduser(cwd))) - die Zeile braucht also keine Shell, die
+# es in einer .desktop-Datei auch nicht gibt.
+Exec=kitty --directory ~ --class=floating-center
+Icon=kitty
+Categories=System;TerminalEmulator;
+StartupWMClass=floating-center

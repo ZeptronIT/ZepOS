@@ -1,0 +1,44 @@
+[
+    {
+        "label": "lock",
+        "icon": "{{ICON_LOCK}}",
+        "text": "Lock",
+        "keybind": "l",
+        "action": "zepos-lock"
+    },
+    {
+        "label": "logout",
+        "icon": "{{ICON_LOGOUT}}",
+        "text": "Logout",
+        "keybind": "e",
+        "action": "hyprctl dispatch exit"
+    },
+    {
+        "label": "reboot",
+        "icon": "{{ICON_REBOOT}}",
+        "text": "Reboot",
+        "keybind": "b",
+        "action": "systemctl reboot"
+    },
+    {
+        "label": "shutdown",
+        "icon": "{{ICON_SHUTDOWN}}",
+        "text": "Shutdown",
+        "keybind": "p",
+        "action": "systemctl poweroff"
+    },
+    {
+        "label": "suspend",
+        "icon": "{{ICON_SUSPEND}}",
+        "text": "Suspend",
+        "keybind": "u",
+        "action": "systemctl suspend"
+    },
+    {
+        "label": "hibernate",
+        "icon": "{{ICON_HIBERNATE}}",
+        "text": "Hibernate",
+        "keybind": "h",
+        "action": "systemctl hibernate"
+    }
+]

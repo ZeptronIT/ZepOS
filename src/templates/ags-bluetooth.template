@@ -1,0 +1,705 @@
+// Das Bluetooth-Fenster (AGS v3, GTK4) - eine Ueberlagerung aus der Fabrik
+// Von ZepOS erzeugt
+// Enthaelt: Adapter an/aus, Suchlauf, Geraeteliste, verbinden und trennen
+//
+// WARUM ES DIESES FENSTER SEIT DEM 17.08.2026 GIBT
+//     BESTELLT, woertlich: "ich will alle control center funktionen
+//     aufteilen oben auf die waybar wlan soll direkt dahin bluez
+//     vorinstalliert bluetooth soll funktionieren also so die haupt
+//     funktionen die neben funktionen koennen im control setup bleiben".
+//
+//     Bis dahin gab es fuer Bluetooth genau ZWEI Bedienwege, und beide
+//     starteten einen fremden Prozess:
+//
+//         Leiste, `case "bluetooth"`   onClick: "blueman-manager"
+//         Kontrollzentrum, btRow       GLib.spawn_command_line_async(
+//                                      "blueman-manager")
+//
+//     blueman ist GTK3. Aufgabe #81 hat waybar und wofi genau deshalb
+//     abgeloest, und packaging/zepos-desktop nennt blueman seit dem
+//     12.08.2026 unter den harten Abhaengigkeiten mit derselben
+//     Begruendung, mit der es dort steht: es gibt keinen GTK4-Ersatz zu
+//     kaufen. Also wird er hier gebaut - fuer die HAUPTfunktionen, die
+//     der Nutzer genannt hat: einschalten, suchen, ein Geraet aus einer
+//     Liste verbinden.
+//
+//     blueman bleibt und ist einen Klick entfernt (der Knopf ueber der
+//     Liste). Was er kann und dieses Fenster nicht - der
+//     Kopplungsassistent mit PIN-Vergleich, die Dateiuebertragung, die
+//     Netzwerkfreigabe -, sind genau die Nebenfunktionen, von denen der
+//     Nutzer im selben Satz sagt, dass sie bleiben duerfen.
+//
+// WARUM AUS DER FABRIK UND NICHT SELBST GEBAUT
+//     createOverlayWindow() in utils/overlay.ts. Sie bringt den
+//     Hoehendeckel (MEASURE_MODAL_SHARE), die Bildlaufleiste NEBEN dem
+//     Inhalt, die gemessene natuerliche Groesse, die Lage am Zeiger und
+//     das Schliesskreuz mit. ags-network.template hat sich sein Fenster
+//     bis zum 12.08.2026 selbst gebaut und stand dafuer 721 Punkte hoch
+//     da, wo der Deckel 540 sagt; tests/src/test_modal_rule.py haelt die
+//     Regel seither ueber ALLE Vorlagen. Ein zweites Fenstersystem
+//     entsteht hier nicht.
+//
+// JEDE FRAGE AN bluetoothctl BEKOMMT EINE FRIST, UND DAS IST GEMESSEN
+//     GEMELDET am 17.08.2026: "wenn ich auf meinem zepos system versuche
+//     das auszufuehren stuckt er freeze es passiert nichts" - ueber
+//     ags/scripts/status.sh, aus dem Ton, Mikrofon, Akku, Netz und
+//     Bluetooth kommen.
+//
+//     bar-status-config.template hat daraufhin `frag` bekommen, also
+//     `timeout 3`. Das behebt das EINFRIEREN und beantwortet nicht,
+//     WARUM `bluetoothctl show` haengt. Die Antwort ist am 17.08.2026
+//     an der Testinstallation gemessen worden (iso/out/release-target
+//     .img, entsperrt, Wurzel p2):
+//
+//         bluez 5.87-2, bluez-utils 5.87-2, blueman 2.4.6-2 installiert
+//         /usr/lib/systemd/system/bluetooth.service vorhanden
+//         /etc/systemd/system/bluetooth.target.wants/   FEHLT
+//         /etc/systemd/system/dbus-org.bluez.service    FEHLT
+//
+//     Die beiden fehlenden Namen sind genau das, was `systemctl enable
+//     bluetooth.service` schreibt - die Unit traegt unter [Install]
+//     "WantedBy=bluetooth.target" und "Alias=dbus-org.bluez.service".
+//     Und /usr/share/dbus-1/system-services/org.bluez.service nennt als
+//     Starter "SystemdService=dbus-org.bluez.service" bei
+//     "Exec=/bin/false": ohne diesen Alias kann der Systembus org.bluez
+//     WEDER selbst starten NOCH auf einen laufenden Dienst verweisen.
+//     bluetoothctl wartet dann auf einen Namen, der nie kommt.
+//
+//     Aktiviert wird der Dienst seither in installer/core/translate.py,
+//     bei den "services". Dieses Fenster deckt den Rest ab: es fragt mit
+//     Frist und SAGT, wenn nichts antwortet, statt stehenzubleiben. Ein
+//     Werkzeug, das nicht antwortet, ist eine fehlende Auskunft und kein
+//     fehlendes Geraet - dieselbe Regel wie in bar-status-config
+//     .template.
+
+import { Gtk } from "ags/gtk4"
+import { execAsync } from "ags/process"
+import { interval } from "ags/time"
+// Fuer JEDE Beschriftung, deren Text aus einem fremden Programm kommt -
+// hier der Geraetename und die Adresse, die bluetoothctl liefert.
+//
+// GEMESSEN am 17.08.2026 im verschachtelten Compositor mit dem
+// Bluetooth-Adapter dieser Maschine: mit einem gekoppelten "Keychron K3
+// Version 3" stand das Fenster 460 Punkte breit da statt der 312, die
+// es leer braucht - und der dritte Knopf ueber der Liste lag hinter der
+// rechten Kante. Dieselbe Messung wie im Kontrollzentrum am selben Tag,
+// und dieselbe Antwort: die Zeile endet nach
+// {{STYLE_MEASURE_LINE}} Zeichen mit drei Punkten, statt das Fenster zu
+// verbreitern.
+import Pango from "gi://Pango"
+import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
+import { _, format } from "../utils/i18n"
+
+const WINDOW_NAME = "bluetooth"
+const UPDATE_INTERVAL = 5000
+
+// Die Masse, die dieses Fenster sich WUENSCHT. utils/overlay.ts deckelt
+// sie auf MEASURE_MODAL_SHARE des Schirms und auf die gemessene
+// natuerliche Groesse des Inhalts - dieselbe Rechnung wie beim
+// Netzfenster nebenan, und dieselben Zahlen, weil beide dieselbe Sorte
+// Liste zeigen: eine Handvoll Zeilen aus Zeichen, Name und Zustand.
+//
+// NACHGEMESSEN am 17.08.2026 im verschachtelten Compositor, mit dem
+// Adapter dieser Maschine und einem gekoppelten Geraet ("Keychron K3
+// Version 3"), auf einem Schirm, auf dem weder MODAL_SHARE noch der
+// Wunsch bindet - und ZWEIMAL geoeffnet, weil die Fabrik in show() VOR
+// onShow misst und beim ersten Mal deshalb den leeren Inhalt sieht:
+//
+//     erstes Aufgehen    312x416   die Liste ist noch leer
+//     zweites Aufgehen   466x446   mit der Geraetezeile darin
+//
+// 460 STANDEN HIER, und das waren sechs Punkte zu wenig. Auf dem Bild
+// vom selben Tag lag der dritte Knopf ueber der Liste - der, der
+// blueman oeffnet - hinter der rechten Kante, und daneben stand die
+// waagerechte Bildlaufleiste der Fabrik. Sechs Punkte, ein
+// unerreichbarer Knopf.
+//
+// UND 500, NICHT 470: zu den 466 des Inhalts kommt die senkrechte
+// Bildlaufleiste, die NEBEN ihm liegt (overlay_scrolling: false in der
+// Fabrik). NACHGEMESSEN mit einem Wunsch von 620, damit weder er noch
+// MODAL_SHARE bindet: das Fenster steht dann 490 breit da. 500 ist die
+// naechste Zehnerstufe darueber.
+//
+// Sie bleibt ein WUNSCH: MODAL_SHARE deckelt auf 960 (bei 1920), und ein
+// Geraetename an der Ellipsengrenze von {{STYLE_MEASURE_LINE}} Zeichen
+// kann darueber hinausgehen - dann greift die Bildlaufleiste, und dafuer
+// ist sie da.
+//
+// NACHTRAG VOM 17.08.2026, NACHMITTAG: DIE 490 WAREN NICHT DER INHALT,
+// SONDERN EIN FREMDER AUSSENRAND
+//     GEMELDET: "die ags fenster die du gebaut hast sind so
+//     eingequetscht das man nach rechts und nach unten scrollen muss".
+//
+//     GEMESSEN mit einem Messfuehler in der erzeugten utils/overlay.ts,
+//     Schirm 1920x1200: die Flaeche war 490 breit, `win.get_width()`
+//     aber 475, das Sichtfenster 449 und der Inhalt 464 - fuenfzehn
+//     Punkte lagen hinter der Kante. Die fuenfzehn sind
+//     STYLE_MODULE_SPACING: `#bluetooth` in src/styles/bar-style.template
+//     ist der Abstand ZWISCHEN ZWEI LEISTENMODULEN und traf dieses
+//     Fenster, weil es bis dahin ebenfalls `bluetooth` hiess. Die ganze
+//     Messung steht in ags-overlay-utils.template beim Widgetnamen.
+//
+//     500 bleibt damit richtig und ist es jetzt auch wirklich: der
+//     Inhalt misst sich 464, die senkrechte Bildlaufleiste kostet 24,
+//     macht 490 - und die passen seither auch an.
+const WIN_WIDTH = 500
+
+// DIE HOEHE IST AM 17.08.2026 VON 550 AUF 600 GEGANGEN, UND ES WAREN
+// DREI PUNKTE
+//     GEMESSEN am selben Tag mit drei bekannten Geraeten: der Inhalt
+//     wollte 553 Punkte, das Fenster gab 550 - eine Bildlaufleiste fuer
+//     DREI Punkte, und der Nutzer hat sie gesehen ("und nach unten
+//     scrollen muss").
+//
+//     600 ist keine gegriffene Zahl: MEASURE_MODAL_SHARE mal 1200 - der
+//     Schirmhoehe des Nutzers - ist genau 600, und das Kontrollzentrum
+//     steht dort ebenso hoch da. Auf jedem Schirm unter 1200 Zeilen
+//     entscheidet weiter MODAL_SHARE (auf 1080 sind es 540), auf jedem
+//     darueber dieser Wunsch. Er ist also nicht tot, sondern die
+//     Obergrenze fuer grosse Schirme.
+const WIN_HEIGHT = 600
+
+// Die Frist auf jede Frage an bluetoothctl, in Sekunden. DIESELBE Zahl
+// wie ANTWORTFRIST in bar-status-config.template, und aus demselben
+// Grund: lang genug fuer ein traeges Werkzeug, kurz genug, dass ein
+// Fenster nach spaetestens drei Sekunden wieder etwas zeigt.
+const FRIST = 3
+
+// Wie lange ein Suchlauf laeuft. `bluetoothctl scan on` kehrt NIE
+// zurueck - es ist eine Sitzung, die man beendet. `--timeout` ist der
+// eingebaute Ausgang von bluetoothctl (bluez 5.87 auf der
+// Testinstallation, gemessen am 17.08.2026): danach beendet sich das
+// Werkzeug selbst und die gefundenen Geraete stehen in seiner Datenbank.
+//
+// Zehn Sekunden, und die Zahl ist eine Entscheidung: ein Geraet, das
+// sich anbietet, sendet sein Erkennungspaket mehrmals je Sekunde. Wer
+// laenger sucht, findet nichts Neues mehr, haelt aber den Adapter im
+// Suchmodus, und das kostet auf einem Notebook Strom.
+const SUCHDAUER = 10
+
+const ICONS = {
+  bluetooth: "{{ICON_BLUETOOTH}}",
+  connected: "{{ICON_BLUETOOTH_CONNECTED}}",
+  power: "{{ICON_POWER}}",
+  search: "{{ICON_SEARCH}}",
+  refresh: "{{ICON_REFRESH}}",
+  check: "{{ICON_CHECK}}",
+  settings: "{{ICON_SETTINGS}}",
+  alert: "{{ICON_ALERT}}",
+}
+
+// Was an der Stelle einer fehlenden Angabe steht - dasselbe Zeichen wie
+// im Netzfenster.
+const NOTHING = "—"
+
+/** Ein Geraet, wie bluetoothctl es kennt. */
+interface Device {
+  /** Die Adresse, AA:BB:CC:DD:EE:FF. Sie ist der Schluessel. */
+  address: string
+  name: string
+  paired: boolean
+  connected: boolean
+}
+
+/** Der Zustand des Adapters. */
+interface Adapter {
+  /** Gibt es ueberhaupt einen, und antwortet er? */
+  vorhanden: boolean
+  powered: boolean
+  name: string
+  /** Gesetzt, wenn bluetoothctl nicht geantwortet hat. */
+  fehler: string
+}
+
+/** bluetoothctl fragen, mit Frist.
+ *
+ * `bash -c` und nicht der nackte Befehl: Astals execAsync startet KEINE
+ * Shell, es zerlegt die Zeichenkette mit GLib.shell_parse_argv und
+ * startet argv direkt. Die Messung dazu steht im Kopf von
+ * tests/src/test_ags_exec.py. Hier wird sie gebraucht, weil `timeout`
+ * dem Aufruf vorangestellt wird und der Rueckgabewert 124 als Fehler
+ * beim Aufrufer ankommen soll.
+ */
+async function bctl(args: string): Promise<string> {
+  const output = await execAsync(["bash", "-c", `timeout ${FRIST} bluetoothctl ${args}`])
+  return output.trim()
+}
+
+/** Der Adapter, oder der Grund, aus dem es keine Auskunft gibt. */
+async function readAdapter(): Promise<Adapter> {
+  let show: string
+  try {
+    show = await bctl("show")
+  } catch (e) {
+    // KEIN Adapter und KEINE Antwort sind zwei verschiedene Zustaende,
+    // und dieser hier ist der zweite. Er bekommt deshalb einen Satz und
+    // keinen leeren Kasten - siehe den Kopf dieser Datei fuer die
+    // Messung, aus der dieser Satz stammt.
+    //
+    // EIN Literal und nicht zwei aneinandergehaengte: xgettext liest
+    // `"a" + "b"` nicht als einen msgid, und ein halber msgid ist ein
+    // Eintrag, den der Katalog nie findet. Die Zeile wird dafuer lang;
+    // das ist der kleinere Preis (17.08.2026).
+    return {
+      vorhanden: false, powered: false, name: "",
+      fehler: format(_("bluetoothctl is not answering ({error}). Usually the service is not running: systemctl enable --now bluetooth.service"), { error: String(e) }),
+    }
+  }
+
+  if (!show || show.includes("No default controller")) {
+    return { vorhanden: false, powered: false, name: "", fehler: "" }
+  }
+
+  let powered = false
+  let name = ""
+  for (const line of show.split("\n")) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith("Powered:")) powered = trimmed.endsWith("yes")
+    if (trimmed.startsWith("Name:")) name = trimmed.slice("Name:".length).trim()
+    if (trimmed.startsWith("Alias:")) name = trimmed.slice("Alias:".length).trim()
+  }
+  return { vorhanden: true, powered, name, fehler: "" }
+}
+
+/** Die Zeilen von `bluetoothctl devices ...` zu Adressen aufloesen.
+ *
+ * Die Form ist "Device AA:BB:CC:DD:EE:FF Der Name" - der Name darf
+ * Leerzeichen enthalten, die Adresse nicht.
+ */
+function parseDevices(output: string): Map<string, string> {
+  const found = new Map<string, string>()
+  for (const line of output.split("\n")) {
+    const match = line.match(/^Device\s+(\S+)\s+(.*)$/)
+    if (match) found.set(match[1], match[2].trim())
+  }
+  return found
+}
+
+/** Alle Geraete, die dieser Rechner kennt, mit ihrem Zustand.
+ *
+ * DREI Aufrufe und nicht einer je Geraet: `bluetoothctl info <adresse>`
+ * saegt zwar Gekoppelt und Verbunden fuer EIN Geraet heraus, und bei
+ * acht bekannten Geraeten waeren das acht Prozessstarts je Takt. Die
+ * drei Listen beantworten dieselbe Frage fuer alle auf einmal.
+ */
+async function readDevices(): Promise<Device[]> {
+  let alle: Map<string, string>
+  try {
+    alle = parseDevices(await bctl("devices"))
+  } catch {
+    return []
+  }
+
+  let verbunden = new Map<string, string>()
+  let gekoppelt = new Map<string, string>()
+  try { verbunden = parseDevices(await bctl("devices Connected")) } catch { /* leer */ }
+  try { gekoppelt = parseDevices(await bctl("devices Paired")) } catch { /* leer */ }
+
+  // Ein verbundenes Geraet, das `devices` nicht nennt, gibt es: die
+  // Liste ohne Argument zeigt, was der Adapter GESEHEN hat, und nach
+  // einem Neustart des Dienstes ist das weniger als das, was gerade
+  // haengt. Beide Listen gehen deshalb mit ein.
+  for (const [address, name] of verbunden) if (!alle.has(address)) alle.set(address, name)
+  for (const [address, name] of gekoppelt) if (!alle.has(address)) alle.set(address, name)
+
+  const devices: Device[] = []
+  for (const [address, name] of alle) {
+    devices.push({
+      address,
+      // Ein Geraet ohne Namen meldet sich mit seiner Adresse. Sie ein
+      // zweites Mal als Namen zu zeigen waere eine Zeile, die zweimal
+      // dasselbe sagt.
+      name: name && name !== address ? name : _("Unnamed device"),
+      paired: gekoppelt.has(address),
+      connected: verbunden.has(address),
+    })
+  }
+
+  // Verbunden zuerst, dann gekoppelt, dann der Rest - und innerhalb
+  // jeder Gruppe nach Namen. Das ist die Reihenfolge, in der man sucht:
+  // was gerade haengt, ist das, was man abschalten will.
+  const rang = (device: Device): number =>
+    device.connected ? 0 : device.paired ? 1 : 2
+  return devices.sort((left, right) =>
+    rang(left) - rang(right) || left.name.localeCompare(right.name))
+}
+
+function removeAllChildren(box: Gtk.Box): void {
+  let child = box.get_first_child()
+  while (child) {
+    const next = child.get_next_sibling()
+    box.remove(child)
+    child = next
+  }
+}
+
+export default function BluetoothManager(): OverlayWidget {
+  // Die Widgets, die spaeter beschrieben werden. Sie stehen hier und
+  // nicht in buildContent(), weil updateDisplay() sie von aussen
+  // erreichen muss - dieselbe Aufteilung wie im Netzfenster.
+  let statusIcon: Gtk.Label
+  let statusLabel: Gtk.Label
+  let statusDetail: Gtk.Label
+  let powerBtn: Gtk.Button
+  let scanBtn: Gtk.Button
+  let deviceList: Gtk.Box
+  let emptyLabel: Gtk.Label
+
+  // Steht das Fenster gerade auf dem Schirm? Ohne diese Frage liefe der
+  // Takt unten ab dem Aufbau der Oberflaeche und ohne Ende - vier
+  // bluetoothctl-Aufrufe alle fuenf Sekunden, den ganzen Tag, fuer ein
+  // Fenster, das zu ist. Dieselbe Messung wie im Netzfenster.
+  let windowIsUp = false
+
+  // Laeuft gerade ein Suchlauf? Ein zweiter waehrenddessen ist ein
+  // zweites bluetoothctl auf demselben Adapter.
+  let suchtGerade = false
+
+  // Der zuletzt gelesene Zustand. Die Knoepfe brauchen ihn beim Klick,
+  // und ihn dort neu zu lesen hiesse, auf eine Antwort zu warten, bevor
+  // ueberhaupt etwas passiert.
+  let adapter: Adapter = { vorhanden: false, powered: false, name: "", fehler: "" }
+
+  const updateDisplay = async () => {
+    if (!windowIsUp) return
+
+    adapter = await readAdapter()
+
+    if (adapter.fehler) {
+      statusIcon.set_text(ICONS.alert)
+      statusIcon.set_css_classes(["bt-status-icon", "bt-broken"])
+      statusLabel.set_text(_("Bluetooth is not answering"))
+      statusDetail.set_text(adapter.fehler)
+      powerBtn.set_sensitive(false)
+      scanBtn.set_sensitive(false)
+      removeAllChildren(deviceList)
+      emptyLabel.set_visible(false)
+      return
+    }
+
+    if (!adapter.vorhanden) {
+      statusIcon.set_text(ICONS.bluetooth)
+      statusIcon.set_css_classes(["bt-status-icon", "bt-off"])
+      statusLabel.set_text(_("No Bluetooth adapter"))
+      statusDetail.set_text(_("This machine reports no controller"))
+      // KEIN Knopf, der nichts tun kann. Ein Adapter, den es nicht gibt,
+      // laesst sich nicht einschalten und nicht suchen lassen - Spec
+      // §7.4.
+      powerBtn.set_sensitive(false)
+      scanBtn.set_sensitive(false)
+      removeAllChildren(deviceList)
+      emptyLabel.set_visible(false)
+      return
+    }
+
+    powerBtn.set_sensitive(true)
+    // DASSELBE Zeichen fuer an und aus, und der Unterschied ist die
+    // Klasse. Das ist von bar-status-config.template uebernommen, wo
+    // ein ausgeschalteter Adapter seit dem 13.08.2026 abgeblendet
+    // dasteht statt zu verschwinden: "ein Adapter, der AUS ist, ist
+    // etwas anderes als kein Adapter", und wer ihn sieht, weiss, dass
+    // er ihn nur einschalten muss.
+    statusIcon.set_text(ICONS.bluetooth)
+    statusIcon.set_css_classes(
+      adapter.powered ? ["bt-status-icon"] : ["bt-status-icon", "bt-off"])
+    statusLabel.set_text(
+      adapter.powered ? _("Bluetooth is on") : _("Bluetooth is off"))
+    statusDetail.set_text(adapter.name || NOTHING)
+    if (adapter.powered) {
+      powerBtn.add_css_class("active")
+      powerBtn.remove_css_class("inactive")
+    } else {
+      powerBtn.remove_css_class("active")
+      powerBtn.add_css_class("inactive")
+    }
+    // Suchen kann man nur mit eingeschaltetem Adapter, und waehrend ein
+    // Suchlauf laeuft nicht noch einmal.
+    scanBtn.set_sensitive(adapter.powered && !suchtGerade)
+
+    removeAllChildren(deviceList)
+    if (!adapter.powered) {
+      emptyLabel.set_text(_("Turn Bluetooth on to see devices"))
+      emptyLabel.set_visible(true)
+      return
+    }
+
+    const devices = await readDevices()
+    if (devices.length === 0) {
+      emptyLabel.set_text(suchtGerade
+        ? _("Searching …")
+        : _("No device known - search for devices"))
+      emptyLabel.set_visible(true)
+      return
+    }
+    emptyLabel.set_visible(false)
+    for (const device of devices) deviceList.append(createDeviceRow(device))
+  }
+
+  /** Eine Zeile: Zeichen, Name, Zustand - und ein Klick, der etwas tut. */
+  const createDeviceRow = (device: Device): Gtk.Button => {
+    const row = new Gtk.Button({ can_focus: false })
+    row.add_css_class("bt-item")
+    if (device.connected) row.add_css_class("active")
+
+    const rowBox = new Gtk.Box({ spacing: 12 })
+    const icon = new Gtk.Label({
+      label: device.connected ? ICONS.connected : ICONS.bluetooth,
+    })
+    icon.add_css_class("bt-device-icon")
+    if (device.connected) icon.add_css_class("bt-device-connected")
+
+    const infoBox = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true,
+    })
+    const nameLabel = new Gtk.Label({
+      label: device.name, xalign: 0,
+      ellipsize: Pango.EllipsizeMode.END,
+      max_width_chars: {{STYLE_MEASURE_LINE}},
+    })
+    nameLabel.add_css_class("bt-device-name")
+    // Der Zustand IN WORTEN und die Adresse daneben. Die Adresse ist
+    // das, was zwei gleich benannte Kopfhoerer unterscheidet, und der
+    // Zustand das, was der Klick gleich aendert.
+    const zustand = device.connected ? "Verbunden"
+      : device.paired ? "Gekoppelt" : "Gefunden"
+    const detailLabel = new Gtk.Label({
+      label: `${zustand} • ${device.address}`, xalign: 0,
+      ellipsize: Pango.EllipsizeMode.END,
+      max_width_chars: {{STYLE_MEASURE_LINE}},
+    })
+    detailLabel.add_css_class("bt-device-detail")
+    infoBox.append(nameLabel)
+    infoBox.append(detailLabel)
+
+    rowBox.append(icon)
+    rowBox.append(infoBox)
+
+    if (device.connected) {
+      const mark = new Gtk.Label({ label: ICONS.check })
+      mark.add_css_class("bt-connected-icon")
+      rowBox.append(mark)
+    }
+
+    row.set_child(rowBox)
+    row.set_tooltip_text(device.connected
+      ? format(_("Disconnect {device}"), { device: device.name })
+      : format(_("Connect to {device}"), { device: device.name }))
+
+    row.connect("clicked", async () => {
+      // Waehrend der Aufruf laeuft, sagt die Zeile es. Ein Knopf, der
+      // nach dem Klick zwei Sekunden lang aussieht wie vorher, sieht aus
+      // wie einer, der nichts tut.
+      detailLabel.set_text(
+        device.connected ? _("Disconnecting …") : _("Connecting …"))
+      row.set_sensitive(false)
+      try {
+        // `connect`/`disconnect` warten auf die Gegenstelle. Die Frist
+        // ist hier laenger als bei einer Abfrage: ein Kopfhoerer, der
+        // aus der Tasche geholt wird, braucht mehr als drei Sekunden.
+        await execAsync(["bash", "-c",
+          `timeout 15 bluetoothctl ${device.connected ? "disconnect" : "connect"} `
+          + `${device.address}`])
+      } catch (e) {
+        console.error("Bluetooth:", device.address, e)
+        detailLabel.set_text(device.connected
+          ? _("Disconnecting failed")
+          : _("Connecting failed - is it paired?"))
+      }
+      row.set_sensitive(true)
+      updateDisplay()
+    })
+
+    return row
+  }
+
+  return createOverlayWindow({
+    name: WINDOW_NAME,
+    width: WIN_WIDTH,
+    height: WIN_HEIGHT,
+    cssClass: "BluetoothManager",
+    headerIcon: ICONS.bluetooth,
+    headerTitle: _("Bluetooth"),
+    // DIESELBE Akzentfarbe wie das Netzfenster, und das ist keine
+    // Sparsamkeit: Bluetooth ist eine Verbindung wie das WLAN, und die
+    // Farbe steht in src/brand.py unter "network_accent" mit der
+    // Ueberschrift "Netzwerk". Ein eigener Regler dafuer waere ein
+    // siebzigster Eintrag im Style Editor fuer eine Unterscheidung, die
+    // niemand treffen will.
+    accentCssClass: "network-accent",
+    onShow: () => {
+      windowIsUp = true
+      updateDisplay()
+    },
+    onHide: () => {
+      windowIsUp = false
+    },
+    buildContent: (_win, closeWindow) => {
+      const container = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 12,
+      })
+
+      // ----- Der Zustand des Adapters, mit dem Schalter daneben -----
+      const currentBox = new Gtk.Box({ spacing: 0 })
+      currentBox.add_css_class("bt-current")
+
+      const currentInner = new Gtk.Box({ spacing: 16 })
+      statusIcon = new Gtk.Label({ label: ICONS.bluetooth, valign: Gtk.Align.CENTER })
+      statusIcon.add_css_class("bt-status-icon")
+
+      const statusInfo = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true,
+        valign: Gtk.Align.CENTER,
+      })
+      // MIT GRENZE, seit dem 17.08.2026. Diese Zeile war die BREITESTE
+      // des ganzen Fensters: GEMESSEN meldete `.bt-current` 464 Punkte
+      // MINDESTbreite, und 247 davon waren diese eine Beschriftung -
+      // ohne `ellipsize` ist die Mindestbreite einer Beschriftung ihre
+      // ganze Zeile, und ein Kasten, der nicht schmaler werden kann,
+      // laesst GTK nur die waagerechte Bildlaufleiste.
+      //
+      // Der laengste Satz, den sie traegt, ist nicht "Bluetooth ist an",
+      // sondern "Bluetooth antwortet nicht" - und daneben steht in
+      // statusDetail ein ganzer Befehl. Auf dem Schirm des Nutzers
+      // greift die Grenze nie; sie ist da fuer den Schirm, auf dem sie
+      // greifen wuerde.
+      statusLabel = new Gtk.Label({
+        label: _("Loading …"), xalign: 0,
+        ellipsize: Pango.EllipsizeMode.END,
+        max_width_chars: {{STYLE_MEASURE_LINE}},
+      })
+      statusLabel.add_css_class("bt-status-label")
+      // Die Zeile, in der der Grund steht, wenn es keinen Adapter gibt.
+      // Sie bricht um und ellipsiert nicht: der Satz aus readAdapter()
+      // nennt einen Befehl, und ein abgeschnittener Befehl ist keiner.
+      statusDetail = new Gtk.Label({
+        label: NOTHING, xalign: 0, wrap: true,
+        max_width_chars: {{STYLE_MEASURE_LINE}},
+      })
+      statusDetail.add_css_class("bt-status-detail")
+      statusInfo.append(statusLabel)
+      statusInfo.append(statusDetail)
+
+      powerBtn = new Gtk.Button({ can_focus: false })
+      powerBtn.add_css_class("bt-power-btn")
+      powerBtn.set_child(new Gtk.Label({ label: ICONS.power }))
+      powerBtn.set_tooltip_text(_("Turn Bluetooth on or off"))
+      powerBtn.connect("clicked", async () => {
+        powerBtn.set_sensitive(false)
+        try {
+          await bctl(adapter.powered ? "power off" : "power on")
+        } catch (e) {
+          console.error("Bluetooth: power schlug fehl:", e)
+        }
+        powerBtn.set_sensitive(true)
+        updateDisplay()
+      })
+
+      currentInner.append(statusIcon)
+      currentInner.append(statusInfo)
+      currentInner.append(powerBtn)
+      currentBox.append(currentInner)
+
+      // Ein Gtk.Separator und kein leerer Kasten: ein Kasten ohne Kind
+      // ist null Punkte hoch und braucht eine Mindesthoehe im
+      // Stylesheet, ein Separator bringt seine eigene mit.
+      const divider = new Gtk.Separator({
+        orientation: Gtk.Orientation.HORIZONTAL,
+      })
+      divider.add_css_class("bt-divider")
+
+      // ----- Die Zeile ueber der Liste: Ueberschrift und drei Knoepfe -----
+      //
+      // Dieselbe Aufteilung wie im Netzfenster, wo dieselben drei Rollen
+      // stehen: etwas anstossen, neu lesen, das grosse Werkzeug oeffnen.
+      const toolRow = new Gtk.Box({ spacing: 12 })
+      const listHeader = new Gtk.Label({
+        label: _("DEVICES"), xalign: 0, hexpand: true,
+      })
+      listHeader.add_css_class("bt-section-title")
+
+      scanBtn = new Gtk.Button({ can_focus: false })
+      scanBtn.add_css_class("bt-tool-btn")
+      scanBtn.set_child(new Gtk.Label({ label: ICONS.search }))
+      scanBtn.set_tooltip_text(
+        format(_("Search for devices for {seconds} seconds"),
+               { seconds: SUCHDAUER }))
+      scanBtn.connect("clicked", async () => {
+        if (suchtGerade) return
+        suchtGerade = true
+        scanBtn.set_sensitive(false)
+        emptyLabel.set_text(_("Searching …"))
+        emptyLabel.set_visible(true)
+        try {
+          // Die aeussere Frist ist die innere plus Anlauf. Ohne sie
+          // haengt dieses Fenster an genau dem Werkzeug, dessen Haengen
+          // der Anlass dieser Datei war.
+          await execAsync(["bash", "-c",
+            `timeout ${SUCHDAUER + 5} bluetoothctl --timeout ${SUCHDAUER} scan on`])
+        } catch (e) {
+          console.error("Bluetooth: der Suchlauf schlug fehl:", e)
+        }
+        suchtGerade = false
+        updateDisplay()
+      })
+
+      const refreshBtn = new Gtk.Button({ can_focus: false })
+      refreshBtn.add_css_class("bt-tool-btn")
+      refreshBtn.set_child(new Gtk.Label({ label: ICONS.refresh }))
+      refreshBtn.set_tooltip_text(_("Read the list again"))
+      refreshBtn.connect("clicked", () => { updateDisplay() })
+
+      // blueman, und zwar fuer das, was hier NICHT steht: der
+      // Kopplungsassistent mit PIN-Vergleich, die Dateiuebertragung, die
+      // Netzwerkfreigabe. Es ist eine harte Abhaengigkeit von
+      // zepos-desktop (siehe dort), also fuehrt dieser Knopf auf jeder
+      // Installation irgendwohin - anders als der
+      // `nm-connection-editor`, den das Netzfenster am 12.08.2026
+      // losgeworden ist.
+      const bluemanBtn = new Gtk.Button({ can_focus: false })
+      bluemanBtn.add_css_class("bt-tool-btn")
+      bluemanBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
+      bluemanBtn.set_tooltip_text(
+        _("Open Blueman - pairing, sending files"))
+      bluemanBtn.connect("clicked", () => {
+        execAsync("blueman-manager")
+        closeWindow()
+      })
+
+      toolRow.append(listHeader)
+      toolRow.append(scanBtn)
+      toolRow.append(refreshBtn)
+      toolRow.append(bluemanBtn)
+
+      // ----- Die Liste, OHNE eigene Bildlaufleiste -----
+      //
+      // Die Fabrik haengt eine um den GANZEN Inhalt. Zwei ineinander
+      // waeren zwei Raeder unter einem Finger - die Begruendung steht
+      // ausgeschrieben in ags-network.template.
+      deviceList = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 6,
+      })
+      deviceList.add_css_class("bt-list")
+
+      // Eine leere Liste sagt, WARUM sie leer ist. Ohne diese Zeile
+      // saehe "Adapter aus", "nichts gefunden" und "der Dienst laeuft
+      // nicht" gleich aus, naemlich wie nichts.
+      emptyLabel = new Gtk.Label({
+        label: "", xalign: 0, wrap: true,
+        max_width_chars: {{STYLE_MEASURE_LINE}},
+      })
+      emptyLabel.add_css_class("bt-empty")
+
+      container.append(currentBox)
+      container.append(divider)
+      container.append(toolRow)
+      container.append(deviceList)
+      container.append(emptyLabel)
+
+      // Derselbe Takt wie im Netzfenster, an derselben Stelle.
+      // updateDisplay() steigt oben aus, solange das Fenster zu ist.
+      interval(UPDATE_INTERVAL, updateDisplay)
+
+      return container
+    },
+  })
+}

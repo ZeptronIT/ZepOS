@@ -1,0 +1,68 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# zepos-apps-office - das Buero, wenn es jemand anhakt.
+#
+# WARUM DAS NICHT IN zepos-apps STEHT
+#     Weil ein Buero nicht zu dem gehoert, ohne das ein Schreibtisch
+#     keiner ist, und weil es 724,4 MiB kostet - mehr als die gesamte
+#     uebrige Anwendungsauswahl von ZepOS zusammen (436,6 MiB, gemessen
+#     am angehefteten ALA-Schnappschuss 2026/08/04). Es einem Nutzer
+#     aufzudraengen, der einen Rechner zum Surfen einrichtet, waere die
+#     Haelfte der Installationszeit fuer nichts.
+#
+#     Der Weg dahin ist die ZepOS-Seite des Installers: ein Haken, der
+#     hier landet. Nicht eine Zeile, die jemand am Tag der Installation
+#     tippt - deshalb ist es ein Paket und keine Namensliste in
+#     installer/core/translate.py.
+#
+# DIE EINE STELLE, AN DER DIE MARKE AUFHOERT - AUSDRUECKLICH
+#     LibreOffice traegt kein GTK4. Es hat ueberhaupt keine
+#     Toolkit-Abhaengigkeit in `depends` (gemessen an
+#     libreoffice-fresh 26.2.5-1: weder gtk3 noch gtk4 noch qt), weil
+#     sein VCL die Oberflaeche ueber austauschbare Rueckwaende zeichnet -
+#     und unter den Rueckwaenden, die es gibt, ist gtk3, qt5, qt6, kf5,
+#     kf6 und "gen". Eine GTK4-Rueckwand existiert nicht.
+#
+#     Damit liest LibreOffice das ~/.config/gtk-4.0/gtk.css nicht, das
+#     ZepOS aus src/brand.py erzeugt. Es ist das einzige Stueck, das
+#     ZepOS anbietet und nicht einfaerben kann, und das steht deshalb
+#     auch auf der Seite, auf der es angehakt wird - ein Nutzer, der es
+#     waehlt, soll vorher wissen, dass dieses Fenster anders aussieht.
+#
+#     Der Weg, den die Regel dafuer vorsieht, ist hier zu Ende: einen
+#     GTK4-Ersatz gibt es nicht (onlyoffice-bin ist AUR, Spec §4.3;
+#     abiword und gnumeric sind GTK3), die Funktion nach AGS zu holen ist
+#     bei einer Textverarbeitung keine Aussage, und ein Port von
+#     LibreOffice ist genau die Ausnahme, die fuer grosse fremde
+#     C++-Projekte gilt. Also: anbieten, benennen, nicht vorgeben.
+#
+# WARUM DIE WOERTERBUECHER MITKOMMEN
+#     Weil LibreOffice ohne sie keine Rechtschreibpruefung hat und das
+#     niemandem sagt - der rote Unterstrich bleibt einfach aus. hunspell
+#     ist eine optdepend von libreoffice-fresh, und optdepends
+#     installiert pacman nicht; das ist derselbe Fehler, aus dem dieses
+#     ganze Teilprojekt entstanden ist.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-apps-office
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="Optional: die Buero-Anwendungen, die der ZepOS-Installer anbietet"
+arch=('any')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+depends=(
+    # fresh und nicht still: 26.2.5-1 gegen 25.8.7-5, und ZepOS haengt
+    # ohnehin an einem angehefteten Schnappschuss - die Zurueckhaltung,
+    # fuer die es "still" gibt, leistet hier schon die Anheftung.
+    'libreoffice-fresh'
+    'libreoffice-fresh-de'
+    'hunspell-de'
+    'hunspell-en_us'
+)
+
+package() {
+    install -Dm644 "$_zepos_repo/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

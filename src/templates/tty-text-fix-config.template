@@ -1,0 +1,40 @@
+#!/bin/bash
+# =========================================
+# TTY TEXT BOUNDARY FIX
+# Fixes text starting outside screen after rotation
+# =========================================
+
+# Function to fix text boundaries after rotation
+fix_tty_boundaries() {
+    echo "{{ICON_TERMINAL}} Fixing TTY text boundaries..."
+    
+    # Clear and reset the console
+    clear
+    
+    # Reset terminal to fix drawing issues
+    reset
+    
+    # Force console to redraw with correct boundaries
+    # This uses fbcon parameters to reset the visible area
+    if [ -f /sys/class/graphics/fbcon/cursor_blink ]; then
+        # Trigger redraw by toggling cursor
+        echo 0 > /sys/class/graphics/fbcon/cursor_blink 2>/dev/null
+        echo 1 > /sys/class/graphics/fbcon/cursor_blink 2>/dev/null
+    fi
+    
+    # Alternative: Use setterm to reset console
+    setterm -reset
+    
+    # Set smaller font for rotated display (optional)
+    # setfont ter-112n  # Terminus font, smaller size
+    
+    echo "{{ICON_CHECK}} TTY boundaries fixed!"
+}
+
+# Check if we're in TTY
+if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+    echo "{{ICON_WARNING}} This script is for TTY only!"
+    exit 1
+fi
+
+fix_tty_boundaries

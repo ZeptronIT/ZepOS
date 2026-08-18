@@ -1,0 +1,45 @@
+#!/bin/bash
+# Leistenmodul für Floating Window Layouts
+
+# Icons
+ICON_NO_LAYOUT="{{ICON_WINDOW_FLOATING}}"
+ICON_LAYOUT="{{ICON_SAVE}}"
+ICON_MULTIPLE="{{ICON_COPY}}"
+
+# Hole Layout Informationen
+layouts_json=$($HOME/.local/bin/floating-window-manager bar 2>/dev/null || echo '{"layouts":[]}')
+layout_count=$(echo "$layouts_json" | jq -r '.layouts | length')
+
+# Hole aktuelle floating Fenster
+current_floating=$(hyprctl clients -j | jq '[.[] | select(.floating == true)] | length')
+
+if [ "$layout_count" -eq 0 ]; then
+    # Keine Layouts gespeichert
+    text="$ICON_NO_LAYOUT"
+    tooltip="Keine Layouts gespeichert\n$current_floating floating Fenster aktiv\n\nBedienung:\nLinksklick: Layout laden\nRechtsklick: Layout speichern\nMittelklick: Layout löschen"
+    class="no-layouts"
+elif [ "$layout_count" -eq 1 ]; then
+    # Ein Layout
+    layout_name=$(echo "$layouts_json" | jq -r '.layouts[0].name')
+    window_count=$(echo "$layouts_json" | jq -r '.layouts[0].windows')
+    text="$ICON_LAYOUT $layout_name"
+    tooltip="Layout: $layout_name\n$window_count Fenster gespeichert\n$current_floating floating Fenster aktiv\n\nBedienung:\nLinksklick: Layout laden\nRechtsklick: Neues Layout speichern\nMittelklick: Layout löschen"
+    class="single-layout"
+else
+    # Mehrere Layouts
+    text="$ICON_MULTIPLE $layout_count"
+    tooltip="$layout_count Layouts gespeichert:\n"
+    
+    # Füge alle Layouts zum Tooltip hinzu
+    while IFS= read -r layout; do
+        name=$(echo "$layout" | jq -r '.name')
+        windows=$(echo "$layout" | jq -r '.windows')
+        tooltip="${tooltip}  $name ($windows Fenster)\n"
+    done < <(echo "$layouts_json" | jq -c '.layouts[]')
+    
+    tooltip="${tooltip}\n$current_floating floating Fenster aktiv\n\nBedienung:\nLinksklick: Layout auswählen und laden\nRechtsklick: Neues Layout speichern\nMittelklick: Layout löschen"
+    class="multiple-layouts"
+fi
+
+# Ausgabe für die Leiste
+echo "{\"text\": \"$text\", \"tooltip\": \"$tooltip\", \"class\": \"$class\"}"

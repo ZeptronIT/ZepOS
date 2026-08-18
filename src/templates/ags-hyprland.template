@@ -1,0 +1,326 @@
+// Hyprland-IPC fuer die Leiste und das Dock (GTK4/AGS)
+// Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+// Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-hyprland.template kopieren
+//
+// VORBILD
+//     waybar, src/modules/hyprland/backend.cpp (MIT). Uebernommen ist
+//     das Verfahren, nicht der Text: zwei Sockets desselben Servers,
+//     .socket.sock fuer Fragen und .socket2.sock fuer Ereignisse, die
+//     Zeile "ereignis>>nutzlast", und die Regel, dass der Zustand nach
+//     JEDEM Ereignis neu erfragt und nicht aus dem Ereignis abgeleitet
+//     wird. Der Grund fuer das letzte steht bei refresh().
+//
+// WARUM UEBERHAUPT EIN EIGENER KLIENT UND NICHT AstalHyprland
+//     GEMESSEN am 11.08.2026 am angehefteten Astal-Archiv
+//     (packaging/astal/astal-9dac92f2....tar.gz): lib/hyprland baut,
+//     lib/tray aber nicht - dessen meson.build verlangt
+//     `dependency('appmenu-glib-translator')`, und dieses Paket gibt es
+//     in den Arch-Repositorien nicht (`pacman -Si
+//     appmenu-glib-translator` meldet "wurde nicht gefunden"). Eine
+//     Leiste, deren Ablage ein neues, nicht paketiertes Fremdprojekt
+//     braucht, ist keine Leiste, die man ausliefern kann.
+//
+//     Damit stand die Wahl nicht zwischen "Bibliothek" und "selbst",
+//     sondern zwischen "vier Bibliotheken UND selbst" und "selbst". Die
+//     elf AGS-Widgets, die es hier schon gibt, importieren genau drei
+//     Typbibliotheken - Astal 4.0, AstalIO, AstalNotifd - und holen jede
+//     einzelne Angabe ueber execAsync. Vier weitere Pakete fuer die
+//     Leiste haetten zwei Datenwege fuer einen Schreibtisch bedeutet.
+
+import Gio from "gi://Gio"
+import GLib from "gi://GLib"
+
+// Ein Arbeitsbereich, so wie `hyprctl workspaces -j` ihn meldet.
+export interface Workspace {
+  id: number
+  name: string
+  monitor: string
+  windows: number
+}
+
+// Ein Fenster, so wie `hyprctl clients -j` es meldet. Das Dock zeichnet
+// daraus seine Knoepfe, die Leiste liest nur den Titel des aktiven.
+export interface Client {
+  address: string
+  title: string
+  class: string
+  workspace: { id: number; name: string }
+  monitor: number
+  floating: boolean
+  // Die Prozesskennung des Fensters. Sie steht seit jeher in der
+  // Antwort von `hyprctl clients -j` und wurde hier bis zum 13.08.2026
+  // nicht gelesen.
+  //
+  // WOZU SIE GEBRAUCHT WIRD: die Klasse ist das, was ein Fenster ueber
+  // sich SAGT, und sie kann etwas anderes sein als das Programm.
+  // GEMESSEN am 13.08.2026: `bind = $mainMod, Q, exec, kitty
+  // --directory ~ --class="floating-default"` in
+  // hyprland-universal-config.template - das Terminal dieses Systems
+  // meldet also die Klasse "floating-default", und kein Symbolthema der
+  // Welt kennt dafuer ein Bild. Ueber /proc/<pid>/comm steht dort
+  // "kitty", und das kennt jedes. Siehe ags-dock.template, iconFor().
+  pid: number
+}
+
+export interface HyprlandState {
+  workspaces: Workspace[]
+  // Der aktive Arbeitsbereich JE MONITOR, nicht global. Eine Leiste
+  // steht auf jedem Schirm, und auf jedem ist ein anderer Bereich
+  // sichtbar - ein einzelnes "active" liesse neun von zehn Knoepfen auf
+  // dem zweiten Schirm falsch aussehen.
+  activeByMonitor: Record<string, number>
+  // Der Bereich, auf dem der Fokus steht. Nur er wird als "active"
+  // gezeichnet, die uebrigen sichtbaren als "visible".
+  focused: number
+  clients: Client[]
+  title: string
+  appClass: string
+}
+
+export const EMPTY_STATE: HyprlandState = {
+  workspaces: [],
+  activeByMonitor: {},
+  focused: 0,
+  clients: [],
+  title: "",
+  appClass: "",
+}
+
+// Wo Hyprland seine beiden Sockets hinlegt.
+//
+// Zwei Orte und nicht einer, weil Hyprland den Ort gewechselt hat:
+// bis 0.40 /tmp/hypr/$HIS, seither $XDG_RUNTIME_DIR/hypr/$HIS. GEMESSEN
+// am 11.08.2026 auf dieser Maschine: /run/user/1000/hypr/<signatur>/
+// existiert, /tmp/hypr nicht. Der alte Ort steht trotzdem hier, weil
+// eine Leiste, die auf einem aelteren Hyprland gar nichts anzeigt,
+// schlechter ist als zwei Zeilen Suche.
+function socketDirectory(): string | null {
+  const signature = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE")
+  if (!signature) return null
+
+  const runtime = GLib.getenv("XDG_RUNTIME_DIR")
+  const candidates = [
+    runtime ? `${runtime}/hypr/${signature}` : null,
+    `/tmp/hypr/${signature}`,
+  ]
+  for (const candidate of candidates) {
+    if (candidate && GLib.file_test(candidate, GLib.FileTest.IS_DIR)) {
+      return candidate
+    }
+  }
+  return null
+}
+
+function connect(name: string): Gio.SocketConnection | null {
+  const directory = socketDirectory()
+  if (!directory) return null
+  try {
+    const client = new Gio.SocketClient()
+    return client.connect(
+      new Gio.UnixSocketAddress({ path: `${directory}/${name}` }), null)
+  } catch (error) {
+    console.error("Hyprland-Socket nicht erreichbar:", error)
+    return null
+  }
+}
+
+/** Eine Frage an .socket.sock, synchron, als Text zurueck.
+ *
+ * Synchron und nicht ueber execAsync("hyprctl ..."), und das ist keine
+ * Geschmacksfrage: die Leiste fragt bei jedem Fensterwechsel neu, und
+ * ein hyprctl je Ereignis ist ein Prozessstart je Ereignis. Auf dem
+ * Socket ist es ein write() und ein read().
+ *
+ * Die Antwort kommt in einem Rutsch und der Server schliesst danach; es
+ * gibt keine Laengenangabe, also wird bis zum Dateiende gelesen.
+ */
+export function ask(payload: string): string {
+  const connection = connect(".socket.sock")
+  if (!connection) return ""
+  try {
+    const output = connection.get_output_stream()
+    output.write_all(new TextEncoder().encode(payload), null)
+    output.flush(null)
+
+    const input = connection.get_input_stream()
+    const chunks: Uint8Array[] = []
+    let total = 0
+    for (;;) {
+      const bytes = input.read_bytes(65536, null)
+      const size = bytes.get_size()
+      if (size === 0) break
+      chunks.push(bytes.get_data() ?? new Uint8Array(0))
+      total += size
+    }
+    const joined = new Uint8Array(total)
+    let offset = 0
+    for (const chunk of chunks) {
+      joined.set(chunk, offset)
+      offset += chunk.length
+    }
+    return new TextDecoder().decode(joined)
+  } catch (error) {
+    console.error("Hyprland-Anfrage fehlgeschlagen:", payload, error)
+    return ""
+  } finally {
+    try { connection.close(null) } catch { /* schon zu */ }
+  }
+}
+
+function askJson<T>(payload: string, fallback: T): T {
+  const answer = ask(payload)
+  if (!answer) return fallback
+  try {
+    return JSON.parse(answer) as T
+  } catch {
+    // Kein Grund zum Laermen: waehrend eines Reloads antwortet Hyprland
+    // kurzzeitig mit "ok" statt mit JSON. Der Aufrufer bekommt den
+    // vorigen Zustand und die naechste Runde raeumt es auf.
+    return fallback
+  }
+}
+
+/** Einen Befehl an den Compositor, ohne auf die Antwort zu warten. */
+export function dispatch(command: string): void {
+  ask(`dispatch ${command}`)
+}
+
+/** Den ganzen Zustand frisch erfragen.
+ *
+ * WARUM NACH JEDEM EREIGNIS ALLES UND NICHT DAS EINE FELD
+ *     Der Ereignisstrom nennt Uebergaenge, nicht Zustaende:
+ *     "workspace>>3" sagt, dass 3 jetzt vorn ist, aber nicht, welcher
+ *     Bereich damit hinten liegt, ob dort noch Fenster sind, und ob 3
+ *     ueberhaupt schon existierte. Ein Zustand, der aus Uebergaengen
+ *     fortgeschrieben wird, laeuft nach dem ersten verpassten Ereignis
+ *     auseinander und kommt nie wieder zurueck - und verpasst wird
+ *     eines, sobald der Compositor waehrend eines `hyprctl reload`
+ *     schweigt.
+ *
+ *     Drei Fragen an einen Unix-Socket kosten unter einer Millisekunde.
+ *     Das ist der Preis dafuer, dass die Leiste nach jedem Ereignis
+ *     dasselbe anzeigt wie der Compositor.
+ */
+export function refresh(): HyprlandState {
+  const workspaces = askJson<Workspace[]>("j/workspaces", [])
+  const monitors = askJson<Array<{ name: string; activeWorkspace: { id: number }; focused: boolean }>>(
+    "j/monitors", [])
+  const clients = askJson<Client[]>("j/clients", [])
+  const active = askJson<{ title?: string; class?: string }>("j/activewindow", {})
+
+  const activeByMonitor: Record<string, number> = {}
+  let focused = 0
+  for (const monitor of monitors) {
+    activeByMonitor[monitor.name] = monitor.activeWorkspace?.id ?? 0
+    if (monitor.focused) focused = monitor.activeWorkspace?.id ?? 0
+  }
+
+  return {
+    workspaces: workspaces.sort((left, right) => left.id - right.id),
+    activeByMonitor,
+    focused,
+    clients,
+    title: active.title ?? "",
+    appClass: active.class ?? "",
+  }
+}
+
+// Die Ereignisse, nach denen sich fuer Leiste und Dock etwas geaendert
+// haben KANN. Hyprland sendet ueber vierzig; auf die uebrigen - etwa
+// "screencast" - neu zu zeichnen waere Arbeit ohne sichtbaren
+// Unterschied.
+//
+// "activelayout" STAND BIS ZUM 17.08.2026 IN DIESER AUFZAEHLUNG DER
+// UNINTERESSANTEN, UND BIS DAHIN WAR ES AUCH EINES
+//     An diesem Tag hat die Leiste ein Modul bekommen, das die
+//     Tastaturbelegung anzeigt (keyboardModule() in ags-bar.template).
+//     BESTELLT: "die tastatur icon fehlt auch noch links neben dem
+//     datum" - und das ist bei diesem System keine Zierde, sondern die
+//     Auskunft, deren Fehlen am 15.08.2026 eine richtige Passphrase hat
+//     abweisen lassen.
+//
+//     Es ist das EINZIGE Ereignis, das eine Belegungsaenderung meldet.
+//     Ohne diese Zeile bliebe ein Takt, der `hyprctl devices -j` in
+//     Abstaenden fragt - ein Prozessstart je Sekunde fuer eine Angabe,
+//     die sich in Monaten nicht aendert.
+const INTERESTING = new Set([
+  "workspace", "workspacev2", "createworkspace", "createworkspacev2",
+  "destroyworkspace", "destroyworkspacev2", "focusedmon", "focusedmonv2",
+  "activewindow", "activewindowv2", "openwindow", "closewindow",
+  "movewindow", "movewindowv2", "windowtitle", "windowtitlev2",
+  "urgent", "monitoradded", "monitorremoved", "configreloaded",
+  "activelayout",
+])
+
+/** Auf .socket2.sock hoeren und bei jedem interessanten Ereignis rufen.
+ *
+ * Zeilenweise und asynchron. Der Rueckruf bekommt Name und Nutzlast des
+ * Ereignisses, soll den Zustand aber ueber refresh() holen und nicht aus
+ * der Nutzlast ableiten - siehe dort. Die Nutzlast wird trotzdem
+ * durchgereicht, weil es EINE Angabe gibt, die in keiner Abfrage steht:
+ * "urgent>>adresse" ist der einzige Ort, an dem Hyprland ueberhaupt
+ * sagt, dass ein Fenster Aufmerksamkeit will.
+ *
+ * Ein Abriss der Verbindung (Hyprland beendet sich, oder die Sitzung
+ * wird gewechselt) beendet die Schleife still. Ein Wiederverbinden
+ * findet absichtlich nicht statt: stirbt der Compositor, stirbt die
+ * Sitzung mit ihm, und ein Leistenprozess, der danach im Sekundentakt
+ * einen Socket sucht, den es nicht mehr gibt, ist genau das, was in
+ * einem Log niemand mehr liest.
+ */
+export function subscribe(onEvent: (name: string, data: string) => void): void {
+  const connection = connect(".socket2.sock")
+  if (!connection) {
+    console.error("Kein Hyprland-Ereignissocket - die Leiste bleibt statisch")
+    return
+  }
+
+  const stream = new Gio.DataInputStream({
+    base_stream: connection.get_input_stream(),
+  })
+
+  const readNext = () => {
+    stream.read_line_async(GLib.PRIORITY_DEFAULT, null, (source, result) => {
+      let line: string | null = null
+      try {
+        // read_line_FINISH_UTF8, nicht read_line_utf8_finish. GJS dreht
+        // bei den ..._utf8-Spielarten das Namensende um; die falsche
+        // Schreibweise ist keine Ausnahme, sondern schlicht `undefined`,
+        // der Aufruf wirft also einen TypeError, BEVOR ein Byte gelesen
+        // wird. Gemessen am 12.08.2026 mit gjs:
+        //     read_line_utf8_finish: undefined
+        //     read_line_finish_utf8: function
+        //
+        // WAS DIE FALSCHE SCHREIBWEISE GEKOSTET HAT
+        //     Der TypeError fiel in den catch darunter, und der kehrt
+        //     ohne readNext() zurueck. Der Ereignisstrom war damit nach
+        //     dem ersten Ereignis tot - auf JEDER Installation. Die
+        //     Leiste stand still: kein Wechsel des Arbeitsbereichs, kein
+        //     Fenstertitel, keine Hervorhebung des aktiven Fensters.
+        //     Die Meldung schob es auf den Socket ("abgerissen"), also
+        //     haette jeder Suchende an der falschen Stelle angefangen.
+        //
+        //     Gesehen hat es keine Zusicherung, weil die Suite ohne
+        //     Hyprland-Socket laeuft und den Ausfall fuer die erwartete
+        //     Antwort dieser Umgebung hielt. Aufgefallen ist er erst im
+        //     verschachtelten Compositor von tests/render/ - im
+        //     Protokoll, nicht im Bild.
+        const [read] = (source as Gio.DataInputStream).read_line_finish_utf8(result)
+        line = read
+      } catch (error) {
+        console.error("Hyprland-Ereignisstrom abgerissen:", error)
+        return
+      }
+      if (line === null) return
+
+      const separator = line.indexOf(">>")
+      const name = separator === -1 ? line : line.slice(0, separator)
+      const data = separator === -1 ? "" : line.slice(separator + 2)
+      if (INTERESTING.has(name)) onEvent(name, data)
+
+      readNext()
+    })
+  }
+
+  readNext()
+}

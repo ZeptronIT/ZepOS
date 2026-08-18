@@ -1,0 +1,136 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# hyprzones - zone-based window tiling, one of ZepOS's three own plugins
+# (spec §7.1).
+#
+# WHY THIS RECIPE CAN ONLY BE BUILT AFTER zepos-hyprland
+#     Not because of a version number. A Hyprland plugin is C++ compiled
+#     against the compositor's own headers, so the object that comes out
+#     of this build carries Hyprland's struct layouts, vtable orders and
+#     inline function bodies inside itself. Those headers arrive with
+#     zepos-hyprland and with nothing else - `pkg_check_modules(HYPRLAND
+#     REQUIRED hyprland)` in the project's CMakeLists reads the
+#     hyprland.pc that package installs.
+#
+#     packaging/build.sh installs each finished package into the build
+#     container before the next recipe runs, which is what makes that
+#     work. Building this against the Arch `hyprland` instead would
+#     produce an object for a compositor ZepOS does not ship.
+#
+# THE THREE DEPENDENCIES BELOW, AND WHY THEY ARE NOT ONE
+#     zepos-hyprland>=0.56.1 and <0.57.0 are spec §7.3: patch updates run
+#     through, minor jumps stop, because that is where the plugin ABI
+#     actually breaks. They are necessary and they are not sufficient -
+#     0.56.1 rebuilt against a newer aquamarine is still 0.56.1, and the
+#     plugin built against the older one would load into it without a
+#     word. Hyprland's own load-time check does not help: it compares the
+#     literal string "0.1" (packaging/zepos-hyprland/PKGBUILD has the
+#     reading).
+#
+#     So the third dependency is the exact ABI token zepos-hyprland
+#     publishes - upstream's own abiHash, commit plus five library
+#     versions - read out of the file that package installs. pacman then
+#     refuses this plugin next to any compositor it was not compiled
+#     against.
+#
+# WHAT THIS PACKAGE DOES NOT SHIP, AND WHY IT IS NOT AN OVERSIGHT
+#     Upstream's editor/ is an AGS application, and hyprpm.toml copies it
+#     to ~/.config/hyprzones/editor. src/main.cpp's hyprzones:editor
+#     dispatcher then runs
+#
+#         ags run ~/.config/hyprzones/editor/app.ts
+#
+#     at exactly that path. A pacman package may own nothing below ~
+#     (src/paths.py's header has the argument), so the editor cannot come
+#     from here. Where it belongs is /etc/skel or a zepos-config
+#     template - the same decision spec §4.2 already made for the
+#     fourteen directories install-system.sh used to create - and that is
+#     a change to zepos-config, not to this recipe. Until it is made the
+#     plugin loads, tiles and snaps, and SUPER+SHIFT+Z opens nothing.
+_commit=73171c735fa65e32aec82b48ce5b1aea0309b995
+
+pkgname=zepos-hyprzones
+# The project's own number, from its CMakeLists, plus the commit: the
+# repository has no tags, so the version alone would not say which state
+# is packaged. Same convention as packaging/astal.
+pkgver=0.3.2.r87.73171c7
+pkgrel=1
+pkgdesc="Zone-based window tiling for Hyprland, as a ZepOS plugin package"
+arch=('x86_64')
+url="https://github.com/azzuriel/hyprzones"
+# Gemessen am 11.08.2026: der Quellbaum traegt KEINE Lizenzdatei und
+# keinen Copyright-Vermerk, die GitHub-API meldet "license": null. Hier
+# stand trotzdem BSD-3-Clause - vermutlich mitgewandert von den Plugins
+# des Hyprland-Projekts, die wirklich so lizenziert sind.
+#
+# 'custom' beschreibt die Lage, statt eine Lizenz zu behaupten: Leon
+# Marzoll hat am 11.08.2026 erklaert, dass ZepOS die Quellen verwenden
+# und veraendern darf. Eine Erlaubnis gilt dem, dem sie erteilt wurde -
+# was ein NUTZER von ZepOS mit diesem Code darf, steht damit nirgends.
+# plugins/LICENSE haelt das fest und nennt das eine, was die Luecke
+# schliesst: eine Lizenzdatei im Repositorium des Urhebers.
+license=('custom')
+
+# The ABI token zepos-hyprland published, read from the file that package
+# installs. Read here, at the top of the recipe, because makepkg's
+# lint_provides and its siblings evaluate these arrays out of package()
+# too, with nothing set - measured, as "pkgver in provides is not allowed
+# to be empty" from a token computed in a package function.
+#
+# The fallback is a string no package provides, on purpose. Without
+# zepos-hyprland installed there is no ABI to name, and a build that
+# guessed one would produce an object matched to a compositor that was
+# never consulted. makepkg then stops at
+#
+#     unable to satisfy dependency 'hyprland-plugin-abi=zepos.hyprland.absent'
+#
+# which says what is missing.
+_abi_file="/usr/lib/hyprland/plugin-abi"
+_abi="$(cat "$_abi_file" 2>/dev/null || true)"
+: "${_abi:=zepos.hyprland.absent}"
+
+depends=('zepos-hyprland>=0.56.1' 'zepos-hyprland<0.57.0'
+         "hyprland-plugin-abi=$_abi"
+         'cairo' 'pango' 'glibc' 'libgcc' 'libstdc++')
+makedepends=('cmake' 'ninja' 'zepos-hyprland')
+
+source=("hyprzones-$_commit.tar.gz::$url/archive/$_commit.tar.gz")
+sha256sums=('d4c59b7a7feed27e9451423c0cb3ec30b7442478ad4abf15f9ea7d70946c43d7')
+
+# Where spec §4.2 says the object goes and src/plugins.py looks for it.
+# The project's CMakeLists already installs to lib/hyprland/plugins under
+# the prefix, so this is a check rather than a move - but it is checked,
+# because a package that installs elsewhere produces a desktop with no
+# plugins and no error at all.
+_plugin_dir="usr/lib/hyprland/plugins"
+
+build() {
+    cd "$srcdir/hyprzones-$_commit"
+    cmake -S . -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_SKIP_RPATH=ON
+    cmake --build build --config Release
+}
+
+package() {
+    cd "$srcdir/hyprzones-$_commit"
+    DESTDIR="$pkgdir" cmake --install build
+
+    test -f "$pkgdir/$_plugin_dir/hyprzones.so" || {
+        echo "the plugin object is not at /$_plugin_dir/hyprzones.so;" >&2
+        echo "src/plugins.py would drop this plugin silently" >&2
+        return 1
+    }
+
+    # The token was read when this file was sourced, before the compile.
+    # Reading it again is not paranoia: a `pacman -Syu` between the two
+    # would leave an object compiled against one header set carrying a
+    # dependency on another.
+    [[ -f "$_abi_file" && "$(<"$_abi_file")" == "$_abi" ]] || {
+        echo "the compositor's ABI is not the one this build declared:" >&2
+        echo "  declared:  $_abi" >&2
+        echo "  installed: $(cat "$_abi_file" 2>/dev/null || echo '<no zepos-hyprland>')" >&2
+        return 1
+    }
+}

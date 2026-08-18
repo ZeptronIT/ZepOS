@@ -1,0 +1,89 @@
+#%PAM-1.0
+#
+# Der PAM-Dienst des Sperrbildschirms, installiert nach
+# /etc/pam.d/zepos-lock.
+#
+# WARUM EINE EIGENE DATEI UND NICHT DIE EINES ANDEREN PROGRAMMS
+#     Weil ein Programm, das den Dienstnamen eines anderen benutzt, mit
+#     dessen Paket verschwindet. Genau das steht hier an: hyprlock geht
+#     mit dieser Aenderung, und /etc/pam.d/hyprlock geht mit ihm. Ein
+#     zepos-lock, das `pam_start("hyprlock", ...)` riefe, faende danach
+#     keinen Dienst mehr und liefe in /etc/pam.d/other - was auf Arch
+#     zwar zufaellt (viermal pam_deny.so, gemessen am 12.08.2026), aber
+#     eben nur zufaellig richtig ist.
+#
+#     Es ist ausserdem die Aufteilung, an die sich das andere Programm
+#     dieses Projekts haelt, das PAM ruft. src/login/greetd.toml zaehlt
+#     den Inhalt des greetd-Pakets aus dem angehefteten Schnappschuss
+#     auf, und darin steht neben etc/greetd/config.toml auch
+#     etc/pam.d/greetd: GREETD bringt seinen PAM-Dienst selbst mit, weil
+#     greetd das Programm ist, das authentisiert. ZepOS besitzt genau
+#     diese Datei NICHT - es legt seine Konfiguration daneben und zeigt
+#     greetd ueber ein systemd-Drop-in darauf, weil zwei Pakete auf
+#     einem Pfad in pacman ein Dateikonflikt sind.
+#
+#     Hier gibt es diesen Konflikt nicht: /etc/pam.d/zepos-lock gehoert
+#     keinem anderen Paket, weil es das Programm vorher nicht gab. Also
+#     dieselbe Regel wie dort - wer PAM ruft, liefert seinen Dienst mit.
+#
+# WARUM system-auth UND NICHT login, WAS HYPRLOCK UND SWAYLOCK TUN
+#     Gemessen am 12.08.2026 auf dieser Maschine:
+#
+#         /etc/pam.d/hyprlock   auth include login
+#         /etc/pam.d/swaylock   auth include login
+#         /etc/pam.d/gtklock    auth include login
+#
+#     `login` ist ueber system-local-login und system-login zwei Zeilen
+#     mehr als system-auth, und beide gehoeren nicht hierher:
+#
+#         auth required   pam_shells.so     das Konto hat eine
+#                                           Anmeldeschale aus /etc/shells
+#         auth requisite  pam_nologin.so    es gibt kein /etc/nologin
+#
+#     Beide beantworten die Frage "darf dieser Mensch hier eine Sitzung
+#     ANFANGEN". Ein Sperrbildschirm fragt etwas anderes: "ist das der
+#     Mensch, dem die Sitzung gehoert, die schon laeuft". Die Sitzung
+#     existiert bereits, sie steht hinter der Sperre mit allem darin.
+#
+#     Der Unterschied ist keine Formsache, sondern eine Aussperrung. Wer
+#     eine Schale benutzt, die nicht in /etc/shells steht, kaeme mit
+#     `include login` an seinen eigenen laufenden Schreibtisch nicht mehr
+#     heran - mit richtigem Passwort. Dasselbe gilt fuer ein
+#     /etc/nologin, das eine Wartung angelegt und niemand geloescht hat.
+#     Auf dieser Maschine geht heute beides gut (/usr/bin/zsh steht in
+#     /etc/shells, /etc/nologin gibt es nicht); das ist ein Zustand und
+#     keine Eigenschaft.
+#
+# WAS DAMIT WEITERHIN GILT, UND ABSICHTLICH
+#     system-auth fuehrt pam_faillock. Nach `deny` Fehlversuchen -
+#     Vorgabe 3, /etc/security/faillock.conf ist auf Arch vollstaendig
+#     auskommentiert - weist der Stapel fuer `unlock_time` Sekunden
+#     (Vorgabe 600) auch das richtige Passwort ab.
+#
+#     Das ist eine echte Aussperrung von zehn Minuten, und sie bleibt
+#     trotzdem stehen: die Alternative waere ein Sperrbildschirm ohne
+#     Zaehler, also ein Passwortraten ohne Ende an einer Maschine, an der
+#     jemand physisch sitzt. Die Anmeldemaske derselben Maschine zaehlt
+#     genauso.
+#
+#     Was ZepOS dagegen tut, ist REDEN statt schweigen: die
+#     Gespraechsfunktion in lock/zepos-lock-pam.c hebt PAM_ERROR_MSG und
+#     PAM_TEXT_INFO auf und zeigt sie an. pam_faillock sagt selbst, dass
+#     und wie lange gesperrt ist; hyprlock zeigte an derselben Stelle
+#     seinen festen Text "Falsches Passwort" und schickte damit jemanden
+#     los, ein Passwort zu suchen, das er schon hatte.
+#
+# WARUM HIER NUR auth STEHT
+#     Weil das Programm nur pam_authenticate() ruft und kein
+#     pam_acct_mgmt(). Kontoverwaltung entscheidet, ob eine Sitzung
+#     BEGONNEN werden darf - abgelaufenes Passwort, abgelaufenes Konto,
+#     Zeitfenster aus pam_time. Auf einen Bildschirm angewandt, hinter
+#     dem eine Sitzung bereits laeuft, hiesse jedes dieser Ergebnisse:
+#     der Nutzer kommt an seine offenen Dateien nicht mehr heran, und
+#     zwar ohne Weg zurueck, denn der Sperrbildschirm hat keinen.
+#
+#     Eine Zeile fuer `account`, die niemand ruft, waere toter Text.
+#     Fehlt sie, und jemand fuegt spaeter den Aufruf hinzu, antwortet
+#     Linux-PAM fuer eine Gruppe ohne Regeln mit einer Ablehnung - der
+#     Fehler faellt also zu und nicht auf.
+auth include system-auth

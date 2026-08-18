@@ -1,0 +1,59 @@
+#!/bin/bash
+# ZepOS - der Haken, ohne den die Passphrase-Abfrage keine Umlaute
+# schreiben kann. Ausgeliefert von packaging/zepos-config.
+#
+# ER KOPIERT NICHTS UND ERZEUGT NICHTS. Alles, was er tut, ist das
+# Laufzeitstueck daneben anzumelden (usr/lib/initcpio/hooks/zepos-locale,
+# im Baum src/boot/initcpio/hooks/zepos-locale), und das setzt EINE
+# Umgebungsvariable. Die Daten, ohne die sie wirkungslos waere, kommen
+# ueber die FILES-Zeile von /etc/mkinitcpio.conf - warum dort und nicht
+# hier, steht in installer/core/translate.py, PLYMOUTH_COMMAND.
+#
+# WARUM ES IHN GIBT, gemessen am 17.08.2026 an plymouth 26.134.222-2 und
+# mkinitcpio 41 aus dem angehefteten ALA-Schnappschuss 2026/08/04:
+#
+#   * Plymouth ZEICHNET ein "ue" aus zwei Bytes nicht als Umlaut,
+#     sondern verschluckt beide. Auf dem Schirm stand "Passphrase wird
+#     geprft" - ohne Kaestchen, ohne Luecke.
+#   * Die Schrift kann es. Der plymouth-Haken legt ueber `fc-match`
+#     Roboto als /usr/share/fonts/Plymouth.ttf in die Initramfs; die
+#     Datei ist dort 460324 Bytes gross und fuehrt in ihrer cmap
+#     U+00FC als Glyph 2333 (ae 2312, oe 2329, ss 134, Gedankenstrich
+#     U+2013 als 1118, Anfuehrungszeichen U+201E als 1128).
+#   * Der Zeichner dekodiert ueber das GEBIETSSCHEMA und nicht als
+#     UTF-8: usr/lib/plymouth/label-freetype.so schiebt jedes Zeichen
+#     bei 0x26de durch `mbrtowc`, ehe es bei 0x2709 in FT_Load_Char
+#     geht. Im Gebietsschema "C" (Zeichensatz ANSI_X3.4-1968) faellt
+#     das 0xC3 heraus.
+#   * plymouthd nimmt sein Gebietsschema aus der UMGEBUNG - es ruft
+#     setlocale(LC_ALL, "") -, und der plymouth-Haken startet es ohne
+#     jede. Deshalb dieser Haken, und deshalb VOR jenem.
+#
+# WARUM NICHT UEBER DIE KERNELZEILE. Der andere Weg waere ein
+# `locale=`-Wort in GRUB_CMDLINE_LINUX_DEFAULT und ein Stueck Init, das
+# es liest. Er haengt an einer Annahme darueber, was der Kernel mit
+# unbekannten Woertern macht, und er schreibt ein Gebietsschema sichtbar
+# nach /proc/cmdline. Dieser Weg hier hat kein ungemessenes Glied.
+
+build() {
+    add_runscript
+}
+
+# Der Begrenzer steht in Anfuehrungszeichen, und das ist keine
+# Formsache: in einem OFFENEN Hierdokument sind Rueckwaertsstriche
+# Befehlsersetzung, und dieser Text nennt `plymouth` in solchen. Ein
+# `mkinitcpio -H zepos-locale` fuehrte das Programm dann aus, statt
+# seinen Namen zu drucken. Der ausgelieferte plymouth-Haken kommt ohne
+# Anfuehrungszeichen aus, weil in SEINEM Hilfetext keine vorkommen.
+help() {
+    cat <<'HELPEOF'
+Gibt plymouthd ein UTF-8-Gebietsschema mit, damit die Passphrase-Abfrage
+Umlaute zeichnet statt sie zu verschlucken. Der Haken gehoert unmittelbar
+VOR `plymouth` in die HOOKS-Zeile; die Daten des Gebietsschemas
+(/usr/lib/locale/C.utf8) und die Datei, an der plymouthds
+setlocale-Aufruf haengt (/usr/share/locale/nl/LC_MESSAGES/plymouth.mo),
+gehoeren in die FILES-Zeile. Beides schreibt der Installer, siehe
+installer/core/translate.py, PLYMOUTH_COMMAND. Ohne die Daten bleibt der
+Haken wirkungslos, er richtet aber auch keinen Schaden an.
+HELPEOF
+}

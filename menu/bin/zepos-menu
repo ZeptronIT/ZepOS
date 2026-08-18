@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Der Befehl.
+
+WARUM DER SUCHPFAD HIER ZURECHTGELEGT WIRD
+    Dieselbe Lage wie bei installer/bin/zepos-install: das Paket liegt
+    unter /usr/share/zepos-menu und nicht in site-packages, damit kein
+    zweites Paket denselben Modulnamen beansprucht. Ein Import findet es
+    dort von sich aus nicht, also wird das Verzeichnis vor dem ersten
+    Import eingehaengt - und zwar sowohl die Installation als auch der
+    Arbeitsbaum, damit `menu/bin/zepos-menu` aus einem Checkout heraus
+    dasselbe Programm startet wie das Paket.
+"""
+import sys
+from pathlib import Path
+
+SYSTEM_ROOT = Path("/usr/share/zepos-menu")
+CHECKOUT_ROOT = Path(__file__).resolve().parent.parent
+
+for root in (CHECKOUT_ROOT, SYSTEM_ROOT):
+    if (root / "zepos_menu" / "__init__.py").is_file():
+        sys.path.insert(0, str(root))
+        break
+else:
+    print("zepos-menu: das Paket zepos_menu ist weder neben diesem Befehl "
+          f"({CHECKOUT_ROOT}) noch unter {SYSTEM_ROOT} zu finden",
+          file=sys.stderr)
+    raise SystemExit(1)
+
+from zepos_menu.main import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main())

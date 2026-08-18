@@ -1,0 +1,122 @@
+# Everything the installation medium installs, and nothing else.
+#
+# The list is deliberately not the smoke image's list. That one carries a
+# whole desktop - AGS with the bar and the dock, five Hyprland plugins,
+# zepos-menu,
+# cliphist -
+# because the question it answers is whether a ZepOS session comes up.
+# This image answers a different question: can a person install ZepOS. So
+# the desktop is not here; it is what gets INSTALLED, out of
+# /opt/zepos-repo and the Arch mirrors, onto the target.
+#
+# Every package below is either something the installer calls, something
+# the minimal Wayland session of spec §8.5 needs, or something without
+# which the medium does not boot.
+
+# --- the installer, which is what this medium is -----------------------
+# Spec §4.2, one line under the table: "Die drei Installer-Pakete liegen
+# nur in der ISO, nicht im installierten System."
+#
+# All three. §8.5's fallback from the GTK4 surface to the text one is a
+# decision taken at run time on the machine in front of the user, and an
+# image carrying only one surface has made that decision at build time.
+# zepos-installer-gui is the only one of the three that names a toolkit;
+# zepos-installer-tui depends on the core and on nothing else at all.
+#
+# zepos-installer also brings what actually does the work: archinstall
+# (spec §8.1 - "Ein eigener Partitionierer waere Code, dessen Fehler
+# fremde Festplatten loeschen"), and with it arch-install-scripts,
+# dosfstools, e2fsprogs and the rest of the filesystem tooling; plus
+# util-linux for the disk list, openssl for the password hashes and iwd
+# for the wireless step.
+zepos-installer
+zepos-installer-gui
+zepos-installer-tui
+
+# The public half of the ZepOS signing key, and the only ZepOS package
+# with an install scriptlet. Spec §8.6: signatures from the first ISO.
+# Without it `pacman-key --populate` on the live medium has no ZepOS
+# keyring to populate, and every package installed out of
+# /opt/zepos-repo is refused for a key the machine was never told to
+# trust - see /usr/local/bin/zepos-live-prepare.
+zepos-keyring
+
+# --- the minimal Wayland session (spec §8.5) ---------------------------
+# WHY cage AND NOT zepos-hyprland, WHICH IS ZepOS'S OWN COMPOSITOR
+#     The installer must run as root: archinstall says so and exits 1
+#     otherwise, this medium has no sudo, and the alternative - a live
+#     user with passwordless root - is a credential in an image that is
+#     meant to carry none. Hyprland refuses to start as root. Measured
+#     against the shipped binary of zepos-hyprland 0.56.1:
+#
+#         Hyprland was launched with superuser privileges, but the
+#         privileges check is not omitted.
+#         Hint: Use the --i-am-really-stupid flag to omit that check.
+#
+#     A shipping medium whose desktop session is started with a flag
+#     called --i-am-really-stupid is not a shipping medium. cage is a
+#     kiosk compositor - 27 KiB, no configuration file, every window
+#     fullscreen, exits when its child does - which is exactly the
+#     "minimale Wayland-Sitzung" §8.5 asks for and nothing more.
+#
+#     ZepOS's own compositor is what gets INSTALLED. It has no reason to
+#     be the thing that installs it.
+#
+# mesa carries the software rasteriser. A machine whose GPU has no
+# driver - the exact machine §8.5's fallback exists for - still gets a
+# KMS device with dumb buffers, and Mesa's kms_swrast is the only path
+# from wlroots' GBM/EGL requirement to a picture. When even that fails,
+# zepos-live-session falls back to the text interface on the console.
+#
+# foot is the terminal the session starts the installer in. It is there
+# so that §8.5's fallback is VISIBLE: if GTK4 cannot open a window,
+# /usr/bin/zepos-install prints why and starts the text interface, and
+# without a terminal around it that would happen on a screen showing
+# nothing. foot rather than kitty because kitty needs OpenGL 3.3 and
+# this is precisely the machine that may not have it - foot draws with
+# the CPU.
+cage
+mesa
+foot
+
+# --- archiso baseline: without these the image does not boot -----------
+base
+linux
+mkinitcpio
+mkinitcpio-archiso
+
+# syslinux is needed IN THE IMAGE, not only in the build container:
+# archiso's bios.syslinux boot mode copies the loader out of the built
+# root's /usr/lib/syslinux/bios/.
+syslinux
+
+# linux-firmware, which the smoke image deliberately leaves out.
+#
+# That was right for a virtio guest and is wrong here: this image is
+# booted on somebody's laptop, and the wireless adapter that needs a
+# firmware blob is the same adapter spec §8.4 hangs the offline
+# fallback on. An installation medium that cannot bring up the machine's
+# network is a medium that can only ever install offline.
+linux-firmware
+
+# --- fonts, or the installer is a row of boxes -------------------------
+# Roboto first, because the installer's own stylesheet asks for it by
+# name and fontconfig answers a missing family by substituting one it
+# has - so a medium without it would show a perfectly working installer
+# in somebody else's typeface, and nothing would say so. Fira Code is
+# what the disk sizes and the log view are set in.
+#
+# cantarell is what libadwaita's default style asks for, dejavu is what
+# foot resolves `monospace` to, and noto covers everything neither of
+# them has.
+ttf-roboto
+ttf-fira-code
+cantarell-fonts
+ttf-dejavu
+noto-fonts
+
+# --- icons the GTK4 surface draws --------------------------------------
+# GTK looks its named icons up in an icon theme; without one the buttons
+# in the installer are empty rectangles.
+adwaita-icon-theme
+hicolor-icon-theme

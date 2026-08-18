@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Die Verdrahtung: Einstellungen lesen, Fenster zeigen, Rueckgabewert.
+
+DIE RUECKGABEWERTE
+    0   das Fenster wurde geoeffnet und wieder geschlossen
+    1   die Einstellungsdatei ist da und nicht lesbar
+
+    Die 1 ist der Fall, der eine Erklaerung braucht und keinen
+    Rueckverfolgungsbericht. settings.py schreibt sie: welche Datei, was
+    daran nicht stimmt, und was man dagegen tut. Eine Anwendung, die
+    stattdessen mit den Vorgaben aufginge, wuerde beim ersten Speichern
+    ueber das schreiben, was der Nutzer noch hat - und das ist genau der
+    Fehler, den `set-color` einmal gemacht hat, bevor die Datei einen
+    Leser bekam.
+
+WARUM DER IMPORT VON app.py ERST HIER PASSIERT
+    Weil er `gi` hereinzieht. Der Fehlerweg oben braucht kein GTK, und
+    eine unlesbare Einstellungsdatei soll nicht an einem fehlenden
+    python-gobject scheitern - die Meldung waere dann ueber das
+    Falsche.
+"""
+from __future__ import annotations
+
+import sys
+from typing import Callable
+
+import paths
+import settings as settings_file
+
+from . import model
+
+
+def page_of(arguments: list[str]) -> str | None:
+    """Welche Seite die Schalter nennen, oder None fuer "keine".
+
+    Wirft ValueError, wenn die Schalter keine sind. Eine eigene Funktion
+    und kein Zweig in main(), damit sie sich pruefen laesst OHNE `gi`:
+    main() faellt zwei Zeilen weiter in `settings_file.load()` und
+    danach in den Import von app.py, der GTK hereinzieht. Eine
+    Zusicherung, die den Text von main.py durchsucht statt ihn
+    auszufuehren, ist keine - GEMESSEN am 12.08.2026 mit einer Mutation,
+    die JEDE Seite ablehnte und trotzdem gruen blieb.
+
+    Der eine Schalter ist keine Bequemlichkeit fuer die Kommandozeile.
+    Er existiert, weil die .desktop-Datei ihn braucht: sie liefert seit
+    dem 12.08.2026 eine Aktion je Seite aus, damit `zepos-menu` die
+    BILDSCHIRME findet und nicht nur die Anwendung, in der sie liegen.
+    Eine Aktion ist eine Exec-Zeile, und eine Exec-Zeile kann eine Seite
+    nur nennen, wenn das Programm zuhoert.
+
+    Geprueft wird gegen dieselbe Tabelle, aus der das Fenster seine
+    Seiten baut - model.PAGES. Ein unbekannter Name ist ein Fehler und
+    keine stille Vorgabeseite: eine Aktion, die klaglos die falsche
+    Seite oeffnet, ist ein Bedienelement, das etwas anderes tut als es
+    sagt.
+    """
+    if not arguments:
+        return None
+    if (len(arguments) == 2
+            and arguments[0] == model.PAGE_OPTION
+            and arguments[1] in model.PAGE_NAMES):
+        return arguments[1]
+    raise ValueError(
+        f"usage: zepos-settings-gui [{model.PAGE_OPTION} SEITE]\n"
+        f"`{' '.join(arguments)}` ist keiner der Schalter dieser "
+        f"Anwendung.\n"
+        f"Seiten: {', '.join(model.PAGE_NAMES)}\n"
+        f"Fuer die Kommandozeile: zepos-settings --help")
+
+
+def main(argv: list[str] | None = None, *,
+         on_window_shown: Callable | None = None,
+         runner=None) -> int:
+    """Ein Durchlauf.
+
+    `on_window_shown` bekommt das fertige Fenster, `runner` tritt an die
+    Stelle von subprocess.run. Beide gibt es fuer
+    tests/settings/settings_headless_child.py - der Generator beendet die
+    Leiste und AGS des Nutzers, also darf kein Test ihn wirklich
+    aufrufen, und ohne einen Griff ins Fenster waere die einzige
+    pruefbare Aussage, dass die Anwendung startet.
+    """
+    arguments = list(sys.argv[1:] if argv is None else argv)
+
+    try:
+        page = page_of(arguments)
+    except ValueError as wrong:
+        print(wrong, file=sys.stderr)
+        return 2
+
+    try:
+        settings_file.load()
+    except (ValueError, OSError) as problem:
+        # Denselben Pfad wie cli.settings_path(), und aus demselben
+        # Grund benannt statt beschrieben: "unsupported schema_version
+        # None" sagt nicht, welche Datei zu reparieren ist, und es gibt
+        # mehr als eine Einstellungsdatei auf einer Maschine.
+        target = paths.user_root() / settings_file.FILENAME
+        print(settings_file.unreadable(target, problem), file=sys.stderr)
+        return 1
+
+    from .app import SettingsApplication
+
+    application = SettingsApplication(
+        runner=runner, on_window_shown=on_window_shown, page=page)
+    # Ohne Argumente: GTK wertete sonst unsere eigenen noch einmal aus.
+    return application.run([])

@@ -1,0 +1,395 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Gathers the evidence for one smoke run and hands it to the host.
+#
+# HOW THE EVIDENCE LEAVES THE GUEST
+#     Through a raw disk, written as a tar stream: `tar cf /dev/vda .`
+#     and, on the host, `tar xf evidence.img`. tar stops reading at its
+#     end-of-archive marker and ignores the unwritten remainder of the
+#     device, which is what makes an unformatted block device a
+#     legitimate destination - the tape case tar was written for.
+#
+#     The alternatives were considered and rejected: base64 over the
+#     serial line is throttled by the emulated baud rate and would take
+#     minutes for one screenshot; a 9p or virtiofs share adds a mount
+#     that can fail for its own reasons on the one boot we are trying to
+#     measure.
+#
+# WHY A SCREENSHOT FROM INSIDE AS WELL
+#     The host takes a framebuffer dump through QEMU, which proves the
+#     screen shows something. grim asks the compositor for its output,
+#     which proves the something came out of Hyprland. A blank QEMU dump
+#     with a populated grim capture would mean a scanout problem; the
+#     reverse would mean the compositor is not drawing. One capture
+#     cannot tell those apart.
+set -u
+
+SERIAL=/dev/ttyS0
+
+# The same directory zepos-smoke writes into, derived the same way. Its
+# header explains why it is not /run.
+EVIDENCE="${XDG_RUNTIME_DIR:-/tmp}/zepos-smoke"
+
+# The evidence disk, found by the serial the harness gave it and NEVER by
+# position.
+#
+# /dev/vda was correct for as long as there was exactly one virtio block
+# device. There are now two: this script also runs on the INSTALLED
+# system, where the other one is the root disk it just booted from - and
+# `tar cf /dev/vda` onto that would destroy the system whose first boot
+# is being measured, after the measurement had succeeded. QEMU's
+# `serial=` on the virtio-blk device is what udev turns into this path,
+# so the name is a statement by the host about which disk it means rather
+# than a guess about enumeration order.
+#
+# Deliberately no fallback. A missing evidence disk costs this run its
+# evidence, which the serial log survives; a fallback to a positional
+# node costs somebody their filesystem.
+DISK=/dev/disk/by-id/virtio-zepos-evidence
+
+# How long to keep asking whether the session came up. Generous: a
+# software-rendered compositor on a cold squashfs is slow, and a false
+# "did not start" is the most expensive wrong answer this run can give.
+DEADLINE=180
+
+# hyprland.conf's exec-once lines stagger the desktop's own components -
+# the bar at five seconds, the widgets at three, the VPN watcher at ten.
+# Capturing before they have run would photograph an empty compositor and
+# call it the result.
+SETTLE=25
+
+# Three destinations, for the reasons zepos-smoke's copy of this
+# function spells out. Note that the collector's stdout is the tty the
+# compositor is about to take over, so its lines end up underneath the
+# session rather than on screen - which is why they also go to the file.
+say() {
+    printf 'ZEPOS-SMOKE: %s\n' "$*"
+    printf 'ZEPOS-SMOKE: %s\n' "$*" >>"$EVIDENCE/progress.log"
+    printf 'ZEPOS-SMOKE: %s\n' "$*" >>"$SERIAL" 2>/dev/null || true
+}
+
+# --------------------------------------------------------------------
+# Find the compositor before asking it anything
+# --------------------------------------------------------------------
+# hyprctl locates its instance through HYPRLAND_INSTANCE_SIGNATURE, and
+# this process is not a child of the compositor, so nothing set it.
+# Without it every hyprctl call fails with "is Hyprland running?" no
+# matter how running Hyprland is.
+#
+# Measured, and it is the reason this function exists: a run in which
+# grim captured a 242 kB screenshot of a working desktop - bar, wallpaper
+# and all - was reported as `session=timeout monitors=0`, because the
+# readiness probe was an hyprctl call that could never have succeeded. A
+# harness that answers "no desktop" to a desktop is worth less than no
+# harness.
+find_instance() {
+    local directory
+    for directory in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/hypr/*/; do
+        [[ -S "${directory}.socket.sock" ]] || continue
+        HYPRLAND_INSTANCE_SIGNATURE="$(basename "$directory")"
+        export HYPRLAND_INSTANCE_SIGNATURE
+        return 0
+    done
+    return 1
+}
+
+# `hyprctl monitors` rather than a process check: a Hyprland that started
+# and then failed to open a backend is still a running process, and would
+# report a session that does not exist.
+status=timeout
+waited=0
+while (( waited < DEADLINE )); do
+    if find_instance && hyprctl monitors -j >/dev/null 2>&1; then
+        status=up
+        break
+    fi
+    sleep 2
+    waited=$(( waited + 2 ))
+done
+say "session $status after ${waited}s instance=${HYPRLAND_INSTANCE_SIGNATURE:-none}"
+
+if [[ "$status" == up ]]; then
+    sleep "$SETTLE"
+fi
+
+# --------------------------------------------------------------------
+# Is the AGS layer there
+# --------------------------------------------------------------------
+# Fifteen templates generate AGS widgets and until aylurs-gtk-shell was
+# packaged, not one of them had ever been executed by the program it is
+# written for - the first boot of this image had no AGS at all. So this
+# asks, and it asks in the way that leaves evidence either way.
+#
+# `ags request calendar` rather than a process check, for the same reason
+# the session probe is `hyprctl monitors` and not pgrep: a gjs process
+# that started and then failed on an import is still a running process.
+# A request goes over the socket ags-config.template's requestHandler
+# listens on, so an answer means the bundle compiled, the imports
+# resolved, main() ran and the widgets exist.
+#
+# It also MAKES ONE VISIBLE. The widgets are layer-shell windows created
+# hidden, so `hyprctl layers` shows nothing of AGS until one is toggled -
+# a screenshot taken before this would be a photograph of a working AGS
+# with nothing to see. The probe loop below and the grim capture both
+# come after it on purpose.
+ags_status=down
+if [[ "$status" == up ]]; then
+    say "PHASE ags"
+    ags list >"$EVIDENCE/ags-list.txt" 2>&1 || true
+    if ags request calendar >"$EVIDENCE/ags-request.txt" 2>&1; then
+        ags_status=up
+        # The toggle is asynchronous: the request returns when the
+        # handler was called, not when the surface is mapped.
+        sleep 3
+    else
+        # Nothing captured AGS's own output - hyprland.conf starts it
+        # with `>/dev/null 2>&1` - so on failure the only way to learn
+        # WHY is to run it here and read what it says. Bounded, because
+        # a bundle that compiles and then waits would otherwise hold the
+        # whole run until the harness kills the machine.
+        say "ags did not answer; running it once to capture the reason"
+        timeout 30 ags run -d "$HOME/.config/ags" \
+            >"$EVIDENCE/ags-run.log" 2>&1 || true
+    fi
+    say "ags $ags_status"
+fi
+
+# --------------------------------------------------------------------
+# Ask the compositor about itself
+# --------------------------------------------------------------------
+# Not a list of names but a list of questions, because the interesting
+# ones are the two the task actually asks: is the bar there (layers), and
+# are the keybinds there (binds).
+for probe in version monitors clients workspaces binds layers devices instances; do
+    hyprctl -j "$probe" >"$EVIDENCE/hyprctl-$probe.json" 2>&1
+done
+hyprctl systeminfo >"$EVIDENCE/hyprctl-systeminfo.txt" 2>&1
+
+# --------------------------------------------------------------------
+# Which plugins the compositor loaded, in its own words
+# --------------------------------------------------------------------
+# Two questions, and they have to be asked separately because they fail
+# separately.
+#
+#   plugins.conf  did the GENERATOR find the objects? src/plugins.py
+#                 writes a `plugin =` line only for a .so that was on the
+#                 machine when the file was written, and drops the whole
+#                 block - settings and binds with it - when it was not.
+#                 A file of nothing but comments is a valid Hyprland
+#                 configuration and a desktop with no plugins, which is
+#                 exactly what §7.4 built and exactly what looks like
+#                 success from every other angle.
+#
+#   plugin list   did the COMPOSITOR accept them? A load line points at a
+#                 path; whether the object behind it is loadable is
+#                 answered only after dlopen, and a plugin refused there
+#                 costs its feature and nothing else. Hyprland reports
+#                 the ones it holds, by the name each registered in its
+#                 own pluginInit - so a name here is the plugin's own
+#                 word that it ran.
+#
+# `plugin list` and not a two-word entry in the loop above: the loop
+# passes one token to hyprctl and this command takes two.
+hyprctl -j plugin list >"$EVIDENCE/hyprctl-plugins.json" 2>&1
+plugins="$(grep -oE '"name": "[^"]*"' "$EVIDENCE/hyprctl-plugins.json" 2>/dev/null \
+    | cut -d'"' -f4 | sort -u | paste -sd, - || true)"
+
+# The load lines that were actually written, counted in the file that was
+# actually read. `|| true` because grep -c exits non-zero on a count of
+# zero while still printing it, and the failure of this one line must not
+# be able to take the summary with it.
+plugins_conf="$HOME/.config/hypr/plugins.conf"
+plugin_lines="$(grep -c '^plugin[[:space:]]*=' "$plugins_conf" 2>/dev/null || true)"
+: "${plugin_lines:=0}"
+
+# What the compositor says about the ones it would not take.
+#
+# NOT read out of hyprland.log, and that was measured: Hyprland's
+# debug:disable_logs defaults to true and ZepOS's generated configuration
+# does not turn it off, so after the first few lines the compositor
+# writes nothing of its own to the file at all - this run produced 41400
+# log lines of which 41249 were aquamarine's trace and none mentioned a
+# plugin. A refused plugin would therefore leave no trace anywhere: the
+# session starts, the desktop looks finished, and the feature is absent.
+#
+# So it is asked directly. `hyprctl plugin load <path>` returns the
+# compositor's own error string for an object it cannot take, and for one
+# it already holds it answers "Cannot load a plugin twice!" - which is
+# why only the objects that are NOT in the list above are tried. Nothing
+# is loaded that was not already meant to be: every path here comes from
+# a `plugin =` line the generator wrote.
+: >"$EVIDENCE/plugin-refused.txt"
+while read -r path; do
+    name="$(basename "$path" .so)"
+    case ",$plugins," in *",$name,"*) continue ;; esac
+    # timeout, because `hyprctl plugin load` waits for a promise the
+    # compositor resolves in its own event loop and there is no deadline
+    # on the other end. This runs only for objects that already failed to
+    # load once, which is exactly the case where hanging is plausible -
+    # and a hang here would cost the whole evidence tar, which is written
+    # after this loop.
+    printf '%s: %s\n' "$name" \
+        "$(timeout 15 hyprctl plugin load "$path" 2>&1)" \
+        >>"$EVIDENCE/plugin-refused.txt"
+done < <(sed -n 's/^plugin[[:space:]]*=[[:space:]]*//p' "$plugins_conf" 2>/dev/null)
+
+refused="$(cut -d: -f1 "$EVIDENCE/plugin-refused.txt" | paste -sd, - || true)"
+say "plugins loaded=${plugins:-none} refused=${refused:-none}"
+
+# --------------------------------------------------------------------
+# A picture from inside the session
+# --------------------------------------------------------------------
+# WAYLAND_DISPLAY is set by Hyprland for the processes IT starts; this
+# one was started by the login shell, so the socket has to be found. The
+# .lock files sit next to the sockets and must not be mistaken for one.
+if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
+    for socket in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/wayland-*; do
+        [[ "$socket" == *.lock ]] && continue
+        [[ -S "$socket" ]] || continue
+        export WAYLAND_DISPLAY="${socket##*/}"
+        break
+    done
+fi
+say "wayland display ${WAYLAND_DISPLAY:-none}"
+grim "$EVIDENCE/screenshot-compositor.png" >"$EVIDENCE/grim.log" 2>&1
+say "grim rc=$? size=$(stat -c %s "$EVIDENCE/screenshot-compositor.png" 2>/dev/null || echo 0)"
+
+# --------------------------------------------------------------------
+# The compositor's own log, and the machine's
+# --------------------------------------------------------------------
+# Hyprland writes below $XDG_RUNTIME_DIR/hypr/<instance signature>/, and
+# the signature is not knowable in advance.
+for log in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/hypr/*/hyprland.log; do
+    [[ -f "$log" ]] || continue
+    cp "$log" "$EVIDENCE/hyprland.log"
+done
+journalctl -b --no-pager >"$EVIDENCE/journal.txt" 2>&1
+ps -eo pid,ppid,etimes,args >"$EVIDENCE/processes.txt" 2>&1
+env >"$EVIDENCE/environment.txt" 2>&1
+
+# --------------------------------------------------------------------
+# The configuration that was actually generated
+# --------------------------------------------------------------------
+# The point of the whole exercise. Copied rather than summarised: the
+# next person's question will be about a line nobody thought to grep for.
+mkdir -p "$EVIDENCE/config"
+for directory in hypr kitty zepos-menu ags zepos; do
+    [[ -d "$HOME/.config/$directory" ]] || continue
+    cp -a "$HOME/.config/$directory" "$EVIDENCE/config/" 2>>"$EVIDENCE/collect.log"
+done
+[[ -f "$HOME/.zshrc" ]] && cp "$HOME/.zshrc" "$EVIDENCE/config/zshrc"
+( cd "$HOME" && find .config .local -maxdepth 4 -printf '%M %10s %p\n' ) \
+    >"$EVIDENCE/config/tree.txt" 2>&1
+
+# --------------------------------------------------------------------
+# What this machine will update from (spec 8.5b)
+# --------------------------------------------------------------------
+# Meaningless on a live medium, which is why it reports rather than
+# asserts: the question belongs to the INSTALLED system, where this same
+# script runs on the first boot. §8.5b asks for exactly one [zepos]
+# section, pointing at the online repository, and for no `file://` source
+# anywhere in the file - because `file:///opt/zepos-repo` is a directory
+# of the medium that installed the machine and is gone the moment it is
+# unplugged.
+#
+# Asked of the running system rather than of the target root the
+# installer wrote: the same file, one reboot later, read by the machine
+# it belongs to. That is the difference between "the installer wrote the
+# right thing" and "the right thing is there".
+cp /etc/pacman.conf "$EVIDENCE/pacman.conf" 2>/dev/null
+# The other half of the same question, and the reason it is collected
+# rather than counted: [core] and [extra] say `Include =
+# /etc/pacman.d/mirrorlist`, so where the base system comes from is in
+# that file and not in this one. pacstrap copies the live medium's
+# mirrorlist into the target, which is what carries the ALA pin (spec
+# §8.7) across the installation.
+cp /etc/pacman.d/mirrorlist "$EVIDENCE/mirrorlist" 2>/dev/null
+zepos_sections="$(grep -c '^\[zepos\]' /etc/pacman.conf 2>/dev/null || true)"
+: "${zepos_sections:=0}"
+zepos_servers="$(sed -n '/^\[zepos\]/,/^\[/{/^Server/p}' /etc/pacman.conf 2>/dev/null \
+    | sed 's/^Server *= *//' | paste -sd, - || true)"
+
+# ACTIVE sources only, and that correction is worth the extra regex.
+# A plain `grep -c 'file://'` reported 1 on the first installed system
+# ZepOS ever produced - and the one hit was line 100 of pacman's own
+# default configuration:
+#
+#     # An example of a custom package repository. [...]
+#     #[custom]
+#     #SigLevel = Optional TrustAll
+#     #Server = file:///home/custompkgs
+#
+# A count that says 1 when the answer is 0 cannot say anything when the
+# answer is 1, which is the case §8.5b exists for.
+zepos_file_urls="$(grep -cE '^[[:space:]]*Server[[:space:]]*=[[:space:]]*file://' \
+    /etc/pacman.conf 2>/dev/null || true)"
+: "${zepos_file_urls:=0}"
+say "pacman.conf zepos-sections=$zepos_sections servers=${zepos_servers:-none} file-urls=$zepos_file_urls"
+
+# What the machine can verify a package with. On the installed system
+# this is the other half of the same question: a [zepos] section with
+# SigLevel = Required on a machine whose keyring never heard of the key
+# fails the first upgrade just as surely as an unreachable URL.
+pacman-key -l >"$EVIDENCE/pacman-keys.txt" 2>&1
+
+# --------------------------------------------------------------------
+# One line the harness can read without unpacking anything
+# --------------------------------------------------------------------
+# Counted out of the files the probe loop just wrote, not by asking
+# Hyprland a second time: a summary that can disagree with the evidence
+# next to it is a summary nobody can act on.
+#
+# jq rather than a grep for '"name"'. That grep reported monitors=3 for
+# one monitor, because a monitor object also carries the name of its
+# active workspace and of its special workspace. A number that is wrong
+# by a factor of three in the good case would have been wrong in the bad
+# case too, silently.
+#
+# Every substitution is guarded so that the line stays ONE line. `grep -c`
+# exits non-zero on a count of zero, and an `|| echo 0` after a command
+# that already printed "0" produced "0\n0" - which cut the summary in
+# half at exactly the moment it was reporting a failure.
+count() { jq 'length' "$EVIDENCE/hyprctl-$1.json" 2>/dev/null || echo '?'; }
+
+generate_rc="$(cat "$EVIDENCE/rc.generate" 2>/dev/null || true)"
+verify_rc="$(cat "$EVIDENCE/rc.verify" 2>/dev/null || true)"
+
+# The half of the verification that can still move. zepos-smoke's phase 2
+# has the measurement: --verify-config does not load plugins, so every
+# bind on a plugin dispatcher is reported as invalid and the return code
+# is 1 on any machine where the plugins are installed and working. This
+# is the number that has to stay 0.
+verify_other="$(cat "$EVIDENCE/rc.verify_other" 2>/dev/null || true)"
+
+# The layer-shell surfaces, by name. This is the answer to "is the bar
+# actually there" - the bar and the dock are layer surfaces (namespaces
+# zepos-bar and zepos-dock), so they appear here and never in the client
+# list.
+layers="$(grep -oE '"namespace": "[^"]*"' "$EVIDENCE/hyprctl-layers.json" 2>/dev/null \
+    | cut -d'"' -f4 | sort -u | paste -sd, - || true)"
+
+say "RESULT session=$status generate=${generate_rc:-?} verify=${verify_rc:-?}" \
+    "verifyother=${verify_other:-?}" \
+    "monitors=$(count monitors) binds=$(count binds) clients=$(count clients)" \
+    "ags=$ags_status layers=${layers:-none}" \
+    "plugins=${plugins:-none} pluginlines=$plugin_lines refused=${refused:-none}" \
+    "zeposrepo=${zepos_sections}/${zepos_file_urls}"
+
+# --------------------------------------------------------------------
+# Hand it over
+# --------------------------------------------------------------------
+# </dev/null so that a tar which runs out of device asks its
+# "next volume?" question into an EOF and gives up, instead of blocking
+# forever on a machine with nobody at the keyboard.
+if [[ -b "$DISK" ]]; then
+    if tar cf "$DISK" -C "$EVIDENCE" . </dev/null 2>>"$EVIDENCE/collect.log"; then
+        say "evidence written to $DISK"
+    else
+        say "evidence FAILED to write to $DISK"
+    fi
+else
+    say "no evidence disk at $DISK - the run is only as good as the serial log"
+fi
+
+say "DONE"

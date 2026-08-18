@@ -1,0 +1,506 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# The core package. Everything else in ZepOS depends on it, and nothing
+# else can be tested without it: it carries the templates, the generator
+# and the three commands, which together are what turns a bare Arch into
+# ZepOS.
+#
+# WHERE THE FILES GO, AND WHY NOT WHERE THEY ARE TODAY
+#     src/paths.py's header has the argument in full: a pacman package
+#     may own nothing below ~, so the source, the user's settings and
+#     the generated output become three separate roots. This package
+#     owns the first one and nothing else.
+#
+# WHY THE VERSION IS NOT WRITTEN HERE
+#     A version repeated in fifteen PKGBUILDs is a version that is wrong
+#     in some of them by the second release. It lives in VERSION at the
+#     repository root, and every zepos-* recipe reads it from there. The
+#     path is resolved from this file's own location rather than from the
+#     working directory, so `makepkg` in this directory and
+#     `packaging/build.sh` from the repository root see the same number.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-config
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="ZepOS configuration sources: templates, styles, the generator and its single source of truth"
+arch=('any')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+# Spec §4.2. Deliberately short: this package generates configuration for
+# AGS, Kitty and Hyprland, but it does not need any of them
+# installed to do it - the generator writes files. zepos-desktop is the
+# package that pulls the desktop in; a hard dependency here would make
+# the generator uninstallable on a machine that only wants to render its
+# own configuration, and would make this package's dependency list a
+# duplicate of the meta package's.
+#
+# plymouth ist die eine Ausnahme von diesem kurzen Satz, und sie folgt
+# derselben Regel, die am 12.08.2026 blueman aus den optdepends geholt
+# hat: was die AUSGELIEFERTE KONFIGURATION NENNT, installiert das Paket.
+#
+# Dieses Rezept legt zwei Dateien ab, die ohne plymouth nichts tun und
+# nichts sagen:
+#
+#   * /usr/share/plymouth/themes/zepos/ - das Thema fuer die Abfrage der
+#     Plattenpassphrase. Ohne plymouth ist es ein Verzeichnis, das
+#     niemand liest.
+#   * /etc/default/grub.d/10-zepos.cfg - setzt `splash` auf die
+#     Kernelzeile. Ohne plymouth ist das ein Wort, das der Kernel
+#     ueberliest.
+#
+# UND DER FEHLERFALL IST DER GRUND, NICHT DIE ORDENTLICHKEIT. Ein
+# optdepend, das jemand weglaesst, ergaebe hier keine fehlende
+# Funktion, sondern eine Maschine, die beim Einschalten wieder eine
+# englische Textzeile zeigt - und zwar lautlos, weil der encrypt-Haken
+# von mkinitcpio auf ein fehlendes plymouth mit genau diesem Rueckfall
+# antwortet (gemessen, siehe installer/core/translate.py,
+# PLYMOUTH_COMMAND). Ein Rueckfall, der still ist, ist ein Rueckfall,
+# den niemand meldet.
+#
+# WARUM HIER UND NICHT IN zepos-desktop: weil DIESES Paket die zwei
+# Dateien oben ablegt. zepos-desktop haengt an zepos-config, bekommt
+# plymouth also mit; andersherum haette man ein Thema ohne Leser, sobald
+# jemand zepos-config allein installiert.
+depends=('python' 'bash' 'plymouth')
+optdepends=(
+    'jq: the generated status scripts parse JSON with it'
+    'aylurs-gtk-shell: runs the AGS widget templates, the bar and the dock'
+    'kitty: runs the terminal templates'
+    'zepos-hyprland: the compositor the generated configuration is for'
+)
+
+# Produced by packaging/build.sh from the working tree, with mtimes
+# clamped to SOURCE_DATE_EPOCH so that one tree gives one tarball.
+#
+# sha256sums is SKIP because a checksum here would be a checksum of a
+# file this build just created from the sources next to it - it would
+# verify nothing that is not already true. The checksums that matter are
+# in the recipes that fetch from the network, and the test suite requires
+# them there.
+source=("zepos-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+# msgfmt, fuer den deutschen Katalog der Oberflaeche. Dieselbe
+# Abhaengigkeit und derselbe Grund wie bei zepos-installer: im Baum
+# liegt die .po-Datei, das .mo entsteht beim Bauen.
+makedepends=('gettext')
+
+build() {
+    # Dasselbe Skript, das ein Entwicklerbaum aufruft, nur auf ein
+    # Zwischenverzeichnis statt auf po/build gezeigt. Sein Kopf sagt es;
+    # dies ist der Aufrufer, fuer den es geschrieben wurde.
+    cd "$srcdir/zepos-$pkgver"
+    bash po/build.sh "$srcdir/locale"
+}
+
+# Die zwei Dateien unter /etc, die ein Administrator aendern koennen
+# muss, ohne dass das naechste `pacman -Syu` es wegwirft. Alles andere,
+# was dieses Paket ablegt, gehoert ZepOS: /usr/bin, /usr/share und das
+# systemd-Drop-in sind Programmteile und keine Einstellungen.
+#
+# Nicht in dieser Liste steht /etc/greetd/config.toml - die gehoert dem
+# Paket greetd, und warum ZepOS daneben ablegt statt darauf, steht in
+# src/login/greetd.toml.
+#
+# Ein Blatt JE THEMA, seit dem 12.08.2026. Sie liegen alle da, und
+# src/bin/zepos-greeter waehlt beim Start ueber /etc/zepos/theme
+# zwischen ihnen - das ist die ganze Umschaltung der Anmeldemaske, und
+# sie kommt ohne einen Erzeugungslauf mit Rechten aus. Der Kopf von
+# src/greeter.py fuehrt es aus.
+backup=(
+    'etc/greetd/zepos.toml'
+    'etc/greetd/zepos-regreet.toml'
+    'etc/greetd/zepos-greeter-zeptronit.css'
+    'etc/greetd/zepos-greeter-tageslicht.css'
+)
+
+package() {
+    cd "$srcdir/zepos-$pkgver"
+
+    # ------------------------------------------------------------------
+    # /usr/share/zepos - the package root src/paths.py points at
+    # ------------------------------------------------------------------
+    # bin/ is excluded because those three files go to /usr/bin instead;
+    # everything else in src/ is the generator and its inputs and moves
+    # across unchanged. __pycache__ is excluded because a package that
+    # ships compiled bytecode for one Python version becomes wrong on the
+    # next one, silently.
+    #
+    # branding/ is the ZeptronIT wallpaper and logo. They belong to the
+    # PACKAGE and not to a home directory: the generator substitutes
+    # {{ZEPOS_SYSTEM_ROOT}}/branding/zepos-wallpaper.png into
+    # wallpaper-manager, so a machine where nobody has chosen a wallpaper
+    # comes up with the shipped one instead of the compositor's black -
+    # and a package update carrying a new one reaches every such machine
+    # without touching a single file the user owns.
+    install -d "$pkgdir/usr/share/zepos"
+    cp -a --no-preserve=ownership \
+        branding docs helpers profiles styles system templates *.py *.sh \
+        "$pkgdir/usr/share/zepos/"
+    rm -rf "$pkgdir/usr/share/zepos/__pycache__"
+
+    find "$pkgdir/usr/share/zepos" -type d -exec chmod 0755 {} +
+    find "$pkgdir/usr/share/zepos" -type f -exec chmod 0644 {} +
+
+    # The generator runs ITSELF: generate_config.sh re-invokes "$SELF"
+    # for every target's post-generation step, and the start-hyprland it
+    # writes calls it directly before exec'ing the compositor. Both are
+    # execution, not `bash <file>`, so this mode is load-bearing - the
+    # first boot of the smoke ISO died at exactly this, with exit 126 and
+    # no session.
+    chmod 0755 "$pkgdir/usr/share/zepos/generate_config.sh"
+    chmod 0755 "$pkgdir/usr/share/zepos/fetch_icons.sh"
+
+    # DER ABDRUCK DER EIGENEN ANWENDUNGEN, fuer das Dock.
+    #
+    # Dieselbe Bauart wie shipped-applications in zepos-apps, und aus
+    # demselben Grund: src/apps.py liest im Checkout die Rezepte und
+    # findet auf einer Installation kein packaging/. Was hier
+    # herausgeschrieben wird, ist genau das, was dort gelesen wuerde -
+    # die Kennung jedes Anwendungseintrags, den ein Rezept dieses
+    # Projekts nach /usr/share/applications legt.
+    #
+    # GEMELDET am 12.08.2026: "das einstellungs icon im footer laesst
+    # sich garnicht oeffnen es erscheint nie". Das Zahnrad, das dastand,
+    # war der Eintrag des Portal-DIENSTES und nicht der der
+    # Einstellungen - die ganze Messung steht im Kopf von
+    # src/templates/ags-dock.template. Diese Datei hier ist die andere
+    # Haelfte: das ECHTE Einstellungssymbol hat gefehlt, weil das Dock
+    # nur zepos-apps kannte und die Einstellungsanwendung ein eigenes
+    # Paket ist. Siehe den Kopf von src/apps.py.
+    #
+    # `grep -h` ueber die Rezepte und keine getippte Liste: eine Liste
+    # waere ab der zweiten eigenen Anwendung falsch, und zwar still.
+    # Kommentarzeilen fallen weg, damit ein Rezept begruenden darf,
+    # welchen Eintrag es NICHT ablegt.
+    grep -hv '^[[:space:]]*#' "$_zepos_repo"/packaging/*/PKGBUILD \
+        | grep -o 'usr/share/applications/[A-Za-z0-9][[:alnum:]._+-]*\.desktop' \
+        | sed 's#.*/##; s#\.desktop$##' \
+        | sort -u > "$pkgdir/usr/share/zepos/own-applications"
+
+    test -s "$pkgdir/usr/share/zepos/own-applications" || {
+        echo "kein Rezept legt einen Anwendungseintrag ab - dann heftet" >&2
+        echo "das Dock keine einzige eigene Anwendung an, und der" >&2
+        echo "Abdruck waere eine leere Datei, die so aussieht wie eine" >&2
+        echo "richtige." >&2
+        return 1
+    }
+    chmod 0644 "$pkgdir/usr/share/zepos/own-applications"
+
+    # DER ABDRUCK DER AUSGELIEFERTEN LEISTE, fuer die Einstellungen.
+    #
+    # Derselbe Kniff wie die zwei Abdruecke darueber und aus demselben
+    # Grund, nur fuer die andere Frage: "in welcher Reihenfolge kommt
+    # die Leiste aus dem Paket?". Die Einstellungs-Anwendung muss sie
+    # ZEIGEN koennen, und sie darf dafuer src/style_definition.py nicht
+    # importieren - dessen Import fragt `hyprctl` nach den
+    # Bildschirmen, und ein Einstellungsfenster, das den Compositor
+    # braucht, geht auf einer Maschine ohne Hyprland nicht mehr auf.
+    # src/settings.py's Abschnitt "Die Leiste" traegt die Begruendung
+    # in ganzer Laenge.
+    #
+    # GESCHRIEBEN VON DEM MODUL, DAS DIE LISTEN DEFINIERT, wie schon
+    # bei user-settings.json weiter unten: eine zweite Aufzaehlung im
+    # Rezept waere eine zweite Definition, und die beiden trennen sich
+    # beim ersten neuen Modul.
+    #
+    # ZEPOS_USER_ROOT zeigt ins Leere, und das ist die tragende Zeile:
+    # der Abdruck soll die AUSGELIEFERTE Reihenfolge tragen. Mit den
+    # Einstellungen des Bauenden darin waere er das, wogegen
+    # bar_order() prueft - und ein Paket haette die Leiste dessen
+    # ausgeliefert, der es gebaut hat.
+    #
+    # OHNE DIE ANHEFTUNGEN, und das ist am 13.08.2026 gemessen worden.
+    # Hier stand der Versuch, sie mitzuschreiben, und makepkg brach ab:
+    #
+    #     AssertionError: {... 'dock_pins': []}
+    #
+    # Dieses Paket wird aus einem Tarball gebaut, in dem packaging/
+    # nicht liegt, und /usr/share/zepos ist dabei leer - die
+    # Anwendungsauswahl gehoert zepos-apps und ist hier weder ueber das
+    # Rezept noch ueber einen Abdruck zu erfahren. Sie hat mit
+    # /usr/share/zepos/shipped-applications ohnehin ihren eigenen
+    # Abdruck; settings.shipped_bar() holt sie beim LESEN von dort.
+    ZEPOS_USER_ROOT="$srcdir/keine-einstellungen" \
+    PYTHONPATH="$_zepos_repo/src" \
+        python -c 'import json, sys, style_definition
+sys.stdout.write(json.dumps(style_definition.shipped_bar_imprint(),
+                            ensure_ascii=False, indent=2) + "\n")' \
+        > "$pkgdir/usr/share/zepos/shipped-bar.json"
+
+    # Die Gegenprobe, und sie ist keine Formsache: `python -c` schreibt
+    # bei einem Fehler auf die FEHLERausgabe, die Umlenkung oben legt
+    # trotzdem eine Datei an, und makepkg liefe weiter. Der Abdruck
+    # waere dann leer - und eine leere Liste heisst fuer bar_order()
+    # "jeder gespeicherte Name ist unbekannt", also verlaere der Nutzer
+    # beim naechsten Speichern seine Leiste an eine Datei, die so
+    # aussieht wie eine richtige.
+    python -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["modules_left"] and d["modules_right"] and d["modules_available"], d
+assert "dock_pins" not in d, ("die Anheftungen gehoeren zepos-apps und "
+                              "seinem Abdruck, nicht in diese Datei: %r" % d)' \
+        "$pkgdir/usr/share/zepos/shipped-bar.json" || {
+        echo "der Abdruck der Leiste ist leer oder unvollstaendig;" >&2
+        echo "die Einstellungs-Anwendung wuerde jeden gespeicherten" >&2
+        echo "Namen fuer unbekannt halten und verwerfen." >&2
+        return 1
+    }
+    chmod 0644 "$pkgdir/usr/share/zepos/shipped-bar.json"
+
+    # ------------------------------------------------------------------
+    # /usr/bin - the commands
+    # ------------------------------------------------------------------
+    # Die ersten drei sind je vier Zeilen, die /usr/share/zepos finden
+    # und an cli.py uebergeben; src/cli.py's header explains the split.
+    #
+    # Die letzten zwei sind der Anmeldeweg und keine Python-Vorschalter:
+    # zepos-greeter laeuft als Benutzer "greeter", bevor irgendjemand
+    # angemeldet ist, und zepos-session als der gerade Angemeldete. Beide
+    # sind Shell, weil beide vor allem andere Programme der Reihe nach
+    # versuchen - und weil zepos-greeter laufen muss, wenn von ZepOS
+    # sonst noch nichts erzeugt wurde.
+    #
+    # zepos-displays-guard ist die siebte und die einzige, die kein
+    # Mensch je tippt: die Bildschirmseite von zepos-settings-gui startet
+    # sie, bevor sie eine Anordnung anwendet, und sie stellt die alte
+    # wieder her, wenn niemand bestaetigt - AUCH DANN, wenn die
+    # Oberflaeche dabei stirbt. Genau deshalb ist sie ein eigener Befehl
+    # und keine Funktion: ein Zeitgeber im Programm stirbt mit ihm, und
+    # der schwarze Schirm bliebe.
+    #
+    # Sie liegt in DIESEM Paket und nicht in zepos-settings-gui, weil sie
+    # zu src/displays.py gehoert - dort stehen die Entscheidungen, hier
+    # steht der Vorschalter, und ein Waechter ohne sein Modul ist ein
+    # ImportError an der Stelle, an der er gebraucht wird.
+    install -Dm755 -t "$pkgdir/usr/bin" \
+        bin/zepos-generate \
+        bin/zepos-settings \
+        bin/zepos-doctor \
+        bin/zepos-update \
+        bin/zepos-greeter \
+        bin/zepos-session \
+        bin/zepos-displays-guard
+
+    # ------------------------------------------------------------------
+    # Die Selbstaktualisierung (UP-1)
+    # ------------------------------------------------------------------
+    # Zeitgeber, Dienst und der ALPM-Haken, der den Zeitgeber einschaltet.
+    # src/update.py traegt die drei Entscheidungen und ihre Begruendung;
+    # src/system/zepos-update.hook sagt, warum das Einschalten ein Haken
+    # sein muss und kein Scriptlet.
+    #
+    # Die .timer-Datei ist die einzige hier, die AUS DEM MODUL ERZEUGT
+    # ist: timer_unit(defaults()) schreibt sie, und tests/src/
+    # test_update.py vergleicht beide Byte fuer Byte. Ausgeliefert wird
+    # trotzdem die Datei und nicht der Aufruf - ein Paket, das seine Units
+    # zur Bauzeit aus Python erzeugt, ist eins, dessen Inhalt niemand vor
+    # dem Bauen lesen kann.
+    install -Dm644 system/zepos-update.service \
+        "$pkgdir/usr/lib/systemd/system/zepos-update.service"
+    install -Dm644 system/zepos-update.timer \
+        "$pkgdir/usr/lib/systemd/system/zepos-update.timer"
+    install -Dm644 system/zepos-update.hook \
+        "$pkgdir/usr/share/libalpm/hooks/90-zepos-update.hook"
+
+    # ------------------------------------------------------------------
+    # Die Anmeldung
+    # ------------------------------------------------------------------
+    # Ohne diesen Block erreicht ein installiertes ZepOS "Reached target
+    # Graphical Interface" und dann nichts mehr - gemessen mit
+    # iso/test-boot.py --scenario release-installed auf
+    # iso/out/release-target.img. Es gab keinen Anmeldedienst, keinen
+    # Sitzungseintrag und nichts, was einen Compositor gestartet haette.
+    #
+    # WARUM DIE DATEIEN SO HEISSEN, WIE SIE HEISSEN
+    #     greetd besitzt /etc/greetd/config.toml und greetd-regreet
+    #     besitzt /etc/greetd/regreet.toml - beides nachgemessen an den
+    #     Paketen aus dem angehefteten ALA-Schnappschuss. Ein zweites
+    #     Paket auf demselben Pfad ist ein Dateikonflikt, der die
+    #     Installation abbricht. ZepOS legt deshalb daneben ab und zeigt
+    #     greetd ueber das Drop-in darauf; src/login/greetd.toml traegt
+    #     die Messung.
+    install -Dm644 login/greetd.toml "$pkgdir/etc/greetd/zepos.toml"
+    install -Dm644 login/regreet.toml "$pkgdir/etc/greetd/zepos-regreet.toml"
+    install -Dm644 login/greetd-service.conf \
+        "$pkgdir/usr/lib/systemd/system/greetd.service.d/10-zepos.conf"
+
+    # Das Aussehen der Maske. Ohne diese Datei zeichnet regreet in
+    # libadwaitas Vorgabe - graue Kachel, blauer Anmeldeknopf, zwei
+    # gleich rote Endknoepfe -, und das war der Zustand auf
+    # iso/out/run-release-installed/key-01-01-anmeldung.png.
+    #
+    # ERZEUGT AUS src/greeter.py stylesheet(), und ausgeliefert wird
+    # trotzdem die DATEI und nicht der Aufruf - dieselbe Entscheidung
+    # und dieselbe Begruendung wie bei zepos-update.timer weiter oben:
+    # ein Paket, das seine Konfiguration zur Bauzeit aus Python erzeugt,
+    # ist eins, dessen Inhalt niemand vor dem Bauen lesen kann.
+    # tests/src/test_greeter.py vergleicht beide Byte fuer Byte.
+    #
+    # Der Name traegt wieder das zepos-: regreets eigene Vorgabe ist
+    # /etc/greetd/regreet.css, und derselbe Dateikonflikt-Grund wie bei
+    # den zwei Dateien darueber gilt hier noch einmal.
+    #
+    # EIN BLATT JE THEMA, und alle werden abgelegt. Welches gilt,
+    # entscheidet src/bin/zepos-greeter beim Start aus /etc/zepos/theme.
+    # Der Grund steht dort und im Kopf von src/greeter.py: /etc gehoert
+    # root, die Maske laeuft als "greeter", also kann ein Themenwechsel
+    # sie nur erreichen, wenn schon alles da ist.
+    install -Dm644 -t "$pkgdir/etc/greetd" \
+        login/zepos-greeter-zeptronit.css \
+        login/zepos-greeter-tageslicht.css
+
+    # Der Sitzungseintrag an der ueblichen Stelle, damit ihn auch ein
+    # anderer Greeter faende, den jemand spaeter installiert.
+    install -Dm644 login/zepos.desktop \
+        "$pkgdir/usr/share/wayland-sessions/zepos.desktop"
+
+    # ------------------------------------------------------------------
+    # Das Startmenue
+    # ------------------------------------------------------------------
+    # Dasselbe Menue, das das Installationsmedium zeigt, jetzt auch auf
+    # der Maschine, die davon installiert wurde. Bis hierher lag es nur
+    # im ISO-Profil; was der Nutzer nach einer Installation sah, war
+    # systemd-boot, und das laesst sich nicht themen.
+    # installer/core/translate.py stellt deshalb auf GRUB um.
+    #
+    # Die Dateien kommen aus iso/profile-release/grub/ und werden von
+    # packaging/build.sh in dieses Tarball gelegt - eine Kopie im Baum,
+    # zwei Ziele. Dort steht auch, warum die Schriften unter f/ landen.
+    install -d "$pkgdir/usr/share/grub/themes/zepos"
+    install -Dm644 -t "$pkgdir/usr/share/grub/themes/zepos" \
+        boot/grub-theme/*.png boot/grub-theme/theme.txt
+    install -Dm644 -t "$pkgdir/usr/share/grub/themes/zepos/f" \
+        boot/grub-theme/f/*.pf2
+
+    # Und die zwei Zeilen, ohne die grub-mkconfig das alles ignoriert.
+    # src/boot/grub-zepos.cfg hat die Messung an /etc/grub.d/00_header:
+    # GRUB_THEME allein erzeugt keine einzige Zeile in grub.cfg.
+    install -Dm644 boot/grub-zepos.cfg \
+        "$pkgdir/etc/default/grub.d/10-zepos.cfg"
+
+    # DER SPIEGEL NACH /boot, UND OHNE IHN IST DER GANZE BLOCK DARUEBER
+    # UMSONST - das ist die Messung des 17.08.2026.
+    #
+    #     Das Verzeichnis drei Zeilen weiter oben liegt auf der Wurzel,
+    #     und die Wurzel einer ZepOS-Installation ist verschluesselt.
+    #     is_path_readable_by_grub verwirft jeden Pfad, dessen
+    #     Abstraktionsliste `cryptodisk` enthaelt; /etc/grub.d/00_header
+    #     ueberspringt daraufhin den Themenblock vollstaendig, und die
+    #     erzeugte grub.cfg des Laufs vom 17.08.2026 enthielt null
+    #     Vorkommen von `theme`. Der Nutzer sah ein nacktes GNU GRUB,
+    #     obwohl Thema, Drop-in und der zweite grub-mkconfig-Lauf alle da
+    #     waren. src/boot/grub-zepos.cfg schreibt die ganze Messung aus.
+    #
+    #     Das Paket legt deshalb NICHT selbst etwas unter /boot ab - eine
+    #     FAT-Partition verliert Rechte und Besitzer, und ein nicht
+    #     eingehaengtes /boot bekaeme die Dateien auf die Wurzel. Statt
+    #     dessen spiegelt ein ALPM-Haken das Verzeichnis bei jeder
+    #     Transaktion, die es anfasst. Genau der Aufbau, den grub-install
+    #     fuer sein eigenes starfield hat: Bestand unter /usr/share,
+    #     Kopie unter /boot.
+    install -Dm755 boot/zepos-grub-theme "$pkgdir/usr/bin/zepos-grub-theme"
+    install -Dm644 boot/zepos-grub-theme.hook \
+        "$pkgdir/usr/share/libalpm/hooks/90-zepos-grub-theme.hook"
+
+    # ------------------------------------------------------------------
+    # Die Passphrase-Abfrage beim Starten
+    # ------------------------------------------------------------------
+    # Das Bild, das eine verschluesselte Installation zeigt, nachdem das
+    # Startmenue weg ist und bevor die Anmeldemaske kommt. Bis zum
+    # 13.08.2026 stand dort eine englische Textzeile auf der Konsole -
+    # archinstall haengt den klassischen encrypt-Haken ein und sonst
+    # nichts, und installer/core/crypt.py schreibt das selbst aus.
+    #
+    # Anders als das GRUB-Thema kommt dieses NICHT aus dem ISO-Profil:
+    # das Medium fragt nach keiner Passphrase, es installiert ja erst.
+    # Die Dateien liegen deshalb unter src/boot/plymouth-theme/ und
+    # werden von packaging/make-plymouth-theme.py aus src/brand.py und
+    # src/sizes.py erzeugt - dort steht auch, warum in diesem
+    # Verzeichnis kein Farbliteral steht.
+    #
+    # Die HOOKS-Zeile und plymouth-set-default-theme gehoeren NICHT
+    # hierher, sondern in installer/core/translate.py: das sind
+    # Aenderungen an /etc/mkinitcpio.conf, denen ein mkinitcpio-Lauf
+    # folgen muss, und ein Paketskript, das die Initramfs der Maschine
+    # neu baut, waere ein Paket, das beim Aktualisieren den Start
+    # riskiert.
+    install -Dm644 -t "$pkgdir/usr/share/plymouth/themes/zepos" \
+        boot/plymouth-theme/*.png \
+        boot/plymouth-theme/zepos.plymouth \
+        boot/plymouth-theme/zepos.script
+
+    # UND DER HAKEN, OHNE DEN DIE ABFRAGE KEINE UMLAUTE SCHREIBT.
+    #
+    # Zwei Dateien in mkinitcpios eigenen Verzeichnissen: das Stueck
+    # unter install/ meldet beim Bauen der Initramfs das Stueck unter
+    # hooks/ an, und dieses setzt LC_ALL=C.UTF-8, bevor plymouthd
+    # startet. Ohne das verschluckt Plymouth jeden Umlaut - sein
+    # Zeichner schiebt jedes Zeichen durch mbrtowc, und im
+    # Gebietsschema "C" faellt jedes Byte ueber 0x7F heraus; auf dem
+    # Schirm stand "Passphrase wird geprft". Die ganze Messung vom
+    # 17.08.2026 steht in src/boot/initcpio/install/zepos-locale.
+    #
+    # 0644 wie jeder andere Haken auch. Ausfuehrbar muss nur die Kopie
+    # IM ABBILD sein, und die legt mkinitcpio selbst mit 755 an
+    # (add_runscript ruft add_binary mit genau diesem Modus).
+    #
+    # IN DIESEM PAKET, weil hier auch das Thema liegt, dessen Text den
+    # Umlaut traegt. Lagen die beiden in zwei Paketen, haette eine halb
+    # aktualisierte Maschine ein Thema mit Umlaut auf einer Initramfs
+    # ohne Gebietsschema - und die zeigt wieder "geprft", also weniger
+    # als die englische Textzeile, die das alles ersetzt hat.
+    #
+    # DIE HOOKS-ZEILE UND DIE DATEN DES GEBIETSSCHEMAS gehoeren auch
+    # hier nicht her, sondern in installer/core/translate.py,
+    # PLYMOUTH_COMMAND - aus demselben Grund wie im Absatz darueber:
+    # /etc/mkinitcpio.conf gehoert dem Administrator, und ein
+    # Paketskript, das die Initramfs neu baut, riskiert beim
+    # Aktualisieren den Start. Dort steht auch, was das Gebietsschema
+    # kostet: +41 KB im fertigen Abbild.
+    install -Dm644 boot/initcpio/install/zepos-locale \
+        "$pkgdir/usr/lib/initcpio/install/zepos-locale"
+    install -Dm644 boot/initcpio/hooks/zepos-locale \
+        "$pkgdir/usr/lib/initcpio/hooks/zepos-locale"
+
+
+    # ------------------------------------------------------------------
+    # /etc/skel - a working configuration for every new account
+    # ------------------------------------------------------------------
+    # Spec §4.3 asks for this so that the installer does not have to copy
+    # anything: useradd populates a new home from /etc/skel by itself.
+    #
+    # The document is WRITTEN BY THE CODE THAT DEFINES IT rather than
+    # copied from a checked-in file. settings.defaults() is the single
+    # definition of what a fresh ZepOS installation believes; a second
+    # copy in packaging/ would be a second definition, and the two would
+    # part company at the first new setting. settings.save() also decides
+    # the mode - 0600, because this file can hold a VPN pre-shared key.
+    install -d "$pkgdir/etc/skel/.config/zepos"
+    ZEPOS_USER_ROOT="$pkgdir/etc/skel/.config/zepos" \
+    PYTHONPATH="$pkgdir/usr/share/zepos" \
+        python -c 'import settings; settings.save(settings.defaults())'
+    test -s "$pkgdir/etc/skel/.config/zepos/user-settings.json"
+
+    # ------------------------------------------------------------------
+    # Der deutsche Katalog der Oberflaeche
+    # ------------------------------------------------------------------
+    # An dem Ort, den gettext ohne jede Angabe durchsucht. Deshalb ruft
+    # src/templates/ags-i18n.template kein bindtextdomain auf: ein Pfad
+    # in der Vorlage waere eine zweite Wahrheit neben dieser Zeile.
+    #
+    # In DIESEM Paket, weil hier auch die Vorlagen liegen, aus denen die
+    # Oberflaeche erzeugt wird - Katalog und msgids kommen damit immer
+    # aus demselben Stand. Lagen sie in zwei Paketen, zeigte eine
+    # halb aktualisierte Maschine die Haelfte ihrer Beschriftungen auf
+    # Englisch, ohne dass irgendetwas es meldet.
+    #
+    # Nur de: Englisch IST der msgid und braucht keinen Katalog.
+    install -Dm644 "$srcdir/locale/de/LC_MESSAGES/zepos-desktop.mo" \
+        "$pkgdir/usr/share/locale/de/LC_MESSAGES/zepos-desktop.mo"
+
+    install -Dm644 "$srcdir/zepos-$pkgver/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

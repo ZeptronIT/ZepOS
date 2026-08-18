@@ -1,0 +1,41 @@
+name: Proposal
+description: Something ZepOS should do that it does not do yet.
+labels: ["proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ZepOS has a written roadmap in
+        [`docs/specs/2026-08-11-weg-zum-eigenen-os.md`](https://github.com/ZeptronIT/ZepOS/blob/main/docs/specs/2026-08-11-weg-zum-eigenen-os.md)
+        (in German) and a design document next to it. If your proposal is
+        already on that list, say so rather than repeating it - a "this one
+        matters to me" is useful information.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What are you unable to do today? Describe the situation, not the
+        solution - the solution is the next field, and separating the two
+        makes it possible to disagree about one without the other.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: How you would solve it, and what it would look like to a user.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What else you considered
+      description: >-
+        Including "use an existing program instead of writing one". ZepOS
+        does write its own surfaces, but each of those decisions is written
+        down with a reason, and "there is already a good one" is a valid
+        answer.

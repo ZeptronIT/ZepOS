@@ -1,0 +1,176 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# The whole of what this medium does: it starts the installer.
+#
+# THE THREE ATTEMPTS, AND WHY THERE ARE THREE
+#     Spec §8.5: "Die Live-Umgebung startet eine minimale Wayland-Sitzung
+#     fuer die grafische Oberflaeche. Kommt diese nicht hoch - fehlender
+#     Treiber, unbekannte GPU - startet automatisch die TUI. Erkennung
+#     ueber den tatsaechlichen Startversuch, nicht ueber eine
+#     Hardware-Liste."
+#
+#     There is no hardware list anywhere below. Each step is an attempt,
+#     and the next one runs when the previous one did not produce an
+#     installer:
+#
+#       1. cage with its ordinary renderer. On a machine with a working
+#          driver this is the whole story.
+#       2. cage with WLR_RENDERER=pixman. wlroots renders through
+#          EGL/GBM by default and there are machines where that fails
+#          while a plain software renderer still draws a window. Costs
+#          one restart of a compositor that has already failed once.
+#       3. /usr/bin/zepos-install on the console, with no display
+#          variable set at all - its own choose_surface() then picks the
+#          text interface, which is the fallback the whole arrangement
+#          exists for.
+#
+#     Note what is NOT decided here: whether the GTK4 surface or the text
+#     surface runs. That is /usr/bin/zepos-install's decision and it
+#     makes it by trying (see its header). Steps 1 and 2 run it inside a
+#     terminal precisely so that a GTK4 failure INSIDE a working
+#     compositor is visible to the user instead of happening on a black
+#     screen.
+#
+# WHY IT RUNS AS ROOT AND WHY NOBODY IS LOGGED IN
+#     archinstall requires root, this medium has no sudo, and a live user
+#     with passwordless root would be a credential in an image whose
+#     whole point is that it carries none. So there is no login on this
+#     medium at all: getty@tty1 is masked, /etc/shadow is the one the
+#     filesystem package ships (root has no usable password), and this
+#     script is started by systemd as a service that owns tty1.
+set -u
+
+RC_FILE=/run/zepos-install.rc
+LOG=/run/zepos-live-session.log
+
+# A login session's variables, which a system service does not get from
+# anywhere else. XDG_RUNTIME_DIR is where the compositor puts its Wayland
+# socket; pam_systemd normally creates it, and the fallback is here
+# because a session that dies on a missing directory would be reported as
+# "the graphical interface could not start", which would be a lie.
+export HOME=/root
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/0}"
+install -d -m 0700 "$XDG_RUNTIME_DIR"
+
+log() { printf '%s\n' "$*" >>"$LOG"; }
+
+# --------------------------------------------------------------------
+# The keyboard
+# --------------------------------------------------------------------
+# MEASURED, on this medium before this block existed: `xyz-abc`, sent as
+# the key POSITIONS a German board needs for it, arrived in the
+# installer's password field as `xzy/abc` - every key produced what a US
+# board produces.
+#
+# /etc/vconsole.conf's KEYMAP=de governs the CONSOLE. It is loaded by
+# systemd-vconsole-setup into the kernel's own keymap and reaches
+# anything running on a virtual terminal, which is why attempt 3 below
+# has always typed correctly. It does not reach a Wayland compositor at
+# all: wlroots builds its keymap through libxkbcommon out of the
+# XKB_DEFAULT_* variables, and with none of them set it takes
+# libxkbcommon's compiled-in default, which is `us`.
+#
+# WHY THAT IS WORSE THAN A COSMETIC DEFECT
+#     The installer asks a German user for a password, twice, in a masked
+#     field. On a US layout `y` and `z` swap, `-` `_` `/` `:` `;` `=` `+`
+#     move, and every shifted digit is a different character. The user
+#     sees dots either way, both fields agree with each other, the
+#     installation completes - and the account it created cannot be
+#     logged into. Nothing anywhere reports it.
+#
+# WHY THE LANGUAGE THE USER PICKS CANNOT DECIDE THIS
+#     It would be the right source and it is not reachable from here.
+#     cage reads XKB_DEFAULT_LAYOUT once, when it starts, and wlroots
+#     offers no way to change a seat's keymap afterwards; the language
+#     page is the installer's FIRST page and runs inside a compositor
+#     that is by then already up.
+#
+#     So the layout follows the language this SESSION speaks, which is
+#     LC_MESSAGES out of zepos-install.service - the same value that
+#     decides which catalogue the installer opens in and which entry its
+#     language page preselects. For everybody who keeps that preselection
+#     the layout does follow the language they chose. Somebody who
+#     switches the installer to English types their password on a German
+#     board, which is the residual and is written down rather than
+#     papered over: it is a wrong LAYOUT on a screen that says so, not a
+#     wrong password nobody can see.
+#
+#     `de` is the fallback for an unknown value, deliberately. ZepOS is a
+#     German product on German hardware; guessing `us` there would
+#     restore exactly the defect this block exists to remove.
+session_language="${LC_MESSAGES:-${LANG:-}}"
+case "$session_language" in
+    en*) XKB_DEFAULT_LAYOUT=us ;;
+    de*) XKB_DEFAULT_LAYOUT=de ;;
+    *)   XKB_DEFAULT_LAYOUT=de ;;
+esac
+export XKB_DEFAULT_LAYOUT
+log "--- keyboard: XKB_DEFAULT_LAYOUT=$XKB_DEFAULT_LAYOUT (LC_MESSAGES=${session_language:-unset}, console keymap from /etc/vconsole.conf)"
+
+# The installer inside a compositor. Returns 0 only when the installer
+# actually ran in there - zepos-live-surface writes its exit code to
+# RC_FILE - so a compositor that came up and then showed nothing is a
+# failure here rather than a session the user is left staring at.
+graphical_attempt() {
+    local renderer="$1"
+    rm -f "$RC_FILE"
+
+    if [[ -n "$renderer" ]]; then
+        export WLR_RENDERER="$renderer"
+        log "--- cage, WLR_RENDERER=$renderer"
+    else
+        unset WLR_RENDERER
+        log "--- cage, default renderer"
+    fi
+
+    # cage: every window fullscreen, newest on top, and it exits when the
+    # program it was given exits. foot is that program, and the installer
+    # runs inside foot - so a GTK4 window appears over a terminal that
+    # will show the reason if it does not.
+    cage -- foot --fullscreen /usr/local/bin/zepos-live-surface >>"$LOG" 2>&1
+    log "--- cage exited rc=$? (installer ran: $([[ -f $RC_FILE ]] && echo ja || echo nein))"
+
+    [[ -f "$RC_FILE" ]]
+}
+
+console_attempt() {
+    # No display variable, so zepos-install picks the text interface
+    # itself rather than being told to.
+    unset WAYLAND_DISPLAY DISPLAY WLR_RENDERER
+    printf '\n%s\n\n' "Die grafische Sitzung konnte nicht gestartet werden. ZepOS wird im Textmodus installiert."
+    zepos-install
+    printf '%s' "$?" >"$RC_FILE"
+}
+
+run_installer() {
+    if [[ -e /dev/dri/card0 ]] || compgen -G '/dev/dri/card*' >/dev/null; then
+        graphical_attempt ""       && return
+        graphical_attempt "pixman" && return
+    else
+        log "--- no DRM device, skipping the compositor"
+    fi
+    console_attempt
+}
+
+# Round after round, because the installer ending is not the medium
+# ending: somebody who cancels wants it back, and somebody who has
+# finished wants to reboot. Both are one keypress, and neither is a
+# shell - there is no way from this screen to a root prompt, which is
+# deliberate on a medium that autologs nobody in.
+while true; do
+    run_installer
+
+    rc="$( [[ -f "$RC_FILE" ]] && cat "$RC_FILE" || echo '?' )"
+    printf '\n'
+    if [[ "$rc" == "0" ]]; then
+        printf '%s\n' "Der ZepOS-Installer wurde beendet."
+    else
+        printf '%s\n' "Der ZepOS-Installer wurde beendet (Rueckgabewert $rc)."
+        printf '%s\n' "Einzelheiten stehen in $LOG und in 'journalctl -b'."
+    fi
+    printf '%s\n' "[Eingabetaste] startet den Installer erneut."
+    printf '%s\n' "[Strg]+[Alt]+[Entf] startet den Rechner neu."
+    printf '\n'
+    read -r _ || sleep 3600
+done

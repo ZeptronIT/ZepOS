@@ -1,0 +1,18 @@
+# Erzeugt aus src/update.py timer_unit(defaults()).
+# Nicht von Hand aendern: `zepos-settings set update.schedule.*`
+# schreibt eine Ergaenzung unter /etc, die diese Werte ueberstimmt,
+# und tests/src/test_update.py vergleicht diese Datei mit dem, was
+# das Modul aus seinen Vorgaben baut.
+[Unit]
+Description=ZepOS-Aktualisierung (taeglich, verzoegert)
+Documentation=file:///usr/share/zepos/update.py
+
+[Timer]
+Unit=zepos-update.service
+OnBootSec=15min
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

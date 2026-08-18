@@ -1,0 +1,238 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# zepos-settings-gui - das Fenster, in dem man ZepOS einstellt.
+#
+# WARUM ES DIESES PAKET GIBT
+#     Der Nutzer am 11.08.2026, auf die Frage, was zum "Apple OS" fehle:
+#     "1 genau das sollen wir zusaetzlich zu den keybings erreichen" -
+#     also eine Einstellungs-ANWENDUNG, zusaetzlich zu den
+#     Tastenkuerzeln.
+#
+#     Die Luecke, die sie schliesst, ist gemessen: `zepos-settings` kann
+#     alles, aber es ist ein Befehl in einem Terminal, und der Stil-
+#     Editor im Schreibtisch kennt nur Farben und Fenstergroessen. Die
+#     SCHRIFTGROESSE - sizes.scale, der eine Regler, den der Nutzer
+#     selbst verlangt hat - liess sich am 12.08.2026 mit keiner
+#     Oberflaeche dieses Systems aendern. `grep -c sizes
+#     src/templates/ags-style-editor.template` antwortet 0.
+#
+# WARUM EIN EIGENES REZEPT UND NICHT zepos-apps
+#     zepos-apps ist die AUSWAHL: fremde Anwendungen, eine je Aufgabe,
+#     ausgesucht und begruendet. Es besitzt eine einzige eigene Datei,
+#     die LICENSE. Eine Anwendung, die ZepOS selbst baut, gehoert dort
+#     nicht hinein - sie waere die erste Zeile in dieser Liste, hinter
+#     der kein fremdes Paket steht, und die Regel "eine Anwendung je
+#     Aufgabe, alle aus den offiziellen Quellen" waere ab da eine Regel
+#     mit einer Ausnahme.
+#
+#     Und sie waere am falschen Ort in der Bauordnung: dieses Paket
+#     haengt an zepos-config, zepos-apps an nichts.
+#
+# WARUM zepos-config EINE HARTE ABHAENGIGKEIT IST - DER PUNKT DER GANZEN
+# ANWENDUNG
+#     Sie bringt KEINE eigene Einstellungsdatei, KEINE eigenen
+#     Vorgabefarben und KEINE eigene Groessentabelle mit. Sie liest und
+#     schreibt durch settings.py, sizes.py, brand.py und update.py -
+#     dieselben Module, durch die `zepos-settings`, der Generator und
+#     der Stil-Editor gehen. Zwei Wege zu einer Einstellung, die
+#     verschiedene Dateien anfassen, sind zwei Einstellungen; genau
+#     daran ist die Einstellungsdatei dieses Projekts schon einmal
+#     gescheitert, als sie vier Schreiber mit vier verschiedenen
+#     Zusicherungen hatte (siehe den Kopf von src/settings.py).
+#
+#     /usr/bin/zepos-settings-gui legt sich /usr/share/zepos deshalb vor
+#     dem ersten Import auf den Suchpfad und bricht mit einer Erklaerung
+#     ab, wenn es dort nicht liegt.
+#
+# WARUM PYTHON UND NICHT C
+#     Wie bei zepos-menu und zepos-installer-gui: eine GTK4-Oberflaeche
+#     in diesem Projekt ist `gi`. Und hier kommt ein zweiter Grund dazu,
+#     der dort nicht galt - die Anwendung IMPORTIERT src/, das Python
+#     ist. In C waere jede dieser Tabellen eine Kopie.
+#
+# WAS SIE NICHT MITBRINGT: FARBEN
+#     ZepOS erzeugt ~/.config/gtk-4.0/gtk.css aus src/brand.py (Route
+#     gtk4-colors-config), und GTK liest sie beim Start JEDER
+#     GTK4-Anwendung. Diese ist eine. Ein eigenes Farbblatt waere die 46.
+#     bis 90. Kopie derselben Werte. settings/zepos_settings_gui/style.py
+#     traegt deshalb genau zwei Regeln, und keine davon ist eine Farbe.
+#
+# WARUM DIE VERSION NICHT HIER STEHT
+#     Wie bei zepos-config, zepos-installer und zepos-menu: sie liegt in
+#     VERSION an der Wurzel und wird relativ zur Lage DIESER Datei
+#     gelesen, damit `makepkg` in diesem Verzeichnis und
+#     packaging/build.sh von der Wurzel aus dieselbe Zahl sehen.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-settings-gui
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="Die Einstellungen von ZepOS als GTK4-Fenster: Groesse, Bildschirme, Leiste, Farben, Wetter, Aktualisierung"
+arch=('any')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+# zepos-config ist die Abhaengigkeit, die diese Anwendung zu dem macht,
+# was sie ist - siehe oben. python-gobject laesst `import gi` ueberhaupt
+# existieren; gtk4 und libadwaita sind die beiden Typbibliotheken, die
+# settings/zepos_settings_gui/app.py namentlich mit gi.require_version
+# anfordert.
+#
+# adwaita-icon-theme traegt die Symbole, die die vier Reiter und die
+# Zuruecksetzen-Knoepfe zeichnen; ohne es sind es leere Flaechen und GTK
+# meldet es nur auf stderr. Die Schriften stehen hier aus demselben
+# Grund wie bei zepos-menu: das erzeugte Stylesheet nennt die Familien
+# aus src/brand.py, und fontconfig beantwortet eine fehlende Familie
+# durch Ersatz - das faellt nicht auf, es rendert nur in irgendetwas
+# anderem.
+depends=('zepos-config' 'python' 'python-gobject' 'gtk4' 'libadwaita'
+         'adwaita-icon-theme' 'ttf-roboto' 'ttf-jetbrains-mono-nerd')
+
+# polkit ist KEINE Abhaengigkeit, und das ist eine Entscheidung.
+#
+# Die Seite "Aktualisierung" schreibt /etc/zepos/update.json, und die
+# gehoert root. Kann dieses Konto sie nicht schreiben, ruft die Anwendung
+# `pkexec zepos-settings set update.<schluessel> <wert>` - derselbe Weg
+# und dieselbe Begruendung wie in vpn-control-config.template.
+#
+# Sie fordert polkit trotzdem nicht an: zepos-desktop bringt es bereits
+# mit (polkit-gnome, exec-once in hyprland-universal-config.template),
+# und ein Nutzer, der diese Anwendung ohne den ZepOS-Schreibtisch
+# installiert, soll deswegen keinen Authentifizierungs-Agenten
+# hinterhergeschoben bekommen. Fehlt pkexec, sagt die Anwendung den
+# Befehl zum Abtippen - sie schweigt nicht.
+optdepends=('polkit: die Aktualisierungseinstellungen ohne Terminal aendern')
+
+# Erzeugt von packaging/build.sh aus dem Arbeitsbaum, mit auf
+# SOURCE_DATE_EPOCH festgeklemmten Zeitstempeln. SKIP aus demselben
+# Grund wie bei zepos-config: eine Pruefsumme ueber eine Datei, die
+# dasselbe Skript Sekunden vorher geschrieben hat, prueft nichts.
+source=("zepos-settings-gui-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_root="usr/share/zepos-settings-gui"
+
+_src() { printf '%s/zepos-settings-gui-%s' "$srcdir" "$pkgver"; }
+
+package() {
+    # Das Modulverzeichnis, nicht site-packages. Dieselbe Regel wie bei
+    # zepos-menu und zepos-installer: nichts anderes soll je `import
+    # zepos_settings_gui` schreiben duerfen, und ein Modulname im
+    # globalen Suchpfad ist ein Versprechen, das dieses Paket nicht
+    # geben will. __pycache__ bleibt draussen - Bytecode fuer eine
+    # Python-Fassung ist auf der naechsten still falsch.
+    install -d "$pkgdir/$_root/zepos_settings_gui"
+    install -Dm644 -t "$pkgdir/$_root/zepos_settings_gui" \
+        "$(_src)/zepos_settings_gui"/*.py
+
+    test -f "$pkgdir/$_root/zepos_settings_gui/__init__.py" || {
+        echo "zepos_settings_gui hat im Paket kein __init__.py;" >&2
+        echo "der Import in /usr/bin/zepos-settings-gui loeste sich nicht auf" >&2
+        return 1
+    }
+
+    install -Dm755 "$(_src)/bin/zepos-settings-gui" \
+        "$pkgdir/usr/bin/zepos-settings-gui"
+
+    # DIE DATEI, OHNE DIE ES DIE ANWENDUNG FUER DEN NUTZER NICHT GIBT.
+    #
+    # `zepos-menu --show drun` - der Starter auf SUPER+SPACE - liest
+    # g_app_info_get_all(), und das liest /usr/share/applications. Ein
+    # Programm unter /usr/bin, das dort nicht steht, findet nur, wer
+    # seinen Namen schon kennt. Genau das ist der Zustand, aus dem diese
+    # Anwendung herausfuehren soll.
+    install -Dm644 "$(_src)/zepos-settings.desktop" \
+        "$pkgdir/usr/share/applications/zepos-settings.desktop"
+
+    # Die Pruefungen, die die Abhaengigkeiten oben erst zu welchen
+    # machen.
+    #
+    # Bei einem uebersetzten Programm fragte man das Objekt mit `readelf
+    # -d`. Ein Python-Programm hat kein Objekt; was es hat, ist die
+    # Zeile, mit der es die Typbibliothek namentlich und mit Version
+    # anfordert. Fehlt sie oder nennt sie eine andere Fassung, ist das
+    # Paket etwas anderes als das, was diese depends beschreiben.
+    local app="$pkgdir/$_root/zepos_settings_gui/app.py"
+    local line
+    for line in 'gi.require_version("Gtk", "4.0")' \
+                'gi.require_version("Adw", "1")'; do
+        grep -qxF "$line" "$app" || {
+            echo "zepos_settings_gui/app.py enthaelt nicht: $line" >&2
+            echo "Damit stimmt das Paket nicht mehr mit seinen" >&2
+            echo "Abhaengigkeiten ueberein." >&2
+            return 1
+        }
+    done
+    # `if` und nicht `grep ... && { ... }`: makepkg laeuft mit errexit,
+    # und ein `&&`, dessen linke Seite fehlschlaegt, gibt 1 zurueck -
+    # der GUTE Fall haette den Bau abgebrochen.
+    #
+    # Ueber ALLE Dateien des Pakets und nicht nur ueber app.py: seit dem
+    # 12.08.2026 fordert screens.py die Typbibliotheken ebenfalls selbst
+    # an, und eine Pruefung, die nur die eine Datei liest, waere ab der
+    # zweiten eine Pruefung ueber die falsche.
+    if grep -rqE "require_version\(.(Gtk|Gdk)., .3" \
+            "$pkgdir/$_root/zepos_settings_gui"; then
+        echo "zepos_settings_gui fordert GTK3 an. ZepOS ist GTK4," >&2
+        echo "und diese Anwendung hat nwg-displays abgeloest, WEIL es" >&2
+        echo "GTK3 war." >&2
+        return 1
+    fi
+
+    # Die Seite "Bildschirme" wendet nichts an, ohne dass ein Waechter
+    # bereitsteht - und der ist ein eigener Befehl aus zepos-config.
+    # Faellt die Zeile weg, die ihn anfordert, wird still ohne Rueckweg
+    # angewandt, und der Fehler zeigt sich erst auf einem Schirm, der
+    # schwarz bleibt.
+    grep -q 'arm_and_apply' \
+        "$pkgdir/$_root/zepos_settings_gui/screens.py" || {
+        echo "screens.py wendet nicht ueber displays.arm_and_apply() an." >&2
+        echo "Dann gibt es keinen Waechter und keinen Rueckweg." >&2
+        return 1
+    }
+
+    # Die Seite "Leiste" - die Antwort auf "im footer war ein
+    # einstellungs icon was man nicht oeffnen konnte genau sowas will
+    # ich im ZepOS zu customizen" (12.08.2026).
+    #
+    # Sie steht in model.PAGES, also baut das Fenster sie: faellt ihre
+    # Datei aus dem Paket, ist das kein fehlender Reiter, sondern ein
+    # ImportError beim Start - die ganze Anwendung ginge nicht mehr auf.
+    # Deshalb hier und nicht im Vertrauen auf das *.py oben.
+    test -f "$pkgdir/$_root/zepos_settings_gui/bar.py" || {
+        echo "die Seite \"Leiste\" (bar.py) liegt nicht im Paket." >&2
+        echo "app.py importiert sie beim Start; ohne sie oeffnet sich" >&2
+        echo "kein Fenster mehr." >&2
+        return 1
+    }
+
+    # Und sie liest die ausgelieferte Reihenfolge als ABDRUCK.
+    #
+    # Der Erzeuger darf hier nicht importiert werden:
+    # src/style_definition.py fragt beim Import `hyprctl` nach den
+    # Bildschirmen, und ein Einstellungsfenster, das dafuer den
+    # Compositor anspricht, geht auf einer Maschine ohne laufendes
+    # Hyprland nicht mehr auf - also genau dort nicht, wo man es zum
+    # Reparieren braucht.
+    if grep -rq "import style_definition" \
+            "$pkgdir/$_root/zepos_settings_gui"; then
+        echo "zepos_settings_gui importiert den Erzeuger." >&2
+        echo "style_definition fragt beim Import hyprctl; damit haengt" >&2
+        echo "das Einstellungsfenster am laufenden Compositor." >&2
+        return 1
+    fi
+
+    # Und die Zeile, die zepos-config zur Abhaengigkeit macht. Ohne sie
+    # faende der Befehl seine Module nicht, und der Eintrag im Starter
+    # waere ein ModuleNotFoundError.
+    grep -q '/usr/share/zepos' \
+        "$pkgdir/usr/bin/zepos-settings-gui" || {
+        echo "/usr/bin/zepos-settings-gui sucht ZepOS nicht unter" >&2
+        echo "/usr/share/zepos - dann ist zepos-config keine" >&2
+        echo "Abhaengigkeit, sondern eine Hoffnung." >&2
+        return 1
+    }
+
+    install -Dm644 "$(_src)/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

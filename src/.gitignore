@@ -1,0 +1,35 @@
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*.log
+
+# Backup files
+*.bak
+*.backup.*
+*~
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+
+# Global user settings - machine-specific, not part of the shipped source
+user-settings.json
+
+# VPN credentials - NEVER commit these
+secrets*
+*.psk
+*.key
+*.p12
+*.pfx
+credentials*
+vpn-credentials*
+vpn-secrets*
+*.ovpn
+swanctl.conf

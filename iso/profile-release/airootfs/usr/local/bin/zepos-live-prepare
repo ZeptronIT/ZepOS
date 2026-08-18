@@ -1,0 +1,138 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# What the live medium has to do to itself before it can install anything.
+#
+# Two things, and neither is optional:
+#
+#   the mirrorlist   The live system's /etc/pacman.conf is the one the
+#                    `pacman` package ships: [core] and [extra] both say
+#                    `Include = /etc/pacman.d/mirrorlist`, and
+#                    pacman-mirrorlist's file has every server commented
+#                    out. So this medium can reach no Arch repository at
+#                    all until something writes one, and pacstrap fails
+#                    at its first `pacman -Sy`. The profile's own
+#                    pacman.conf does not help: mkarchiso only ever uses
+#                    it to BUILD the image.
+#
+#                    It is written from the Arch Linux Archive snapshot
+#                    the image was built against (spec §8.7), not from a
+#                    mirror list, so that two installations from one
+#                    medium produce the same system. It reaches the
+#                    target as well, and that is the point rather than a
+#                    side effect: pacstrap(8) copies the host's
+#                    mirrorlist into the new root.
+#
+#   the timeout      pacman gives up on a download that transfers less
+#                    than one byte per second for ten seconds, and it
+#                    fails the WHOLE transaction when it does. Measured
+#                    on 11.08.2026, four minutes into an installation
+#                    from this medium:
+#
+#                        error: failed retrieving file
+#                        'linux-firmware-mediatek-20260622-1-any.pkg.tar.zst'
+#                        from archive.archlinux.org : Operation too slow
+#                        ==> ERROR: Failed to install packages to new root
+#
+#                    That default is written for a mirrorlist. This
+#                    medium has no mirrorlist: the pin above puts exactly
+#                    one server in it, and it is archive.archlinux.org -
+#                    a single rate-limited host with nothing to fall back
+#                    to. A ten-second stall there is an ordinary
+#                    afternoon, and pacman turns it into a failed
+#                    installation.
+#
+#                    THE TRADE THIS MAKES, SAID PLAINLY
+#                    Off means a genuinely dead transfer no longer ends
+#                    by itself. That is the better half of the trade
+#                    here, and not because stalling is pleasant: the
+#                    progress bar and the log are both on the screen the
+#                    whole time (installer/gui/pages.py), so a stall is
+#                    VISIBLE and the user can close the installer. An
+#                    abort is not a choice anybody gets to make - it
+#                    discards the work and leaves a half-written disk.
+#                    curl still ends a connection that actually drops.
+#
+#                    pacman offers no threshold to raise, only the switch
+#                    (DisableDownloadTimeout, in the binary of pacman
+#                    7.1.0) - so this is on or it is ten seconds.
+#
+#   the keyring      mkarchiso builds the image with `pacstrap -G`, so
+#                    this medium has no pacman keyring in it at all -
+#                    which is also why zepos-keyring's install scriptlet
+#                    skipped its own --populate while the image was being
+#                    built. Without this every package an installation
+#                    fetches is refused, the Arch ones and the ZepOS ones
+#                    alike, and spec §8.6's signatures would be a
+#                    signature nobody can check.
+#
+# It is a unit of its own, ordered before the installer, because both
+# steps take seconds and both have to have happened before the user
+# reaches the point of no return - not because the installer needs them
+# to start.
+#   the locale      The image ships LANG=C.UTF-8, which is right for the
+#                   C library: what an installation medium has to get
+#                   right is UTF-8, and a locale that is merely declared
+#                   is worse than none. But the installer speaks German
+#                   before it has asked which language to speak - see
+#                   zepos-install.service's LC_MESSAGES - and GTK calls
+#                   setlocale() with whatever it finds. Measured on the
+#                   text fallback of the first medium that did this:
+#
+#                       Gtk-WARNING **: Locale not supported by C
+#                       library. Using the fallback 'C' locale.
+#
+#                   printed directly above the installer's first
+#                   question. Generating the locale is two seconds at
+#                   boot and removes the only line on that screen that
+#                   looks like a fault.
+set -u
+
+SNAPSHOT_FILE=/usr/local/share/zepos-install/ala-snapshot
+MIRRORLIST=/etc/pacman.d/mirrorlist
+PACMAN_CONF=/etc/pacman.conf
+LOCALE=de_DE.UTF-8
+
+# In the live overlay, which is a tmpfs: nothing here is written to the
+# medium, and nothing here reaches the installed system - archinstall
+# generates the target's locales from what the user chose.
+if ! locale -a 2>/dev/null | grep -qix "${LOCALE/UTF-8/utf8}"; then
+    sed -i "s/^#\(${LOCALE} UTF-8\)/\1/" /etc/locale.gen
+    locale-gen
+fi
+
+if [[ -r "$SNAPSHOT_FILE" ]]; then
+    snapshot="$(<"$SNAPSHOT_FILE")"
+    printf '# Pinned by ZepOS (spec 8.7): the Arch Linux Archive snapshot\n# this medium was built against.\nServer = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' \
+        "$snapshot" >"$MIRRORLIST"
+    echo "mirrorlist pinned to $snapshot"
+else
+    # Not fatal, and deliberately not silent. An offline installation
+    # (spec §8.4, second row) never touches an Arch mirror, so a medium
+    # without the pin can still install; one that pretended it had a
+    # mirrorlist could not.
+    echo "no snapshot pin at $SNAPSHOT_FILE - no Arch mirrorlist was written" >&2
+fi
+
+# Written here and not shipped as a file, for the same reason the
+# mirrorlist is: /etc/pacman.conf belongs to the `pacman` package, and a
+# profile that ships a path pacman also claims stops the build with
+# "exists in filesystem".
+#
+# The three branches are three different facts, and none of them may be
+# silent. pacstrap runs with `-C /etc/pacman.conf`, so if this edit
+# misses, the next thing anybody learns about it is a failed
+# installation - which is exactly how it was found.
+if grep -q '^[[:space:]]*DisableDownloadTimeout' "$PACMAN_CONF"; then
+    echo "download timeout already disabled in $PACMAN_CONF"
+elif grep -q '^\[options\]' "$PACMAN_CONF"; then
+    sed -i '0,/^\[options\]/s//[options]\nDisableDownloadTimeout/' "$PACMAN_CONF"
+    echo "download timeout disabled in $PACMAN_CONF"
+else
+    echo "no [options] section in $PACMAN_CONF - the download timeout stays" \
+         "at pacman's ten seconds, and a slow archive will fail the install" >&2
+fi
+
+pacman-key --init
+pacman-key --populate
+echo "keys trusted: $(pacman-key -l 2>/dev/null | grep -c '^pub')"

@@ -1,0 +1,497 @@
+// Der Kalender (AGS v3, GTK4) - ein Aufklappfenster der Leiste
+// Von ZepOS erzeugt
+// Zeigt: das heutige Datum, den Monat als Gitter, und die Programme dazu
+
+import { Gtk, Gdk } from "ags/gtk4"
+import { execAsync } from "ags/process"
+import GLib from "gi://GLib"
+import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
+import { _ } from "../utils/i18n"
+
+// Die Masse, die dieses Fenster sich wuenscht. utils/overlay.ts deckelt
+// sie gegen den Schirm, sie sind also eine Obergrenze und keine Zusage.
+//
+// GEMESSEN am 12.08.2026 im verschachtelten Compositor, auf einem
+// Schirm, auf dem der Deckel nicht greift: der Inhalt dieses Fensters
+// ist im aufwendigsten Fall 678 Punkte hoch - ein Monat, der sechs
+// Wochenzeilen braucht, und beide Programme darunter installiert. Die
+// 480, die hier standen, waren nie eine Messung; sie sind aus der Zeit,
+// in der die Zahl ueberhaupt nicht angekommen ist, und der Kalender
+// stand mit 810 Punkten auf dem Schirm.
+//
+// DIE BREITE WAR 420, UND DAMIT FEHLTE DER SONNTAG
+//
+//     GEMELDET am 17.08.2026 aus dem i18n-Lauf, in BEIDEN Sprachen
+//     gleich (out/i18n-de/kalender.png und out/i18n-en/kalender.png):
+//     das Gitter hat sieben Spalten, zu sehen waren sechs. Die siebte -
+//     "So" beziehungsweise "Sun" - lag hinter der rechten Fensterkante.
+//
+//     GEMESSEN am 17.08.2026 im verschachtelten Compositor, Schirm
+//     1920x1080, mit genau den Beschriftungen dieser Datei, je einmal
+//     unter LANG=de_DE.UTF-8 und unter LANG=en_US.UTF-8:
+//
+//         Gitter, natuerlich                      259 - beide Sprachen
+//         Datumszeile oben, natuerlich            290 - beide Sprachen
+//         Inhalt (.calendar-container)            470 - beide Sprachen
+//         Inhalt samt Platte (outerBox)           472
+//         Fenster laut hyprctl layers             420
+//
+//     Die 420 waren also nicht zu wenig fuer das GITTER - das braucht
+//     259 -, sondern zu wenig fuer den Kasten, in dem es sitzt. Woher
+//     die 470 kommen, ist eine Addition und keine Vermutung:
+//
+//         .calendar-container { min-width: 420px }   420
+//         dessen padding {{STYLE_SPACE_16}}, zweimal  +50
+//         .overlay-outer, Rahmen 1px, zweimal          +2
+//                                                    ----
+//                                                     472
+//
+//     Das Sichtfenster der Bildlaufleiste bekam davon 420 - 2 - 24
+//     (senkrechte Leiste, die die Fabrik immer reserviert) = 394. Der
+//     Rest lag daneben, und weil das Gitter column_homogeneous ist und
+//     seine Tagesfelder hexpand tragen, verteilt es seine sieben
+//     Spalten ueber die vollen 470 - also 60 Punkte je Spalte. 394
+//     davon sind 6,15 Spalten. Genau das zeigen die beiden Bilder.
+//
+//     DIE ZAHL IST DESHALB GEMESSEN UND NICHT GERATEN: 472 (der Inhalt,
+//     wie er sich misst) + 24 (die senkrechte Bildlaufleiste, die
+//     utils/overlay.ts immer dazurechnet, weil der Monat mal fuenf und
+//     mal sechs Wochenzeilen hat) = 496. Damit ist das Sichtfenster
+//     496 - 2 - 24 = 470 breit, also genau der Inhalt, und es bleibt
+//     keine waagerechte Bildlaufleiste uebrig.
+//
+//     Die Sprache aendert daran nichts, und auch das ist gemessen und
+//     kein Schluss: %a ist auf Englisch drei Zeichen ("Wed") statt zwei
+//     ("Mi"), aber eine Kopfzelle misst sich damit 28 statt 19 Punkte -
+//     unter den 37, die eine Spalte ohnehin fuer die zweistelligen
+//     Tageszahlen braucht. Das Gitter ist deshalb in beiden Sprachen
+//     259 breit. Die Datumszeile ebenso: "August 17, 2026" und
+//     "17. August 2026" sind beide fuenfzehn Zeichen, und die Schrift
+//     dieser Oberflaeche ist Fira Code, also dicktengleich.
+const WIN_WIDTH = 496
+const WIN_HEIGHT = 678
+
+// Zeichen
+const ICONS = {
+  calendar: "{{ICON_CALENDAR}}",
+  email: "{{ICON_EMAIL}}",
+  prev: "{{ICON_ARROW_LEFT}}",
+  next: "{{ICON_ARROW_RIGHT}}",
+}
+
+// Wochentage und Monate kommen aus der Sitzung und nicht aus einer
+// Liste in dieser Datei.
+//
+// HIER STANDEN DREI DEUTSCHE TABELLEN - WEEKDAYS_DE, WEEKDAY_HEADS,
+// MONTHS_DE -, und der Kopf daneben hat sie begruendet: "Es steht hier
+// und kommt nicht aus der Locale, weil der Rest dieses Fensters auch
+// nicht aus ihr kommt." Seit dem 17.08.2026 kommt der Rest dieses
+// Fensters aus ihr: jede Beschriftung laeuft durch `_()`, siehe
+// utils/i18n.ts. Damit war die Begruendung leer, und die Tabellen waren
+// das, was sie ohne sie sind - eine zweite Quelle, die auf einer
+// englischen Installation "Mittwoch" unter "Wednesday" schreibt.
+//
+// GEMESSEN am 17.08.2026 mit gjs 1.88.1, mit genau dem Aufruf, den
+// diese Datei jetzt macht:
+//
+//     LANG=de_DE.UTF-8   %B -> "Maerz"    %A -> "Dienstag"   %a -> "Di"
+//     LANG=en_US.UTF-8   %B -> "March"    %A -> "Tuesday"    %a -> "Tue"
+//
+// KEIN VERSTOSS GEGEN tests/src/test_locale.py
+//     Die Regel dort verbietet, eine Anzeigesprache VOR ein Programm zu
+//     schreiben (`LANG=de_DE.UTF-8 date`) - eine Zusage, die nichts
+//     haelt. Hier wird die Sprache der Sitzung GELESEN, und genau das
+//     benennt derselbe Kopf als das Richtige.
+
+// Der Kopf einer Spalte des Gitters. Spalte 0 ist Montag.
+//
+// Der Anker ist ein FESTES Datum und keine Rechnung auf dem heutigen
+// Tag: der 5. Januar 2026 war ein Montag. Vom heutigen Tag aus
+// zurueckzurechnen gaebe im Sommer eine andere Antwort als im Winter,
+// und der Fehler zeigte sich erst Monate spaeter.
+function weekdayHead(column: number): string {
+  const tag = GLib.DateTime.new_local(2026, 1, 5 + column, 12, 0, 0)
+  return tag?.format("%a") ?? ""
+}
+
+// Die Ueberschrift ueber dem Gitter: "August 2026".
+//
+// Nicht uebersetzbar, und das ist gemessen und keine Nachlaessigkeit:
+// %B ist schon die Sprache der Sitzung, und Monat-vor-Jahr ist im
+// Deutschen wie im Englischen dieselbe Reihenfolge. Ein Katalogeintrag
+// waere hier eine Zeile, die ein Uebersetzer bearbeiten soll, ohne dass
+// es etwas zu entscheiden gibt.
+function monthTitle(year: number, month: number): string {
+  const erster = GLib.DateTime.new_local(year, month + 1, 1, 12, 0, 0)
+  return erster?.format("%B %Y") ?? ""
+}
+
+// Das Gitter beginnt am MONTAG - siehe weekdayHead() oben.
+//
+// GEMESSEN am 12.08.2026 auf einem Bildschirmabzug: hier stand ein
+// Gtk.Calendar, und der nimmt Wochenbeginn und Tagesnamen aus der
+// Locale. Der Abzug zeigte "Sun Mon Tue ..." und eine Woche ab Sonntag -
+// unter der deutschen Zeile "Mittwoch / 12. August 2026", die dieselbe
+// Datei zwei Zentimeter darueber selbst schreibt. Ein Fenster mit zwei
+// Sprachen und zwei Wochenanfaengen.
+//
+// Der NAME des Tages kommt seit dem 17.08.2026 wieder aus der Locale,
+// und der Befund von damals kehrt trotzdem nicht zurueck: er entstand,
+// weil die eine Haelfte des Fensters aus der Locale kam und die andere
+// aus einer deutschen Tabelle. Jetzt kommen beide aus derselben Quelle.
+//
+// Der WOCHENBEGINN bleibt fest bei Montag, weil ISO 8601 (und
+// DIN 1355-1) die Woche am Montag beginnen lassen - die Norm, nach der
+// in Deutschland auch die Kalenderwoche gezaehlt wird. Er steht in
+// firstColumn() unten als Drehung um sechs und ist damit nicht
+// verhandelbar; ein aus der Locale gelesener Wochenbeginn wuerde das
+// Gitter gegen seine eigene Rechnung verschieben.
+
+// Die drei Regeln, die ein selbst gebautes Tagesfeld braucht.
+//
+// WARUM SIE HIER STEHEN UND NICHT IM STYLESHEET
+//     Sie beschreiben Widgets, die es nur in dieser Datei gibt, und sie
+//     entstehen mit ihnen zusammen. ags-style.template kennt
+//     `.calendar-widget:selected` - eine Regel fuer den gewaehlten Tag
+//     des Gtk.Calendar, die NIE gegriffen hat: der Zustand :selected
+//     sitzt am Tagesfeld tief im Widget, nicht am Widget selbst. Der
+//     Abzug vom 12.08.2026 zeigt deshalb den 12. auf Adwaita-Blau
+//     mitten in einer Oberflaeche aus ZepOS-Cyan und -Gelb.
+//
+// KEINE FARBE UND KEINE GROESSE STEHT HIER ALS ZAHL
+//     Jeder der fuenf Werte ist ein Platzhalter aus dem Stilsystem, und
+//     der Akzent ist derselbe, den `.calendar-day-big` darueber traegt:
+//     der grosse 12er und der markierte 12. im Gitter sind dieselbe
+//     Farbe, weil sie derselbe Tag sind. Ein Themawechsel erreicht damit
+//     auch diese Flaeche - tests/src/test_theme.py fuehrt die Datei seit
+//     heute in der Liste derer, die sich mit dem Thema aendern.
+const DAY_STYLE = `
+.calendar-day {
+  font-size: {{STYLE_FONT_BODY}};
+  padding: 0 {{STYLE_SPACE_4}};
+}
+.calendar-day-outside {
+  color: {{STYLE_COLOR_OVERLAY_SUBTEXT}};
+}
+.calendar-day-today {
+  color: {{STYLE_COLOR_CALENDAR_ACCENT}};
+  font-weight: bold;
+  border-radius: {{STYLE_RADIUS_CONTROL}};
+  background: alpha({{STYLE_COLOR_CALENDAR_ACCENT}}, 0.2);
+}
+`
+
+// Die beiden Programme unter dem Gitter.
+//
+// GEMESSEN am 12.08.2026: WEDER gnome-calendar NOCH thunderbird steht in
+// packaging/zepos-apps/PKGBUILD, in zepos-apps-office oder in
+// zepos-apps-devel - ZepOS liefert ueberhaupt keinen Kalender und kein
+// Mailprogramm aus. Beide Knoepfe waren auf jeder frischen Installation
+// Knoepfe, hinter denen nichts passiert, derselbe Befund wie der
+// Druckerknopf des Kontrollzentrums (Spec §7.4).
+//
+// Sie bleiben trotzdem stehen, weil wer sich thunderbird nachinstalliert
+// genau diesen Knopf will. Sichtbar sind sie ab jetzt nur, wenn das
+// Programm auf der Maschine WIRKLICH liegt - dieselbe Regel wie bei der
+// leeren Netzwerkzeile des Kontrollzentrums: was nichts hat, zeigt
+// nichts.
+const ACTIONS = [
+  {
+    program: "gnome-calendar",
+    icon: ICONS.calendar,
+    label: _("Calendar"),
+    tooltip: _("Open GNOME Calendar"),
+  },
+  {
+    program: "thunderbird",
+    icon: ICONS.email,
+    label: _("Mail"),
+    tooltip: _("Open Thunderbird"),
+  },
+]
+
+// Das heutige Datum, in der Sprache der Sitzung.
+//
+// `month` und `year` standen hier bis zum 17.08.2026 im Rueckgabewert
+// und wurden von niemandem gelesen - fullDate hat beide schon drin.
+function getDateInfo() {
+  const now = GLib.DateTime.new_now_local()
+  return {
+    weekday: now.format("%A") ?? "",
+    day: now.format("%d") ?? "",
+    // Die REIHENFOLGE ist Sprache und nicht Technik: "August 17, 2026"
+    // gegen "17. August 2026". Deshalb steht das Muster im Katalog.
+    fullDate: now.format(_("%B %-d, %Y")) ?? "",
+  }
+}
+
+// Wie viele Tage der Monat hat. Tag 0 des FOLGEmonats ist der letzte des
+// gesuchten - die Rechnung, die Schaltjahre von selbst mitnimmt.
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate()
+}
+
+// Auf welche Spalte der Erste faellt, gezaehlt ab Montag = 0.
+// Date.getDay() zaehlt ab Sonntag = 0, deshalb die Drehung um sechs.
+function firstColumn(year: number, month: number): number {
+  return (new Date(year, month, 1).getDay() + 6) % 7
+}
+
+export default function Calendar(): OverlayWidget {
+  // Beschriftungen, die sich aendern
+  let weekdayLabel: Gtk.Label
+  let dayLabel: Gtk.Label
+  let fullDateLabel: Gtk.Label
+  let monthLabel: Gtk.Label
+  let grid: Gtk.Grid
+  let closeFn: (() => void) | null = null
+
+  // Welcher Monat gerade im Gitter steht. Nicht zwingend der heutige -
+  // die beiden Pfeile blaettern.
+  let shownYear = new Date().getFullYear()
+  let shownMonth = new Date().getMonth()
+
+  // Das Gitter neu fuellen: Kopfzeile, dann so viele Wochen, wie dieser
+  // Monat wirklich braucht. Fuenf oder sechs - eine feste sechste Zeile
+  // waere in acht von zwoelf Monaten eine leere Zeile.
+  const fillGrid = () => {
+    let child = grid.get_first_child()
+    while (child) {
+      const next = child.get_next_sibling()
+      grid.remove(child)
+      child = next
+    }
+
+    monthLabel.set_text(monthTitle(shownYear, shownMonth))
+
+    for (let column = 0; column < 7; column++) {
+      const head = new Gtk.Label({ label: weekdayHead(column) })
+      head.add_css_class("calendar-weekday")
+      grid.attach(head, column, 0, 1, 1)
+    }
+
+    const offset = firstColumn(shownYear, shownMonth)
+    const days = daysInMonth(shownYear, shownMonth)
+    const before = daysInMonth(shownYear, shownMonth - 1)
+    const weeks = Math.ceil((offset + days) / 7)
+
+    const today = new Date()
+    const todayShown = today.getFullYear() === shownYear
+      && today.getMonth() === shownMonth
+
+    for (let cell = 0; cell < weeks * 7; cell++) {
+      const number = cell - offset + 1
+      const outside = number < 1 || number > days
+      const shown = number < 1 ? before + number
+        : number > days ? number - days
+        : number
+
+      const label = new Gtk.Label({ label: String(shown), hexpand: true })
+      label.add_css_class("calendar-day")
+      if (outside) label.add_css_class("calendar-day-outside")
+      if (!outside && todayShown && number === today.getDate()) {
+        label.add_css_class("calendar-day-today")
+      }
+      grid.attach(label, cell % 7, Math.floor(cell / 7) + 1, 1, 1)
+    }
+  }
+
+  // Die drei Zeilen des heutigen Datums neu setzen. Ein Fenster, das
+  // ueber Mitternacht offen bleibt, zeigte sonst den gestrigen Tag.
+  const updateDateDisplay = () => {
+    const info = getDateInfo()
+    weekdayLabel.set_text(info.weekday)
+    dayLabel.set_text(info.day)
+    fullDateLabel.set_text(info.fullDate)
+  }
+
+  // Ein Programm starten und das Fenster schliessen
+  function launchApp(command: string) {
+    try {
+      execAsync(command)
+    } catch (e) {
+      console.error("Das Programm liess sich nicht starten:", e)
+    }
+    closeFn?.()
+  }
+
+  return createOverlayWindow({
+    name: "calendar",
+    width: WIN_WIDTH,
+    height: WIN_HEIGHT,
+    cssClass: "Calendar",
+    headerIcon: ICONS.calendar,
+    headerTitle: _("Calendar"),
+    accentCssClass: "calendar-accent",
+    onShow: () => {
+      updateDateDisplay()
+      // Zurueck auf den heutigen Monat: wer im Maerz geblaettert hat und
+      // das Fenster wieder aufmacht, will den heutigen sehen.
+      const now = GLib.DateTime.new_now_local()
+      shownYear = now.get_year()
+      shownMonth = now.get_month() - 1
+      fillGrid()
+    },
+    buildContent: (_win, closeWindow) => {
+      closeFn = closeWindow
+
+      // Die drei Regeln der Tagesfelder beim Anzeigegeraet anmelden.
+      // Einmal - Calendar() wird von app.ts genau einmal gerufen.
+      const provider = new Gtk.CssProvider()
+      provider.load_from_string(DAY_STYLE)
+      const display = Gdk.Display.get_default()
+      if (display) {
+        Gtk.StyleContext.add_provider_for_display(
+          display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+      }
+
+      // Ohne eigenen Abstand zwischen den Abschnitten: die beiden
+      // Trenner tragen je {{STYLE_SPACE_8}} nach oben und unten, ein
+      // Kastenabstand obendrauf waere Luft ueber Luft. GEMESSEN am
+      // 12.08.2026: 32 Punkte, die kein Auge sieht und die im Kalender
+      // eine ganze Wochenzeile kosten.
+      const mainBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 0,
+      })
+      mainBox.add_css_class("calendar-container")
+
+      // ===== DAS HEUTIGE DATUM =====
+      //
+      // WAAGERECHT, und das ist eine Groessenentscheidung: uebereinander
+      // gestapelt kostete dieser Block am 12.08.2026 gemessene 210 der
+      // 810 Punkte, die das Fenster zu hoch war. Die grosse Zahl bleibt,
+      // sie ist das Gesicht dieses Fensters - sie steht jetzt neben
+      // ihren zwei Zeilen statt ueber ihnen.
+      const dateInfo = getDateInfo()
+
+      const todayBox = new Gtk.Box({ spacing: 16, halign: Gtk.Align.CENTER })
+      todayBox.add_css_class("calendar-today")
+
+      dayLabel = new Gtk.Label({ label: dateInfo.day })
+      dayLabel.add_css_class("calendar-day-big")
+
+      const todayTextBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 4,
+        valign: Gtk.Align.CENTER,
+      })
+
+      weekdayLabel = new Gtk.Label({ label: dateInfo.weekday, xalign: 0 })
+      weekdayLabel.add_css_class("calendar-weekday")
+
+      fullDateLabel = new Gtk.Label({ label: dateInfo.fullDate, xalign: 0 })
+      fullDateLabel.add_css_class("calendar-date-full")
+
+      todayTextBox.append(weekdayLabel)
+      todayTextBox.append(fullDateLabel)
+
+      todayBox.append(dayLabel)
+      todayBox.append(todayTextBox)
+
+      // ===== TRENNER =====
+      const divider1 = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL })
+      divider1.add_css_class("calendar-divider")
+
+      // ===== DER MONAT =====
+      const calendarWrapper = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 8,
+      })
+      calendarWrapper.add_css_class("calendar-wrapper")
+
+      // Die Zeile zum Blaettern. Ein Titel und zwei Pfeile, wo der
+      // Gtk.Calendar VIER Knoepfe hatte (Monat und Jahr getrennt) - zwoelf
+      // Klicks aufs Jahr sind derselbe Weg wie ein Klick auf den Pfeil,
+      // und die Zeile ist eine halbe Zeile kuerzer.
+      const navBox = new Gtk.Box({ spacing: 8 })
+
+      const prevBtn = new Gtk.Button({ can_focus: false })
+      prevBtn.add_css_class("flat")
+      prevBtn.set_child(new Gtk.Label({ label: ICONS.prev }))
+      prevBtn.set_tooltip_text(_("Previous month"))
+      prevBtn.connect("clicked", () => {
+        shownMonth--
+        if (shownMonth < 0) { shownMonth = 11; shownYear-- }
+        fillGrid()
+      })
+
+      monthLabel = new Gtk.Label({
+        label: monthTitle(shownYear, shownMonth),
+        hexpand: true,
+      })
+      monthLabel.add_css_class("calendar-date-full")
+
+      const nextBtn = new Gtk.Button({ can_focus: false })
+      nextBtn.add_css_class("flat")
+      nextBtn.set_child(new Gtk.Label({ label: ICONS.next }))
+      nextBtn.set_tooltip_text(_("Next month"))
+      nextBtn.connect("clicked", () => {
+        shownMonth++
+        if (shownMonth > 11) { shownMonth = 0; shownYear++ }
+        fillGrid()
+      })
+
+      navBox.append(prevBtn)
+      navBox.append(monthLabel)
+      navBox.append(nextBtn)
+
+      grid = new Gtk.Grid({ column_homogeneous: true, row_spacing: 2 })
+      grid.add_css_class("calendar-widget")
+
+      calendarWrapper.append(navBox)
+      calendarWrapper.append(grid)
+
+      // ===== TRENNER =====
+      const actionsDivider = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL })
+      actionsDivider.add_css_class("calendar-divider")
+
+      // ===== DIE PROGRAMME =====
+      const actionsBox = new Gtk.Box({
+        spacing: 20,
+        halign: Gtk.Align.CENTER,
+        homogeneous: true,
+      })
+      actionsBox.add_css_class("calendar-actions")
+
+      let anyInstalled = false
+      for (const action of ACTIONS) {
+        const path = GLib.find_program_in_path(action.program)
+        if (!path) continue
+        anyInstalled = true
+
+        const button = new Gtk.Button({ can_focus: false })
+        button.add_css_class("calendar-action-btn")
+        button.set_tooltip_text(action.tooltip)
+        button.connect("clicked", () => launchApp(path))
+
+        // Zeichen und Wort NEBENeinander: uebereinander war dieser
+        // Kasten am 12.08.2026 gemessene 115 Punkte hoch, nebeneinander
+        // sind es 70.
+        const box = new Gtk.Box({ spacing: 8, halign: Gtk.Align.CENTER })
+        const icon = new Gtk.Label({ label: action.icon })
+        icon.add_css_class("calendar-action-icon")
+        const label = new Gtk.Label({ label: action.label })
+        label.add_css_class("calendar-action-label")
+
+        box.append(icon)
+        box.append(label)
+        button.set_child(box)
+        actionsBox.append(button)
+      }
+      actionsDivider.set_visible(anyInstalled)
+      actionsBox.set_visible(anyInstalled)
+
+      // ===== ZUSAMMENSETZEN =====
+      mainBox.append(todayBox)
+      mainBox.append(divider1)
+      mainBox.append(calendarWrapper)
+      mainBox.append(actionsDivider)
+      mainBox.append(actionsBox)
+
+      fillGrid()
+
+      return mainBox
+    },
+  })
+}

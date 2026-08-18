@@ -1,0 +1,410 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Die Anmeldemaske von ZepOS. greetd startet dieses Skript als Benutzer
+# "greeter"; /etc/greetd/zepos.toml ist die Zeile, die es benennt.
+#
+# DREI VERSUCHE, UND WARUM ES DREI SIND
+#     Dasselbe Muster wie auf dem Installationsmedium
+#     (iso/profile-release/airootfs/usr/local/bin/zepos-live-session) und
+#     aus demselben Grund: Spec 8.5 verlangt die Erkennung "ueber den
+#     tatsaechlichen Startversuch, nicht ueber eine Hardware-Liste".
+#     Unten steht keine Hardware-Liste. Jeder Schritt ist ein Versuch,
+#     und der naechste laeuft, wenn der vorige keine Anmeldemaske
+#     hervorgebracht hat:
+#
+#       1. cage mit dem gewoehnlichen Renderer, darin regreet. Auf einer
+#          Maschine mit funktionierendem Treiber ist das die ganze
+#          Geschichte, und es ist die GTK4/libadwaita-Oberflaeche, die
+#          aussieht wie der Installer.
+#       2. cage mit WLR_RENDERER=pixman. wlroots rendert per Vorgabe
+#          ueber EGL/GBM, und es gibt Maschinen, auf denen das scheitert,
+#          waehrend ein reiner Software-Renderer noch zeichnet.
+#       3. tuigreet auf der Konsole. Kein Compositor, kein GTK, keine
+#          GPU - der Rueckfall, fuer den die ganze Anordnung da ist.
+#
+#     Was NICHT hier entschieden wird: ob ueberhaupt jemand angemeldet
+#     wird. Das entscheidet greetd, und es fragt in allen drei Faellen.
+#
+# WORAN "ES HAT GEKLAPPT" ERKANNT WIRD, UND WARUM NICHT AM RUECKGABEWERT
+#     Ein erfolgreicher Login sieht von aussen aus wie ein Absturz:
+#     greetd beendet den Greeter, sobald der die Sitzung anfordert, also
+#     stirbt dieses Skript samt cage mitten im Betrieb. Ein "cage kam mit
+#     0 zurueck" ist deshalb kein Beweis fuer irgendetwas.
+#
+#     Gemessen wird stattdessen, ob regreet ueberhaupt GELAUFEN ist: der
+#     innere Aufruf schreibt seinen Rueckgabewert in eine Datei. Liegt
+#     sie danach da, hat die Oberflaeche existiert und der Rueckfall
+#     waere falsch. Liegt sie nicht da, ist der Compositor gar nicht erst
+#     hochgekommen. Dieselbe Unterscheidung trifft zepos-live-session
+#     ueber /run/zepos-install.rc.
+#
+# WAS DIESES SKRIPT NICHT TUT: DIE SITZUNGSLISTE BESCHNEIDEN
+#     zepos-hyprland installiert ueber `cmake --install` auch Hyprlands
+#     eigene hyprland.desktop und hyprland-uwsm.desktop, und beide
+#     starten den Compositor an zepos-session vorbei - genau die Luecke,
+#     die src/plugins.py benennt. Sie hier per XDG_DATA_DIRS
+#     auszublenden waere moeglich und WAERE FALSCH: ReGreet 0.5.0 haengt
+#     an jeden Eintrag der Variablen "/xsessions" und
+#     "/wayland-sessions" an (src/sysutil.rs, nachgelesen an 0.5.0), also
+#     muesste die Variable auf ein ZepOS-Verzeichnis allein zeigen - und
+#     damit verlieren GTK4 und GLib /usr/share/glib-2.0/schemas, ohne das
+#     eine libadwaita-Anwendung nicht startet, sondern abbricht. Ein
+#     aufgeraeumtes Menue um den Preis, dass es keins mehr gibt.
+#
+#     Die Liste gehoert deshalb dorthin, wo die Eintraege herkommen: in
+#     die Pakete. Solange sie ungekuerzt ist, sorgt --cmd unten dafuer,
+#     dass die Eingabetaste die ZepOS-Sitzung startet und nicht die
+#     danebenstehende.
+set -u
+
+# Ein Praefix vor jeden Systempfad, damit dieses Skript ueberhaupt
+# messbar ist. Leer im Betrieb, also sind die Pfade unten genau die
+# absoluten, die sie sein sollen. Er existiert fuer den Test und fuer
+# nichts sonst - dieselbe Regel und dieselbe Warnung, die der Kopf von
+# src/paths.py fuer die beiden Wurzeln dort aufschreibt: wer ihn dauerhaft
+# in einer Shell-Umgebung setzt, schickt den Greeter gegen ein
+# Verzeichnis, in das nie jemand etwas geschrieben hat.
+ZEPOS_GREETER_ROOT="${ZEPOS_GREETER_ROOT:-}"
+
+REGREET_CONFIG="$ZEPOS_GREETER_ROOT/etc/greetd/zepos-regreet.toml"
+
+# Das Stylesheet der Maske, erzeugt aus src/greeter.py und von
+# zepos-config abgelegt. Ohne diese Zeile nimmt regreet seine Vorgabe
+# /etc/greetd/regreet.css - die es nicht gibt - und zeichnet in
+# libadwaitas Grau: graue Kachel, blauer Anmeldeknopf, zwei gleich rote
+# Endknoepfe. So sah iso/out/run-release-installed/key-01-01-anmeldung.png
+# aus, und es war der einzige Bildschirm von ZepOS, der nicht nach ZepOS
+# aussah.
+#
+# Der Schalter heisst "-s, --style <PATH>"; src/main.rs des Tags 0.5.0
+# fuehrt ihn als `#[arg(short, long, value_name = "PATH")]`. regreet laedt
+# die Datei nur, WENN es sie gibt (component.rs: `if
+# input.css_path.exists()`) - eine fehlende kostet also die Farben und
+# nicht die Anmeldung.
+#
+# ------------------------------------------------------------------
+# DAS THEMA - und warum es hier gelesen wird und nicht erzeugt
+# ------------------------------------------------------------------
+# GEMELDET am 12.08.2026: "login bildschirm soll genauso dem theme
+# angepasst sein" und "sofort umschaltbar".
+#
+# Der Schreibtisch bekommt sein Thema, indem zepos-generate ihn neu
+# schreibt. Diese Maske kann das nicht: sie laeuft als Benutzer
+# "greeter", /etc/greetd gehoert root, und zum Zeitpunkt des
+# Anmeldebildschirms gibt es kein Konto, dessen Einstellungen gemeint
+# sein koennten.
+#
+# Also liegt JEDES Thema schon da - zepos-config legt zur Bauzeit ein
+# Blatt je Thema ab -, und umgeschaltet wird durch das Lesen EINES
+# Namens. Damit ist ein Themenwechsel beim naechsten Anmeldebildschirm
+# da, ohne dass irgendetwas erzeugt worden waere.
+#
+# WARUM EINE ZEILE UND KEIN JSON
+#     Dieses Skript muss laufen, wenn von ZepOS sonst noch nichts
+#     erzeugt wurde, und `jq` ist keine Abhaengigkeit dieses Systems.
+#     Eine Datei mit einem Namen darin kann `read`; ein JSON-Dokument
+#     braucht ein Programm, das fehlen kann.
+#
+# WARUM EIN UNBEKANNTER NAME HIER NICHT ABBRICHT
+#     Der Generator bricht ueber einen unbekannten Themennamen ab, und
+#     das ist dort richtig: er schreibt den ganzen Schreibtisch. Hier
+#     waere dieselbe Strenge eine Maschine, in die niemand mehr
+#     hineinkommt, weil in einer Datei ein Buchstabe fehlt. Also: gibt
+#     es das Blatt nicht, nimmt diese Zeile das ausgelieferte Thema,
+#     und gibt es auch das nicht, laeuft regreet ohne Blatt weiter -
+#     grau, aber es laeuft.
+ZEPOS_THEME_FILE="$ZEPOS_GREETER_ROOT/etc/zepos/theme"
+ZEPOS_THEME_DEFAULT="zeptronit"
+
+theme_name=""
+if [[ -r "$ZEPOS_THEME_FILE" ]]; then
+    # Nur die erste Zeile, und nur das erste Wort daraus: die Datei ist
+    # von Hand editierbar, und ein angehaengtes Leerzeichen darf keinen
+    # Dateinamen ergeben, den es nicht gibt.
+    read -r theme_name _ <"$ZEPOS_THEME_FILE" || theme_name=""
+fi
+[[ -n "$theme_name" ]] || theme_name="$ZEPOS_THEME_DEFAULT"
+
+REGREET_STYLE="$ZEPOS_GREETER_ROOT/etc/greetd/zepos-greeter-$theme_name.css"
+if [[ ! -r "$REGREET_STYLE" ]]; then
+    REGREET_STYLE="$ZEPOS_GREETER_ROOT/etc/greetd/zepos-greeter-$ZEPOS_THEME_DEFAULT.css"
+fi
+
+SESSION_COMMAND=/usr/bin/zepos-session
+
+# /var/log/regreet gehoert dem Benutzer greeter - angelegt von
+# usr/lib/tmpfiles.d/regreet.conf des Pakets greetd-regreet, nachgelesen
+# im Paket. Ein eigenes Verzeichnis anzulegen ginge hier gar nicht:
+# dieses Skript laeuft nicht als root.
+LOG="$ZEPOS_GREETER_ROOT/var/log/regreet/zepos-greeter.log"
+: >>"$LOG" 2>/dev/null || LOG=/dev/null
+log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" >>"$LOG"; }
+
+log "--- greeter start, uid=$(id -u) tty=$(tty 2>/dev/null || echo keine)"
+log "--- Thema: $theme_name -> $REGREET_STYLE"
+
+# --------------------------------------------------------------------
+# Die Tastatur
+# --------------------------------------------------------------------
+# Hier wird ein Passwort getippt, und zwar verdeckt. Auf dem
+# Installationsmedium wurde gemessen, was passiert, wenn der Compositor
+# die Belegung nicht kennt: `xyz-abc`, auf einer deutschen Tastatur
+# getippt, kam als `xzy/abc` an. Auf einem Anmeldebildschirm ist das
+# nicht kosmetisch - es ist ein Konto, in das der Besitzer nicht
+# hineinkommt, ohne dass irgendwo etwas gemeldet wuerde.
+#
+# archinstall schreibt in das Zielsystem NUR KEYMAP und FONT nach
+# /etc/vconsole.conf (lib/installer.py, set_vconsole) - kein XKBLAYOUT.
+# Die Konsole ist damit richtig belegt und ein wlroots-Compositor nicht:
+# der baut seine Belegung ueber libxkbcommon aus XKB_DEFAULT_*, und ohne
+# die nimmt er die eingebaute Vorgabe "us".
+#
+# Uebersetzt wird ueber /usr/share/systemd/kbd-model-map, die Tabelle des
+# systemd-Pakets - also nicht geraten, sondern nachgeschlagen. Sie steht
+# auf jedem installierten System, weil systemd zu base gehoert.
+# Spaltenbedeutung: Konsolenbelegung, XKB-Layout, Modell, Variante, ...
+# "-" heisst leer.
+KBD_MAP="$ZEPOS_GREETER_ROOT/usr/share/systemd/kbd-model-map"
+VCONSOLE="$ZEPOS_GREETER_ROOT/etc/vconsole.conf"
+
+console_keymap() {
+    [[ -r "$VCONSOLE" ]] || return 1
+    # Nur die eine Zuweisung lesen und nichts ausfuehren: vconsole.conf
+    # ist eine systemd-Umgebungsdatei, kein Shell-Skript, und `source`
+    # darauf wuerde ausfuehren, was jemand hineinschreibt.
+    sed -n 's/^[[:space:]]*KEYMAP="\{0,1\}\([^"[:space:]]*\)"\{0,1\}.*/\1/p' \
+        "$VCONSOLE" | tail -n 1
+}
+
+keymap="$(console_keymap || true)"
+layout=""
+variant=""
+if [[ -n "$keymap" && -r "$KBD_MAP" ]]; then
+    read -r layout variant < <(
+        awk -v want="$keymap" '
+            $1 == want { print $2, ($4 == "-" ? "" : $4); exit }
+        ' "$KBD_MAP"
+    ) || true
+fi
+
+# "de" als Rueckfall, ausdruecklich. ZepOS ist ein deutsches Produkt auf
+# deutscher Hardware; "us" zu raten wuerde genau den Fehler
+# wiederherstellen, den dieser Block entfernt. zepos-live-session
+# entscheidet an derselben Stelle genauso.
+export XKB_DEFAULT_LAYOUT="${layout:-de}"
+export XKB_DEFAULT_VARIANT="${variant:-}"
+log "--- keyboard: KEYMAP=${keymap:-unbekannt} -> XKB_DEFAULT_LAYOUT=$XKB_DEFAULT_LAYOUT XKB_DEFAULT_VARIANT=${XKB_DEFAULT_VARIANT:-keine}"
+
+# --------------------------------------------------------------------
+# Die Sprache der Maske
+# --------------------------------------------------------------------
+# GEFUNDEN am 17.08.2026 beim i18n-Lauf: src/login/regreet.toml trug
+# `locale = "de_DE"` und `greeting_msg = "Willkommen bei ZepOS"` FEST
+# EINGETRAGEN - fuer jede Installation dieselben zwei Zeilen. Wer ZepOS
+# auf Englisch installiert, bekommt eine englische Konsole, einen
+# englischen Assistenten, eine englische Oberflaeche - und dazwischen
+# eine deutsche Anmeldemaske. Derselbe Befund wie bei `kb_layout = de`
+# in hyprland-universal-config.template, und dieselbe Bauform behebt ihn:
+# die AUSLIEFERUNG bleibt die Vorgabe, und die Maschine bekommt daneben
+# ihren eigenen Wert.
+#
+# GEMESSEN an out/anmeldung/NACHHER-zeptronit-auswahl.png: von den acht
+# Zeichenketten dieser Maske sind genau ZWEI einstellbar - die Uhr oben
+# ("Do 14:05", aus `locale`) und der Gruss ("Willkommen bei ZepOS").
+# "User:", "Session:", "Login", "Reboot" und "Power Off" stehen als
+# gewoehnliche Rust-Zeichenketten in den 2695 Zeilen von regreet 0.5.0,
+# mit NULL Aufrufen von gettext. Es gibt keinen Katalog zu fuellen, und
+# genau deshalb sind diese beiden Werte das Ganze, was hier zu holen ist.
+#
+# ZWEI QUELLEN, IN DIESER REIHENFOLGE, UND KEINE DRITTE TABELLE
+#     1. LANG aus der Umgebung. Der Installer schreibt die Wahl aus
+#        LANGUAGE_DEFAULTS (installer/gui/pages.py) ueber archinstall
+#        nach /etc/locale.conf, systemd reicht LANG an greetd.service
+#        weiter - siehe den Kopf von src/templates/ags-i18n.template. Ob
+#        greetd es durch die PAM-Sitzung des Benutzers "greeter"
+#        durchreicht, ist NICHT zugesichert; deshalb ist es die erste und
+#        nicht die einzige Quelle.
+#     2. LANG aus /etc/locale.conf, derselben Datei, die der Installer
+#        schreiben laesst. Dieselbe Sorte Datei wie /etc/vconsole.conf
+#        oben und auf demselben Weg gelesen: nur die eine Zuweisung,
+#        NICHTS ausgefuehrt.
+#
+# UND DIE AUSLIEFERUNG ALS RUECKFALL, AUSDRUECKLICH
+#     Auf einer deutschen Maschine - und auf jeder, deren Sprache sich
+#     nicht aufloesen laesst - bleibt es bei
+#     /etc/greetd/zepos-regreet.toml, Byte fuer Byte. Diese Datei steht
+#     in backup= des Pakets, ist also die, an der ein Administrator
+#     dreht; sie wird nie ueberschrieben, sondern nur GELESEN. Ein
+#     Anmeldebildschirm ist der falsche Ort fuer Mut.
+LOCALE_CONF="$ZEPOS_GREETER_ROOT/etc/locale.conf"
+
+locale_conf_lang() {
+    local zeile wert=""
+    [[ -r "$LOCALE_CONF" ]] || return 1
+    while IFS= read -r zeile || [[ -n "$zeile" ]]; do
+        [[ "$zeile" == LANG=* ]] || continue
+        wert="${zeile#LANG=}"
+    done <"$LOCALE_CONF"
+    wert="${wert%\"}"
+    wert="${wert#\"}"
+    printf '%s' "$wert"
+}
+
+sprache="${LANG:-}"
+sprach_herkunft="der Umgebung des Greeters"
+if [[ -z "$sprache" ]]; then
+    sprache="$(locale_conf_lang || true)"
+    sprach_herkunft="LANG in /etc/locale.conf"
+fi
+# regreet will "en_US" und nicht "en_US.UTF-8" - die Kodierung und eine
+# etwaige Variante gehoeren nicht in den Namen, den chrono nachschlaegt.
+sprache="${sprache%%.*}"
+sprache="${sprache%%@*}"
+
+# WELCHE SPRACHEN HIER UEBERHAUPT EINGESETZT WERDEN, UND WARUM NUR DIESE
+#     Genau die, die der Assistent anbietet: LANGUAGE_DEFAULTS in
+#     installer/gui/pages.py fuehrt de -> de_DE und en -> en_US und sonst
+#     nichts. tests/src/test_login.py haelt diese Liste gegen jene, damit
+#     eine dritte Sprache dort nicht stillschweigend hier fehlt.
+#
+#     Es ist eine ERLAUBNISLISTE und keine Bequemlichkeit: regreets Uhr
+#     schlaegt ihren Namen in pure-rust-locales nach, und was ein
+#     unbekannter Name dort ausloest, ist auf einer Maschine ohne
+#     Anmeldemaske nicht mehr nachzumessen. Ein Wert, den dieser Baum
+#     nicht selbst erzeugen kann, wird deshalb nicht eingesetzt - dann
+#     gilt die Auslieferung, und die ist heute schon da.
+#
+# DER GRUSS AUF ENGLISCH IST DER MSGID UND KEINE ERFINDUNG
+#     Jede uebersetzbare Zeichenkette dieses Projekts steht auf Englisch
+#     im Quelltext und auf Deutsch in po/desktop/de.po. "Welcome to
+#     ZepOS" ist der msgid zu "Willkommen bei ZepOS"; er steht hier und
+#     nicht im Katalog, weil dieses Skript ihn dort nicht lesen koennte:
+#     gettext(1) kommt aus dem Paket gettext, und das gehoert nicht zu
+#     base - eine Anmeldemaske, die an einem fehlenden Programm haengt,
+#     waere ein teurerer Fehler als eine Zeile hier.
+gruss=""
+case "$sprache" in
+    de_DE) ;;                                # die Auslieferung selbst
+    en_US) gruss="Welcome to ZepOS" ;;
+    *)     sprache="" ;;
+esac
+
+# Die Datei fuer DIESE Maschine. Sie entsteht aus der ausgelieferten,
+# Zeile fuer Zeile, und nur zwei davon werden ersetzt - ohne sed, ohne
+# awk, ohne ein Programm, das fehlen kann. Sie liegt in
+# XDG_RUNTIME_DIR, weil /etc/greetd root gehoert und dieses Skript als
+# "greeter" laeuft.
+#
+# DREI RUECKGABEWERTE, WEIL ES DREI VERSCHIEDENE LAGEN SIND
+#     0  die eigene Datei wird gebraucht und steht.
+#     2  die Auslieferung sagt schon dasselbe - der Normalfall auf einer
+#        deutschen Maschine. Kein Fehler, und das Protokoll darf ihn
+#        auch nicht als einen melden.
+#     1  eine der beiden Zeilen fehlt in der Vorlage, oder das Schreiben
+#        ist gescheitert. Dann gilt die Auslieferung, statt dass hier
+#        eine halbe Datei entsteht.
+maschinen_konfiguration() {
+    local ziel="$1" zeile locale_da=0 gruss_da=0 geaendert=0
+    while IFS= read -r zeile || [[ -n "$zeile" ]]; do
+        case "$zeile" in
+            'locale = "'*)
+                locale_da=1
+                if [[ "$zeile" != "locale = \"$sprache\"" ]]; then
+                    zeile="locale = \"$sprache\""
+                    geaendert=1
+                fi
+                ;;
+            'greeting_msg = "'*)
+                gruss_da=1
+                if [[ -n "$gruss" && "$zeile" != "greeting_msg = \"$gruss\"" ]]; then
+                    zeile="greeting_msg = \"$gruss\""
+                    geaendert=1
+                fi
+                ;;
+        esac
+        printf '%s\n' "$zeile"
+    done <"$REGREET_CONFIG" >"$ziel" || return 1
+    (( locale_da && gruss_da )) || return 1
+    (( geaendert )) || return 2
+    [[ -s "$ziel" ]]
+}
+
+if [[ -n "$sprache" && -n "${XDG_RUNTIME_DIR:-}" && -r "$REGREET_CONFIG" ]]; then
+    EIGENE_KONFIGURATION="$XDG_RUNTIME_DIR/zepos-regreet.toml"
+    maschinen_konfiguration "$EIGENE_KONFIGURATION"
+    case "$?" in
+        0)  REGREET_CONFIG="$EIGENE_KONFIGURATION"
+            log "--- Sprache: $sprache (aus $sprach_herkunft) -> $REGREET_CONFIG" ;;
+        2)  rm -f "$EIGENE_KONFIGURATION"
+            log "--- Sprache: $sprache (aus $sprach_herkunft) - die ausgelieferte Maske sagt das schon" ;;
+        *)  rm -f "$EIGENE_KONFIGURATION"
+            log "--- Sprache: $sprache (aus $sprach_herkunft), aber die eigene Datei kam nicht zustande - es bleibt bei der ausgelieferten" ;;
+    esac
+else
+    log "--- Sprache: keine eigene Datei (LANG=${sprache:-unbekannt}) - es gilt die ausgelieferte $REGREET_CONFIG"
+fi
+
+# --------------------------------------------------------------------
+# Der grafische Versuch
+# --------------------------------------------------------------------
+# Ohne XDG_RUNTIME_DIR gibt es kein Verzeichnis fuer den Wayland-Socket,
+# und anlegen kann dieses Skript es nicht: /run/user gehoert root, und
+# hier laeuft "greeter". Also wird es gemeldet und der Textgreeter
+# uebernimmt - das ist ehrlicher als ein cage, das ohne erkennbaren
+# Grund nicht startet.
+RC_FILE="${XDG_RUNTIME_DIR:-/tmp}/zepos-greeter.rc"
+
+graphical_attempt() {
+    local renderer="$1"
+    rm -f "$RC_FILE"
+
+    if [[ -n "$renderer" ]]; then
+        export WLR_RENDERER="$renderer"
+        log "--- cage, WLR_RENDERER=$renderer"
+    else
+        unset WLR_RENDERER
+        log "--- cage, Standard-Renderer"
+    fi
+
+    # -s laesst den Benutzer die Konsole wechseln. Ein Anmeldebildschirm,
+    # von dem aus [Strg]+[Alt]+[F2] nicht mehr geht, ist ein Rechner ohne
+    # Notausgang.
+    # -d spart die Fensterdekoration, die in einem Vollbild-Greeter
+    # ohnehin nichts umrahmt.
+    cage -s -d -- bash -c '
+        regreet --config "$1" --style "$2"
+        printf %s "$?" >"$3"
+    ' _ "$REGREET_CONFIG" "$REGREET_STYLE" "$RC_FILE" >>"$LOG" 2>&1
+    log "--- cage beendet rc=$? (regreet lief: $([[ -f $RC_FILE ]] && echo ja || echo nein))"
+
+    [[ -f "$RC_FILE" ]]
+}
+
+console_attempt() {
+    unset WAYLAND_DISPLAY DISPLAY WLR_RENDERER
+    log "--- tuigreet auf der Konsole"
+    # --cmd ist die VORGABE, nicht die einzige Moeglichkeit: tuigreet
+    # liest daneben /usr/share/wayland-sessions und zeigt ein Menue. Die
+    # Eingabetaste startet damit die ZepOS-Sitzung, und wer eine andere
+    # will, findet sie trotzdem.
+    exec tuigreet \
+        --cmd "$SESSION_COMMAND" \
+        --remember \
+        --time \
+        --asterisks \
+        --greeting "ZepOS"
+}
+
+if compgen -G "$ZEPOS_GREETER_ROOT/dev/dri/card*" >/dev/null; then
+    if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+        graphical_attempt ""       && exit 0
+        graphical_attempt "pixman" && exit 0
+    else
+        log "--- kein XDG_RUNTIME_DIR, der Compositor haette keinen Socket"
+    fi
+else
+    log "--- kein DRM-Geraet, der Compositor wird uebersprungen"
+fi
+
+console_attempt

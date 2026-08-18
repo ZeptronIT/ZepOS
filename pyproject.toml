@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+# Ohne dies legt pytest bei einer conftest.py in tests/ das Verzeichnis
+# tests/ in den Suchpfad statt der Repo-Wurzel, und "from installer.core..."
+# schlaegt fehl - je nachdem, wie pytest aufgerufen wurde.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra"

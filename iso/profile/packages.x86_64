@@ -1,0 +1,217 @@
+# Everything the smoke image installs, and nothing else.
+#
+# The list is short on purpose. This image exists to find out whether a
+# Hyprland session comes up on ZepOS's generated configuration; every
+# package that is not needed to answer that is one more thing that can
+# fail for a reason nobody is interested in. A workstation needs roughly
+# a hundred and forty packages - that is zepos-desktop and the shipping
+# image of TP5-2, not this.
+#
+# Deliberately absent:
+#   linux-firmware  - a virtio guest needs no device firmware, and it is
+#                     the single largest package in the image.
+
+# --- ZepOS's own, out of the [zepos] repository -----------------------
+# These lines are what replaced iso/build.sh copying src/ into the image
+# by hand. The difference is not cosmetic: a copy tests a layout that
+# never ships, and it can only ever carry files - a package carries
+# dependencies, file modes, an /etc/skel default and a signature, and
+# every one of those is a thing that can be wrong somewhere a copy
+# cannot be wrong at all.
+#
+# zepos-config puts the templates, the styles and the generator in
+# /usr/share/zepos and the three commands in /usr/bin.
+#
+# aylurs-gtk-shell is the reason the first boot of this image could not
+# show a single AGS widget: AGS is in no Arch repository (spec §4.3), so
+# the fifteen AGS templates generated files with nothing to run them. It
+# pulls libastal-io and libastal-4 in with it.
+#
+# libastal-notifd is named here although AGS only suggests it, because
+# ags-notifications.template imports AstalNotifd on its fifth line and
+# app.ts imports that widget at the top level: without the typelib the
+# WHOLE bundle fails at import time and no widget starts, not just the
+# notifications.
+zepos-config
+aylurs-gtk-shell
+libastal-notifd
+
+# zepos-keyring is here for the one thing a container cannot supply: it
+# is the only ZepOS package with an install scriptlet, and the
+# conditions that scriptlet was written for exist during a real
+# pacstrap and nowhere else. mkarchiso passes -G, so the image being
+# built has no pacman keyring in it at all; the scriptlet has to notice
+# that and skip rather than fail, or this build stops.
+# packaging/verify-install.sh measures the other half, where a keyring
+# does exist and the population actually happens.
+#
+# It also puts the key material on the live medium, which is what
+# `pacman-key --init && pacman-key --populate zepos` in a live session
+# needs before anything can be installed from [zepos] (spec §8.4).
+zepos-keyring
+
+# --- the installer, which is what makes this a ZepOS ISO --------------
+# Spec §4.2, one line under the table: "Die drei Installer-Pakete liegen
+# nur in der ISO, nicht im installierten System." Both halves of that
+# sentence are now measured. This is the first half; the second is
+# packaging/verify-install.sh's third container, which installs
+# zepos-desktop and checks that zepos-installer, -gui, -tui and
+# archinstall are all absent afterwards.
+#
+# All three, not only the core: §8.5's fallback from GTK4 to the text
+# interface is a decision taken at run time on the machine in front of
+# the user, so both surfaces have to be present for it to be a decision
+# rather than a foregone conclusion. zepos-installer-gui is the only one
+# of the three that names a toolkit.
+#
+# zepos-installer brings archinstall with it, which is what actually
+# partitions, bootstraps and installs a bootloader - spec §8.1: "Ein
+# eigener Partitionierer waere Code, dessen Fehler fremde Festplatten
+# loeschen." It also brings util-linux, openssl and iwd, one for each
+# thing installer/core calls directly: lsblk for the disk list, `openssl
+# passwd -6` for the password hashes, iwctl for the wireless step.
+#
+# This is what the image had never carried, and it is why "ZepOS has
+# never been installed" was still true after three boots of it.
+zepos-installer
+zepos-installer-gui
+zepos-installer-tui
+
+# The five plugins of spec §7.1, which is what makes plugins.conf a file
+# with load lines in it rather than eighty-one lines of comment
+# explaining what is missing. src/plugins.py keeps a plugin's block only
+# when /usr/lib/hyprland/plugins/<name>.so is on the machine at the
+# moment the file is generated, so their presence in the IMAGE is what
+# the smoke run measures - and their absence would look exactly like a
+# working desktop with no title bars, no zones and a launcher that
+# fell back to zepos-menu.
+zepos-hyprbars
+zepos-borders-plus-plus
+zepos-hyprlaunch
+zepos-hyprclipx
+zepos-hyprzones
+
+# `ags run` compiles the style.scss that ags-style.template generates by
+# shelling out to dart-sass. Without it the bundle has no stylesheet.
+dart-sass
+
+# --- archiso baseline: without these the image does not boot ---------
+base
+linux
+mkinitcpio
+mkinitcpio-archiso
+syslinux
+
+# --- the compositor, and what a machine without a GPU needs to draw ---
+# mesa carries the software rasteriser. QEMU's virtio-gpu offers a KMS
+# device with dumb buffers and no render node, so Mesa's kms_swrast is
+# the only path from Hyprland's GBM/EGL requirement to a framebuffer.
+#
+# zepos-hyprland and not hyprland: spec §4.2 and §7. Hyprland stood in
+# §4.3's list of packages usable straight out of extra until the revision
+# to §7 took it back out, because five plugin packages are compiled
+# against its headers and cannot have their compositor move underneath
+# them on somebody else's release schedule. It provides `hyprland` and
+# conflicts with it, so xdg-desktop-portal-hyprland below resolves
+# against it and the two can never both be installed.
+zepos-hyprland
+mesa
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+polkit
+polkit-gnome
+
+# --- what the generated hyprland.conf actually starts -----------------
+# waybar und nwg-dock-hyprland standen hier und sind am 11.08.2026
+# entfallen: beide sind GTK3 (waybar auf gtkmm-3, nwg-dock ohne jede
+# GTK4-Fassung), und Leiste wie Dock sind seither Fenster in AGS -
+# ags/widget/Bar.tsx und ags/widget/Dock.tsx, GTK4 ueber libastal-4.
+kitty
+zepos-menu
+wl-clipboard
+cliphist
+swaybg
+xsettingsd
+numlockx
+brightnessctl
+
+# Die Abmeldemaske, aus dem [zepos]-Repositorium wie die Pakete darueber.
+# hyprland-universal-config.template bindet SUPER+M unbedingt darauf. Im
+# Bild ist sie Beweis und keine Ausstattung - ein hier gebautes Paket,
+# von pacstrap installiert, an genau dem Pfad, den die erzeugte Bindung
+# nennt.
+#
+# Hier stand bis zum 11.08.2026 `wlogout`. Spec §4.3 fuehrte es unter den
+# Bestandteilen, die kein Arch-Repositorium hat, und das stimmt weiter -
+# nur baut ZepOS jetzt sein eigenes, weil wlogout gemessen auf
+# libgtk-3.so.0 steht und der Ursprung (HEAD 350fe88, 26.05.2024) GTK4
+# nirgends nennt. packaging/zepos-logout/PKGBUILD fuehrt die Messung.
+zepos-logout
+
+# DER SPERRBILDSCHIRM STEHT ABSICHTLICH NICHT HIER
+#     zepos-lock gibt es seit dem 12.08.2026, hyprland-universal-config.
+#     template bindet SUPER+L unbedingt darauf, und trotzdem gehoert es
+#     nicht in dieses Bild. Der Grund ist gemessen und steht zwei Dateien
+#     weiter:
+#
+#         airootfs/etc/sysusers.d/zepos.conf
+#           u zepos 1000 "ZepOS live session" /home/zepos /bin/bash
+#
+#     systemd-sysusers legt ein Konto mit GESPERRTEM Passwortfeld an -
+#     airootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf
+#     sagt es selbst ("The account systemd-sysusers creates has a locked
+#     password field"), und deshalb funktioniert die Anmeldung dort nur
+#     ueber `agetty --autologin`.
+#
+#     pam_unix kann gegen ein gesperrtes Feld nicht abgleichen, und
+#     `nullok` hilft dabei nicht: das erlaubt ein LEERES Feld, nicht ein
+#     gesperrtes. Ein Sperrbildschirm auf dem Medium wiese also JEDES
+#     Passwort ab - und weil ext-session-lock-v1 die Sitzung auch beim
+#     Absturz des Sperrprogramms gesperrt LAESST, waere der Nutzer bis
+#     zum harten Neustart aus dem Installationsassistenten ausgesperrt.
+#
+#     SUPER+L ist auf dem Medium damit eine tote Taste, und das ist die
+#     billigere der beiden Moeglichkeiten. Sie war es vorher auch:
+#     hyprlock stand hier ebenso wenig. Neu ist nur, dass es jetzt eine
+#     Entscheidung ist statt eines Versehens -
+#     tests/iso/test_smoke_profile.py haelt sie fest.
+
+# --- grim is evidence, not decoration --------------------------------
+# It captures what the compositor rendered, from inside the session.
+# QEMU's framebuffer dump proves the screen shows something; grim proves
+# the something came out of Hyprland.
+grim
+
+# --- interpreters the generator and the generated helpers need --------
+bash
+python
+zsh
+jq
+
+# --- fonts, or the bar is a row of replacement boxes ------------------
+# The whole point of the icon SSOT is Nerd Font glyphs; without the font
+# a screenshot cannot distinguish "the bar is there" from "the bar is
+# broken".
+#
+# ZeptronIT's two families are here for the same reason and it is
+# stronger, because their absence does NOT look broken: fontconfig
+# answers a missing family by substituting one it has, so a screenshot of
+# a machine without them shows a working desktop in the wrong typeface -
+# which is exactly what this image exists to be unable to say.
+# zepos-desktop depends on both; the image installs them directly
+# because it does not install zepos-desktop.
+ttf-fira-code
+ttf-roboto
+ttf-jetbrains-mono-nerd
+ttf-dejavu
+noto-fonts
+noto-fonts-emoji
+
+# --- GTK stack and icons for the widgets that do exist ----------------
+gtk3
+gtk4
+papirus-icon-theme
+adwaita-icon-theme
+
+# --- named by the generated status scripts ----------------------------
+networkmanager

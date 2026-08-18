@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Read and write the user settings.
+
+The file format, the schema version and the atomic 0600 write belong to
+settings.py; cli.py's header explains how the four lines below find it,
+and why they have to be here rather than in a module.
+"""
+import os
+import sys
+from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent
+_ROOT = Path(os.environ.get("ZEPOS_SYSTEM_ROOT") or (
+    _HERE.parent if (_HERE.parent / "cli.py").is_file() else "/usr/share/zepos"))
+sys.path.insert(0, str(_ROOT))
+
+try:
+    import cli
+except ImportError as exc:
+    raise SystemExit(
+        f"ZepOS could not be found in {_ROOT}: {exc}\n"
+        "That directory holds the templates, the generator and the modules "
+        "this command imports. Reinstall the zepos-config package, or set "
+        "ZEPOS_SYSTEM_ROOT to the directory it lives in."
+    ) from exc
+
+raise SystemExit(cli.settings_command(sys.argv[1:]))

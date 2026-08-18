@@ -1,0 +1,245 @@
+# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
+# Initialization code that may require console input (password prompts, [y/n]
+# confirmations, etc.) must go above this block; everything else may go below.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+# =====================================================================
+# DIE EINGABEZEILE: powerlevel10k, und was ZepOS dafuer wirklich
+# ausliefert
+# =====================================================================
+#
+# GEMELDET am 12.08.2026: "es soll irgendwie die moeglichkeit geben
+# powerlevel 10k einzurichten das theme fuer ein terminal voll
+# automatisch und andere themes auch."
+#
+# HIER STAND DIE EINRICHTUNG SCHON, UND SIE HAT NICHTS EINGERICHTET.
+# Achtzig Zeilen oh-my-zsh: `export ZSH="$HOME/.oh-my-zsh"`,
+# `ZSH_THEME="powerlevel10k/powerlevel10k"`, eine plugins=()-Liste mit
+# sieben Namen und `source $ZSH/oh-my-zsh.sh`. Gemessen mit `zsh -i` in
+# einem leeren Heimatverzeichnis - also so, wie eine erste Anmeldung
+# aussieht:
+#
+#     ~/.zshrc:90: no such file or directory: ~/.oh-my-zsh/oh-my-zsh.sh
+#     PROMPT=[%m%# ]
+#
+# Eine Fehlermeldung bei jeder Anmeldung und der nackte
+# zsh-Standardprompt. Die Konfiguration war da, das Konfigurierte nicht.
+#
+# WARUM OH-MY-ZSH GANZ WEG IST UND NICHT NACHINSTALLIERT WURDE
+#     Es ist nicht paketierbar. GEMESSEN am angehefteten Schnappschuss
+#     2026/08/04: weder [core] noch [extra] kennen ein Paket
+#     "oh-my-zsh"; es gibt es nur in der AUR, als -git-Paket ohne
+#     Stichtag und ohne Signatur - genau das, was Spec §4.3
+#     ausgeschlossen hat. Und es aktualisiert sich selbst per git in
+#     $HOME, was mit einer Distribution, die ~/.zshrc ERZEUGT, direkt
+#     kollidiert.
+#
+#     Es waere auch ohne das die falsche Abhaengigkeit gewesen. Was es
+#     hier zu tun hatte, waren drei Dinge, und fuer jedes gibt es eine
+#     Zeile: das Theme laden, zwei Plugins laden, ein paar Voreinstellungen
+#     fuer Verlauf und Vervollstaendigung setzen. Die plugins=()-Liste,
+#     die hier stand, haette ausserdem auch MIT oh-my-zsh nichts getan:
+#     zsh-completions, zsh-autosuggestions und zsh-syntax-highlighting
+#     liegen bei Arch unter /usr/share/zsh/, nicht unter
+#     $ZSH_CUSTOM/plugins/, wo oh-my-zsh sie gesucht haette.
+#
+# WOHER DIE DATEIEN KOMMEN
+#     powerlevel10k gibt es im angehefteten Schnappschuss ebenfalls
+#     nicht (das frueher vorhandene zsh-theme-powerlevel10k steht nicht
+#     mehr in [extra] - nachgezaehlt in extra.db vom 04.08.2026). ZepOS
+#     baut es deshalb selbst: packaging/zepos-zsh-prompt, auf einen
+#     Commit gepinnt und mit Pruefsumme, wie astal und die
+#     Hyprland-Plugins. Die drei Plugin-Pakete dagegen liegen in
+#     [extra] und werden von dort installiert.
+#
+#     Alle vier stehen in den depends von packaging/zepos-desktop. Ohne
+#     diese Kante waere die Zeile darunter wieder das, was hier stand:
+#     eine Konfiguration ohne ihr Programm.
+
+# Das Theme. Der Pfad ist der des Pakets und keine Vermutung -
+# tests/src/test_prompt.py haelt ihn gegen das Rezept, das ihn anlegt.
+[[ ! -r /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme ]] || \
+    source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme
+
+# Vervollstaendigung. zsh-completions legt seine Definitionen in
+# site-functions ab, das schon im fpath steht; compinit ist das, was sie
+# einliest, und ohne diesen Aufruf tut die Tabulatortaste nichts weiter
+# als Dateinamen zu ergaenzen.
+#
+# Mit Zwischenspeicher (-d) und ohne Rechtepruefung (-u): der Aufbau
+# kostet auf einer frischen Installation eine Drittelsekunde, und die
+# faellt sonst bei JEDER Anmeldung an.
+autoload -Uz compinit
+compinit -u -d "${XDG_CACHE_HOME:-$HOME/.cache}/zcompdump-$ZSH_VERSION"
+
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+zstyle ':completion:*' menu select
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# Der Verlauf. Das waren die Voreinstellungen, die oh-my-zsh
+# mitgebracht hat und die als Einzige davon wirklich gefehlt haetten:
+# ohne sie merkt sich zsh nichts ueber das Ende der Sitzung hinaus.
+HISTFILE="${XDG_STATE_HOME:-$HOME/.local/state}/zsh/history"
+HISTSIZE=50000
+SAVEHIST=50000
+[[ -d ${HISTFILE:h} ]] || mkdir -p ${HISTFILE:h}
+setopt append_history share_history inc_append_history
+setopt hist_ignore_dups hist_ignore_space hist_verify extended_history
+setopt auto_cd interactive_comments
+
+# Die zwei Plugins, in DIESER Reihenfolge. zsh-syntax-highlighting
+# haengt sich in jedes Widget ein, das zu diesem Zeitpunkt existiert -
+# sein eigenes README verlangt deshalb, dass es als LETZTES geladen
+# wird. Andersherum faerbt es die Vorschlaege von zsh-autosuggestions
+# nicht mehr richtig ein.
+[[ ! -r /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]] || \
+    source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+[[ ! -r /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] || \
+    source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# User configuration
+
+# export MANPATH="/usr/local/man:$MANPATH"
+
+# You may need to manually set your language environment
+# export LANG=en_US.UTF-8
+
+# Preferred editor for local and remote sessions
+# if [[ -n $SSH_CONNECTION ]]; then
+#   export EDITOR='vim'
+# else
+#   export EDITOR='nvim'
+# fi
+
+# Compilation flags
+# export ARCHFLAGS="-arch $(uname -m)"
+
+# Eigene Aliase gehoeren nach ~/.zshrc.d/*.zsh - der Lader dafuer steht
+# ganz unten in dieser Datei, samt der Begruendung. `alias` zeigt, was
+# gerade gilt.
+
+# Die Einstellungen des Prompts.
+#
+# ~/.p10k.zsh wird ERZEUGT, aus src/templates/p10k-config.template, mit
+# den Farben des aktiven Themas und den Symbolen aus
+# src/icon_definition.py. Deshalb steht hier nicht mehr "run `p10k
+# configure`", was frueher hier stand: der Fragebogen von p10k schreibt
+# eine Datei, die der naechste `zepos-generate --all` ueberschreibt, und
+# er stellt zwoelf Fragen fuer ein Ergebnis, das ZepOS schon kennt.
+#
+# Die Bedingung bleibt trotzdem: ein `zepos-generate -zshrc-config` ohne
+# den p10k-Lauf daneben ist moeglich, und eine Anmeldung darf daran
+# nicht scheitern.
+[[ ! -r ~/.p10k.zsh ]] || source ~/.p10k.zsh
+
+# DER PATH, UND DIE DREI BLOECKE, DIE HIER NICHT MEHR STEHEN
+#
+# GEMELDET am 17.08.2026, sinngemaess: warum steht in der ausgelieferten
+# Konfiguration Software, die es auf dieser Maschine nicht gibt.
+#
+# Hier standen drei Bloecke vom Rechner eines Menschen, und jeder zeigte
+# auf etwas, das ZepOS nicht installiert. NACHGESEHEN am 17.08.2026 auf
+# der Wurzel der letzten Installation (iso/out/release-target.img,
+# entschluesselt und eingehaengt), Pfad fuer Pfad:
+#
+#     /opt/anaconda            FEHLT   -> `conda init`-Block, dazu
+#                                         CRYPTOGRAPHY_OPENSSL_NO_LEGACY
+#                                         und SSL_CERT_FILE, die beide
+#                                         nur seine OpenSSL-Fehler
+#                                         geradebogen haben
+#     /opt/android-sdk         FEHLT   -> ANDROID_HOME, ANDROID_SDK_ROOT,
+#                                         ANDROID_NDK_HOME und drei
+#                                         PATH-Anhaenge darauf
+#     /usr/lib/jvm             FEHLT   -> JAVA_HOME
+#     /usr/bin/npm             FEHLT   -> ~/.npm-global/bin
+#
+# WARUM DAS NICHT NUR HAESSLICH WAR
+#     Der conda-Block RUFT AUF, bei jeder Anmeldung:
+#     `/opt/anaconda/bin/conda shell.zsh hook`. Der Aufruf schlaegt fehl,
+#     der Zweig darunter faengt ihn auf, und geblieben ist eine
+#     Anmeldung, die jedes Mal etwas versucht, was es hier nie geben
+#     wird.
+#
+#     ~/.npm-global/bin und die Android-Pfade standen ausserdem VOR
+#     /usr/bin. Ein Verzeichnis vorne im PATH ist keine Kleinigkeit: was
+#     dort liegt, gewinnt gegen jedes Programm des Systems. Am
+#     17.08.2026 lag der Verdacht genau dort - es sei eine alte Huelle in
+#     einem dieser Verzeichnisse, die `claude` abfaengt. Sie war es
+#     nicht (die Ursache stand im Paketrezept), aber die Falle bleibt
+#     eine, solange die Zeilen dastehen.
+#
+# WAS BLEIBT, UND WARUM GENAU DAS
+#     ~/.local/bin. Es ist der Ort, an dem generate_config.sh die
+#     erzeugten Hilfsskripte ablegt - start-hyprland, list-profiles,
+#     save-profile, wallpaper-manager und die uebrigen. Ohne diese Zeile
+#     ist `start-hyprland` ein Befehl, den es nicht gibt.
+#
+#     Zweimal genannt zu werden schadet ihm nicht: src/bin/zepos-session
+#     setzt denselben Pfad fuer die ganze SITZUNG, also auch fuer die
+#     Programme, die keine Anmeldeschale sind. Diese Zeile deckt den
+#     zweiten Weg ab - eine zsh auf einer Konsole, per ssh, oder unter
+#     einem Compositor, der nicht ueber zepos-session gestartet wurde.
+#
+# UND WARUM `typeset -U` STATT EINES WEITEREN `export PATH=...:$PATH`
+#     Weil sich ein vorangestellter Pfad bei jeder verschachtelten Schale
+#     wiederholt. GEMESSEN am 17.08.2026 auf dem Rechner, von dem diese
+#     Vorlage stammt: ~/.local/bin steht dort DREIMAL im PATH,
+#     ~/.npm-global/bin zweimal, /opt/anaconda/bin zweimal - eine zsh in
+#     einer zsh in einer zsh. `typeset -U path PATH` ist zsh' eigene
+#     Antwort darauf: die beiden bleiben aneinander gekoppelt, und jeder
+#     Eintrag steht genau einmal darin, an seiner ersten Stelle.
+typeset -U path PATH
+path=(~/.local/bin $path)
+
+# Custom aliases - Hyprland profile launchers
+#
+# Hier standen go-game, go-home und go-office: drei Aliase auf
+# `start-hyprland gaming|home|office`. Diese drei Profile gibt es nicht.
+# Ein Profil entsteht durch `save-profile <name>` - ZepOS bringt laptop
+# und desktop mit, und der Name des naechsten gehoert dem Nutzer. Ein
+# Alias, der einen festen Profilnamen einsetzt, kann darum nur einen
+# Namen treffen, den es auf dieser Maschine gibt, oder eben keinen: alle
+# drei endeten in "Profile 'gaming' not found!".
+#
+# `profiles` bleibt, weil es nichts voraussetzt - es zeigt die Profile,
+# die wirklich da sind, und start-hyprland nimmt einen davon.
+alias profiles='list-profiles'
+
+# HIER STANDEN DREI ABKUERZUNGEN AUF PROGRAMME, DIE ES NICHT GIBT
+#     `lg` auf lazygit, `ti` auf tig, `gu` auf gitui. NACHGESEHEN am
+#     17.08.2026 auf der Wurzel der letzten Installation: keines der drei
+#     liegt unter /usr/bin, und keines steht in den depends von
+#     zepos-apps, zepos-apps-devel oder zepos-desktop. Drei Abkuerzungen,
+#     die "command not found" abkuerzen.
+#
+#     Wer sie will, legt sich ~/.zshrc.d/git.zsh an - der Lader dafuer
+#     steht unten, und eine Abkuerzung auf ein Programm, das jemand
+#     selbst nachinstalliert hat, ist genau der Fall, fuer den es ihn
+#     gibt.
+#
+# UND EINE ZEILE, DIE ZU conda GEHOERTE
+#     `export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt` stand
+#     unmittelbar hinter den drei Abkuerzungen und gehoerte zu keiner:
+#     es war die zweite Haelfte des OpenSSL-Notbehelfs, dessen erste
+#     Haelfte oben im conda-Block stand. Die Datei GIBT es auf ZepOS
+#     (ca-certificates-utils 20240618-1, am 17.08.2026 nachgesehen) - sie
+#     ist genau der Ort, an dem OpenSSL von sich aus nachsieht. Eine
+#     Umgebungsvariable, die auf die Vorgabe zeigt, stellt nichts ein.
+
+# ===== User drop-in commands (~/.zshrc.d/*.zsh) =====
+# Custom commands/functions belong in ~/.zshrc.d/*.zsh, NOT inline in this file.
+# This is the rule the origin broke: a 485-line build tool for one company's
+# products lived directly in this template, and generate_config.sh shipped it
+# into every generated ~/.zshrc. A drop-in would have been private to the one
+# machine that needed it.
+# This loader is part of the template, so it survives every zshrc regeneration;
+# generate_config.sh never touches ~/.zshrc.d, so the drop-ins persist too.
+# Add a new command as ~/.zshrc.d/<name>.zsh (e.g. work-ssh.zsh, work-sftp.zsh).
+if [[ -d ~/.zshrc.d ]]; then
+    for _f in ~/.zshrc.d/*.zsh(N); do
+        source "$_f"
+    done
+    unset _f
+fi

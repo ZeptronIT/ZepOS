@@ -1,0 +1,50 @@
+# Der Dienst, den der Zeitgeber ausloest. src/update.py traegt die
+# Begruendung fuer alles, was er entscheidet; hier steht nur, unter
+# welchen Bedingungen er ueberhaupt laeuft.
+#
+# WARUM network-online UND NICHT NUR network
+#     network.target heisst "der Netzwerkstapel ist eingerichtet", nicht
+#     "eine Adresse ist da". Ein pacman, das eine Sekunde vor der
+#     DHCP-Antwort startet, endet mit "could not resolve host" - und das
+#     ist ein Fehlschlag, den der Nutzer gemeldet bekaeme, obwohl seine
+#     Maschine vollkommen in Ordnung ist. Dieselbe Zeile und derselbe
+#     Grund wie in der Sonde des Messstands
+#     (iso/profile/airootfs/etc/systemd/system/zepos-update-probe.service).
+#
+# WARUM TimeoutStartSec=infinity DASTEHEN MUSS
+#     Weil "nichts hinschreiben" NICHT "keine Frist" heisst: ohne die
+#     Zeile gilt DefaultTimeoutStartSec, und das sind 90 Sekunden. Ein
+#     Type=oneshot, der laenger braucht, wird abgeschossen - mitten in
+#     einer pacman-Transaktion, auf einer Maschine, an der niemand sitzt.
+#
+#     Neunzig Sekunden sind fuer eine Aktualisierung nichts. Schon das
+#     `pacman -Sy` holt die Datenbanken der Arch-Basis, und danach kommen
+#     die Pakete selbst - ueber die Leitung, die der Nutzer hat, nicht
+#     ueber die, die wir uns wuenschen. Dieselbe Ueberlegung und dieselbe
+#     Zeile wie in der Sonde des Messstands
+#     (iso/profile/airootfs/etc/systemd/system/zepos-update-probe.service),
+#     und dort steht auch, was eine halb eingespielte Transaktion ist:
+#     der eine Zustand, den ein unbeaufsichtigtes System nie erreichen
+#     darf.
+#
+# WARUM Nice UND IOSchedulingClass
+#     Der Zeitgeber feuert waehrend jemand arbeitet. Eine Aktualisierung,
+#     die den Schreibtisch ruckeln laesst, ist eine, die abgeschaltet
+#     wird - und pacman ist vor allem I/O.
+[Unit]
+Description=ZepOS-Aktualisierung
+Documentation=file:///usr/share/zepos/update.py
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/zepos-update
+TimeoutStartSec=infinity
+Nice=10
+IOSchedulingClass=idle
+
+# Kein [Install]-Abschnitt, und das ist Absicht: dieser Dienst wird nicht
+# eingeschaltet, sondern vom Zeitgeber gerufen. Ein WantedBy hier waere
+# eine Aktualisierung bei jedem Start - ohne Verzoegerung, ohne Streuung
+# und damit ohne alles, was zepos-update.timer ausmacht.

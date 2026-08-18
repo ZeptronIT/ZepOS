@@ -1,0 +1,113 @@
+[Desktop Entry]
+# Claude Code im Starter - und ein Klick oeffnet ein Terminal damit.
+#
+# GEMELDET am 13.08.2026: "beim suchen in dem launcher auch claude code
+# anzeigen bei auswahl wird ein terminal geoeffnet mit claude code"
+#
+# WARUM `kitty -e` UND NICHT `Terminal=true`
+#     Terminal=true waere die vorgesehene Art, ein Programm der
+#     Kommandozeile in einem Terminal zu starten - und sie funktioniert
+#     auf ZepOS nicht. GEMESSEN am 12.08.2026 an btop.desktop, das
+#     genau das tut: GLib kennt beim Starten nur eine feste Liste
+#     fremder Terminals, in der kitty nicht steht, und antwortet mit
+#     "Fuer die Anwendung benoetigtes Terminal konnte nicht gefunden
+#     werden" - mit kitty UND foot auf dem PATH. Der Knopf im Fuss
+#     oeffnete deshalb nichts, bis er auf `kitty -e` umgestellt wurde.
+#     Dieser Eintrag macht es von vornherein richtig.
+#
+#     --hold NICHT: Claude Code laeuft, bis der Mensch es beendet;
+#     danach soll das Fenster zugehen wie jedes andere Terminal auch.
+#
+# WARUM HIER NICHT MEHR `claude` STEHT, SONDERN zepos-claude-code
+#     GEMELDET am 17.08.2026: der Klick zeigt nichts. `kitty -e claude`
+#     bindet das Fenster an das Programm - endet claude nach einer
+#     Fehlerzeile, ist die Zeile mit dem Fenster weg. GEMESSEN an der
+#     ausgelieferten Binaerdatei (2.1.233): `claude --gibtsnicht`
+#     schreibt EINE Zeile und gibt 1 zurueck.
+#
+#     /usr/bin/zepos-claude-code liegt jetzt dazwischen. Es haelt das
+#     Fenster genau dann offen, wenn der Rueckgabewert einen Fehlschlag
+#     meldet, und laesst es sonst zugehen - die Unterscheidung, die
+#     --hold nicht treffen kann. Der ganze Grund steht in seinem Kopf.
+#
+# WARUM Icon NICHT MEHR utilities-terminal IST
+#     GEMELDET am 17.08.2026: im Dock sind zwei Eintraege nicht
+#     auseinanderzuhalten. GEMESSEN am Abnahmebild
+#     iso/out/run-release-installed/key-41-15-super-q-terminal.png: dort
+#     stehen zwei Zeichen nebeneinander, die beide eine
+#     Eingabeaufforderung ">_" in einem dunklen Kasten zeigen - das des
+#     Terminals (Icon=kitty) und dieses hier. utilities-terminal heisst
+#     "ein Terminal", und mehr sagt es auch nicht: nichts ueber das
+#     Programm darin.
+#
+#     applications-engineering war die Antwort darauf und hielt einen
+#     Tag. Es ist in Papirus-Dark - dem Symbolthema dieser Sitzung,
+#     gesetzt in hyprland-universal-config.template - ein ROBOTERARM, und
+#     der Nutzer hat am 17.08.2026 genau das beanstandet: "ich will das
+#     das logo von claude benutzt wird statt ein roboter arm".
+#
+#     Jetzt steht hier das ECHTE Zeichen von Claude Code, mitgeliefert
+#     vom Paket. Woher es kommt und warum es nicht gezeichnet, sondern
+#     geholt wurde, steht im Rezept unter "DAS ZEICHEN".
+#
+#     DAS SCHLAEGT EINE REGEL, DIE IN DIESEM BAUM SONST GILT:
+#     settings/zepos-settings.desktop begruendet, warum ein
+#     selbstgezeichnetes Zeichen im Starter neben lauter Zeichen aus
+#     einem Satz das einzige ist, das nicht dazugehoert. Der Unterschied
+#     ist, dass dies KEIN selbstgezeichnetes Zeichen ist: es ist das
+#     Zeichen, unter dem dieses Programm ueberall sonst auftritt. Ein
+#     Symbolthema kann es gar nicht fuehren - Papirus hat kein Zeichen
+#     fuer Claude, so wie es keines fuer irgendein anderes Programm hat,
+#     das seine Marke selbst mitbringt. Genau dafuer gibt es hicolor.
+# WARUM --class, UND WARUM StartupWMClass DARUNTER
+#
+# GEMELDET am 17.08.2026: "ich sehe das claude roboter icon auch zweimal
+# in der taskleiste". Zwei Eintraege, EIN Programm - und im ganzen Baum
+# gibt es nur diese eine .desktop-Datei, es waren also nie zwei
+# Eintraege.
+#
+# Das Dock haelt angeheftete Anwendungen und laufende Fenster
+# auseinander, indem es die KLASSE des Fensters mit dem Programmnamen,
+# der Kennung des Eintrags und StartupWMClass vergleicht
+# (belongsTo() in src/templates/ags-dock.template). Passt nichts davon,
+# bekommt das Fenster einen eigenen Knopf - "ein Fenster an beiden
+# Stellen waere dasselbe Programm zweimal im Dock", sagt der Kommentar
+# dort, und genau das ist passiert.
+#
+# Denn dieses Fenster IST ein kitty-Fenster. Es meldet die Klasse
+# `kitty`, und /proc/<pid>/comm sagt `kitty` - der zweite Weg, den das
+# Dock probiert, fuehrt also zur selben Antwort. Der Eintrag konnte sein
+# eigenes Fenster nicht als seines erkennen, und keine Stelle im Dock
+# war schuld daran.
+#
+# `--class` setzt unter Wayland die Anwendungskennung (gemessen an kitty
+# 0.48.2: "On Wayland set the application id", Vorgabe `kitty`). Damit
+# traegt das Fenster den Namen, unter dem der Eintrag angeheftet ist, und
+# die erste der drei Vergleichsformen trifft.
+#
+# StartupWMClass steht daneben, weil es dieselbe Aussage fuer JEDEN
+# anderen Leser macht - Dock, Starter und Arbeitsumgebung fragen es ab.
+# Eine Zuordnung, die nur funktioniert, weil eine Exec-Zeile ein
+# bestimmtes Argument traegt, ist eine, die beim naechsten Umbau der
+# Exec-Zeile still zerfaellt.
+Type=Application
+Name=Claude Code
+GenericName=KI-Assistent auf der Kommandozeile
+Comment=Anthropics Assistent fuer Programmieren und Systemarbeit
+Exec=kitty --class zepos-claude-code -e zepos-claude-code
+TryExec=/usr/bin/zepos-claude-code
+Icon=zepos-claude-code
+StartupWMClass=zepos-claude-code
+Terminal=false
+# TerminalEmulator ist hier weg, und das gehoert zum selben Befund wie
+# das Symbol darueber: die Kategorie behauptet, dieses Programm SEI ein
+# Terminalemulator. Ist es nicht - es LAEUFT in einem. Die Kategorie ist
+# die Stelle, an der eine Arbeitsumgebung nachsieht, wenn sie "das
+# Terminal" oeffnen will; ein Assistent, der dabei herauskommen kann, ist
+# eine Verwechslung mit Folgen und nicht nur eine Ungenauigkeit im Menue.
+Categories=Development;Utility;
+# Woraufhin der Starter ihn findet. Der Nutzer sucht ihn vermutlich als
+# "claude", moeglicherweise als "ki" oder "ai" - alle drei stehen hier,
+# damit die Suche nicht am Namen scheitert.
+Keywords=claude;code;ki;ai;assistent;anthropic;terminal;
+StartupNotify=false

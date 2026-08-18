@@ -1,0 +1,67 @@
+# Build-Artefakte
+build/out/
+packaging/out/
+packaging/*/pkg/
+packaging/*/src/
+packaging/*/.stage/
+packaging/*/*.pkg.tar.zst
+packaging/*/*.pkg.tar.zst.sig
+# Heruntergeladene und erzeugte Quellarchive der Rezepte
+packaging/*/*.tar.gz
+packaging/*/*.tar.xz
+packaging/*/*.tgz
+
+# Schluesselmaterial - NIE committen.
+# packaging/make-test-key.sh legt hier eine GNUPGHOME an. Auch ein
+# Testschluessel ist ein privater Schluessel, und ein privater Schluessel
+# in einem Klon ist ein privater Schluessel in jedem Klon.
+packaging/keys/
+*.gpg
+secring*
+*.pgp
+
+# Der oeffentliche Schluessel, den packaging/build.sh vor dem Bau nach
+# packaging/zepos-keyring/zepos-repo.pub exportiert. Oeffentlich, aber
+# trotzdem nicht eingecheckt: heute ist das der Wegwerfschluessel aus
+# make-test-key.sh, und ein zepos-keyring-Paket um diesen herum waere
+# eine Distribution, die einem Schluessel vertraut, dessen privater Teil
+# in irgendeinem Arbeitsverzeichnis liegt. Kommt der Release-Schluessel,
+# wird dessen oeffentlicher Teil bewusst hier eingecheckt.
+packaging/*/*.pub
+
+# ISO-Build
+iso/work/
+iso/out/
+*.iso
+
+# Bilder der Oberflaeche (tests/render/shoot.py)
+#
+# Ein Vollbild bei 1920x1080 ist ein knappes Megabyte, und es entsteht in
+# zwei Minuten neu. Was ein Bild BELEGT, gehoert in einen Bericht; das
+# Bild selbst gehoert nicht in die Geschichte des Zweiges.
+out/
+
+# Offline-Repo
+*.db
+*.db.tar.gz
+*.files
+*.files.tar.gz
+
+# Python
+__pycache__/
+*.pyc
+
+# Backups - im Ursprungsprojekt sind daraus 698 Dateien geworden.
+# Versionierung uebernimmt git, nicht das Dateisystem.
+*.backup.*
+
+# Editor
+.idea/
+.vscode/
+
+# Lokale Testumgebung
+.venv/
+.superpowers/
+
+# Kompilierte Katalog-Artefakte (po/build.sh)
+po/build/

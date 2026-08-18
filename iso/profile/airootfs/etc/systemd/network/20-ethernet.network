@@ -1,0 +1,47 @@
+# DHCP on whatever wired interface the machine has.
+#
+# WHY THE SMOKE IMAGE NEEDED NONE OF THIS AND THE INSTALLER DOES
+#     The session run measures a desktop and touches no repository, so
+#     the first boots of this image ran with no network at all and
+#     nothing noticed. Measured on the run of a4b03d8: systemd-networkd
+#     was started by systemd's own first-boot preset, brought `lo` up,
+#     and then had no .network file for enp0s2 - so the interface stayed
+#     down, `journalctl -b` shows not one DHCP line, and the guest had no
+#     address.
+#
+#     An installation cannot run that way. pacstrap fetches `base`,
+#     `linux` and the forty-odd Arch dependencies of zepos-desktop from
+#     the mirrors (spec §8.4: with a network, the base system comes from
+#     the pinned ALA snapshot and only the ZepOS packages come from the
+#     ISO), and archinstall's own sanity_check() waits - without a
+#     deadline - for `timedatectl` to report NTPSynchronized=yes, which
+#     never happens on a machine that cannot reach a time server.
+#
+# WHY systemd-networkd AND NOT NetworkManager
+#     networkd is already enabled and already running in this image;
+#     NetworkManager is installed (the generated status scripts call
+#     nmcli) but nothing starts it, and enabling a second manager for the
+#     same interface is how an image ends up with two DHCP clients. The
+#     INSTALLED system gets NetworkManager instead - archinstall's
+#     network_config type is "nm" - which is the right answer there and
+#     the wrong one here.
+#
+# Copied in shape from archiso's own releng profile, including the
+# Kind=!* exclusion: without it this matches virtual ethernet devices
+# too, and a container bridge or a VPN tap would get a DHCP client of its
+# own.
+[Match]
+Type=ether
+Kind=!*
+
+[Link]
+RequiredForOnline=routable
+
+[Network]
+DHCP=yes
+
+[DHCPv4]
+RouteMetric=100
+
+[IPv6AcceptRA]
+RouteMetric=100

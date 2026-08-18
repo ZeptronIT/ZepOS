@@ -1,0 +1,116 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# Aylur's GTK Shell (AGS), version 3.
+#
+# WHY THIS IS THE SECOND PACKAGE AND NOT THE TENTH
+#     Fifteen of the repository's templates generate AGS widgets - the
+#     control centre, the VPN dialog, the style editor, the notification
+#     daemon that replaces mako - and AGS is in no Arch repository
+#     (spec §4.3), so the first ISO shipped without it and not one of
+#     those fifteen has ever been executed by the program it is written
+#     for. Every other missing package hides a feature. This one hides a
+#     layer.
+#
+# WHAT `ags` ACTUALLY IS
+#     Not a daemon and not an interpreter. It is a Go command line tool
+#     that bundles the user's TypeScript with esbuild (compiled into the
+#     binary) and hands the result to gjs. So the runtime dependencies
+#     are gjs and the GObject libraries the bundle imports, and the build
+#     dependency is a Go toolchain. Three paths are compiled into the
+#     binary by meson - gjs, bash and libgtk4-layer-shell.so - which is
+#     why gtk4-layer-shell has to be present at BUILD time even though
+#     nothing links against it.
+#
+# WHY THE NPM DEPENDENCY IS A SOURCE AND NOT A BUILD STEP
+#     Upstream's meson installs node_modules/gnim, and the AUR recipe
+#     gets it there with `npm install` inside build(). That makes the
+#     build depend on a package manager reaching a registry and resolving
+#     a range (`gnim: ^1.9.1`), which is the opposite of a pinned build.
+#     The exact tarball is already pinned by upstream's own
+#     package-lock.json, integrity included, so it is listed here as a
+#     source with the checksum that lockfile implies. Verified: the
+#     sha512 of the file below is the `integrity` field of
+#     node_modules/gnim in ags 3.1.2's package-lock.json. npm is then not
+#     needed at all - neither to build nor to run.
+pkgname=aylurs-gtk-shell
+pkgver=3.1.2
+_gnimver=1.9.1
+pkgrel=1
+pkgdesc="Aylur's GTK Shell: the widget runtime behind ZepOS's fifteen AGS templates"
+arch=('x86_64')
+url="https://github.com/Aylur/ags"
+license=('GPL-3.0-only')
+
+# libastal-io and libastal-4 are what `import ... from "gi://Astal"`
+# resolves to, and AGS's own JavaScript library imports them before any
+# user code runs. They are not optional in the way upstream's optdepends
+# suggest: without them `ags run` exits on the first import.
+depends=('gjs' 'gtk4-layer-shell' 'gobject-introspection-runtime'
+         'libastal-io' 'libastal-4')
+makedepends=('go' 'meson' 'gtk4-layer-shell')
+optdepends=(
+    'dart-sass: compiles the style.scss that ags-style.template generates'
+    'libastal-notifd: the notification widget imports it'
+    'blueprint-compiler: for widgets written in blueprint rather than TSX'
+)
+provides=('ags')
+
+source=("ags-$pkgver.tar.gz::https://github.com/Aylur/ags/archive/refs/tags/v$pkgver.tar.gz"
+        "gnim-$_gnimver.tgz::https://registry.npmjs.org/gnim/-/gnim-$_gnimver.tgz")
+sha256sums=('7c9bf38cddfa9661ca3bc70268df0f3124174dad0d6ff85433445816471690f4'
+            'fb8afbe9619c33f80bc4773cff16a15a81fb2c7cb9eb4ab6d371604be57b4099')
+
+prepare() {
+    # An npm tarball unpacks to package/ whatever the package is called;
+    # meson installs node_modules/gnim by that name, so it is put there
+    # rather than resolved.
+    install -d "$srcdir/ags-$pkgver/node_modules"
+    rm -rf "$srcdir/ags-$pkgver/node_modules/gnim"
+    cp -a "$srcdir/package" "$srcdir/ags-$pkgver/node_modules/gnim"
+
+    # Blank the Go build id, so that two builds of this recipe produce
+    # the same binary.
+    #
+    # MEASURED, not guessed. Two builds of an unmodified 3.1.2 differ in
+    # exactly 40 bytes of an 11 MB binary: the .note.go.buildid and the
+    # .note.gnu.build-id that ld computes over content containing it.
+    # Every other byte, and every other file in the package, is
+    # identical - and the other four ZepOS packages are byte-for-byte
+    # equal across rebuilds already.
+    #
+    # It has to be done here rather than in GOFLAGS, and that is the
+    # whole reason this is a patch: meson.build passes its own -ldflags
+    # to `go build` (four -X assignments naming gjs, bash and
+    # libgtk4-layer-shell.so), and an explicit flag on the command line
+    # overrides the same flag in GOFLAGS. The AUR recipe's
+    # `-ldflags=-linkmode=external` is silently discarded for exactly
+    # this reason.
+    sed -i "s#^    + find_program('bash').full_path(),#    + find_program('bash').full_path()\n    + ' -buildid=',#" \
+        "$srcdir/ags-$pkgver/meson.build"
+    grep -q "buildid=" "$srcdir/ags-$pkgver/meson.build" \
+        || { echo "the -buildid patch did not apply; upstream moved" >&2; return 1; }
+}
+
+build() {
+    cd "$srcdir/ags-$pkgver"
+
+    # Arch's Go packaging flags. -trimpath and -mod=readonly are the two
+    # that matter here: the first keeps build paths out of the binary,
+    # the second makes the build fail rather than silently update go.sum
+    # if a module resolves differently from the pin.
+    export CGO_CPPFLAGS="${CPPFLAGS}"
+    export CGO_CFLAGS="${CFLAGS}"
+    export CGO_CXXFLAGS="${CXXFLAGS}"
+    export CGO_LDFLAGS="${LDFLAGS}"
+    export GOFLAGS="-buildmode=pie -trimpath -ldflags=-linkmode=external -mod=readonly -modcacherw"
+    export GOPATH="$srcdir/go"
+
+    arch-meson build
+    meson compile -C build
+}
+
+package() {
+    cd "$srcdir/ags-$pkgver"
+    meson install -C build --destdir "$pkgdir"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,0 +1,21 @@
+#!/bin/bash
+# Monitor color calibration script
+# Adjust XX, YY, ZZ values for your monitor's RGB settings
+
+# Check if ddcutil is installed
+if ! command -v ddcutil &> /dev/null; then
+    echo "ddcutil not found. Skipping monitor color adjustment."
+    exit 0
+fi
+
+# Check if we have permission to access i2c devices
+if ! ddcutil detect &> /dev/null; then
+    echo "Cannot access DDC/CI. Skipping monitor color adjustment."
+    exit 0
+fi
+
+# Set monitor colors (adjust values as needed)
+# VCP 16 = Video gain: Red
+# VCP 18 = Video gain: Green  
+# VCP 1A = Video gain: Blue
+ddcutil -d 1 setvcp 16 XX && ddcutil -d 1 setvcp 18 YY && ddcutil -d 1 setvcp 1a ZZ

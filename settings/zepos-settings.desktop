@@ -1,0 +1,106 @@
+[Desktop Entry]
+# Die Einstellungs-Anwendung, wie der Starter und das Dock sie sehen -
+# installiert nach /usr/share/applications/zepos-settings.desktop
+#
+# WARUM DIESE DATEI DER HALBE PUNKT DER GANZEN ANWENDUNG IST
+#     Ein Programm unter /usr/bin, das in keiner .desktop-Datei steht,
+#     gibt es fuer den Nutzer nicht. zepos-menu --show drun liest
+#     g_app_info_get_all(), und das liest genau dieses Verzeichnis; das
+#     Dock heftet an, was in src/apps.py steht, und auch das kommt von
+#     hier. Ohne diese vierzehn Zeilen waere die Anwendung ueber
+#     SUPER+SPACE nicht zu finden - also nur fuer den, der ihren Namen
+#     schon kennt, und das ist genau der Zustand, aus dem sie
+#     herausfuehren soll.
+#
+# WARUM DER NAME NICHT "ZepOS Einstellungen" IST
+#     Weil der Starter alphabetisch sortiert und die Liste eines Systems,
+#     auf dem alles mit demselben Wort anfaengt, keine Liste mehr ist.
+#     Apple nennt es "Systemeinstellungen" und nicht "macOS
+#     Systemeinstellungen". Der Bezug steht in Comment und in Keywords,
+#     wo er gesucht wird.
+#
+# WARUM Icon EIN NAME AUS DEM THEMA IST UND KEINE DATEI
+#     adwaita-icon-theme ist eine harte Abhaengigkeit dieses Pakets und
+#     traegt preferences-system. Eine eigene SVG waere ein Symbol, das
+#     neben allen anderen im Starter steht und als einziges nicht aus
+#     demselben Satz kommt.
+Name=Systemeinstellungen
+Comment=Groesse, Bildschirme, Leiste, Farben, Wetter und Aktualisierung von ZepOS
+Exec=/usr/bin/zepos-settings-gui
+TryExec=/usr/bin/zepos-settings-gui
+Icon=preferences-system
+Type=Application
+Terminal=false
+Categories=Settings;DesktopSettings;GTK;
+Keywords=zepos;einstellungen;schrift;groesse;farben;massstab;aktualisierung;settings;bildschirme;monitor;monitore;aufloesung;anordnung;displays;leiste;bar;dock;module;anheften;fuss;taskleiste;
+StartupNotify=true
+# Die Kennung, unter der das FENSTER auftritt - GTK setzt sie unter
+# Wayland aus der Anwendungskennung, also aus app.APPLICATION_ID.
+#
+# Sie steht hier, seit das Dock diese Anwendung anheftet (12.08.2026).
+# ags-dock.template ordnet ein offenes Fenster seinem Knopf ueber drei
+# Schreibweisen zu: den Programmnamen, die Kennung des Eintrags ohne
+# .desktop, und diese Zeile. Die ersten beiden ergeben "zepos-settings",
+# Hyprland meldet aber "de.zeptronit.zepos.Settings" - ohne diese Zeile
+# stuende die laufende Anwendung ein zweites Mal im Dock, neben ihrem
+# eigenen angehefteten Symbol.
+StartupWMClass=de.zeptronit.zepos.Settings
+# EINE AKTION JE SEITE, UND DAS IST DIE ANTWORT AUF EINE BESCHWERDE
+#
+#     GEMELDET am 12.08.2026: "ich finde den display manager wie nwg
+#     display nicht in der app suche".
+#
+#     Er hat recht, und der Grund ist eine Folge des Umbaus vom selben
+#     Tag: nwg-displays war ein PROGRAMM und stand deshalb im Starter.
+#     Sein Ersatz ist eine SEITE in dieser Anwendung, und eine Seite hat
+#     keinen Anwendungseintrag. Wer "bildschirm" tippt, fand nichts -
+#     obwohl das Werkzeug da ist. Fuer einen Nutzer ist "vorhanden, aber
+#     unauffindbar" dasselbe wie "fehlt"; das steht schon im Kopf von
+#     menu/zepos_menu/index.py, ueber ein anderes Werkzeug.
+#
+#     Die Freedesktop-Spezifikation kennt dafuer Desktop Actions, und
+#     GNOME liefert seine Systemeinstellungen genauso aus. Jede Aktion
+#     ist eine eigene Zeile im Starter, mit eigenem Namen und eigener
+#     Exec-Zeile - also sieben auffindbare Seiten statt einer
+#     auffindbaren Anwendung.
+#
+#     Die Liste steht in settings/zepos_settings_gui/model.py (PAGES).
+#     Hier ist ihr zweiter Abdruck, und tests/settings/
+#     test_settings_model.py haelt beide gegeneinander: eine achte
+#     Seite, die hier fehlt, ist eine Seite, die niemand findet.
+Actions=groesse;bildschirme;leiste;thema;farben;wetter;aktualisierung;
+
+[Desktop Action groesse]
+Name=Groesse
+Exec=/usr/bin/zepos-settings-gui --page groesse
+Icon=preferences-desktop-font-symbolic
+
+[Desktop Action bildschirme]
+Name=Bildschirme
+Exec=/usr/bin/zepos-settings-gui --page bildschirme
+Icon=video-display-symbolic
+
+[Desktop Action leiste]
+Name=Leiste
+Exec=/usr/bin/zepos-settings-gui --page leiste
+Icon=view-list-ordered-symbolic
+
+[Desktop Action thema]
+Name=Thema
+Exec=/usr/bin/zepos-settings-gui --page thema
+Icon=preferences-desktop-theme-symbolic
+
+[Desktop Action farben]
+Name=Farben
+Exec=/usr/bin/zepos-settings-gui --page farben
+Icon=applications-graphics-symbolic
+
+[Desktop Action wetter]
+Name=Wetter
+Exec=/usr/bin/zepos-settings-gui --page wetter
+Icon=weather-few-clouds-symbolic
+
+[Desktop Action aktualisierung]
+Name=Aktualisierung
+Exec=/usr/bin/zepos-settings-gui --page aktualisierung
+Icon=software-update-available-symbolic

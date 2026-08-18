@@ -1,0 +1,234 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# The installer: one source tree, three packages (spec §4.2).
+#
+# WHY THREE AND NOT ONE
+#     Spec §8.1 builds the installer in three layers - a surface fills a
+#     validated data model, the model is translated to archinstall, and
+#     archinstall executes. The point of that arrangement is that the
+#     surface is replaceable without touching the installation logic, and
+#     a single package would throw the property away at the last step:
+#     GTK4, libadwaita and PyGObject would arrive on every machine that
+#     installs the installer, including the one where the graphical
+#     session did not start.
+#
+#     That machine is the whole reason the TUI exists (§8.5: "Kommt diese
+#     nicht hoch [...] startet automatisch die TUI"). A text interface
+#     that drags in the toolkit whose absence it exists to survive is not
+#     a fallback, it is the same dependency with a second name. So:
+#
+#       zepos-installer       core, data model, archinstall translation
+#       zepos-installer-gui   the GTK4 surface, and the only package
+#                             here that names a toolkit
+#       zepos-installer-tui   the text surface - depends on the core and
+#                             on nothing else at all
+#
+#     packaging/verify-install.sh measures the last one rather than
+#     asserting it: it installs zepos-installer-tui into a container with
+#     no GTK4 on it and runs the interface.
+#
+# WHY THE THREE ARE NOT IN zepos-desktop
+#     Spec §4.2, one line under the table: "Die drei Installer-Pakete
+#     liegen nur in der ISO, nicht im installierten System." An installed
+#     ZepOS that carries the program which erases disks has a disk-eraser
+#     in its menu for no reason - and it would carry archinstall, iwd and
+#     the whole live-environment apparatus with it. The ISO names all
+#     three in iso/profile/packages.x86_64; the meta package names none,
+#     and tests/packaging/test_recipes.py fails if that ever changes.
+#
+# WHY THE MODULES ARE NOT IN site-packages
+#     `installer` is a top-level name python-installer - the PEP 517
+#     install tool, a makedepend of half of Arch - already owns in
+#     /usr/lib/python3.X/site-packages. Two packages claiming
+#     .../site-packages/installer/__init__.py is a pacman file conflict,
+#     not a shadowing problem, and it would be discovered by whoever
+#     installs the wrong pair. So the tree goes to
+#     /usr/share/zepos-installer, which is the split zepos-config already
+#     uses, and installer/bin/zepos-install resolves that directory
+#     before its first import - see its header.
+#
+# WHY THE VERSION IS NOT WRITTEN HERE
+#     Same as zepos-config: it lives in VERSION at the repository root
+#     and is read relative to this file's own location, so `makepkg` in
+#     this directory and packaging/build.sh from the repository root see
+#     the same number.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgbase=zepos-installer
+pkgname=('zepos-installer' 'zepos-installer-gui' 'zepos-installer-tui')
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+arch=('any')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+# msgfmt, for the German catalogue. po/build.sh is the same script a
+# checkout runs; the catalogue is compiled here rather than committed
+# because a .mo in git is a build artefact that nobody notices going
+# stale against the .po next to it.
+makedepends=('gettext')
+
+# Produced by packaging/build.sh from the working tree, with mtimes
+# clamped to SOURCE_DATE_EPOCH. SKIP for the same reason zepos-config
+# skips: a checksum of a file the same script wrote moments earlier
+# verifies nothing that is not already true.
+source=("zepos-installer-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+# Where the python tree lands, and where installer/bin/zepos-install
+# looks for it when it is not running out of a checkout. Written once
+# here and asserted in each package function, because a package that
+# installs one directory away produces a command that exits with the
+# "could not be found" message and no other symptom.
+_root="usr/share/zepos-installer"
+
+_src() { printf '%s/zepos-installer-%s' "$srcdir" "$pkgver"; }
+
+build() {
+    # The same script a development checkout runs, pointed at a staging
+    # directory instead of po/build. Its header says so; this is the
+    # caller it was written for.
+    cd "$(_src)"
+    bash po/build.sh "$srcdir/locale"
+}
+
+# One subdirectory of the python tree, with the modes a package sets
+# rather than the modes a working tree happened to have.
+#
+# __pycache__ is excluded because bytecode compiled for one Python
+# version is wrong on the next one, silently - the same reason
+# zepos-config excludes it.
+_install_modules() {
+    local subdir="$1"
+    install -d "$pkgdir/$_root/installer/$subdir"
+    install -Dm644 -t "$pkgdir/$_root/installer/$subdir" \
+        "$(_src)/installer/$subdir"/*.py
+
+    test -f "$pkgdir/$_root/installer/$subdir/__init__.py" || {
+        echo "installer/$subdir has no __init__.py in the package;" >&2
+        echo "the import in /usr/bin/zepos-install would not resolve" >&2
+        return 1
+    }
+}
+
+_license() {
+    install -Dm644 "$(_src)/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
+
+package_zepos-installer() {
+    pkgdesc="ZepOS installer core: the validated data model and its translation to archinstall"
+
+    # archinstall does the partitioning, the bootloader and the base
+    # installation, and spec §8.1 is explicit about why nothing here
+    # reimplements them: "Ein eigener Partitionierer waere Code, dessen
+    # Fehler fremde Festplatten loeschen." The pinned Arch snapshot
+    # carries archinstall 4.4, which is the version
+    # installer/core/translate.py and installer/core/runner.py were read
+    # and tested against - the config keys, the Size/Unit types and the
+    # spelling of --mountpoint all come from that release.
+    #
+    # The three tools below are called by this package DIRECTLY, not
+    # through archinstall, which is why they are named even though
+    # archinstall pulls two of them in anyway:
+    #
+    #   util-linux   disks.py runs lsblk twice - once for the device
+    #                list, once for what is mounted
+    #   openssl      passwords.py hashes with `openssl passwd -6 -stdin`,
+    #                because python removed the crypt module in 3.13
+    #   iwd          wifi.py drives iwctl to find and join a network
+    #                before anything is installed (§8.2 step 2)
+    #
+    # A dependency that is only true transitively is a dependency that
+    # disappears when somebody else's package changes its mind.
+    depends=('python' 'archinstall' 'util-linux' 'openssl' 'iwd')
+
+    # Neither surface is a hard dependency, and the direction is what
+    # decides it: -gui and -tui depend on this package, so naming either
+    # of them here would close the cycle. The ISO installs all three
+    # (spec §8), which is the only configuration this is ever in.
+    optdepends=(
+        'zepos-installer-tui: the text interface, and the fallback when the graphical session does not start'
+        'zepos-installer-gui: the GTK4 interface'
+    )
+
+    # The package root of the python tree. Owned by this package and by
+    # this one only: /usr/share/zepos-installer/installer/__init__.py in
+    # two packages is a file conflict, and pacman would refuse to install
+    # the second surface next to the first.
+    install -Dm644 "$(_src)/installer/__init__.py" \
+        "$pkgdir/$_root/installer/__init__.py"
+    _install_modules core
+
+    # The entry point. It chooses a surface, and it is in this package
+    # rather than in either surface package because it belongs to
+    # neither: §8.5's fallback is a decision taken before either one has
+    # run.
+    install -Dm755 "$(_src)/installer/bin/zepos-install" \
+        "$pkgdir/usr/bin/zepos-install"
+
+    # The catalogue, at the path installer/core/i18n.py's SYSTEM_LOCALEDIR
+    # names. In the core package because the domain is one domain: core,
+    # gui and tui share zepos-installer.mo, and splitting a gettext
+    # catalogue along package lines would leave the fallback interface
+    # speaking half German.
+    install -Dm644 "$srcdir/locale/de/LC_MESSAGES/zepos-installer.mo" \
+        "$pkgdir/usr/share/locale/de/LC_MESSAGES/zepos-installer.mo"
+
+    _license
+}
+
+package_zepos-installer-gui() {
+    pkgdesc="GTK4 surface for the ZepOS installer"
+
+    # The only package in this recipe that names a toolkit. gi.require_version
+    # in installer/gui/app.py asks for Gtk 4.0 and Adw 1 by name, and
+    # python-gobject is what makes `import gi` exist at all.
+    #
+    # The last two are the families installer/gui/branding.py names.
+    # fontconfig answers a family it does not have by substituting one it
+    # does, so their absence is not an error: it is a perfectly working
+    # installer in somebody else's typeface, on the medium a customer is
+    # handed, with nothing anywhere saying so.
+    depends=("zepos-installer=$pkgver-$pkgrel" 'gtk4' 'libadwaita' 'python-gobject'
+             'ttf-roboto' 'ttf-fira-code')
+
+    _install_modules gui
+
+    # The logo, and it is in -gui rather than in the core package for the
+    # reason §8.5 exists: the text surface has no use for an SVG, and
+    # everything the graphical one needs that lands in the core package
+    # is one more thing the fallback carries in order to survive the
+    # graphical one's absence.
+    #
+    # Staged into this recipe's tarball out of src/branding/ by
+    # packaging/build.sh, so this file and the wallpaper zepos-config
+    # installs come from one place in the tree. A second copy committed
+    # under installer/ would be the same picture with two futures.
+    install -Dm644 "$(_src)/branding/zepos-logo.svg" \
+        "$pkgdir/usr/share/zepos-installer/branding/zepos-logo.svg"
+    # The PNG is what the header actually draws - see
+    # packaging/make-brand-assets.sh for why the installer does not render
+    # the SVG itself. The SVG stays because it is the source.
+    install -Dm644 "$(_src)/branding/zepos-wordmark.png" \
+        "$pkgdir/usr/share/zepos-installer/branding/zepos-wordmark.png"
+    # The picture the window is drawn on, the same one the boot menu
+    # uses. See packaging/make-brand-assets.sh.
+    install -Dm644 "$(_src)/branding/zepos-backdrop.png" \
+        "$pkgdir/usr/share/zepos-installer/branding/zepos-backdrop.png"
+
+    _license
+}
+
+package_zepos-installer-tui() {
+    pkgdesc="Text surface for the ZepOS installer, and the fallback when the graphical session does not start"
+
+    # Deliberately one dependency. Spec §8.5: this is what runs when
+    # GTK4 cannot. Anything here that pulls a toolkit in - directly or
+    # through a chain - defeats the fallback, and it would do so
+    # silently, because a machine that CAN run GTK4 would never notice.
+    depends=("zepos-installer=$pkgver-$pkgrel")
+
+    _install_modules tui
+    _license
+}

@@ -1,0 +1,447 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Was nach der Anmeldung passiert. /usr/share/wayland-sessions/
+# zepos.desktop nennt dieses Skript, greetd fuehrt es als der gerade
+# angemeldete Benutzer aus.
+#
+# WARUM DAS NICHT EINFACH "Hyprland" IST
+#     Weil ZepOS seine Konfiguration unmittelbar VOR dem Compositor
+#     erzeugt und nicht davor erzeugen KANN, wenn der Compositor schon
+#     laeuft: Hyprland liest die plugin=-Zeilen beim Parsen, also bevor
+#     irgendetwas von ZepOS in der Sitzung laufen koennte. src/plugins.py
+#     hat die vollstaendige Begruendung und benennt "ein Login ueber
+#     einen Display-Manager an start-hyprland vorbei" als die Luecke, die
+#     der Generator nicht schliessen kann. Dieses Skript ist die
+#     Schliessung: der Weg in die Sitzung geht durch start-hyprland.
+#
+# WARUM HIER UEBERHAUPT ETWAS ERZEUGT WIRD
+#     Gemessen an einer Installation vom Auslieferungsmedium: das Paket
+#     zepos-config legt nur /etc/skel/.config/zepos/user-settings.json
+#     an. Es legt keinen einzigen erzeugten Konfigurationsteil an, und es
+#     kann das auch nicht - die Dateien gehoeren einem Benutzer, den es
+#     zur Bauzeit nicht gibt. Auf einer frisch installierten Maschine
+#     existiert ~/.local/bin/start-hyprland deshalb nicht, und ohne
+#     diesen Block waere die erste Anmeldung eine Anmeldung in nichts.
+#
+#     Das Rauchbild macht dasselbe von Hand: zepos-smoke ruft
+#     `zepos-generate --all` und danach den Starter. Hier ist es an die
+#     Anmeldung gerueckt, weil ein installiertes System keinen
+#     Messlaeufer hat, der das fuer es tut.
+set -u
+
+ZEPOS_USER_ROOT="${ZEPOS_USER_ROOT:-${XDG_CONFIG_HOME:-$HOME/.config}/zepos}"
+PROFILE_DIR="$ZEPOS_USER_ROOT/profiles"
+HYPR_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/hypr"
+LAUNCHER="$HOME/.local/bin/start-hyprland"
+
+# Die Marke, die die Selbstaktualisierung hinterlaesst, wenn sie Pakete
+# getauscht hat, und der Zeitstempel dieses Kontos daneben. Beides sind
+# Dateien, deren AENDERUNGSZEIT die Aussage ist; steht nichts drin, kann
+# auch nichts darin falsch sein.
+ZEPOS_STATE_ROOT="${ZEPOS_STATE_ROOT:-/var/lib/zepos}"
+UPDATE_MARKER="$ZEPOS_STATE_ROOT/regenerate-required"
+GENERATED_STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/zepos/generated-at"
+
+# Und dieselbe Bitte von DIESEM Konto: die Einstellungs-Anwendung legt
+# sie ab, sobald jemand etwas gespeichert hat, ohne "Jetzt anwenden" zu
+# waehlen. src/paths.py SESSION_REGENERATE_MARKER haelt den Namen auf der
+# Python-Seite und begruendet, warum es zwei getrennte Dateien sind;
+# tests/settings/test_settings_model.py haelt beide Pfade gegeneinander, weil ein
+# Bash-Skript kein Python importieren kann.
+SETTINGS_MARKER="${XDG_STATE_HOME:-$HOME/.local/state}/zepos/regenerate-required"
+
+# Unter XDG_STATE_HOME und nicht unter XDG_RUNTIME_DIR: eine Sitzung, die
+# nicht hochkommt, nimmt ihr Laufzeitverzeichnis beim Abmelden mit, und
+# genau dann will jemand nachlesen, woran es lag.
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/zepos"
+LOG="$STATE/session.log"
+mkdir -p "$STATE" 2>/dev/null || LOG=/dev/null
+
+log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" >>"$LOG"; }
+
+log "=== Sitzungsstart, Benutzer $(id -un), vt=${XDG_VTNR:-keine}, runtime=${XDG_RUNTIME_DIR:-keins}"
+
+# --------------------------------------------------------------------
+# Der PATH der Sitzung
+# --------------------------------------------------------------------
+# GEMELDET am 17.08.2026: "das source bash command soll dort dann auch
+# auto ausgefuehrt werden sodass alles direkt funktioniert" - gemeint war
+# die Anleitung, die in JEDEM Erzeugungsprotokoll einer frischen
+# Installation steht:
+#
+#     ⚠ WARNING: ~/.local/bin is NOT in your PATH!
+#     Add this to your ~/.zshrc or ~/.bashrc:
+#       export PATH="$HOME/.local/bin:$PATH"
+#     Then run: source ~/.zshrc
+#
+# Sie kommt aus ensure_local_bin() in src/generate_config.sh, und sie hat
+# RECHT: der Generator lief mit einem PATH ohne dieses Verzeichnis. Er
+# laeuft naemlich hier, aus diesem Skript heraus (`zepos-generate --all`,
+# weiter unten), und dieses Skript startet greetd - mit dem PATH von
+# systemd und sonst nichts. Eine Anleitung an einen Menschen ist die
+# falsche Antwort auf eine Bedingung, die das Programm selbst herstellen
+# kann.
+#
+# WARUM AN DIESER STELLE UND NICHT IN ~/.zshrc
+#     In ~/.zshrc steht die Zeile auch (und muss dort stehen, fuer die
+#     Schale auf einer Konsole). Aber ~/.zshrc gilt fuer SCHALEN. Diese
+#     Sitzung startet gleich einen Compositor, und alles, was der
+#     startet - die Leiste, das Dock, jedes Programm aus dem Starter -
+#     erbt seinen PATH von hier, nicht von einer Anmeldeschale. Genau
+#     dort liegen die erzeugten Hilfsskripte: ~/.local/bin/start-hyprland
+#     ist die naechste Zeile, die dieses Skript ausfuehrt.
+#
+# Vorangestellt und nicht angehaengt, damit ein eigenes Skript ein
+# gleichnamiges des Systems ueberschreiben kann - das ist der Zweck des
+# Verzeichnisses. Und nur, wenn es nicht schon drinsteht: ein PATH, der
+# bei jeder Anmeldung um denselben Eintrag waechst, ist derselbe Fehler,
+# den die Vorlage der Schale mit `typeset -U` vermeidet.
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+mkdir -p "$HOME/.local/bin" 2>/dev/null || true
+log "--- PATH=$PATH"
+
+# --------------------------------------------------------------------
+# Welche Schale die Terminals dieser Sitzung oeffnen
+# --------------------------------------------------------------------
+# GEMESSEN am 17.08.2026 an der Wurzel der letzten Installation
+# (iso/out/release-target.img), in /etc/passwd - das siebte Feld des
+# angelegten Kontos, also seine Anmeldeschale, lautet dort
+#
+#     /usr/bin/bash
+#
+# (Die Zeile steht hier absichtlich nur zur Haelfte: ihr sechstes Feld
+# ist ein Heimatverzeichnis mit einem Kontonamen darin, und der Waechter
+# tests/src/test_inventory.py haelt genau diese Form aus src/ heraus -
+# ein Pfad, den es nur auf einer Maschine gibt, ist der Fehler, den
+# dieses Projekt schon einmal ausgeliefert hat.)
+#
+# Das angelegte Konto bekommt BASH. Im Heimatverzeichnis desselben Kontos
+# liegen aber ~/.zshrc (8830 Bytes) und ~/.p10k.zsh (13131 Bytes), beide
+# von zepos-generate erzeugt, und zepos-desktop haengt hart an zsh,
+# zsh-theme-powerlevel10k und zwei zsh-Plugins. Auf dem Abnahmebild
+# iso/out/run-release-installed/key-41-15-super-q-terminal.png steht
+# darum
+#
+#     [tester@zepos ~]$
+#
+# also der eingebaute Prompt von bash - waehrend die ganze Prompt-Arbeit
+# dieses Projekts fuer zsh gemacht ist. Der Nutzer hat das am 17.08.2026
+# als "warum ist das so anders" gemeldet; das "zepos" darin ist uebrigens
+# nicht ein Verzeichnis, sondern der RECHNERNAME in bash' `\u@\h`.
+#
+# WARUM DIE VARIABLE UND NICHT chsh
+#     Weil die dauerhafte Antwort dem Installateur gehoert - dort wird
+#     das Konto angelegt, und dort gehoert die Anmeldeschale hin. `chsh`
+#     aus einer laufenden Sitzung heraus verlangt eine Kennwortabfrage,
+#     `usermod` verlangt root; beides mitten in einer Anmeldung ist
+#     schlimmer als der Zustand, den es behebt.
+#
+#     $SHELL reicht fuer das, was der Nutzer SIEHT. NACHGELESEN am
+#     17.08.2026 in kitty' eigener Quelle,
+#     /usr/lib/kitty/kitty/constants.py Zeile 166:
+#
+#         shell_path = os.environ.get('SHELL') or pwd.getpwuid(
+#             os.geteuid()).pw_shell or '/bin/sh'
+#
+#     $SHELL kommt VOR dem Eintrag in /etc/passwd. Jedes Terminal dieser
+#     Sitzung oeffnet damit die Schale, fuer die die Konfiguration
+#     geschrieben ist.
+#
+# WARUM NUR bash ERSETZT WIRD
+#     Weil bash keine Wahl ist, sondern die Vorgabe von useradd. Wer per
+#     `chsh` fish oder eine andere Schale eingetragen hat, hat sich
+#     ENTSCHIEDEN - und eine Sitzung, die eine Entscheidung ueberschreibt,
+#     ist ein Fehler, kein Dienst.
+zepos_schale="${SHELL:-$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)}"
+case "${zepos_schale:-}" in
+    */bash|"")
+        if [ -x /usr/bin/zsh ]; then
+            export SHELL=/usr/bin/zsh
+            log "--- SHELL war '${zepos_schale:-leer}', fuer diese Sitzung auf /usr/bin/zsh gesetzt"
+        else
+            log "--- SHELL ist '${zepos_schale:-leer}' und /usr/bin/zsh fehlt - der Prompt bleibt der von bash"
+        fi
+        ;;
+    *)
+        log "--- SHELL ist '$zepos_schale' - eine eigene Wahl, sie bleibt"
+        ;;
+esac
+unset zepos_schale
+
+# --------------------------------------------------------------------
+# Die Standardordner des Heimatverzeichnisses
+# --------------------------------------------------------------------
+# GEMELDET am 13.08.2026, nach einer Installation: "wenn der user
+# eingerichtet ist fehlen die standard ordner strukturen wie download
+# dokumente bilder usw. das fehlt alles warum ?"
+#
+# GEMESSEN an der Zielplatte desselben Laufs: xdg-user-dirs-0.20-1 IST
+# installiert - es kommt als harte Abhaengigkeit von nautilus mit -, und
+# das Heimatverzeichnis des angelegten Kontos enthielt trotzdem nur
+# Punktdateien. Kein Downloads, kein Dokumente, kein Bilder.
+#
+# WARUM DAS PAKET ALLEIN NICHTS TUT
+#     Es liefert das Programm. Angelegt werden die Ordner von
+#     `xdg-user-dirs-update`, und das startet ueberall sonst ueber
+#     /etc/xdg/autostart/ - eine Mechanik, die eine Desktop-Umgebung
+#     abarbeitet. Hyprland tut das nicht, und ZepOS legt auch keinen
+#     `dex` oder eine systemd-Nutzereinheit dafuer daneben. Das Werkzeug
+#     lag also da und wurde nie gerufen.
+#
+# WARUM HIER UND NICHT ALS exec-once IN DER HYPRLAND-KONFIGURATION
+#     Ein exec-once laeuft NEBEN dem Compositor, also moeglicherweise
+#     nachdem der Dateimanager schon offen ist - und der liest
+#     ~/.config/user-dirs.dirs beim Start. Hier laeuft es davor, und die
+#     Ordner sind da, bevor irgendetwas sie sucht.
+#
+# WARUM BEI JEDER ANMELDUNG UND NICHT NUR BEI DER ERSTEN
+#     `xdg-user-dirs-update` ist von sich aus wiederholbar: es legt nur
+#     an, was fehlt, und richtet sich nach ~/.config/user-dirs.dirs, wenn
+#     der Nutzer dort etwas umgestellt hat. Ein geloeschter Ordner kommt
+#     damit zurueck, eine Umbenennung bleibt bestehen.
+#
+# UND WARUM DER FEHLSCHLAG NICHTS KOSTET
+#     Ohne die Ordner fehlen Lesezeichen im Dateimanager. Ohne Sitzung
+#     fehlt alles. Ein Rueckgabewert != 0 darf deshalb nicht bis zum
+#     `set -u` durchschlagen - er wird protokolliert und nicht mehr.
+if command -v xdg-user-dirs-update >/dev/null 2>&1; then
+    xdg-user-dirs-update >>"$LOG" 2>&1 \
+        && log "--- xdg-user-dirs-update: Standardordner geprueft" \
+        || log "--- xdg-user-dirs-update rc=$? (die Standardordner fehlen)"
+else
+    log "--- xdg-user-dirs-update fehlt: keine Standardordner im Heimatverzeichnis"
+fi
+
+# --------------------------------------------------------------------
+# Die erste Anmeldung - und die erste nach einer Aktualisierung
+# --------------------------------------------------------------------
+# WARUM DIE ZWEITE BEDINGUNG HIER STEHT UND NICHT IM AKTUALISIERER
+#     Ein `pacman -Syu` kann zepos-config austauschen, waehrend der
+#     Schreibtisch laeuft. Die Vorlagen sind dann neu und das Erzeugte
+#     unter ~/.config ist alt - und das MUSS so bleiben, solange die
+#     Sitzung laeuft: generate_config.sh beendet an seinem Ende Waybar
+#     und AGS, damit die neue Konfiguration greift. Aus einem Zeitgeber
+#     heraus waere das eine Leiste, die dem Nutzer mitten in der Arbeit
+#     verschwindet. Genau das ist am 11.08.2026 auf der Maschine des
+#     Entwicklers passiert.
+#
+#     src/update.py fasst deshalb nichts an und legt nur eine Marke ab.
+#     Hier, vor dem Compositor, ist die einzige Stelle, an der ein
+#     vollstaendiges Neuerzeugen keine laufende Sitzung trifft.
+#
+# WARUM ZWEI DATEIEN VERGLICHEN WERDEN UND DIE MARKE NICHT GELOESCHT WIRD
+#     Die Marke gehoert root (sie liegt unter /var/lib), diese Sitzung
+#     nicht. Ein Loeschen scheiterte still - und auf einer Maschine mit
+#     zwei Konten waere die Marke ohnehin fuer beide gedacht: jedes Konto
+#     hat sein eigenes Erzeugtes und braucht seinen eigenen Vergleich.
+#
+# WARUM DIE DRITTE BEDINGUNG ANDERS GEBAUT IST ALS DIE ZWEITE
+#     Die Marke der Einstellungs-Anwendung gehoert DIESEM Konto. Sie
+#     wird deshalb geloescht statt datiert: die Bitte ist mit dem
+#     Erzeugen erfuellt, und eine erfuellte Bitte, die liegen bleibt,
+#     kostet jede weitere Anmeldung dieselben Sekunden schwarzen
+#     Bildschirm. Ein Zeitstempelvergleich waere hier zusaetzlich falsch
+#     herum: waehlt jemand in der Anwendung "Jetzt anwenden", ist neu
+#     erzeugt worden, ohne dass GENERATED_STAMP sich bewegt - die
+#     Anwendung raeumt die Marke dann selbst weg.
+regenerate=false
+if [[ ! -x "$LAUNCHER" ]]; then
+    log "--- $LAUNCHER fehlt, das ist die erste Anmeldung"
+    regenerate=true
+elif [[ -e "$UPDATE_MARKER" && "$UPDATE_MARKER" -nt "$GENERATED_STAMP" ]]; then
+    log "--- $UPDATE_MARKER ist neuer als $GENERATED_STAMP: aktualisiert worden"
+    regenerate=true
+elif [[ -e "$SETTINGS_MARKER" ]]; then
+    log "--- $SETTINGS_MARKER liegt vor: in den Einstellungen wurde etwas geaendert"
+    regenerate=true
+fi
+
+# Vor dem Erzeugen und nicht danach: laeuft der Generator in einen
+# Fehler, ist die Bitte trotzdem beantwortet worden, und eine Marke, die
+# nach jedem Fehlschlag liegen bleibt, macht aus einem kaputten Lauf eine
+# kaputte Anmeldung - jedes Mal wieder.
+if $regenerate; then
+    rm -f "$SETTINGS_MARKER" 2>/dev/null || true
+fi
+
+if $regenerate; then
+    log "--- zepos-generate --all"
+    zepos-generate --all >>"$LOG" 2>&1
+    log "--- zepos-generate --all rc=$?"
+    # Der Zeitstempel wird auch dann gesetzt, wenn das Erzeugen
+    # fehlgeschlagen ist. Sonst versucht es jede weitere Anmeldung
+    # wieder, jedes Mal mit denselben 30 Sekunden schwarzem Bildschirm,
+    # und der Fehler steht trotzdem nur im Protokoll. Der Block darunter
+    # faengt den Fall ab, in dem es wirklich nichts zu starten gibt.
+    #
+    # ${...%/*} statt dirname: eine Sitzung startet mit dem PATH, den
+    # greetd ihr gibt, und je weniger fremde Programme dieser Weg
+    # braucht, desto weniger kann daran scheitern. Gemessen in der
+    # eigenen Testsuite, deren Sitzungen unter `env -i` mit einem
+    # Stub-Verzeichnis als ganzem PATH laufen: "dirname: command not
+    # found", mitten in der ersten Anmeldung.
+    mkdir -p "${GENERATED_STAMP%/*}" 2>/dev/null
+    : >"$GENERATED_STAMP" 2>/dev/null || true
+fi
+
+if [[ ! -x "$LAUNCHER" ]]; then
+    # Nicht stillschweigend beenden. greetd startet nach einer beendeten
+    # Sitzung wieder den Greeter, und ein Bildschirm, der ohne ein Wort
+    # zur Anmeldemaske zurueckspringt, ist die Art Fehler, die niemand
+    # findet. Die Zeile steht auf der Konsole UND im Protokoll.
+    printf '%s\n' \
+        "ZepOS: $LAUNCHER wurde nicht erzeugt." \
+        "Die Sitzung kann nicht starten. Einzelheiten: $LOG" \
+        "Auf einer Konsole ([Strg]+[Alt]+[F2]) zeigt 'zepos-doctor', was fehlt." >&2
+    log "!!! Sitzung nicht gestartet: der Starter wurde nicht erzeugt"
+    exit 1
+fi
+
+# --------------------------------------------------------------------
+# Die Tastaturbelegung des Desktops
+# --------------------------------------------------------------------
+# GEFUNDEN am 17.08.2026, waehrend die Leiste eine Tastaturanzeige bekam:
+# hyprland-universal-config.template hatte `kb_layout = de` FEST
+# EINGETRAGEN - fuer jede Installation dieselbe Zeile.
+#
+# Was das heisst: der Assistent laesst Deutsch oder Englisch waehlen, und
+# die Wahl kommt ueberall an ausser auf dem Desktop. Wer ZepOS auf
+# Englisch installiert, bekommt eine englische Konsole, eine englische
+# Passphrase-Abfrage - und eine deutsche Tastatur, sobald die
+# Arbeitsflaeche da ist. Gemeldet hat das niemand, weil bisher niemand
+# ZepOS auf Englisch installiert hat.
+#
+# WARUM DIE ENTSCHEIDUNG HIER FAELLT UND NICHT IN DER VORLAGE
+#     Die Vorlage wird EINMAL erzeugt und an ALLE ausgeliefert; die
+#     Belegung ist eine Eigenschaft der einzelnen Maschine. Genau dafuer
+#     bindet die Vorlage an acht Stellen maschinenlokale Dateien ein
+#     (`source = ~/.config/hypr/...`), und keyboard.conf ist die neunte.
+#     Sie wird bei JEDER Anmeldung neu geschrieben: aendert jemand die
+#     Belegung mit `localectl`, gilt sie ab der naechsten Anmeldung, ohne
+#     dass irgendetwas nachgezogen werden muss.
+#
+# DREI QUELLEN, IN DIESER REIHENFOLGE, UND KEINE VIERTE TABELLE
+#     1. XKB_DEFAULT_LAYOUT aus der Umgebung. Das hat zepos-greeter
+#        bereits aufgeloest (siehe dort, Abschnitt "keyboard"); ist es
+#        da, ist die Frage beantwortet. Ob greetd es durch die
+#        PAM-Sitzung durchreicht, ist NICHT zugesichert - deshalb steht
+#        es hier als erste und nicht als einzige Quelle.
+#     2. XKBLAYOUT aus /etc/vconsole.conf. Diese Zeile schreibt
+#        PLYMOUTH_COMMAND (installer/core/translate.py) beim
+#        Installieren auf verschluesselten Platten, damit die
+#        Passphrase-Abfrage auf der richtigen Belegung tippt.
+#     3. KEYMAP aus derselben Datei, uebersetzt ueber
+#        /usr/share/systemd/kbd-model-map. archinstall schreibt NUR
+#        KEYMAP; ohne diesen Schritt bliebe eine unverschluesselte
+#        englische Installation deutsch.
+#
+#     Alle drei lesen, was systemd ohnehin fuehrt. Die Tabelle ist die
+#     des systemd-Pakets und keine getippte - dieselbe, aus der auch
+#     zepos-greeter und PLYMOUTH_COMMAND lesen.
+#
+# UND "de" ALS RUECKFALL, AUSDRUECKLICH
+#     Dieselbe Wahl wie in zepos-greeter, aus demselben Grund: "us" zu
+#     raten stellte genau den Fehler wieder her, den dieser Block
+#     entfernt.
+ZEPOS_SESSION_ROOT="${ZEPOS_SESSION_ROOT:-}"
+VCONSOLE="$ZEPOS_SESSION_ROOT/etc/vconsole.conf"
+KBD_MAP="$ZEPOS_SESSION_ROOT/usr/share/systemd/kbd-model-map"
+
+# Nur die eine Zuweisung lesen und nichts ausfuehren: vconsole.conf ist
+# eine systemd-Umgebungsdatei, kein Shell-Skript, und `source` darauf
+# wuerde ausfuehren, was jemand hineinschreibt.
+vconsole_wert() {
+    [[ -r "$VCONSOLE" ]] || return 1
+    sed -n "s/^[[:space:]]*$1=\"\{0,1\}\([^\"[:space:]]*\)\"\{0,1\}.*/\1/p" \
+        "$VCONSOLE" | tail -n 1
+}
+
+kb_layout="${XKB_DEFAULT_LAYOUT:-}"
+kb_variant="${XKB_DEFAULT_VARIANT:-}"
+kb_herkunft="der Umgebung des Greeters"
+
+if [[ -z "$kb_layout" ]]; then
+    kb_layout="$(vconsole_wert XKBLAYOUT || true)"
+    if [[ -n "$kb_layout" ]]; then
+        kb_variant="$(vconsole_wert XKBVARIANT || true)"
+        kb_herkunft="XKBLAYOUT in /etc/vconsole.conf"
+    fi
+fi
+
+if [[ -z "$kb_layout" ]]; then
+    kb_keymap="$(vconsole_wert KEYMAP || true)"
+    if [[ -n "$kb_keymap" && -r "$KBD_MAP" ]]; then
+        # Spalten: Konsolenbelegung, XKB-Layout, Modell, Variante.
+        # "-" heisst leer.
+        read -r kb_layout kb_variant < <(
+            awk -v want="$kb_keymap" \
+                '$1 == want { print $2, ($4 == "-" ? "" : $4); exit }' \
+                "$KBD_MAP"
+        ) || true
+        [[ -n "$kb_layout" ]] \
+            && kb_herkunft="kbd-model-map ueber KEYMAP=$kb_keymap"
+    fi
+fi
+
+if [[ -z "$kb_layout" ]]; then
+    kb_layout="de"
+    kb_variant=""
+    kb_herkunft="dem Rueckfall"
+fi
+
+mkdir -p "$HYPR_DIR"
+if printf '%s\n' \
+    "# ERZEUGT von zepos-session bei jeder Anmeldung." \
+    "# NICHT BEARBEITEN - die naechste Anmeldung ueberschreibt diese Datei." \
+    "# Diese Belegung stammt aus $kb_herkunft." \
+    "input {" \
+    "    kb_layout = $kb_layout" \
+    "    kb_variant = $kb_variant" \
+    "}" >"$HYPR_DIR/keyboard.conf" 2>/dev/null
+then
+    log "--- Tastatur: kb_layout=$kb_layout kb_variant=${kb_variant:-keine} (aus $kb_herkunft)"
+else
+    # Kein Abbruch: ohne die Datei gilt die ausgelieferte Belegung, und
+    # eine Sitzung, die wegen einer Tastaturzeile gar nicht erst startet,
+    # waere der teurere Fehler.
+    log "!!! keyboard.conf liess sich nicht schreiben - es bleibt bei der ausgelieferten Belegung"
+fi
+
+# --------------------------------------------------------------------
+# Welches Profil
+# --------------------------------------------------------------------
+# start-hyprland OHNE Argument geht in den Auto-Erkennungsmodus und
+# ueberschreibt dabei monitors.conf mit "monitor=,preferred,auto,1". Das
+# ist fuer die erste Anmeldung genau richtig und fuer jede weitere
+# falsch, denn es wirft die Monitoranordnung weg, die `save-profile`
+# abgelegt hat.
+#
+# Schlimmer ist der Zwischenfall, den es sonst gaebe: liegen Profile vor
+# und wird keines genannt, FRAGT start-hyprland auf der Konsole
+# ("Start with auto-detect mode? [Y/n]"). In einer Sitzung, die von einem
+# Greeter gestartet wurde, gibt es niemanden, der antwortet - ohne
+# </dev/null unten bliebe die Anmeldung an einem read stehen, das nie
+# zurueckkommt.
+#
+# Also wird das Profil hier entschieden und uebergeben. Die Quelle ist
+# dieselbe, aus der auch `hyprland-status get` liest.
+profile=""
+if [[ -r "$HYPR_DIR/current-profile" ]]; then
+    read -r profile <"$HYPR_DIR/current-profile" || profile=""
+fi
+
+if [[ -n "$profile" && -d "$PROFILE_DIR/$profile" ]]; then
+    log "--- Profil '$profile'"
+    exec "$LAUNCHER" "$profile" </dev/null >>"$LOG" 2>&1
+fi
+
+# Kein brauchbares Profil - erste Anmeldung, oder current-profile nennt
+# eines, das es nicht mehr gibt. </dev/null macht aus der Rueckfrage oben
+# eine sofortige Antwort statt eines haengenden Logins.
+log "--- kein gespeichertes Profil (current-profile: '${profile:-leer}'), Auto-Erkennung"
+exec "$LAUNCHER" </dev/null >>"$LOG" 2>&1

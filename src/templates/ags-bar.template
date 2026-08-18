@@ -1,0 +1,1963 @@
+// Die Leiste (GTK4, Layer-Shell) - der Ersatz fuer waybar
+// Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+// Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-bar.template kopieren
+//
+// WARUM DIE LEISTE HIERHER GEZOGEN IST
+//     waybar ist GTK3 (gtkmm-3), und Aufgabe #81 verlangt GTK4 ueberall.
+//     Ein Port von waybar waere die Neuschreibung eines fremden
+//     C++-Projekts, das wir danach ewig nachziehen muessten. AGS ist
+//     bereits GTK4 (ags/gtk4/app -> libastal-4 -> libgtk-4,
+//     gtk4-layer-shell) und traegt schon zwoelf Widgets - darunter genau
+//     die Fenster, die die Leistenmodule bisher ueber `ags request`
+//     geoeffnet haben.
+//
+//     Das ist der zweite Gewinn, und er ist groesser als das Toolkit:
+//     ein Klick auf das Datum ruft jetzt eine Funktion IN DIESEM PROZESS
+//     auf, statt einen `ags`-Prozess zu starten, der eine Anfrage ueber
+//     einen Unix-Socket an genau diesen Prozess schickt. Elf Module
+//     haben das getan.
+//
+// WAS EINE LEISTE IST
+//     Eine Layer-Shell-Flaeche am OBEREN Rand jedes Schirms, die sich
+//     Platz reserviert (Exclusivity.EXCLUSIVE), mit drei Kaesten darin.
+//     Das Dock in Dock.tsx ist dieselbe Flaeche am unteren Rand - siehe
+//     dort. Zusammen sind die beiden ein Kopf und ein Fuss, und was
+//     zwischen ihnen bleibt, gehoert den Fenstern.
+//
+// WARUM WIEDER OBEN UND NICHT MEHR LINKS (Aufgabe #90)
+//     GEMELDET am 12.08.2026: "ich haette unsere gebaute waybar bitte
+//     oben nicht links ja und nwg dock auch nachgebaut gtk4 immer
+//     angezeigt unten im footer sozusagen".
+//
+//     Das ist die Ruecknahme der DREHUNG vom 11.08.2026 (Commit
+//     232dc66) und von sonst nichts. Was an jenem Tag teuer erarbeitet
+//     wurde, bleibt und ist unten einzeln nachgewiesen: das Glas, die
+//     Ueberlaufbehandlung, die Leitern aus src/sizes.py und der EINE
+//     Abstand, den Leiste und Fenster zum Rand halten.
+//
+//     Die Reservierung wandert mit. Das ist keine Kosmetik: bliebe sie
+//     links, laege die Kopfleiste ueber den Fenstern UND links bliebe
+//     ein leerer Streifen, den niemand benutzt. Astal rechnet die Zone
+//     aus Anker und Groesse, also genuegt der Ankerwechsel unten -
+//     nachgemessen wird er trotzdem, siehe tests/src/test_bar_headless.
+//
+// WAS BEIM DREHEN GEBLIEBEN IST, UND WO ES STEHT
+//       Glas            die Deckkraft auf #bar und auf jeder Kachel,
+//                       die layerrule in hyprland-universal-config
+//                       .template. Die beiden Deckkraefte und die
+//                       Kontrastrechnung dazu stehen unveraendert in
+//                       src/brand.py.
+//       Ueberlauf       der Abschnitt "Was die Leiste tut, wenn der
+//                       Platz nicht reicht" weiter unten. Er wird nur
+//                       wieder auf die Waagerechte gelesen: die
+//                       Engstelle ist die BREITE des Schirms.
+//       Leitern         BAR_THICKNESS, EDGE_GAP, SHELF und jede Zahl
+//                       im Stylesheet kommen aus src/sizes.py.
+//       Ein Randmass    EDGE_GAP ist STYLE_GAPS_OUT, dieselbe Zahl, die
+//                       die Fenster als Aussenabstand bekommen. Um 90
+//                       Grad zurueckgedreht heisst das: die Platte
+//                       haelt links, rechts und OBEN diesen Abstand und
+//                       unten keinen, weil dort schon der gaps_out des
+//                       ersten Fensters steht.
+//
+// WAS AN summer-day-and-night GEMESSEN WURDE, UND WAS DAVON HIER IST
+//     VORBILD, NICHT QUELLE. Das Repository MathisP75/summer-day-and-night
+//     hat KEINE LIZENZ - am 11.08.2026 ueber die GitHub-API geprueft,
+//     `license: null`. Es ist daraus keine Zeile Code und kein Bild
+//     uebernommen. Was uebernommen ist, sind Zahlen, die man an einem
+//     Bildschirmfoto abliest, und die stehen in src/sizes.py mit ihrer
+//     Umrechnung.
+//
+//     Es baut ausserdem auf waybar und wofi - genau den zwei
+//     GTK3-Programmen, die ZepOS mit Aufgabe #81 losgeworden ist. Seine
+//     Technik ist also ohnehin nicht uebernehmbar, nur sein Aussehen.
+//
+//     GEMESSEN am 11.08.2026 an screenshots/summer-night.png (1:1, die
+//     5-px-Kante im Bild ist die 5 aus seinem CSS) und an
+//     waybar/everforest/config:
+//
+//       Leiste          60 px hoch bei 16 px Schrift  (Bild: 54 + 5)
+//       Aussenabstand   margin-left/right 120, top/bottom 0
+//       Kachelkante     border-bottom 5 px, eine Stufe dunkler
+//       Fensterabstand  gaps_in 10, gaps_out 20
+//
+// DAS EINE RANDMASS, UND WARUM ES DIE DREHUNG UEBERLEBT
+//     Es kam am 11.08.2026 aus "die fenster auch den selben abstand zum
+//     rand nutzen" und ist an der Vorlage gemessen: ihre Leiste ist mit
+//     margin-left/right 120 auf 1680 von 1920 px eingezogen, jedes
+//     FENSTER darunter mit gaps_out 20 auf 1880 - 87.5 % gegen 97.9 %,
+//     also EINE Flaeche mit einem anderen Randmass als alle anderen.
+//     Hier gibt es nur eines, und es ist buchstaeblich dieselbe Zahl:
+//     EDGE_GAP unten liest denselben Platzhalter, den Hyprland als
+//     gaps_out an die Fenster gibt.
+//
+//     Zurueckgedreht bleibt das unveraendert richtig. Was sich dreht,
+//     ist nur, an WELCHER Kante der Abstand entfaellt: nicht mehr
+//     rechts, sondern unten, weil dort jetzt das Fenstergebiet
+//     anschliesst. Die Rechnung dazu steht in bar-style.template bei
+//     #bar.
+//
+// DIE ABGESETZTE KANTE, UND WARUM DAFUER KEIN PLUGIN ENTSTEHT
+//     Das auffaelligste Merkmal des Vorbilds ist ein 3D-Rand. Seine
+//     README verlangt dafuer Aenderungen an Hyprlands eigenem
+//     CHyprDropShadowDecoration.cpp.
+//
+//     GEPRUEFT am 11.08.2026, ob eines der fuenf Plugins aus src/plugins
+//     .py das schon kann: NEIN, und zwar strukturell. hyprbars zeichnet
+//     eine Titelleiste OBEN an ein Fenster, borders-plus-plus zusaetzliche
+//     Rahmen - beide RINGSUM, mit einer Breite je Rahmen
+//     (border_size_1..9) und ohne jede Angabe pro Seite. Eine Kante, die
+//     es nur unten gibt, ist in ihrer Konfigurationssprache nicht
+//     ausdrueckbar.
+//
+//     Deshalb entsteht hier auch nichts Neues: die Kante ist an unseren
+//     EIGENEN Flaechen ein `border-bottom` im Stylesheet, das GTK4 von
+//     sich aus zeichnet. An fremden FENSTERN gibt es sie nicht, und das
+//     ist der Preis dafuer, kein Plugin zu schreiben, das ein fremdes
+//     C++-Projekt nachzieht.
+
+import Astal from "gi://Astal?version=4.0"
+import GLib from "gi://GLib"
+import Pango from "gi://Pango"
+import { Gtk, Gdk } from "ags/gtk4"
+import { execAsync } from "ags/process"
+import { interval } from "ags/time"
+import * as Hyprland from "../utils/hyprland"
+import { Tray } from "../utils/tray"
+import { _, ngettext, format } from "../utils/i18n"
+// NUR DER TYP, und `import type` steht hier mit Absicht: es ist die eine
+// Einfuhr, die esbuild restlos wegwirft. Ein gewoehnliches `import
+// { OverlayAnchor }` waere zur Laufzeit die Anforderung eines
+// Ausfuhrnamens, den es in der uebersetzten utils/overlay.js gar nicht
+// gibt - eine Schnittstelle ist kein Wert.
+//
+// Die Fabrik selbst wird hier NICHT geholt. tests/src/test_modal_rule.py
+// haelt fest, dass nur sie Aufklappfenster baut; die Leiste OEFFNET
+// welche, und dafuer genuegt zu wissen, wie man sagt, wo man geklickt
+// hat.
+import type { OverlayAnchor } from "../utils/overlay"
+
+const CONFIG_DIR = GLib.get_user_config_dir()
+const SCRIPTS = `${CONFIG_DIR}/ags/scripts`
+
+// Die DICKE der Leiste - bei einer Kopfleiste also ihre Hoehe. Sie
+// kommt aus src/sizes.py und ist damit derselbe Regler, der auch die
+// Schrift bewegt. Hier stand in der Waybar-Fassung eine 50, und darunter
+// 13 px Text; bei sizes.scale 1.85 sind es 24 px Text, die in einer
+// 50 px dicken Leiste an beiden Raendern abgeschnitten waeren.
+export const BAR_THICKNESS = {{STYLE_BAR_THICKNESS}}
+const TRAY_ICON_SIZE = {{STYLE_TRAY_ICON_SIZE}}
+
+// Der Abstand, den die Flaeche zum Schirmrand haelt - dieselbe Zahl, die
+// hyprland-universal-config.template als gaps_out an die Fenster gibt.
+// Das IST die Antwort auf "die fenster auch den selben abstand zum rand
+// nutzen": nicht zwei Werte, die zufaellig gleich sind, sondern einer.
+//
+// Er wird hier gebraucht und nicht nur im Stylesheet, weil er vom
+// Platzbudget abgeht: die Flaeche ist so breit wie der Schirm, die
+// Platte darin ist um diesen Abstand LINKS UND RECHTS schmaler, und nur
+// der Rest steht den Modulen zur Verfuegung.
+const EDGE_GAP = {{STYLE_GAPS_OUT}}
+
+// Die abgesetzte Kante unten an der Platte. Sie ist ein `border-bottom`
+// im Stylesheet, und ein Rahmen zaehlt bei GTK zur Groesse des Widgets -
+// er geht der Dicke also genauso ab wie ein Rand.
+const SHELF = {{STYLE_BAR_SHELF}}
+
+/** Was die Platte von der Schirmbreite fuer sich selbst braucht.
+ *
+ * Ihr Rand links und rechts, siehe #bar in bar-style.template. Die
+ * Kante zaehlt hier NICHT mit, und das ist der ganze Unterschied zur
+ * gedrehten Fassung: `border-bottom` kostet Hoehe und keine Breite.
+ * Solange die Leiste senkrecht lief, stand sie in dieser Summe, und
+ * GEMESSEN am 11.08.2026 waren es genau die zwei Pixel, um die die
+ * Leiste auf einem 900 px hohen Schirm zu gross war.
+ */
+const PANEL_OVERHEAD = 2 * EDGE_GAP
+
+// Die Reihenfolge auf der Leiste, beide Haelften. Sie steht in
+// style_definition.py und nicht hier, weil dieselben Listen dort gegen
+// die `case`-Zweige unten gehalten werden: ein Zweig, den keine Liste
+// nennt, ist toter Code, und ein Name, den kein Zweig kennt, ein leerer
+// Platz.
+//
+// DIE LINKE STAND BIS ZUM 12.08.2026 HIER, ausgeschrieben, und war damit
+// die einzige Haelfte der Leiste, die der Nutzer nicht einstellen
+// konnte: eine Liste in einer Vorlage liest keine user-settings.json.
+// Sie ist nicht kopiert worden, sondern UMGEZOGEN - der Abschnitt "WAS
+// AUF DER LEISTE STEHT" in src/style_definition.py traegt jetzt beide
+// und die Begruendung dazu.
+const MODULES_LEFT: string[] = {{STYLE_BAR_MODULES_LEFT}}
+const MODULES_RIGHT: string[] = {{STYLE_BAR_MODULES_RIGHT}}
+
+// Die Arbeitsbereichssymbole. Dieselben Platzhalter, die die
+// Waybar-Fassung unter "format-icons" trug.
+const WORKSPACE_ICONS: Record<string, string> = {
+  "1": "{{ICON_WORKSPACE_1}}", "2": "{{ICON_WORKSPACE_2}}",
+  "3": "{{ICON_WORKSPACE_3}}", "4": "{{ICON_WORKSPACE_4}}",
+  "5": "{{ICON_WORKSPACE_5}}", "6": "{{ICON_WORKSPACE_6}}",
+  "7": "{{ICON_WORKSPACE_7}}", "8": "{{ICON_WORKSPACE_8}}",
+  "9": "{{ICON_WORKSPACE_9}}", "10": "{{ICON_WORKSPACE_10}}",
+}
+const WORKSPACE_DEFAULT_ICON = "{{ICON_WORKSPACE_DEFAULT}}"
+const WORKSPACE_URGENT_ICON = "{{ICON_WORKSPACE_URGENT}}"
+
+// ---------------------------------------------------------------------
+// Was ein Skriptmodul sagt
+// ---------------------------------------------------------------------
+
+// Die Form, die jedes Leistenskript ausgibt. Sie ist unveraendert die
+// von waybar - zwoelf Skripte in diesem Baum schreiben sie bereits, und
+// eine neue Form haette zwoelf Skripte umgeschrieben, um dasselbe zu
+// sagen.
+interface Payload {
+  text?: string
+  tooltip?: string
+  class?: string
+}
+
+// GEMESSEN am 11.08.2026: kein einziges der Leistenskripte in diesem
+// Baum gibt Pango-Auszeichnung aus - `grep -l '<span'` ueber alle
+// Modulvorlagen findet nichts. Deshalb wird der Text als Text gesetzt
+// und nicht als Markup geparst. Der Unterschied ist nicht Geschmack: ein
+// Modul, dessen Text ein "&" oder ein "<" enthaelt - ein SSID-Name
+// genuegt -, faerbt mit set_markup() die ganze Leiste mit einer
+// GLib-Warnung ein und zeigt nichts an.
+function applyPayload(label: Gtk.Label, box: Gtk.Widget, name: string,
+                      payload: Payload): void {
+  const text = payload.text ?? ""
+  label.set_label(text)
+
+  // Leerer Text heisst "nichts zu sagen". Das Modul verschwindet dann,
+  // statt als leerer Kasten mit Rahmen und Abstand dazustehen.
+  box.set_visible(text !== "")
+
+  const tooltip = payload.tooltip ?? ""
+  box.set_has_tooltip(tooltip !== "")
+  if (tooltip !== "") box.set_tooltip_text(tooltip)
+
+  // Der Modulname bleibt immer, die gemeldete Klasse kommt dazu. So
+  // trifft `#custom-hardware` das Modul und `.hardware-warning` seinen
+  // Zustand - dieselbe Aufteilung, auf der die Stilvorlage schon beruht.
+  const classes = ["bar-module"]
+  if (payload.class) classes.push(...payload.class.split(/\s+/).filter(Boolean))
+  box.set_css_classes(classes)
+  void name
+}
+
+interface ClickSpec {
+  onClick?: string
+  onClickRight?: string
+  onClickMiddle?: string
+  onScrollUp?: string
+  onScrollDown?: string
+  /** Ein Ueberlagerungsfenster dieses Prozesses statt eines Befehls. */
+  toggles?: string
+  /** Dasselbe fuer die rechte Taste - siehe custom/date. */
+  togglesRight?: string
+}
+
+/** Was ein Klick tut. Ein Befehl geht in eine Shell, ein Fenster nicht.
+ *
+ * `bash -c` und nicht der nackte Befehl, und das ist gemessen und nicht
+ * vorsichtshalber: Astals execAsync startet KEINE Shell, es zerlegt die
+ * Zeichenkette mit GLib.shell_parse_argv und startet argv direkt. Ein
+ * "$HOME" darin bliebe ein Dollarzeichen und ein Wort. Die Messung dazu
+ * steht im Kopf von tests/src/test_ags_exec.py.
+ */
+function run(command: string): void {
+  execAsync(["bash", "-c", command]).catch((error: unknown) => {
+    console.error("Leistenmodul:", command, error)
+  })
+}
+
+/** WO DIESES MODUL SITZT - die Angabe, die sein Fenster braucht.
+ *
+ * WARUM SIE NICHT DER MAUSZEIGER IST (17.08.2026)
+ *     GEMELDET: "die modale fuer kontroll zentrum erscheint ganz links
+ *     im fenster buggy wir brauchen es aber dort der user mit maus
+ *     raufklickt".
+ *
+ *     utils/overlay.ts hat die Lage bis dahin aus `hyprctl cursorpos`
+ *     genommen. GEMESSEN am selben Tag auf 1920x1200, dreimal derselbe
+ *     Aufruf und nur der Zeiger woanders: Zahnrad (1872) -> Fenster bei
+ *     x=1401, Bildmitte (960) -> 713, Datum (120) -> 24. Die letzte Zahl
+ *     ist der linke Bildrand aus der Meldung.
+ *
+ *     Ein Modul WEISS, wo es steht. Diese Funktion fragt es.
+ *
+ * WARUM DIE WURZEL DER RICHTIGE BEZUGSPUNKT IST
+ *     compute_bounds() rechnet gegen ein anderes Widget; die WURZEL ist
+ *     das Leistenfenster. Dessen Layer-Shell-Flaeche haengt an
+ *     TOP|LEFT|RIGHT ohne Rand, liegt also mit ihrer linken oberen Ecke
+ *     genau auf der Ecke ihres Schirms - GEMESSEN im verschachtelten
+ *     Compositor: `zepos-bar x=0 y=0 b=1920 h=84`. Was ein Modul in
+ *     dieser Flaeche fuer eine Lage hat, IST damit seine Lage auf dem
+ *     Schirm. Der Rand der Platte (#bar, margin-left) steckt darin
+ *     schon, weil er innerhalb der Flaeche liegt.
+ *
+ * WARUM ES EIN Schirm-NAME IST UND KEINE COMPOSITOR-KOORDINATE
+ *     Gdk und Hyprland zaehlen ihre Schirme nicht gleich, und die
+ *     globale Lage eines Ausgangs meldet Gdk auf Wayland nicht
+ *     verlaesslich. utils/overlay.ts loest den ANSCHLUSSNAMEN ohnehin
+ *     schon gegen `hyprctl monitors -j` auf (findGdkMonitorByName), also
+ *     wird hier derselbe Name weitergereicht statt einer Zahl, die erst
+ *     stimmen muesste.
+ *
+ * Ohne Wurzel gibt es keine Antwort - dann bleibt der Zeiger, und das
+ * ist genau der Fall des Testkindes, das die Leiste ohne Fenster baut.
+ */
+function anchorOf(widget: Gtk.Widget,
+                  monitorName: string): OverlayAnchor | undefined {
+  const root = widget.get_root()
+  if (!root) return undefined
+  const [ok, bounds] = widget.compute_bounds(root as unknown as Gtk.Widget)
+  if (!ok) return undefined
+  return {
+    monitor: monitorName,
+    x: Math.round(bounds.origin.x + bounds.size.width / 2),
+  }
+}
+
+function attachClicks(widget: Gtk.Widget, spec: ClickSpec,
+                      toggle: (name: string, at?: OverlayAnchor) => void,
+                      monitorName: string): void {
+  // Die Lage wird beim KLICK gerechnet und nicht beim Bauen: ein Modul
+  // wandert, sobald ein Nachbar ein- oder ausklappt.
+  const open = (name: string) => toggle(name, anchorOf(widget, monitorName))
+
+  const primary = spec.toggles
+    ? () => open(spec.toggles as string)
+    : spec.onClick ? () => run(spec.onClick as string) : null
+
+  if (primary) {
+    const gesture = new Gtk.GestureClick({ button: 1 })
+    gesture.connect("released", primary)
+    widget.add_controller(gesture)
+  }
+  const secondary = spec.togglesRight
+    ? () => open(spec.togglesRight as string)
+    : spec.onClickRight ? () => run(spec.onClickRight as string) : null
+  if (secondary) {
+    const gesture = new Gtk.GestureClick({ button: 3 })
+    gesture.connect("released", secondary)
+    widget.add_controller(gesture)
+  }
+  if (spec.onClickMiddle) {
+    const gesture = new Gtk.GestureClick({ button: 2 })
+    gesture.connect("released", () => run(spec.onClickMiddle as string))
+    widget.add_controller(gesture)
+  }
+  if (spec.onScrollUp || spec.onScrollDown) {
+    const scroll = new Gtk.EventControllerScroll({
+      flags: Gtk.EventControllerScrollFlags.VERTICAL,
+    })
+    scroll.connect("scroll", (_source: Gtk.EventControllerScroll,
+                              _dx: number, dy: number) => {
+      if (dy < 0 && spec.onScrollUp) run(spec.onScrollUp)
+      if (dy > 0 && spec.onScrollDown) run(spec.onScrollDown)
+      return true
+    })
+    widget.add_controller(scroll)
+  }
+}
+
+/** Ein Kasten mit einer Beschriftung, benannt wie das Modul heisst.
+ *
+ * Der Name ist der Waybar-Name mit "/" zu "-": aus "custom/date" wird
+ * "custom-date". Das ist genau der Selektor, den die Stilvorlagen dieses
+ * Projekts seit jeher benutzen - #custom-date, #custom-hardware,
+ * #battery -, also bleiben sie gueltig, statt dass 60 Regeln
+ * umgeschrieben werden muessten.
+ */
+function moduleBox(name: string): { box: Gtk.Box; label: Gtk.Label } {
+  const label = new Gtk.Label({ label: "" })
+  const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
+  box.set_name(name.replace("/", "-"))
+  box.add_css_class("bar-module")
+  box.append(label)
+  return { box, label }
+}
+
+// Was auf der Leiste steht, wenn ein Skript selbst nicht antwortet -
+// fuer die fuenf aus status.sh wie fuer jedes einzelne Modul. EIN
+// Zeichen fuer einen Zustand, und nicht zwei: die beiden Stellen
+// beschreiben denselben Fall, und zwei Zeichen dafuer waeren zwei
+// Fehlerbilder, zwischen denen niemand unterscheiden koennte.
+const STATUS_BROKEN_ICON = "{{ICON_ALERT}}"
+
+interface ScriptSpec extends ClickSpec {
+  name: string
+  /** Der Befehl, der die JSON-Zeile schreibt. */
+  exec: string
+  /** Millisekunden. 0 heisst: einmal beim Start, danach nie wieder. */
+  intervalMs: number
+}
+
+function scriptModule(spec: ScriptSpec,
+                      toggle: (name: string, at?: OverlayAnchor) => void,
+                      changed: () => void,
+                      monitorName: string): Gtk.Widget {
+  const { box, label } = moduleBox(spec.name)
+  attachClicks(box, spec, toggle, monitorName)
+
+  // Unsichtbar bis zur ersten Antwort. Sonst blitzt beim Anmelden fuer
+  // die Dauer des ersten Aufrufs eine Reihe leerer Kaesten auf.
+  box.set_visible(false)
+
+  const poll = () => {
+    execAsync(["bash", "-c", spec.exec])
+      .then((output: string) => {
+        const line = output.trim()
+        if (!line) { applyPayload(label, box, spec.name, {}); changed(); return }
+        try {
+          applyPayload(label, box, spec.name, JSON.parse(line) as Payload)
+        } catch {
+          // Kein JSON: das Skript hat etwas anderes geschrieben, meist
+          // eine Fehlermeldung. Sie ist der beste Text, den das Modul
+          // gerade hat - besser als ein leerer Kasten, ueber den nichts
+          // erklaert, warum er leer ist.
+          applyPayload(label, box, spec.name, { text: line, class: "broken" })
+        }
+        changed()
+      })
+      .catch((error: unknown) => {
+        // EIN SKRIPT, DAS GAR NICHT LAEUFT, DARF NICHT STILL SEIN -
+        // dieselbe Regel wie in sharedStatus() darunter, und bis zum
+        // 13.08.2026 stand hier ihr Gegenteil.
+        //
+        //     `applyPayload(..., {})` setzt einen leeren Text, und ein
+        //     leerer Text blendet das Modul aus. Ein Skript, das FEHLT
+        //     oder mit einem Fehler endet, sah damit genauso aus wie
+        //     eines, das antwortet und nichts zu sagen hat - der
+        //     Unterschied stand allein in einem Protokoll, das niemand
+        //     liest.
+        //
+        //     Das ist derselbe Mangel, den der Nutzer am 13.08.2026 an
+        //     der rechten Haelfte gemeldet hat ("rechts ist zu leer"),
+        //     nur an der anderen Sorte Modul: dort kamen Netz, Ton und
+        //     Akku aus EINEM Aufruf, hier hat jedes Modul seinen
+        //     eigenen. Ihn dort zu beheben und hier stehenzulassen
+        //     hiesse, die Haelfte einer Regel einzufuehren.
+        //
+        // LEER BLEIBT LEER: der Zweig oben, in dem das Skript ANTWORTET
+        // und nichts sagt, ist unveraendert - das ist eine Auskunft.
+        // Nur das Nichtantworten ist jetzt sichtbar.
+        console.error("Leistenmodul", spec.name, error)
+        applyPayload(label, box, spec.name, {
+          text: STATUS_BROKEN_ICON,
+          tooltip: format(_("{module} is not answering: {error}"),
+                          { module: spec.name, error: String(error) }),
+          class: "broken",
+        })
+        changed()
+      })
+  }
+
+  poll()
+  if (spec.intervalMs > 0) interval(spec.intervalMs, poll)
+  return box
+}
+
+// ---------------------------------------------------------------------
+// Die fuenf aus status.sh
+// ---------------------------------------------------------------------
+
+interface SharedSink {
+  key: string
+  box: Gtk.Box
+  label: Gtk.Label
+}
+
+/** Ein Aufruf je Takt, fuenf Module. Siehe bar-status-config.template.
+ *
+ * EIN SKRIPT, DAS GAR NICHT ANTWORTET, DARF NICHT STILL SEIN
+ *     GEMELDET am 13.08.2026, viermal am selben Tag: "rechts ist zu
+ *     leer", "es fehlt auch ein batterie icon ich weiss nicht wie voll
+ *     der laptop ist", "und lautstaerke und mikrofon auch".
+ *
+ *     GEMESSEN an den Bildern des Abnahmelaufs derselben Woche
+ *     (iso/out/run-release-installed/): rechts stand NUR das Zahnrad.
+ *     Netz, Ton und Akku standen in der Vorgabe und waren unsichtbar -
+ *     und zwar ALLE DREI, was kein Zufall sein kann: sie kommen aus
+ *     EINEM Aufruf. Faellt der aus, schwiegen bis heute alle fuenf, und
+ *     zwar lautlos: die beiden Fehlerzweige hier schrieben eine Zeile
+ *     ins Protokoll und liessen die Kaesten stehen, wie sie waren -
+ *     also unsichtbar, denn so beginnen sie (sharedModule).
+ *
+ *     Ein Modul, das bei einem Fehler VERSCHWINDET, ist von "das gibt
+ *     es auf dieser Maschine nicht" nicht zu unterscheiden. Genau das
+ *     hat der Nutzer geschrieben: er hat einen Akku, sieht nichts, und
+ *     kann nicht wissen, ob ZepOS keinen findet oder ob das Skript
+ *     gescheitert ist.
+ *
+ *     Seither gilt: ein LEERER Text heisst weiter "es gibt hier nichts
+ *     zu sagen" und blendet aus - das ist die Antwort des Skripts und
+ *     eine Auskunft. KEINE Antwort ist dagegen ein Fehler und wird
+ *     angezeigt: jedes Modul dieser Gruppe traegt dann das Warnzeichen,
+ *     die Klasse "broken" (rot, siehe bar-style.template) und im
+ *     Kurzhinweis den Grund.
+ */
+function sharedStatus(sinks: SharedSink[], intervalMs: number,
+                      changed: () => void): void {
+  const fail = (reason: string) => {
+    console.error("status.sh:", reason)
+    // Der Pfad steht in einer eigenen Angabe und nicht im Aufruf. Er ist
+    // ein MASCHINENWERT, und mitten im Ausdruck einer sichtbaren
+    // Eigenschaft laesst sich das von aussen nicht mehr von Text
+    // unterscheiden - tests/src/test_ags_i18n.py hat ihn dort am
+    // 17.08.2026 als uebersetzbare Beschriftung gezaehlt.
+    const skript = `${SCRIPTS}/status.sh`
+    for (const sink of sinks) {
+      applyPayload(sink.label, sink.box, sink.key, {
+        text: STATUS_BROKEN_ICON,
+        tooltip: format(_("{script} is not answering: {reason}"),
+                        { script: skript, reason: String(reason) }),
+        class: "broken",
+      })
+    }
+    changed()
+  }
+
+  const poll = () => {
+    execAsync(["bash", "-c", `${SCRIPTS}/status.sh`])
+      .then((output: string) => {
+        let payloads: Record<string, Payload>
+        try {
+          payloads = JSON.parse(output.trim()) as Record<string, Payload>
+        } catch (error) {
+          fail(String(error))
+          return
+        }
+        for (const sink of sinks) {
+          applyPayload(sink.label, sink.box, sink.key, payloads[sink.key] ?? {})
+        }
+        changed()
+      })
+      .catch((error: unknown) => fail(String(error)))
+  }
+  poll()
+  interval(intervalMs, poll)
+}
+
+// ---------------------------------------------------------------------
+// Arbeitsbereiche
+// ---------------------------------------------------------------------
+
+/** Die Bereiche, die auf DIESEM Schirm immer sichtbar sein sollen.
+ *
+ * Die Datei schreibt bar-workspace-detect.sh aus monitors.py, vor jeder
+ * Sitzung. Fehlt sie - erster Start, kein Compositor beim Erzeugen -,
+ * zeigt die Leiste nur die Bereiche, die es gerade wirklich gibt. Das
+ * ist der ehrliche Rueckfall: eine erfundene Zehnerreihe auf einem
+ * Schirm, der nur drei traegt, waere sieben Knoepfe, die nichts tun.
+ */
+function detectedWorkspaces(monitorName: string): {
+  persistent: number[]
+  icons: Record<string, string>
+} {
+  const empty = { persistent: [], icons: {} }
+  const path = `${CONFIG_DIR}/ags/workspaces.json`
+  if (!GLib.file_test(path, GLib.FileTest.EXISTS)) return empty
+  try {
+    const [ok, contents] = GLib.file_get_contents(path)
+    if (!ok) return empty
+    const parsed = JSON.parse(new TextDecoder().decode(contents)) as {
+      "persistent-workspaces"?: Record<string, number[]>
+      "format-icons"?: Record<string, string>
+    }
+    const table = parsed["persistent-workspaces"] ?? {}
+    // "*" ist der Rueckfall des Erkennungsskripts fuer den Fall, dass es
+    // die Schirme gar nicht benennen konnte. Er heisst "auf jedem" - ein
+    // Anschlussname stuende hier fuer einen Schirm, den genau dieser
+    // Zweig nicht identifizieren konnte.
+    return {
+      persistent: table[monitorName] ?? table["*"] ?? [],
+      icons: parsed["format-icons"] ?? {},
+    }
+  } catch (error) {
+    console.error("workspaces.json unlesbar:", error)
+    return empty
+  }
+}
+
+function workspacesModule(monitorName: string): {
+  widget: Gtk.Widget
+  update: (state: Hyprland.HyprlandState) => void
+  markUrgent: (address: string, state: Hyprland.HyprlandState) => void
+} {
+  // WAAGERECHT, wie die Leiste, in der sie haengen. Sie standen bis zum
+  // 12.08.2026 senkrecht, weil eine 92 px breite Seitenleiste sonst
+  // ihren breitesten Posten - zehn Knoepfe nebeneinander, bei
+  // Vorgabegroesse 439 px - als erstes weggeraeumt haette. Auf einer
+  // Kopfleiste ist genau diese 439 px kein Problem, sondern der
+  // Normalfall: dort ist Breite das, wovon es viel gibt, und Hoehe das,
+  // was knapp ist. Uebereinander gestapelt waeren zehn Knoepfe hier
+  // eine Spalte, die die Leiste zehnmal so dick machte.
+  const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
+  box.set_name("workspaces")
+  box.add_css_class("bar-module")
+
+  const detected = detectedWorkspaces(monitorName)
+  const persistent = detected.persistent
+  const buttons = new Map<number, Gtk.Button>()
+
+  // Welche Bereiche gerade Aufmerksamkeit wollen.
+  //
+  // Ein eigener Merkposten und keine Abfrage, weil es keine gibt:
+  // "urgent>>adresse" ist das einzige Wort, das Hyprland darueber
+  // verliert, und weder j/workspaces noch j/clients tragen ein Feld
+  // dafuer. Geleert wird ein Eintrag, sobald sein Bereich den Fokus
+  // bekommt - dann hat der Nutzer hingesehen, und genau das war die
+  // Frage.
+  const urgent = new Set<number>()
+
+  const update = (state: Hyprland.HyprlandState) => {
+    urgent.delete(state.focused)
+    const here = state.workspaces.filter(
+      workspace => workspace.monitor === monitorName && workspace.id > 0)
+    const ids = [...new Set([...persistent, ...here.map(w => w.id)])]
+      .sort((left, right) => left - right)
+
+    // Knoepfe, die es nicht mehr gibt, verschwinden. Ohne diese Schleife
+    // waechst die Leiste bei jedem angelegten Bereich und schrumpft nie.
+    for (const [id, button] of buttons) {
+      if (!ids.includes(id)) {
+        box.remove(button)
+        buttons.delete(id)
+      }
+    }
+
+    for (const id of ids) {
+      let button = buttons.get(id)
+      if (!button) {
+        button = new Gtk.Button({ can_focus: false })
+        button.set_child(new Gtk.Label({ label: "" }))
+        button.connect("clicked", () => Hyprland.dispatch(`workspace ${id}`))
+        buttons.set(id, button)
+        box.append(button)
+      }
+
+      // Das Zeichen wird bei jedem Durchlauf gesetzt und nicht nur beim
+      // Anlegen: ein Bereich, der Aufmerksamkeit will, traegt ein
+      // anderes, und er will sie erst spaeter.
+      // Die Erkennung darf ein Zeichen ueberschreiben: sie setzt das
+      // Laptop-Symbol auf den Bereich, den der eingebaute Schirm
+      // wirklich allein haelt. Das ist die einzige Zuordnung, die erst
+      // auf dem Schreibtisch des Nutzers entsteht.
+      const child = button.get_child() as Gtk.Label
+      child.set_label(urgent.has(id)
+        ? WORKSPACE_URGENT_ICON
+        : detected.icons[String(id)]
+          ?? WORKSPACE_ICONS[String(id)]
+          ?? WORKSPACE_DEFAULT_ICON)
+
+      const workspace = here.find(candidate => candidate.id === id)
+      const visible = Object.values(state.activeByMonitor).includes(id)
+      const classes = ["workspace-button"]
+      if (urgent.has(id)) classes.push("urgent")
+      else if (id === state.focused) classes.push("active")
+      else if (visible) classes.push("visible")
+      if (!workspace || workspace.windows === 0) classes.push("empty")
+      button.set_css_classes(classes)
+    }
+
+    // Die Knoepfe stehen in der Reihenfolge, in der sie angelegt wurden.
+    // Ein Bereich, der spaeter entsteht, gehoert trotzdem an seinen
+    // Platz in der Zahlenreihe.
+    let previous: Gtk.Widget | null = null
+    for (const id of ids) {
+      const button = buttons.get(id)
+      if (!button) continue
+      box.reorder_child_after(button, previous)
+      previous = button
+    }
+  }
+
+  // Die Adresse aus "urgent>>adresse" kommt ohne "0x", die aus
+  // j/clients mit. Beide Schreibweisen werden verglichen, weil sonst
+  // NIE ein Treffer entstuende und die Klasse .urgent tote Regel waere.
+  const markUrgent = (address: string, state: Hyprland.HyprlandState) => {
+    const wanted = address.replace(/^0x/, "")
+    const client = state.clients.find(
+      candidate => candidate.address.replace(/^0x/, "") === wanted)
+    if (!client || client.workspace.id === state.focused) return
+    urgent.add(client.workspace.id)
+    update(state)
+  }
+
+  return { widget: box, update, markUrgent }
+}
+
+function windowModule(): {
+  widget: Gtk.Widget
+  update: (state: Hyprland.HyprlandState) => void
+} {
+  const { box, label } = moduleBox("window")
+  // Ein Fenstertitel kann beliebig lang sein - eine Browserseite mit
+  // vollem Seitentitel schiebt sonst die Module rechts vom Schirm.
+  //
+  // WAAGERECHT IST DAS ELLIPSIEREN DIE ANTWORT UND NICHT DAS PROBLEM
+  //     Solange die Leiste senkrecht lief, trug dieses Modul ein
+  //     alwaysFold: eine ellipsierende Beschriftung meldet als
+  //     Mindestbreite nicht, was ihr Text braucht, sondern das, worauf
+  //     sie zu schrumpfen bereit ist - auf einer Seitenleiste also eine
+  //     Spalte aus Auslassungspunkten. Diese Zeile ist quer zur Leiste
+  //     eine Luege.
+  //
+  //     Laengs zur Leiste ist sie genau richtig: "nachgeben" heisst bei
+  //     einem ellipsierenden Label kuerzer werden statt die Nachbarn zu
+  //     schieben. Genau dafuer gibt es EllipsizeMode.END.
+  //
+  // WARUM DIE OBERGRENZE SEIT DEM 12.08.2026 KUERZER IST
+  //     Sie stand auf {{STYLE_MEASURE_PROSE}} Zeichen, und das war
+  //     richtig, solange der Titel in der MITTE stand: dort ist er von
+  //     beiden Seiten eingefasst, und was er nicht bekommt, nimmt er
+  //     sich auch nicht.
+  //
+  //     Seit die Mitte den Arbeitsbereichen gehoert (Aufgabe #96),
+  //     steht er in einem der beiden Kaesten - und die bekommen ihre
+  //     NATUERLICHE Breite, solange Platz ist. Um deren halbe
+  //     Differenz wandert die Mitte, und das ist gemessen: mit
+  //     {{STYLE_MEASURE_PROSE}} Zeichen standen die Arbeitsbereiche
+  //     239 px neben der Schirmmitte.
+  //
+  //     {{STYLE_MEASURE_LINE}} ist die naechstkuerzere Sprosse
+  //     derselben Leiter aus src/sizes.py - dieselbe, an der auch das
+  //     Kontrollzentrum seine Titel abschneidet. Sie macht den Versatz
+  //     kleiner und nicht null; deshalb steht der Titel seit demselben
+  //     Tag nicht mehr in der ausgelieferten Leiste, sondern in
+  //     BAR_MODULES_AVAILABLE - die ganze Rechnung dazu steht in
+  //     src/style_definition.py.
+  label.set_ellipsize(Pango.EllipsizeMode.END)
+  label.set_max_width_chars({{STYLE_MEASURE_LINE}})
+  return {
+    widget: box,
+    update: (state) => {
+      label.set_label(state.title)
+      box.set_visible(state.title !== "")
+    },
+  }
+}
+
+// ---------------------------------------------------------------------
+// Was die Leiste tut, wenn der Platz nicht reicht
+// ---------------------------------------------------------------------
+//
+// EINE KOPFLEISTE HAT EINE ENGSTELLE, UND SIE IST DIE BREITE
+//     Passt die Summe aller Module in die BREITE des Schirms. Das war
+//     die Frage bis zum 11.08.2026, und seit dem 12.08.2026 ist sie es
+//     wieder.
+//
+//     WARUM DIE ZWEITE FRAGE HIER KEINE LAUFZEITREGEL MEHR IST
+//         Senkrecht gab es eine zweite, unabhaengige: passt DIESES eine
+//         Modul quer in die Leiste. Sie war dort scharf, weil ein Modul
+//         beliebig BREIT werden kann - ein Datum mit 258 px auf einer
+//         155 px breiten Seitenleiste -, und weil das mit dem Text
+//         passiert, den ein Skript gerade liefert. Also musste zur
+//         Laufzeit gemessen werden.
+//
+//         Waagerecht ist dieselbe Frage die nach der HOEHE eines
+//         Moduls, und die haengt an keinem Text: eine Beschriftung
+//         bricht nicht um, ein Nerd-Font-Zeichen ist eine Zeile, und
+//         die Symbole der Ablage haben eine feste Pixelgroesse. Was ein
+//         Modul hoch ist, ist Schrift plus Innenabstand plus Rahmen -
+//         alles Sprossen aus src/sizes.py, alle am selben Regler wie
+//         BAR_THICKNESS. Das Verhaeltnis ist damit ueber jeden Faktor
+//         hinweg dasselbe, und was sich nicht mit dem Inhalt aendert,
+//         gehoert nicht in eine Regel, die bei jedem Takt eines Moduls
+//         laeuft, sondern in eine Zusicherung.
+//
+//         Sie steht in tests/src/test_bar_headless.py als
+//         test_no_module_is_taller_than_the_bar_it_hangs_in und wird
+//         dort ueber fuenf Groessenfaktoren gemessen. Der Unterschied
+//         ist nicht Sparsamkeit: eine Laufzeitregel haette ein zu hohes
+//         Modul still eingeklappt, wo jetzt ein Testlauf rot wird.
+//
+// WAS GTK4 VON SICH AUS TUT, UND WARUM DAS KEINE ANTWORT IST
+//     Ein Gtk.CenterBox, dem weniger zugeteilt wird als sein Minimum,
+//     gibt Anfang und Ende TROTZDEM je ihr Minimum und laesst sie
+//     UEBEREINANDER laufen. GEMESSEN am 11.08.2026 bei 1280 px auf der
+//     WAAGERECHTEN Fassung, mit abgeschalteter Regel: die
+//     Arbeitsbereiche reichten bis x=865, und das erste Modul des
+//     rechten Kastens begann bei x=622 - 243 px Ueberdeckung, genau
+//     das, was fehlte. Keine einzige Kante lag dabei ausserhalb des
+//     Schirms.
+//
+//     "Das letzte Modul endet innerhalb des Fensters" ist deshalb KEINE
+//     Pruefung - ein zu kleines CenterBox schiebt sein Ende nicht ueber
+//     den Rand, es legt Anfang und Ende uebereinander.
+//
+//     Unter der Layer-Shell kommt dasselbe anders heraus, weil ein
+//     Fenster nie kleiner wird als sein Inhalt: die Module stehen dann
+//     jenseits des Schirmrandes und werden abgeschnitten. Genau das
+//     zeigt iso/out/run-release-installed/key-16-07-sitzung-nach-240s.png -
+//     vom Hardware-Modul ist noch "No" zu lesen, alles danach fehlt.
+//
+//     Beide Ausgaenge verlieren dieselbe Auskunft, und keiner sagt es.
+//     Deshalb steht die Zusicherung dazu auf drei Beinen: Kanten,
+//     Ueberdeckung und GTKs eigene Untergrenze.
+//
+// WARUM EINGEKLAPPT UND NICHT VERKLEINERT
+//     Die naheliegende Antwort - die Schrift an die Schirmgroesse koppeln -
+//     holt die Aufloesungsskalierung zurueck, die src/sizes.py bewusst
+//     ausgelassen hat: eine Schriftgroesse je Aufloesungsklasse laesst
+//     sich in EINEM Stylesheet fuer alle Schirme nicht ausdruecken, weil
+//     GTK-CSS keinen Monitor-Selektor kennt. Sie widerspraeche ausserdem
+//     dem, wofuer der Nutzer die Groesse ueberhaupt angehoben hat.
+//
+//     Hier wird stattdessen entschieden, WAS auf der Leiste steht, und
+//     das ist kein Stylesheet-Problem: Bar() baut je Gdk.Monitor eine
+//     Leiste und kennt dessen Breite. Was in CSS unausdrueckbar ist,
+//     ist hier eine Zahl.
+//
+// WARUM EINGEKLAPPT UND NICHT AUSGEBLENDET
+//     Ausblenden verliert dieselbe Auskunft wie das Abschneiden, nur
+//     ordentlicher. Die eingeklappten Module ziehen deshalb in ein
+//     Aufklappfenster hinter einem Knopf: sie sind einen Klick entfernt
+//     statt fort. Nebenbei ist das die einzige Fassung, die sich stabil
+//     rechnen laesst - ein unsichtbares Widget beantwortet
+//     gtk_widget_measure mit 0, ein Widget in einem geschlossenen
+//     Aufklappfenster mit seiner wirklichen Breite. Mit Ausblenden
+//     muesste die Leiste sich merken, wie breit ein Modul war, als es
+//     zuletzt zu sehen war - und dieser Merkposten veraltet, sobald das
+//     Skript des Moduls einen laengeren Text liefert.
+
+// Das Zeichen auf dem Knopf. ICON_LIST und kein neu geholtes Chevron:
+// icons_db.py wird von fetch_icons.sh aus dem Netz erzeugt, ein neuer
+// Name kostet also einen Download, und "eine Liste weiterer Eintraege"
+// ist genau das, was hinter diesem Knopf steht.
+const OVERFLOW_ICON = "{{ICON_LIST}}"
+
+// Das Zeichen der Belegungsanzeige. DASSELBE wie an der
+// Tastenkuerzel-Anzeige (#custom-hypr-shortcuts), und das ist kein
+// Versehen: beides handelt von der Tastatur, es gibt in
+// icon_definition.py genau ein Tastaturzeichen, und ein zweites dafuer
+// zu erfinden hiesse, dieselbe Sache zweimal zu benennen. Die beiden
+// stehen ausserdem nie nebeneinander - die Tastenkuerzel-Anzeige ist
+// zuschaltbar und gehoert nicht zur Vorgabe (siehe _bar_optional in
+// style_definition.py).
+const KEYBOARD_ICON = "{{ICON_KEYBOARD}}"
+
+/** Ein Modul, das eingeklappt werden kann, und wo es hingehoert. */
+interface Foldable {
+  widget: Gtk.Widget
+  box: Gtk.Box
+  /** Sein Platz in dem Kasten, aus dem es kommt. */
+  index: number
+  folded: boolean
+}
+
+/** Die Mindestlaenge eines Widgets - sein Mass ENTLANG der Leiste.
+ *
+ * Waagerecht ist das seine Breite. gtk_widget_measure zaehlt margin
+ * mit; deshalb ist die Summe ueber die Kinder eines Gtk.Box genau
+ * dessen eigene Mindestlaenge, und die Summe ueber alle Module genau
+ * die der Leiste. Nachgemessen am 12.08.2026 bei Vorgabegroesse mit
+ * dem Inhalt des Abnahmelaufs: 1609 px, und dieselbe Zahl sagt
+ * bar.measure() auf die ganze Leiste.
+ *
+ * Ein UNSICHTBARES Widget beantwortet gtk_widget_measure mit 0. Das ist
+ * kein Sonderfall, sondern genau richtig - ein Modul ohne Text braucht
+ * keinen Platz -, aber es ist der Grund, aus dem eingeklappte Module in
+ * einem Aufklappfenster liegen und nicht auf set_visible(false).
+ */
+function minimumLength(widget: Gtk.Widget): number {
+  return widget.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
+}
+
+/** Der Einklapper einer Leiste.
+ *
+ * `fixed` sind die Widgets, die MITGEMESSEN und NIE eingeklappt werden:
+ * die Mitte mit den Arbeitsbereichen und der Fenstertitel. Sie stehen
+ * in einer eigenen Liste, seit es zwei davon gibt - vorher las diese
+ * Funktion `bar.get_center_widget()` und traf damit genau eines.
+ *
+ * Sie WEGZULASSEN waere kein Sparen, sondern ein Messfehler in die
+ * gefaehrliche Richtung: die Leiste hielte sich fuer schmaler, als sie
+ * ist, klappte zu wenig ein und liefe um die Breite der Arbeitsbereiche
+ * ueber - bei zehn Bereichen und Vorgabegroesse 408 px.
+ */
+function foldingOf(bar: Gtk.CenterBox, overflow: Gtk.MenuButton,
+                   tray: Gtk.Box, order: Foldable[],
+                   fixed: Gtk.Widget[]) {
+  let pending = false
+
+  const previousUnfolded = (entry: Foldable): Gtk.Widget | null => {
+    let best: Foldable | null = null
+    for (const other of order) {
+      if (other.box !== entry.box || other.folded) continue
+      if (other.index < entry.index && (!best || other.index > best.index)) {
+        best = other
+      }
+    }
+    return best ? best.widget : null
+  }
+
+  const fold = (entry: Foldable) => {
+    if (entry.folded) return
+    entry.box.remove(entry.widget)
+    tray.append(entry.widget)
+    entry.folded = true
+  }
+
+  const unfold = (entry: Foldable) => {
+    if (!entry.folded) return
+    tray.remove(entry.widget)
+    entry.folded = false
+    const after = previousUnfolded(entry)
+    // Der Knopf steht als erstes Kind im rechten Kasten, auch wenn er
+    // unsichtbar ist. Ein Modul, vor dem nichts mehr steht, gehoert
+    // hinter ihn - sonst wanderte er bei jedem Ausklappen nach rechts.
+    if (after) entry.box.insert_child_after(entry.widget, after)
+    else if (entry.box === bar.get_end_widget()) {
+      entry.box.insert_child_after(entry.widget, overflow)
+    } else entry.box.prepend(entry.widget)
+  }
+
+  /** Neu entscheiden, was hineinpasst. `length` ist die Breite des Schirms. */
+  const refit = (length: number) => {
+    if (length <= 0) return
+
+    // Sichtbar, BEVOR er gemessen wird, und am Ende wieder danach, ob
+    // er gebraucht wird.
+    //
+    // Ohne diese Zeile stuende der Knopf beim ERSTEN Durchgang noch auf
+    // unsichtbar, und ein unsichtbares Widget beantwortet
+    // gtk_widget_measure mit 0: die Leiste rechnete dann mit einem
+    // Knopf, der nichts kostet, klappte ein Modul zu wenig ein und lief
+    // um genau seine Breite ueber. Beim naechsten Takt eines Moduls -
+    // clocks.sh, also nach einer Sekunde - waere der Knopf sichtbar und
+    // die Rechnung richtig; der Fehler kostet also keine Sitzung,
+    // sondern die erste Sekunde nach dem Anmelden.
+    //
+    // Genau deshalb faengt ihn die Suite NICHT: sie misst nach
+    // anderthalb Sekunden, und da hat die Regel sich schon selbst
+    // berichtigt. Die Mutation dazu ist gelaufen und durchgekommen -
+    // das ist hier notiert, damit die Zeile nicht als ueberfluessig
+    // gestrichen wird, weil kein Test sie haelt.
+    overflow.set_visible(true)
+    const button = minimumLength(overflow)
+
+    let needed = 0
+    for (const widget of fixed) {
+      if (widget.visible) needed += minimumLength(widget)
+    }
+    for (const entry of order) {
+      if (entry.widget.visible) needed += minimumLength(entry.widget)
+    }
+
+    // Der Knopf kostet selbst Platz, aber nur, wenn er gebraucht wird.
+    const budget = needed <= length ? length : length - button
+    for (const entry of order) {
+      if (needed <= budget) { unfold(entry); continue }
+      if (!entry.widget.visible) { unfold(entry); continue }
+      needed -= minimumLength(entry.widget)
+      fold(entry)
+    }
+    overflow.set_visible(tray.get_first_child() !== null)
+  }
+
+  /** Einmal je Durchlauf der Ereignisschleife, nicht einmal je Modul.
+   *
+   * status.sh speist fuenf Module aus einer Antwort; ohne das Sammeln
+   * waere jede solche Antwort fuenf vollstaendige Neuberechnungen ueber
+   * achtzehn Module.
+   */
+  const schedule = (length: () => number) => {
+    if (pending) return
+    pending = true
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      pending = false
+      refit(length())
+      return false
+    })
+  }
+
+  return { refit, schedule }
+}
+
+// ---------------------------------------------------------------------
+// Die Leiste selbst
+// ---------------------------------------------------------------------
+
+export interface BarHandle {
+  windows: Astal.Window[]
+}
+
+/** Der Inhalt einer Leiste: die drei Kaesten mit allen Modulen darin.
+ *
+ * Getrennt vom Fenster, und das ist der Grund, aus dem diese Leiste
+ * ueberhaupt gemessen werden kann: eine Astal.Window ist eine
+ * Layer-Shell-Flaeche und braucht einen Wayland-Compositor, ein Gtk.Box
+ * nicht. tests/src/test_bar_headless.py baut genau diese Box unter
+ * gtk4-broadwayd und zaehlt, was darin steht.
+ *
+ * `screenLength` ist die BREITE des Schirms, auf dem diese Leiste
+ * steht, und keine Eigenschaft des Widgets: unter der Layer-Shell ist
+ * die Flaeche immer so breit wie der Schirm, auch wenn ihr Inhalt
+ * breiter ist. Nach der eigenen Zuteilung zu fragen hiesse also, den
+ * Ueberlauf gerade dann nicht zu sehen, wenn es einen gibt.
+ *
+ * DIE DREI KAESTEN HEISSEN left/centre/right, UND DAS IST JETZT WIEDER
+ * WOERTLICH
+ *     Es sind die drei Plaetze eines Gtk.CenterBox - start, center, end -
+ *     und die heissen so, egal welche Achse er hat. Ihre Namen sind
+ *     ausserdem CSS-Selektoren (#modules-left), die in bar-style.template
+ *     und in den Tests stehen. Sie beim Drehen umzubenennen brauchte
+ *     eine Aenderung an jeder dieser Stellen und saehe beim naechsten
+ *     Drehen wieder falsch aus. Was links und was rechts steht, sagt
+ *     der Anker, nicht der Name.
+ */
+export function BarContent(monitorName: string,
+                           toggle: (name: string, at?: OverlayAnchor) => void,
+                           screenLength: () => number,
+                           notifications: NotificationView): Gtk.CenterBox {
+  const left = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
+  left.set_name("modules-left")
+  const centre = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
+  centre.set_name("modules-center")
+  const right = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
+  right.set_name("modules-right")
+
+  const workspaces = workspacesModule(monitorName)
+  const window = windowModule()
+  // Die Belegungsanzeige. Sie steht hier oben wie die Arbeitsbereiche und
+  // der Fenstertitel, weil apply() sie unten erreichen muss: ihr Wert
+  // kommt aus DEMSELBEN Ereignisstrom und nicht aus einem eigenen Takt.
+  const keyboard = keyboardModule("custom/keyboard", () => refit())
+  const shared: SharedSink[] = []
+
+  // Wird unten gesetzt, sobald der Einklapper steht. Die Module werden
+  // VOR ihm gebaut und melden schon dabei ihre erste Antwort - deshalb
+  // eine Bindung, die zu diesem Zeitpunkt nichts tut, statt einer
+  // Reihenfolge, die man beim Lesen im Kopf behalten muss.
+  let refit: () => void = () => {}
+
+  // Ein Modul, das aus status.sh gespeist wird: eigener Kasten, aber
+  // kein eigener Aufruf.
+  const sharedModule = (name: string, key: string, spec: ClickSpec): Gtk.Widget => {
+    const { box, label } = moduleBox(name)
+    box.set_visible(false)
+    attachClicks(box, spec, toggle, monitorName)
+    shared.push({ key, box, label })
+    return box
+  }
+
+  const build = (name: string): Gtk.Widget | null => {
+    switch (name) {
+      case "hyprland/workspaces": return workspaces.widget
+      case "hyprland/window": return window.widget
+
+      // MIT WELCHER BELEGUNG GERADE GETIPPT WIRD.
+      //
+      // Kein Skript und kein Takt: der Wert kommt beim Start und danach
+      // nur noch, wenn Hyprland "activelayout" meldet. Die ganze
+      // Begruendung steht bei keyboardModule().
+      case "custom/keyboard": return keyboard.widget
+
+      // DATUM UND UHRZEIT, UND SEIT DEM 12.08.2026 BEIDE TUEREN
+      //
+      //     Links der Kalender, rechts das Meldungszentrum.
+      //
+      //     Der rechte Klick ist eine REPARATUR und keine Zutat.
+      //     GEMESSEN am 12.08.2026: das Zentrum hatte genau zwei
+      //     Eingaenge, `custom/clocks` und die Glocke. Die Glocke ist
+      //     bedingt, und `custom/clocks` gibt ohne eingestellte
+      //     Zusatzuhren einen LEEREN Text aus (siehe
+      //     bar-clocks-config.template, "Keine Zusatzuhr eingestellt")
+      //     und ist damit unsichtbar. Auf einer frischen Installation
+      //     war der Verlauf der Meldungen also ueberhaupt nicht
+      //     erreichbar, solange nichts anlag - und genau dann sucht man
+      //     ihn, weil eine Einblendung nach fuenf Sekunden weg ist.
+      //
+      //     An DIESEM Modul, weil es das einzige ist, das immer dasteht
+      //     und ohnehin von der Zeit handelt - dieselbe Zuordnung wie
+      //     auf macOS, wo die Uhr das Zentrum oeffnet. Dass es die
+      //     rechte Taste ist, steht im Tooltip, den date.sh mitgibt;
+      //     eine Taste ohne Hinweis waere eine Funktion, die nur
+      //     findet, wer sie schon kennt.
+      case "custom/date": return scriptModule({
+        name, exec: `${SCRIPTS}/date.sh`, intervalMs: 60000,
+        toggles: "calendar", togglesRight: "notifications",
+      }, toggle, refit, monitorName)
+
+      // Die Uhr ist der Eingang zum Meldungszentrum.
+      //
+      // Das ist von macOS uebernommen, und es ist die eine Stelle, an
+      // der ein Zentrum entstehen kann, ohne dass die Leiste ein Modul
+      // breiter wird: die Uhr steht ohnehin da, und sie hatte bis zum
+      // 12.08.2026 UEBERHAUPT keinen Klick - `custom/clocks` war das
+      // einzige Modul der Leiste ohne jede Handlung.
+      //
+      // Das Datum daneben oeffnet weiterhin den Kalender. Zwei
+      // Zeitmodule, zwei Fenster: was WANN ist, und was WAR.
+      case "custom/clocks": return scriptModule({
+        name, exec: `${SCRIPTS}/clocks.sh`, intervalMs: 1000,
+        toggles: "notifications",
+      }, toggle, refit, monitorName)
+
+      // Die Glocke. Kein Skript - siehe notificationModule().
+      case "custom/notifications":
+        return notificationModule(name, toggle, refit, notifications,
+                                  monitorName)
+
+      // WER GERADE ZUHOERT UND WER ZUSIEHT (Aufgabe #94).
+      //
+      // Das Modul daneben - pulseaudio#microphone - ist ein
+      // LAUTSTAERKEREGLER und beantwortet diese Frage nicht; die ganze
+      // Messung steht im Kopf von ags-privacy-scripts.template. Beide
+      // stehen nebeneinander auf der Leiste, weil sie verschiedene
+      // Fragen beantworten: wie laut das Mikrofon EINGESTELLT ist, und
+      // ob gerade jemand daran hoert.
+      //
+      // Der Klick oeffnet das Kontrollzentrum, weil dort die NAMEN
+      // stehen. "Etwas hoert zu" ohne "wer" ist eine Warnung, mit der
+      // niemand etwas anfangen kann - der Tooltip sagt es beim
+      // Darueberfahren, das Fenster sagt es zum Nachlesen.
+      case "custom/privacy": return scriptModule({
+        name, exec: `${SCRIPTS}/privacy.sh`, intervalMs: 2000,
+        toggles: "control",
+      }, toggle, refit, monitorName)
+
+      // WAS GERADE LAEUFT.
+      //
+      // Drei Tasten an einem Modul, und jede ist der Befehl, den auch
+      // die Medientaste der Tastatur schickt (siehe src/keybinds.py):
+      // links anhalten und fortsetzen, rechts weiter, Mitte zurueck.
+      // playerctl ist eine harte Abhaengigkeit von zepos-desktop, weil
+      // neun Bindungen es namentlich rufen - dieses Modul ist der
+      // zehnte Ruf und kein neues Paket.
+      case "custom/media": return scriptModule({
+        name, exec: `${SCRIPTS}/media.sh`, intervalMs: 2000,
+        onClick: "playerctl play-pause",
+        onClickRight: "playerctl next",
+        onClickMiddle: "playerctl previous",
+      }, toggle, refit, monitorName)
+
+      // WAS ANSTEHT.
+      //
+      // Zehn Minuten Takt und nicht zwei Sekunden: das Skript liest
+      // einen Zustand, den ein systemd-Zeitgeber taeglich schreibt.
+      // Der Klick oeffnet das Kontrollzentrum, in dem der Satz von
+      // `zepos-update --status` steht und der Knopf, der den Lauf
+      // anstoesst.
+      case "custom/updates": return scriptModule({
+        name, exec: `${SCRIPTS}/updates.sh`, intervalMs: 600000,
+        toggles: "control",
+      }, toggle, refit, monitorName)
+
+      case "custom/weather": return scriptModule({
+        name, exec: `${SCRIPTS}/weather.sh`, intervalMs: 300000,
+      }, toggle, refit, monitorName)
+
+      // Der rechte Klick oeffnete bis zum 12.08.2026 `sub
+      // ~/.config/hypr/hyprland.conf` - `sub` war ein Symlink auf
+      // sublime-text-4 aus dem AUR, den install-system.sh des Ursprungs
+      // anlegte. packaging/zepos-apps/PKGBUILD schreibt ueber genau
+      // diesen Namen: "auf jedem ZepOS eine Taste ohne Programm". Die
+      // TASTE wurde damals berichtigt (SUPER+T zeigt auf
+      // gnome-text-editor), die Leiste nicht - hier stand der tote Name
+      // noch. Jetzt derselbe Editor, den auch die Taste oeffnet: ein
+      // Programm je Aufgabe, und dieses liefert zepos-apps aus.
+      case "custom/hypr-shortcuts": return scriptModule({
+        name, exec: `${SCRIPTS}/hypr-shortcuts.py`, intervalMs: 0,
+        toggles: "shortcuts",
+        onClickRight: "gnome-text-editor ~/.config/hypr/hyprland.conf",
+      }, toggle, refit, monitorName)
+
+      // GEMELDET am 12.08.2026: "btop in der waybar". Er war schon hier
+      // - und ZepOS lieferte ihn nicht aus. `grep -rn btop` ueber den
+      // ganzen Baum fand am 12.08.2026 GENAU EINE Zeile, naemlich diese;
+      // kein Rezept nannte das Paket. Der Klick oeffnete also ein
+      // Terminal, das sofort wieder zuging. Seit dem 12.08. steht btop
+      // in packaging/zepos-apps.
+      //
+      // Der rechte Klick rief `watch -n 1 sensors` aus lm_sensors, und
+      // das war derselbe Fehler ein zweites Mal: auch dieses Paket
+      // lieferte niemand aus. Es kommt NICHT dazu, sondern die Zeile
+      // geht - btop zeigt die Temperaturen selbst, und "eine Anwendung
+      // je Aufgabe" ist die Regel, nach der zepos-apps ausgewaehlt ist.
+      case "custom/hardware": return scriptModule({
+        name, exec: `${SCRIPTS}/hardware-monitor.py`, intervalMs: 3000,
+        onClick: "kitty -e btop",
+      }, toggle, refit, monitorName)
+
+      case "custom/floating-layouts": return scriptModule({
+        name, exec: `${SCRIPTS}/floating-layouts-bar.sh`, intervalMs: 2000,
+        onClick: "$HOME/.local/bin/floating-window-manager load-layout",
+        onClickRight: "$HOME/.local/bin/floating-window-manager save-layout",
+        onClickMiddle: "$HOME/.local/bin/floating-window-manager delete-layout",
+      }, toggle, refit, monitorName)
+
+      case "custom/helpers": return scriptModule({
+        name, exec: `${SCRIPTS}/helpers-bar.py`, intervalMs: 5000,
+        onClick: "hyprctl hyprlaunch:helpers",
+      }, toggle, refit, monitorName)
+
+      case "pulseaudio": return sharedModule(name, "audio", {
+        onClick: "pamixer -t",
+        onScrollUp: "pamixer -i 5",
+        onScrollDown: "pamixer -d 5",
+      })
+
+      case "pulseaudio#microphone": return sharedModule(name, "microphone", {
+        onClick: "pamixer --default-source -t",
+        onScrollUp: "pamixer --default-source -i 5",
+        onScrollDown: "pamixer --default-source -d 5",
+      })
+
+      case "battery": return sharedModule(name, "battery", { toggles: "battery" })
+
+      // DIE BEIDEN VERBINDUNGEN WERDEN SEIT DEM 17.08.2026 HIER OBEN
+      // BEDIENT UND NICHT NUR ANGEZEIGT
+      //
+      //     BESTELLT, woertlich: "ich will alle control center
+      //     funktionen aufteilen oben auf die waybar wlan soll direkt
+      //     dahin bluez vorinstalliert bluetooth soll funktionieren also
+      //     so die haupt funktionen die neben funktionen koennen im
+      //     control setup bleiben".
+      //
+      //     Beide Module hatten einen Klick, und beide starteten einen
+      //     FREMDEN PROZESS neben der Sitzung:
+      //
+      //         network     $HOME/.local/bin/network-manager-gui - ein
+      //                     Menue aus zepos-menu, das nmcli ruft.
+      //         bluetooth   blueman-manager - GTK3, also genau das
+      //                     Toolkit, das Aufgabe #81 losgeworden ist.
+      //
+      //     Beide Fenster gibt es in DIESEM Prozess laengst
+      //     (widgets.network seit jeher, widgets.bluetooth seit heute),
+      //     und beide waren nur ueber das Kontrollzentrum zu erreichen -
+      //     also ueber zwei Klicks und ein zweites Fenster, das sich
+      //     dabei vor das erste stellt.
+      //
+      //     `toggles` statt `onClick` ist damit derselbe Schritt, den
+      //     die Leiste am 12.08.2026 fuer elf Module getan hat (siehe
+      //     den Kopf dieser Datei): eine Funktion IN DIESEM PROZESS
+      //     statt eines Prozessstarts. Der Weg zum grossen Werkzeug
+      //     bleibt - er steht jetzt IM Fenster, neben den anderen
+      //     Knoepfen, die dasselbe Geraet betreffen.
+      case "network": return sharedModule(name, "network", {
+        toggles: "network",
+      })
+
+      case "bluetooth": return sharedModule(name, "bluetooth", {
+        toggles: "bluetooth",
+      })
+
+      case "tray": {
+        const tray = Tray(TRAY_ICON_SIZE)
+        // Waagerecht, aus demselben Grund wie die Arbeitsbereiche: die
+        // Ablage waechst mit jedem fremden Programm, das ein Symbol
+        // hineinstellt, und auf einer Kopfleiste waechst sie damit in
+        // die Richtung, in der Platz ist. Senkrecht gestapelt wuerde
+        // ihr drittes Symbol die Leiste dreimal so dick machen.
+        //
+        // Tray() gibt eine Gtk.Box zurueck (siehe ags-tray.template),
+        // also ist die Achse hier setzbar und muss nicht dort
+        // entschieden werden: die Ablage weiss nicht, in welcher Leiste
+        // sie haengt, und die Leiste weiss es.
+        tray.set_orientation(Gtk.Orientation.HORIZONTAL)
+        tray.add_css_class("bar-module")
+        return tray
+      }
+
+      // Die vier Symbolknoepfe rechts. Sie hatten in der Waybar-Fassung
+      // keinen exec - sie sind ein festes Zeichen und ein Klick.
+      case "custom/disk": return staticModule(
+        name, "{{ICON_DISK}}", _("Disk space"), "disk", toggle,
+        monitorName)
+      case "custom/wallpaper": return staticModule(
+        name, "{{ICON_WALLPAPER}}", _("Wallpaper"), "wallpaper", toggle,
+        monitorName)
+
+      // DAS ZEICHEN FUER DAS AUSSEHEN, UND WARUM ES SEIT DEM 17.08.2026
+      // AUF DER LEISTE STEHT
+      //
+      //     GEMELDET, zum wiederholten Mal: "theme manager icon im
+      //     header fehlt immernoch".
+      //
+      //     GEMESSEN am selben Tag: den Style Editor gibt es
+      //     (ags-style-editor.template, Ueberlagerung "style", 69
+      //     einstellbare Farben und fuenf fertige Themen), und von der
+      //     Leiste fuehrte KEIN Weg dorthin. Der einzige Eingang war
+      //     eine Zeile im Kontrollzentrum, im Abschnitt SYSTEMDIENSTE,
+      //     zwischen Drucker und Netz-Watchdog - also zwei Klicks tief
+      //     und unter einer Ueberschrift, unter der niemand das
+      //     Aussehen sucht.
+      //
+      //     DASSELBE Zeichen, das dort stand ({{ICON_PALETTE}}), und
+      //     kein neues: ein zweites Zeichen fuer dieselbe Sache waere
+      //     ein zweiter Name dafuer. Die Zeile im Kontrollzentrum ist
+      //     dafuer weg - eine Hauptfunktion hat einen Platz, und das
+      //     ist seit heute dieser.
+      case "custom/theme": return staticModule(
+        name, "{{ICON_PALETTE}}", _("Appearance and colors"), "style",
+        toggle, monitorName)
+
+      case "custom/system": return staticModule(
+        name, "{{ICON_SETTINGS}}", _("Control center"), "control", toggle,
+        monitorName)
+
+      // DER LETZTE HALT FUER EINEN NAMEN OHNE ZWEIG.
+      //
+      // Seit dem 12.08.2026 kommen BEIDE Listen aus
+      // style_definition.py und damit ueber user-settings.json, also
+      // kann ein Name hier auch von einem Menschen stammen und nicht
+      // nur von einem Umbau. Der Erzeuger verwirft einen unbekannten
+      // Namen schon vorher und sagt es (siehe dort, "WAS AUF DER
+      // LEISTE STEHT") - diese Zeile faengt den Fall, in dem jemand die
+      // erzeugte Bar.tsx von Hand angefasst hat, und sie nennt deshalb
+      // die Stelle, an der die Liste eigentlich gepflegt wird.
+      default:
+        console.error(
+          `Unbekanntes Leistenmodul: "${name}" - die Leiste hat keinen `
+          + `case-Zweig dafuer, also bleibt sein Platz leer. `
+          + `Gepflegt wird die Reihenfolge in user-settings.json unter `
+          + `"bar.modules_left" / "bar.modules_right".`)
+        return null
+    }
+  }
+
+  // Der Knopf steht als ERSTES Kind im rechten Kasten, also dort, wo die
+  // eingeklappten Module gestanden haetten. Unsichtbar, solange nichts
+  // eingeklappt ist - aber vorhanden, damit ein wieder ausgeklapptes
+  // Modul einen festen Anker hat, hinter den es zurueckkehrt.
+  //
+  // SEIN Aufklappfenster bleibt SENKRECHT, und das ist kein
+  // uebersehener Rest: darin stehen die Module UNTEREINANDER, weil ein
+  // Aufklappfenster in die Flaeche wachsen darf und eine Leiste nicht.
+  // Waagerecht waere es eine zweite Leiste, die genauso wenig auf den
+  // Schirm passt wie die erste - und genau davor sind die Module ja
+  // gerade geflohen.
+  //
+  // WAS DABEI NICHT ZURUECKKOMMEN DARF: die Regel `#overflow-tray > *
+  // { margin-left: 0; margin-right: 0 }`, die bis zum 11.08.2026 im
+  // Stylesheet stand. Sie ist ein Messfehler, und zwar ein
+  // rueckgekoppelter: refit() rechnet die Mindestlaenge JEDES sichtbaren
+  // Moduls zusammen, auch der schon eingeklappten. Ein Modul, das im
+  // Aufklappfenster seinen Aussenrand verliert, misst sich dort um
+  // genau diesen Rand schmaler - die Leiste haelt sich fuer freier, als
+  // sie ist, und klappt beim naechsten Takt eines davon wieder aus.
+  // Derselbe Rand hier wie dort ist die Bedingung dafuer, dass die
+  // Rechnung nicht davon abhaengt, wo ein Modul gerade steht.
+  const overflowTray = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+  overflowTray.set_name("overflow-tray")
+  const overflow = new Gtk.MenuButton({ can_focus: false })
+  overflow.set_name("bar-overflow")
+  overflow.add_css_class("bar-module")
+  overflow.set_label(OVERFLOW_ICON)
+  overflow.set_tooltip_text(_("What no longer fits on this screen"))
+  overflow.set_popover(new Gtk.Popover({ child: overflowTray }))
+  overflow.set_visible(false)
+  right.append(overflow)
+
+  const foldable: Foldable[] = []
+  const add = (widget: Gtk.Widget, box: Gtk.Box) => {
+    box.append(widget)
+    foldable.push({ widget, box, index: foldable.length, folded: false })
+  }
+
+  // DIE ARBEITSBEREICHE STEHEN IN DER MITTE, UND ZWAR FEST (Aufgabe #96)
+  //
+  //     BESTELLT am 12.08.2026, woertlich: "in der mitte die
+  //     arbeitsbereiche links die uhrzeit und datum den rest kennst
+  //     du".
+  //
+  //     Fest und nicht ueber eine Liste, aus demselben Grund, aus dem
+  //     vorher der Fenstertitel hier festhing: die Mitte eines
+  //     Gtk.CenterBox ist EIN Platz, und eine Liste mit einem Eintrag
+  //     waere eine Liste, die niemand je aendert. Der Name
+  //     "hyprland/workspaces" steht deshalb auch in keiner der beiden
+  //     Haelften und in BAR_MODULES_AVAILABLE (src/style_definition.py)
+  //     ebenfalls nicht - er hat seinen Platz schon.
+  //
+  //     WAS DIE MITTE FUER SIE TUT: sie wird gemessen (sie zaehlt in
+  //     `needed`), aber nie eingeklappt. Damit sind die Arbeitsbereiche
+  //     genau das, was auf einer Leiste immer dastehen soll - der
+  //     einzige Posten, den man mit einem Blick sucht und der sich mit
+  //     jedem Tastendruck aendert.
+  centre.append(workspaces.widget)
+
+  // Was gemessen, aber nie eingeklappt wird. Die Mitte steht schon
+  // darin; der Fenstertitel kommt dazu, sobald eine der beiden Listen
+  // ihn aufstellt - und nur dann, weil ein Widget ohne Elternteil auf
+  // keiner Leiste Platz kostet.
+  const fixed: Gtk.Widget[] = [centre]
+
+  /** Ein Modul in seinen Kasten, und in die richtige der zwei Rollen. */
+  const place = (name: string, box: Gtk.Box) => {
+    const widget = build(name)
+    if (!widget) return
+    // Der Fenstertitel ist das eine Modul, das NACHGIBT statt zu
+    // weichen, und er steht deshalb nicht in `foldable`.
+    //
+    // Das ist gemessen und keine Vorliebe: seine Beschriftung
+    // ellipsiert, und ein ellipsierendes Gtk.Label meldet als
+    // Mindestbreite nicht die seines Textes, sondern die der drei
+    // Punkte. Ihn einzuklappen brauchte den Knopf und braechte fast
+    // keine Breite - und legte ausgerechnet die Auskunft, die sich am
+    // schnellsten aendert, hinter einen Klick, den niemand macht.
+    if (widget === window.widget) {
+      box.append(widget)
+      fixed.push(widget)
+      return
+    }
+    add(widget, box)
+  }
+
+  for (const name of MODULES_LEFT) place(name, left)
+  for (const name of MODULES_RIGHT) place(name, right)
+
+  const bar = new Gtk.CenterBox()
+  bar.set_name("bar")
+  // WAAGERECHT, und diese eine Zeile ist die ganze Drehung zurueck.
+  //
+  // Ein Gtk.CenterBox ist von sich aus waagerecht; die Zeile stuende
+  // hier also nicht, wenn sie nur die Vorgabe wiederholte. Sie steht
+  // hier, weil sie beim Drehen am 11.08.2026 GEFEHLT hat und die
+  // Messung genau gezeigt hat, was das kostet: die drei Kaesten waren
+  // jeder fuer sich senkrecht, standen aber NEBENeinander, die Leiste
+  // meldete 250 px Mindestbreite bei 185 px Dicke, und der obere wie
+  // der untere Kasten begannen bei y=48. Vier Achsen, und drei davon
+  // zu drehen reicht nicht - in beide Richtungen.
+  //
+  // Aufgefallen ist es der Ueberdeckungspruefung in
+  // tests/src/test_bar_headless.py, und zwar genau so, wie ihr Kopf es
+  // beschreibt: keine einzige Kante lag ausserhalb, und trotzdem lagen
+  // zwei Module aufeinander.
+  bar.set_orientation(Gtk.Orientation.HORIZONTAL)
+  // DIE PLATTE BESCHNEIDET IHRE KINDER, UND OHNE DIESE ZEILE TUT SIE ES
+  // NICHT
+  //
+  //     GEMELDET am 13.08.2026: "bei hover ist der hintergrund hinter
+  //     dem icon ueber den header".
+  //
+  //     GEGENGEMESSEN am selben Tag an Bildpunkten, verschachtelter
+  //     Compositor, Zeiger auf dem Zahnrad ganz rechts, zweimal
+  //     derselbe Baum und nur DIESE Zeile verschieden:
+  //
+  //         Schirm/Faktor        mit der Zeile   ohne sie
+  //          1920x1080 Vorgabe        0 px       60 Punkte, (1888,27,8,54)
+  //          1366x768  Vorgabe        0 px       60 Punkte, (1334,27,8,54)
+  //          1280x800  Faktor 1.0     0 px       15 Punkte, (1260,19,4,41)
+  //
+  //     Die Platte ist rund (STYLE_RADIUS_PANEL), der Zeigergrund eines
+  //     Moduls ist ein RECHTECK, und das letzte Modul reicht bis an
+  //     ihre Kante (margin-right: 0, siehe #custom-system in
+  //     bar-style.template). Ohne Beschneidung fuellt es also die Ecke
+  //     aus, die die Platte rund laesst - acht Spalten weit, oben wie
+  //     unten, und dazwischen keine.
+  //
+  //     Der Grund ist kein Rechenfehler, sondern eine Eigenschaft von
+  //     GTK4: ein Widget beschneidet seine Kinder NICHT von selbst. Ein
+  //     border-radius im Stylesheet rundet die eigene Zeichnung und sagt
+  //     ueber die Kinder nichts. Und `overflow` gibt es in GTKs
+  //     CSS-Teilmenge nicht - es ist eine Eigenschaft des Widgets, also
+  //     steht sie hier und nicht in bar-style.template.
+  //
+  //     HIDDEN beschneidet auf den GERUNDETEN Kasten der Platte. Damit
+  //     macht der Zeigergrund ihre Ecke mit, statt sie zu ueberdecken -
+  //     und das ist genau, was der Nutzer seit dem 12.08.2026 verlangt:
+  //     "die icon sollen im header nicht nochmal ein element haben",
+  //     also EINE Flaeche und keine Kaesten darauf.
+  //
+  //     Das Aufklappfenster des Einklapp-Knopfes und die Kurzhinweise
+  //     sind davon nicht betroffen: beide sind in GTK4 eigene Flaechen
+  //     des Compositors und keine Kinder dieses Widgets.
+  bar.set_overflow(Gtk.Overflow.HIDDEN)
+  bar.set_start_widget(left)
+  bar.set_center_widget(centre)
+  bar.set_end_widget(right)
+
+  // DIE REIHENFOLGE, IN DER EINGEKLAPPT WIRD
+  //     Erst der rechte Kasten von innen nach aussen, dann der linke von
+  //     innen nach aussen. Keine eigene Rangliste: das ist genau die
+  //     Reihenfolge, in der die Module ohnehin schon dastehen, einmal
+  //     von der Mitte weg gelesen.
+  //
+  //     Sie faellt richtig aus, und das ist nachrechenbar statt
+  //     behauptet. Zuletzt gehen die beiden Enden - links das Datum,
+  //     rechts der Knopf zum Kontrollzentrum -, also das, woran der
+  //     Blick die Leiste festmacht. Die Arbeitsbereiche, mit 408 px bei
+  //     Vorgabegroesse und zehn Bereichen der breiteste Posten der
+  //     Leiste, stehen seit dem 12.08.2026 in der MITTE und gehen damit
+  //     ueberhaupt nicht mehr - die Mitte wird gemessen und nie
+  //     eingeklappt.
+  const order = [
+    ...foldable.filter(entry => entry.box === right),
+    ...foldable.filter(entry => entry.box === left).reverse(),
+  ]
+  const folding = foldingOf(bar, overflow, overflowTray, order, fixed)
+  // Nicht die ganze Schirmbreite: die Platte haelt links und rechts
+  // ihren Abstand zum Rand, und was sie dafuer braucht, steht keinem
+  // Modul zur Verfuegung. Siehe PANEL_OVERHEAD.
+  refit = () => folding.schedule(() => screenLength() - PANEL_OVERHEAD)
+
+  if (shared.length) sharedStatus(shared, 2000, refit)
+
+  // Ein Zustand fuer alle Leisten: refresh() fragt den Compositor, und
+  // das darf nicht je Schirm einmal geschehen.
+  const apply = (event = "", data = "") => {
+    const state = Hyprland.refresh()
+    workspaces.update(state)
+    window.update(state)
+    if (event === "urgent") workspaces.markUrgent(data, state)
+    // Die Belegung NUR beim ersten Durchlauf und bei ihrem eigenen
+    // Ereignis. Sie bei jedem Arbeitsbereichswechsel neu zu erfragen
+    // waere ein Prozessstart je Tastendruck auf SUPER+1..0 - und die
+    // Antwort waere jedes Mal dieselbe.
+    if (event === "" || event === "activelayout") keyboard.read()
+    refit()
+  }
+  apply()
+  Hyprland.subscribe(apply)
+
+  return bar
+}
+
+// ---------------------------------------------------------------------
+// Die Glocke
+// ---------------------------------------------------------------------
+
+const NOTIFICATION_ICONS = {
+  dnd: "{{ICON_BELL_SLASH}}",
+  unseen: "{{ICON_BELL_BADGE}}",
+}
+
+/** Was die Leiste von den Meldungen wissen muss - und sonst nichts.
+ *
+ * WARUM DAS HEREINGEREICHT WIRD UND NICHT IMPORTIERT
+ *     Der Zustand liegt in ags/widget/Notifications.tsx, im selben
+ *     Prozess. Ein `import { notificationHub } from "./Notifications"`
+ *     waere der kuerzere Weg und er war der erste Versuch - er ist
+ *     gemessen falsch:
+ *
+ *     Notifications.tsx haengt an AstalNotifd, und
+ *     AstalNotifd.Notifd.get_default() meldet sich am
+ *     D-BUS-SITZUNGSBUS an. tests/src/bar_headless_child.tsx baut genau
+ *     diese Leiste auf einer HTML5-Anzeige, und sein Kopf sagt, warum
+ *     es NICHT `ags run` benutzt: "Auf einer Maschine, auf der der
+ *     Nutzer gerade arbeitet, ist das der Socket SEINER Sitzung." Ein
+ *     Import haette den Melder ueber die Hintertuer wieder
+ *     hereingeholt - jeder Testlauf haette sich um den
+ *     Benachrichtigungsdienst des angemeldeten Nutzers beworben.
+ *
+ *     Mit dieser Schnittstelle haengt die Leiste an drei Funktionen und
+ *     an keiner Bibliothek. Das Kind reicht eine Attrappe herein, app.ts
+ *     den echten Melder - dieselbe Bauart wie `toggle`, das aus
+ *     demselben Grund seit jeher hereingereicht wird.
+ */
+export interface NotificationView {
+  /** Ist "Nicht stoeren" an? */
+  dnd: () => boolean
+  /** Wie viele Meldungen seit dem letzten Blick ins Zentrum. */
+  unseen: () => number
+  /** Wird gerufen, sobald sich eines von beidem geaendert hat. */
+  onChange: (listener: () => void) => void
+}
+
+/** Das einzige Modul, das keinen Prozess startet und trotzdem etwas misst.
+ *
+ * ES IST BEDINGT, und zwar an genau zwei Zustaenden:
+ *
+ *   "Nicht stoeren" ist an   Dann MUSS etwas dastehen. Ein Rechner, der
+ *                            heimlich nichts mehr einblendet, ist genau
+ *                            der Fehler, den Spec §7.4 fuer den
+ *                            schlimmsten haelt - nichts meldet ihn,
+ *                            ausser dem Nutzer, dem etwas entgangen
+ *                            ist.
+ *   Es kam etwas herein      Seit das Zentrum zuletzt offen war. Das
+ *                            ist die Auskunft, die der Einblendstapel
+ *                            nach fuenf Sekunden wegwirft.
+ *
+ * Sonst nichts. Die Leiste traegt achtzehn Module und laeuft auf
+ * 1366x768 ueber; ein Modul, das im Ruhezustand dasteht und dasselbe
+ * zeigt wie im Meldezustand, macht das schlimmer und sagt nichts.
+ */
+function notificationModule(name: string,
+                            toggle: (name: string, at?: OverlayAnchor) => void,
+                            changed: () => void,
+                            notifications: NotificationView,
+                            monitorName: string): Gtk.Widget {
+  const { box, label } = moduleBox(name)
+  box.set_visible(false)
+  attachClicks(box, { toggles: "notifications" }, toggle, monitorName)
+
+  const refresh = () => {
+    // Hinter dieser Schnittstelle liegt eine Typelib (AstalNotifd), und
+    // deren get_default() wirft, wenn sie fehlt. Der Aufruf liegt IN
+    // der Leiste, die app.ts in einem EINZIGEN try baut - ohne diesen
+    // Fang kostete eine fehlende Typelib nicht die Glocke, sondern die
+    // ganze Leiste.
+    let dnd = false
+    let unseen = 0
+    try {
+      dnd = notifications.dnd()
+      unseen = notifications.unseen()
+    } catch (error: unknown) {
+      console.error("Leistenmodul", name, error)
+      box.set_visible(false)
+      return
+    }
+
+    if (dnd) {
+      label.set_label(NOTIFICATION_ICONS.dnd)
+      box.set_tooltip_text(
+        _("Do not disturb is on - it is recorded, but nothing is shown"))
+      box.set_css_classes(["bar-module", "notifications", "notifications-dnd"])
+      box.set_visible(true)
+    } else if (unseen > 0) {
+      label.set_label(`${NOTIFICATION_ICONS.unseen} ${unseen}`)
+      // ngettext und nicht zwei Zeichenketten: wieviele Formen eine
+      // Sprache hat, entscheidet die Sprache und nicht diese Datei.
+      box.set_tooltip_text(format(
+        ngettext("{count} message since you last looked",
+                 "{count} messages since you last looked", unseen),
+        { count: unseen }))
+      box.set_css_classes(
+        ["bar-module", "notifications", "notifications-unseen"])
+      box.set_visible(true)
+    } else {
+      // Die Klassen gehen MIT. Ein verborgenes Widget, das noch
+      // `notifications-dnd` traegt, ist eine Behauptung ueber einen
+      // Zustand, der vorbei ist - und beim naechsten Aufgehen faerbte
+      // die alte Klasse den neuen Zustand, bis die richtige Zeile
+      // laeuft.
+      box.set_css_classes(["bar-module"])
+      label.set_label("")
+      box.set_visible(false)
+    }
+    // Das Modul wird sichtbar und unsichtbar, und beides aendert die
+    // Breite der Leiste. Ohne diese Zeile bliebe die Rechnung des
+    // Einklappers auf dem Stand von vorhin.
+    changed()
+  }
+
+  try {
+    notifications.onChange(refresh)
+  } catch (error: unknown) {
+    console.error("Leistenmodul", name, error)
+  }
+  refresh()
+  return box
+}
+
+// ---------------------------------------------------------------------
+// Die Tastaturbelegung
+// ---------------------------------------------------------------------
+//
+// WARUM ES DIESES MODUL SEIT DEM 17.08.2026 GIBT
+//     BESTELLT, woertlich: "die tastatur icon fehlt auch noch links
+//     neben dem datum".
+//
+//     Es war nichts verrutscht - GESUCHT am selben Tag ueber den ganzen
+//     Baum: zu Belegung, Sprache oder xkb stand in ags-bar.template und
+//     src/style_definition.py KEIN Wort. Die Leiste hat nie gesagt, mit
+//     welcher Belegung getippt wird.
+//
+// UND DAS IST BEI DIESEM SYSTEM KEINE ZIERDE
+//     Die Belegung entscheidet, wie die Passphrase beim naechsten Start
+//     ankommt. Genau dort lag der Fehler vom 15.08.2026: /etc/vconsole
+//     .conf fehlte in der Initramfs, libxkbcommon fiel auf "us" zurueck,
+//     und die richtige Passphrase wurde abgewiesen. Ein sichtbarer
+//     Zustand haette das in einer Sekunde verraten.
+//
+// WOHER DER WERT KOMMT, UND WARUM ER NICHT IM TAKT GEHOLT WIRD
+//     `hyprctl devices -j` nennt unter "keyboards" je Geraet "layout"
+//     (die eingerichtete Liste) und "active_keymap" (die geltende
+//     Belegung). GEMESSEN am 17.08.2026 auf dieser Maschine:
+//
+//         name          at-translated-set-2-keyboard   main: true
+//         layout        de
+//         active_keymap German
+//
+//     Gefragt wird EINMAL beim Start und danach nur noch, wenn Hyprland
+//     "activelayout" meldet - also wenn sich wirklich etwas geaendert
+//     hat. Kein Takt, kein zweiter Ereignisstrom: der Leser in
+//     utils/hyprland.ts ist derselbe, den die Arbeitsbereiche benutzen,
+//     und dieses Ereignis ist dort seit heute in INTERESTING.
+//
+//     Die Frage traegt `timeout`, wie jeder aeussere Aufruf in
+//     bar-status-config.template seit dem 16.08.2026: ein Werkzeug, das
+//     nicht antwortet, haelt sonst die ganze Leiste an (siehe
+//     test_ein_werkzeug_das_nie_antwortet_haelt_die_leiste_nicht_an).
+const KEYBOARD_FRIST = 3
+
+// AUS "German" WIRD "de", UND ZWAR NICHT UEBER EINE GETIPPTE TABELLE
+//
+//     "active_keymap" ist der KLARNAME, nicht das Kuerzel - gemessen
+//     oben. Auf einer Leiste steht kein "German", und eine Liste
+//     `{ German: "de", "English (US)": "us", ... }` waere eine zweite,
+//     unvollstaendige Fassung einer Tabelle, die auf jeder Installation
+//     ohnehin liegt: /usr/share/X11/xkb/rules/base.lst nennt im
+//     Abschnitt "! layout" GENAU diese Paare, am 17.08.2026 neunundneunzig
+//     Stueck, darunter "us English (US)" und "de German".
+//
+//     Sie kommt aus xkeyboard-config, und das ist keine neue
+//     Abhaengigkeit: libxkbcommon zieht es, und zepos-hyprland nennt
+//     libxkbcommon (packaging/zepos-hyprland/PKGBUILD). Ohne die Datei
+//     gaebe es keine Belegung, ueber die dieses Modul berichten koennte.
+//
+//     Gelesen wird sie EINMAL, beim Bauen des Moduls, und ohne
+//     Prozessstart.
+const XKB_LAYOUT_LIST = "/usr/share/X11/xkb/rules/base.lst"
+
+function layoutCodes(): Map<string, string> {
+  const codes = new Map<string, string>()
+  try {
+    const [ok, bytes] = GLib.file_get_contents(XKB_LAYOUT_LIST)
+    if (!ok) return codes
+    const text = new TextDecoder().decode(bytes)
+    let inSection = false
+    for (const line of text.split("\n")) {
+      if (line.startsWith("!")) {
+        inSection = line.trim() === "! layout"
+        continue
+      }
+      if (!inSection) continue
+      const match = line.match(/^\s+(\S+)\s\s+(.+?)\s*$/)
+      if (match) codes.set(match[2], match[1])
+    }
+  } catch (error: unknown) {
+    console.error("Die xkb-Belegungsliste liess sich nicht lesen:", error)
+  }
+  return codes
+}
+
+interface KeyboardDevice {
+  name: string
+  main: boolean
+  layout: string
+  active_keymap: string
+}
+
+/** Das Modul, das sagt, mit welcher Belegung gerade getippt wird. */
+function keyboardModule(name: string, changed: () => void): {
+  widget: Gtk.Widget
+  read: () => void
+} {
+  const { box, label } = moduleBox(name)
+  // Unsichtbar bis zur ersten Antwort - dieselbe Regel wie bei jedem
+  // Skriptmodul, aus demselben Grund.
+  box.set_visible(false)
+  const codes = layoutCodes()
+
+  // Das Geraet, dessen Belegung umgeschaltet wird, und die Liste, die
+  // eingerichtet ist. Beide kommen aus derselben Antwort wie der
+  // angezeigte Wert, damit der Klick nicht auf einen zweiten Aufruf
+  // warten muss.
+  let device = ""
+  let layouts: string[] = []
+
+  // DER KLICK SCHALTET UM - ABER NUR, WENN ES ETWAS UMZUSCHALTEN GIBT
+  //
+  //     GEMESSEN am 17.08.2026: src/templates/hyprland-universal-config
+  //     .template setzt `kb_layout = de`, also EINE Belegung.
+  //     `hyprctl switchxkblayout <geraet> next` haette darauf keine
+  //     Wirkung, und ein Knopf ohne Wirkung ist nach Spec §7.4 ein
+  //     Fehler und keine Kleinigkeit.
+  //
+  //     Deshalb entscheidet die gemessene Liste und nicht der Bauplan:
+  //     mit MEHREREN Belegungen traegt der Kasten die Klasse
+  //     `keyboard-switchable` und bekommt damit einen Zeigergrund
+  //     (src/styles/bar-style.template), mit einer traegt er sie nicht
+  //     und sieht aus wie das, was er dann ist - eine Anzeige. Eine
+  //     zweite Klasse fuer den Ruhefall gibt es NICHT: eine Klasse ohne
+  //     Regel ist ein Name, den niemand liest.
+  //
+  //     GEMESSEN am 17.08.2026 im verschachtelten Compositor, mit
+  //     `hyprctl keyword input:kb_layout de,us` zur Laufzeit und
+  //     dreimal `switchxkblayout ... next`:
+  //
+  //         layout='de,us'  active_keymap='German'       -> Leiste "DE"
+  //         layout='de,us'  active_keymap='English (US)' -> Leiste "US"
+  //         layout='de,us'  active_keymap='German'       -> Leiste "DE"
+  //
+  //     Auf den drei Bildern der Leiste steht es so. Und der
+  //     Ereignisstrom hat es angestossen:
+  //     "activelayout>>wl_keyboard,English (US)".
+  const gesture = new Gtk.GestureClick({ button: 1 })
+  gesture.connect("released", () => {
+    if (layouts.length < 2 || !device) return
+    // Der Geraetename kommt aus einer fremden Antwort und geht in eine
+    // Shell - also wird er auch so behandelt: das ist die uebliche
+    // Anfuehrungsregel fuer einfache Hochkommata in sh.
+    const sicher = device.replace(/'/g, "'\\''")
+    run(`timeout ${KEYBOARD_FRIST} hyprctl switchxkblayout '${sicher}' next`)
+  })
+  box.add_controller(gesture)
+
+  const read = () => {
+    execAsync(["bash", "-c", `timeout ${KEYBOARD_FRIST} hyprctl devices -j`])
+      .then((output: string) => {
+        const data = JSON.parse(output) as { keyboards?: KeyboardDevice[] }
+        const keyboards = data.keyboards ?? []
+        // Hyprland nennt genau EINE Tastatur `main`; die uebrigen sind
+        // Knoepfe am Gehaeuse und Ereignisquellen ("power-button",
+        // "video-bus" - gemessen sieben Eintraege auf dieser Maschine,
+        // von denen einer main ist). Ohne eine main-Tastatur nimmt das
+        // Modul die erste, die es gibt, statt zu schweigen.
+        const main = keyboards.find(entry => entry.main) ?? keyboards[0]
+        if (!main) {
+          box.set_visible(false)
+          changed()
+          return
+        }
+        device = main.name
+        layouts = (main.layout ?? "").split(",")
+          .map(entry => entry.trim()).filter(Boolean)
+
+        const klarname = (main.active_keymap ?? "").trim()
+        // Das Kuerzel, wenn die Tabelle den Klarnamen kennt - sonst der
+        // Klarname selbst. Lieber ein langes Wort auf der Leiste als
+        // eine Auskunft, die fehlt, weil ein Name nicht in einer Liste
+        // stand.
+        const kuerzel = codes.get(klarname) ?? klarname
+        // EIN Leerzeichen, seit dem 17.08.2026.
+        //
+        // GEMELDET: „weniger platz fuer keyboard icon sodass mehr platz
+        // rechts und links ist“. Hier standen ZWEI - und zwar als
+        //
+        // TYPOGRAFISCHE ANFUEHRUNGSZEICHEN UND KEINE GERADEN: in dieser
+        // Datei beginnt ein gerades Anfuehrungszeichen eine
+        // Zeichenkette, und der Scanner von
+        // test_keine_deutsche_zeichenkette_bleibt_in_der_oberflaeche
+        // liest deshalb ueber das Kommentarzeichen hinweg. Er hat das
+        // Zitat am 17.08.2026 als deutschen Oberflaechentext gemeldet -
+        // zu Recht, denn an dieser Stelle sah er eine Zeichenkette.
+        // einzige Stelle der ganzen Leiste; kein anderes Modul trennt
+        // sein Zeichen so von seinem Text. Es war ein Ausreisser, kein
+        // Stilmittel, und die linke Haelfte ist seit demselben Tag die
+        // engere von beiden.
+        label.set_label(`${KEYBOARD_ICON} ${kuerzel.toUpperCase()}`)
+
+        const classes = ["bar-module"]
+        if (layouts.length > 1) classes.push("keyboard-switchable")
+        box.set_css_classes(classes)
+        // Der msgid steht in EINER Zeile, auch wenn sie lang ist:
+        // xgettext liest zwei aneinandergehaengte Literale nicht als
+        // eines, und ein halber msgid ist ein Eintrag, den der Katalog
+        // nie findet.
+        box.set_tooltip_text(layouts.length > 1
+          ? format(
+            _("Keyboard layout: {layout} - click switches to the next of {count}"),
+            { layout: klarname, count: layouts.length })
+          : format(
+            _("Keyboard layout: {layout} - it is the only one configured"),
+            { layout: klarname }))
+        box.set_visible(true)
+        changed()
+      })
+      .catch((error: unknown) => {
+        // Keine Antwort ist eine fehlende AUSKUNFT und kein fehlendes
+        // Geraet - dieselbe Unterscheidung wie in
+        // bar-status-config.template. Das Modul sagt es mit dem Zeichen,
+        // das die Leiste dafuer hat, statt zu verschwinden.
+        console.error("Leistenmodul", name, error)
+        label.set_label(`${KEYBOARD_ICON} ${STATUS_BROKEN_ICON}`)
+        box.set_css_classes(["bar-module", "broken"])
+        box.set_tooltip_text(
+          _("hyprctl did not name the keyboard layout"))
+        box.set_visible(true)
+        changed()
+      })
+  }
+
+  return { widget: box, read }
+}
+
+function staticModule(name: string, icon: string, tooltip: string,
+                      widget: string,
+                      toggle: (name: string, at?: OverlayAnchor) => void,
+                      monitorName: string): Gtk.Widget {
+  const { box, label } = moduleBox(name)
+  label.set_label(icon)
+  box.set_tooltip_text(tooltip)
+  attachClicks(box, { toggles: widget }, toggle, monitorName)
+  return box
+}
+
+/** Eine Leiste je Schirm. */
+export default function Bar(toggle: (name: string, at?: OverlayAnchor) => void,
+                            notifications: NotificationView): BarHandle {
+  const display = Gdk.Display.get_default()
+  const windows: Astal.Window[] = []
+  if (!display) {
+    console.error("Keine Anzeige - es gibt keine Leiste")
+    return { windows }
+  }
+
+  const monitors = display.get_monitors()
+  for (let index = 0; index < monitors.get_n_items(); index++) {
+    const monitor = monitors.get_item(index) as Gdk.Monitor
+    const window = new Astal.Window({
+      namespace: "zepos-bar",
+      name: `bar-${monitor.connector}`,
+      layer: Astal.Layer.TOP,
+      // TOP, LEFT und RIGHT zusammen: nur so zieht sich die Flaeche
+      // ueber die volle BREITE. Mit TOP allein waere sie so breit wie
+      // ihr Inhalt.
+      //
+      // Das ist zugleich die Stelle, an der die Reservierung von links
+      // nach oben zurueckwandert: Astal rechnet die exklusive Zone aus
+      // dem Anker und der Groesse. Mit TOP|LEFT|RIGHT und einer Hoehe
+      // von BAR_THICKNESS reserviert sie einen Streifen OBEN - der
+      // linke Rand des Schirms gehoert damit wieder den Fenstern, statt
+      // ein leerer Streifen zu bleiben.
+      //
+      // Der zweite Streifen ist der des Docks, unten. Was die beiden
+      // zusammen kosten, misst
+      // test_the_bar_and_the_footer_leave_the_windows_room in
+      // tests/src/test_bar_headless.py - eine Zahl, die niemand
+      // schaetzen soll.
+      anchor: Astal.WindowAnchor.TOP | Astal.WindowAnchor.LEFT
+        | Astal.WindowAnchor.RIGHT,
+      exclusivity: Astal.Exclusivity.EXCLUSIVE,
+      gdkmonitor: monitor,
+      visible: false,
+    })
+    window.add_css_class("bar-window")
+    // BAR_THICKNESS + EDGE_GAP, UND DAS EINE IST DER RAND
+    //
+    //     Die Flaeche traegt oben einen Rand von EDGE_GAP (siehe
+    //     bar-style.template, margin-top) und unten keinen. Waere sie
+    //     BAR_THICKNESS hoch, LAEGE der Rand also IN der Zahl und die
+    //     Platte bemalte BAR_THICKNESS - EDGE_GAP.
+    //
+    //     Genau das war sie bis zum 12.08.2026, und genau das war der
+    //     Unterschied, den der Nutzer gesehen hat: gemessen an einem
+    //     Bildschirmabzug malte der Kopf 59 Punkte und der Fuss 83.
+    //     Der Fuss liest dieselbe Zahl naemlich als BEMALTE Hoehe und
+    //     legt seinen Rand darunter. Zwei Lesarten einer Zahl sind
+    //     zwei Zahlen.
+    //
+    //     Jetzt lesen beide sie gleich: BAR_THICKNESS ist, was man
+    //     SIEHT, der Rand kommt obendrauf. Die Flaeche ist deshalb um
+    //     genau einen Rand hoeher als das, was sie bemalt.
+    //
+    //     Die exklusive Zone waechst mit - Astal rechnet sie aus Anker
+    //     und Groesse -, der Streifen ist also 107 statt 83 breit. Das
+    //     ist kein Nebeneffekt, sondern richtig: unter der Platte
+    //     beginnt sofort das Fenstergebiet, und der Abstand, den man
+    //     dort sieht, ist der Aussenabstand des Fensters. Mit der
+    //     alten Hoehe verlor der Fuss diesen Vergleich, weil sein
+    //     Streifen bereits so gerechnet war.
+    window.set_default_size(1, BAR_THICKNESS + EDGE_GAP)
+    // Die Breite kommt vom Schirm und nicht vom Fenster: die Flaeche
+    // ist links UND rechts verankert, also immer so breit wie der
+    // Schirm - und wenn ihr Inhalt breiter ist, waechst nicht sie,
+    // sondern der Inhalt laeuft ueber ihren Rand hinaus. Nach der
+    // eigenen Zuteilung zu fragen hiesse, den Ueberlauf gerade dann
+    // nicht zu sehen, wenn es einen gibt.
+    const content = BarContent(monitor.connector, toggle,
+                               () => monitor.get_geometry().width,
+                               notifications)
+    window.set_child(content)
+    window.visible = true
+    windows.push(window)
+  }
+
+  return { windows }
+}

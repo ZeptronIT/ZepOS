@@ -1,0 +1,205 @@
+#!/bin/bash
+# Was gerade laeuft - Titel, Zustand, Spieler
+# Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+# Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-media-scripts.template kopieren
+#
+# WOFUER ES DAS GIBT
+#     Die Leiste zeigte bis zum 12.08.2026 keinen Titel und hatte keinen
+#     Pause-Knopf, waehrend neun Tastenbindungen dieses Projekts genau
+#     das steuern (die sechs XF86Audio-Tasten und SUPER+F1 bis F3, siehe
+#     packaging/zepos-desktop/PKGBUILD bei 'playerctl'). Wer keine
+#     Medientasten auf der Tastatur hat, hatte keinen Weg.
+#
+# WOMIT, UND WARUM NICHT MIT ASTAL
+#     Mit playerctl. Das ist eine Korrektur an der naheliegenden
+#     Annahme, Astal bringe dafuer etwas mit - es TUT das, oben im
+#     Ursprung, unter lib/mpris. GEMESSEN am 12.08.2026 auf dieser
+#     Maschine:
+#
+#         /usr/share/gir-1.0/     Astal-3.0, Astal-4.0, AstalIO-0.1,
+#                                 AstalNotifd-0.1. Kein AstalMpris.
+#         packaging/astal/        pkgname=('libastal-io' 'libastal-4'
+#                                 'libastal-notifd') - drei
+#                                 meson-Projekte aus dem Ursprungsbaum,
+#                                 lib/mpris ist keines davon.
+#
+#     AstalMpris zu benutzen hiesse also, ein viertes Teilpaket zu
+#     bauen und auszuliefern. playerctl liegt dagegen schon auf JEDER
+#     ZepOS-Installation - es ist eine harte Abhaengigkeit von
+#     zepos-desktop, weil die neun Tasten es namentlich rufen. Eine
+#     zweite Bibliothek fuer dieselbe Auskunft waere zwei Wege zu einer
+#     Antwort.
+#
+# WAS ES KOSTET, GEMESSEN am 12.08.2026 gegen einen eigenen
+# D-Bus-Sitzungsbus mit einem MPRIS-Spieler darauf:
+#     `playerctl -a metadata --format ...`   4 ms, dreimal nacheinander,
+#                                            eine Zeile je Spieler.
+#
+# DIE FORM DER ANTWORT
+#     Die drei Felder jedes Leistenskripts, plus vier fuer das
+#     Kontrollzentrum - dieselbe Aufteilung wie bei privacy.sh und aus
+#     demselben Grund: die Leiste zeigt DASS und was, das
+#     Kontrollzentrum zeigt es ganz und gibt die drei Knoepfe dazu. Ein
+#     zweites Skript waere ein zweiter Messzeitpunkt.
+#
+#         {"text": "...", "tooltip": "...", "class": "...",
+#          "status": "Playing", "player": "firefox",
+#          "artist": "...", "title": "..."}
+set -uo pipefail
+
+ICON_PLAY="{{ICON_PLAY}}"
+ICON_PAUSE="{{ICON_PAUSE}}"
+
+# Wie lang der Titel auf der LEISTE hoechstens wird.
+#
+# Die schmale Sprosse aus src/sizes.py, und sie ist hier eine DECKE und
+# kein Ziel: ein gewoehnlicher Titel ist zwanzig bis vierzig Zeichen
+# lang und wird nie beschnitten. Sie faengt den Fall, gegen den es sonst
+# nichts gibt - ein Netzradio, dessen "Titel" die ganze Sendeankuendigung
+# ist. Ohne sie schoebe ein einziger solcher Strom die halbe Leiste vom
+# Schirm.
+#
+# WARUM NICHT ELLIPSIEREN LASSEN
+#     Eine ellipsierende Gtk.Label meldet als MINDESTbreite nicht, was
+#     ihr Text braucht, sondern das, worauf sie zu schrumpfen bereit ist.
+#     Der Einklapper der Leiste rechnet mit genau dieser Mindestbreite
+#     (minimumLength() in Bar.tsx). Ein Modul, das sich schmaler misst
+#     als es ist, laesst die Leiste sich fuer freier halten, als sie ist
+#     - und dann klappt sie zu wenig ein und laeuft ueber. Der Kopf von
+#     windowModule() in ags-bar.template fuehrt dieselbe Messung fuer
+#     den Fenstertitel; dort ist Ellipsieren richtig, WEIL er in der
+#     Mitte des Gtk.CenterBox steht und die Mitte nie eingeklappt wird.
+#     Hier steht das Modul im rechten Kasten.
+TITLE_LIMIT={{STYLE_MEASURE_LINE}}
+
+# Das Trennzeichen zwischen den vier Feldern: ASCII 0x1F, "unit
+# separator".
+#
+# HIER STAND EIN TABULATOR, UND DAS WAR EIN FEHLER - gefunden von
+# tests/src/test_now_playing.py am 12.08.2026, mit einem Spieler ohne
+# Interpreten:
+#
+#     "Playing<TAB>mpv<TAB><TAB>Kurz"
+#     IFS=$'\t' read -r status player artist title
+#     -> status=Playing player=mpv artist=Kurz title=
+#
+# Der Titel landete im Interpreten und der Titel war leer. Der Grund
+# steht in bash(1) unter "Word Splitting": ein Trennzeichen, das
+# LEERRAUM ist - Leerzeichen, Tabulator, Zeilenumbruch -, wird in
+# Folgen zu EINEM zusammengefasst, und ein leeres Feld verschwindet
+# damit. Ein Trennzeichen, das kein Leerraum ist, wird das nicht.
+#
+# 0x1F, weil es genau dafuer erfunden wurde und in keinem Liedtitel
+# vorkommt. playerctl reicht es unveraendert durch - es steht in der
+# Formatzeichenkette wie jedes andere Zeichen.
+SEP=$'\x1f'
+
+# Der Spieler, der gerade zaehlt.
+#
+# EINE ZEILE JE SPIELER, und die Auswahl steht hier und nicht bei
+# playerctl: ohne `-a` nimmt es den ERSTEN, den es findet, und das ist
+# die Reihenfolge, in der die Programme gestartet wurden. Wer einen
+# Browser offen hat und danach Musik startet, bekaeme den Browser.
+# Gesucht ist der, der SPIELT; erst wenn keiner spielt, der, der
+# pausiert ist.
+#
+# "Stopped" faellt heraus. Ein gestoppter Spieler hat nichts geladen -
+# das Modul haette einen Titel, den es nicht gibt, und einen Knopf, der
+# nichts fortsetzt.
+current() {
+    local playing="" paused="" line status
+
+    # `IFS= read -r line` liest die Zeile UNVERAENDERT. Zerlegt wird
+    # erst unten, an einer Stelle - zweimal zerlegen und wieder
+    # zusammensetzen war der Weg, auf dem das leere Feld verloren ging.
+    while IFS= read -r line; do
+        status=${line%%"$SEP"*}
+        case "$status" in
+            Playing) [ -n "$playing" ] || playing="$line" ;;
+            Paused)  [ -n "$paused" ]  || paused="$line" ;;
+        esac
+    done < <(playerctl -a metadata \
+                 --format "{{status}}$SEP{{playerName}}$SEP{{artist}}$SEP{{title}}" \
+                 2>/dev/null)
+
+    printf '%s' "${playing:-$paused}"
+}
+
+# Auf TITLE_LIMIT ZEICHEN kuerzen - nicht auf Bytes.
+#
+# LC_ALL=C.UTF-8 STEHT AM AUFRUF, UND ES IST DER GANZE UNTERSCHIED.
+#
+# Hier stand ein blankes `awk` mit dem Kommentar, gawk zaehle "in jedem
+# Fall Zeichen". Das ist falsch, und tests/src/test_now_playing.py hat
+# es am 12.08.2026 gemessen: derselbe Titel, "Radio Ümläut – Die große
+# Abendsendung mit Gästen aus aller Welt", unter `env -i` ohne jede
+# Locale.
+#
+#     ohne Locale         length() = 69   (Bytes)
+#     LC_ALL=C.UTF-8      length() = 63   (Zeichen)
+#
+# awk zaehlt in Zeichen, WENN die Locale eine Mehrbyte-Locale ist, und
+# in Bytes sonst. Ohne die Angabe haenge die Laenge des Titels also
+# daran, mit welcher Umgebung die Leiste gestartet wurde - und im
+# schlimmsten Fall faellt der Schnitt mitten in einen Umlaut.
+#
+# C.UTF-8 und nicht de_DE.UTF-8: es ist die einzige UTF-8-Locale, die
+# glibc IMMER mitbringt, ohne dass jemand sie in /etc/locale.gen
+# erzeugt haben muss. Eine Anzeigesprache wird damit nicht gesetzt -
+# das verbietet tests/src/test_locale.py mit Messung -, sondern nur die
+# Kodierung, in der Zeichen gezaehlt werden.
+shorten() {
+    printf '%s' "$1" | LC_ALL=C.UTF-8 awk -v limit="$TITLE_LIMIT" '
+        { print (length($0) > limit) ? substr($0, 1, limit - 1) "…" : $0 }'
+}
+
+line=$(current)
+
+text=""
+class=""
+tooltip=""
+status=""
+player=""
+artist=""
+title=""
+
+if [ -n "$line" ]; then
+    IFS="$SEP" read -r status player artist title <<< "$line"
+
+    # Der Titel kann fehlen - ein Netzradio ohne Metadaten, ein
+    # Browserreiter ohne Seitentitel. Dann steht der Name des Spielers
+    # da: er ist die schlechteste Auskunft AUSSER gar keiner, und ein
+    # Modul ohne Text verschwindet, was hier falsch waere - es laeuft ja
+    # etwas.
+    local_title="$title"
+    [ -n "$local_title" ] || local_title="$player"
+
+    if [ -n "$artist" ]; then
+        headline="$artist – $local_title"
+    else
+        headline="$local_title"
+    fi
+
+    if [ "$status" = Playing ]; then
+        icon="$ICON_PLAY"
+        class="media media-playing"
+    else
+        icon="$ICON_PAUSE"
+        class="media media-paused"
+    fi
+
+    text="$icon $(shorten "$headline")"
+    tooltip="$headline
+$player ($status)"
+fi
+
+jq -n -c \
+    --arg text "$text" \
+    --arg tooltip "$tooltip" \
+    --arg class "$class" \
+    --arg status "$status" \
+    --arg player "$player" \
+    --arg artist "$artist" \
+    --arg title "$title" \
+    '{text: $text, tooltip: $tooltip, class: $class,
+      status: $status, player: $player, artist: $artist, title: $title}'

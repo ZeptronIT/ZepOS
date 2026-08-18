@@ -1,0 +1,26 @@
+[Desktop Entry]
+# Die ZepOS-Sitzung, wie ein Greeter sie sieht - installiert nach
+# /usr/share/wayland-sessions/zepos.desktop
+#
+# WARUM EIN EIGENER EINTRAG NEBEN DEM VON HYPRLAND
+#     hyprland.desktop startet /usr/bin/start-hyprland, also den
+#     Compositor. Das ist fuer Arch richtig und fuer ZepOS zu frueh:
+#     ZepOS erzeugt seine Konfiguration unmittelbar VOR dem Compositor -
+#     src/plugins.py sagt, warum das nicht spaeter gehen kann, und nennt
+#     "ein Login ueber einen Display-Manager an start-hyprland vorbei"
+#     ausdruecklich als die Luecke, die es nicht schliessen kann.
+#
+#     Dieser Eintrag schliesst sie: Exec ist der ZepOS-Sitzungsstarter,
+#     und der geht durch ~/.local/bin/start-hyprland, das die
+#     Konfiguration erzeugt und dann erst /usr/bin/start-hyprland
+#     aufruft.
+#
+#     Deshalb bietet src/bin/zepos-greeter auch nur DIESEN Eintrag an
+#     und nicht das ganze Verzeichnis - die Begruendung steht dort.
+Name=ZepOS
+Comment=Der ZepOS-Desktop auf Hyprland
+Exec=/usr/bin/zepos-session
+TryExec=/usr/bin/zepos-session
+Type=Application
+DesktopNames=Hyprland
+Keywords=zepos;hyprland;wayland;

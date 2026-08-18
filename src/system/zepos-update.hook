@@ -1,0 +1,36 @@
+# Der Haken, der die Selbstaktualisierung einschaltet.
+#
+# WARUM ES DEN GEBEN MUSS
+#     Ein Arch-Paket kann keinen Dienst einschalten - pacman fuehrt dafuer
+#     kein systemctl aus, und installer/core/translate.py traegt die
+#     Messung dazu. Fuer NEUE Installationen loest das der Installer, der
+#     zepos-update.timer in seiner services-Liste nennt.
+#
+#     Fuer jede Maschine, die VOR dieser Fassung installiert wurde, gibt
+#     es diesen Weg nicht: sie bekommt den Aktualisierer als gewoehnliche
+#     Paketaktualisierung und haette danach alles ausser dem Symlink, der
+#     ihn ausloest. Genau dafuer ist ein ALPM-Haken da.
+#
+# WARUM ER AUF DEN PFAD DER UNIT ZEIGT UND NICHT AUF DAS PAKET
+#     Type = Path feuert, wenn genau diese Datei in der Transaktion
+#     vorkommt. Waere hier Type = Package mit Target = zepos-config, liefe
+#     der Haken auch, wenn sich an der Aktualisierung nichts geaendert hat
+#     - bei jedem `pacman -Syu`, in dem irgendetwas an zepos-config neu
+#     ist.
+#
+# WARUM DAS KEIN UEBERSTIMMEN DES NUTZERS IST
+#     `zepos-update --apply` liest die Einstellungen und tut, was dort
+#     steht. Wer update.enabled auf false gesetzt hat, bekommt hier ein
+#     `systemctl disable` und keinen wiederauferstandenen Zeitgeber. Der
+#     Schalter ist die Einstellung, nicht der Symlink; src/update.py sagt,
+#     warum das die einzige Stelle sein darf.
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Target = usr/lib/systemd/system/zepos-update.timer
+
+[Action]
+Description = ZepOS-Aktualisierung auf den Stand der Einstellungen bringen...
+When = PostTransaction
+Exec = /usr/bin/zepos-update --apply

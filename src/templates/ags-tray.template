@@ -1,0 +1,452 @@
+// Die Statusablage der Leiste: ein StatusNotifierWatcher und ein Host
+// Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+// Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-tray.template kopieren
+//
+// VORBILD
+//     waybar, src/modules/sni/{watcher,host,item}.cpp (MIT), und die
+//     Spezifikation, der beide folgen:
+//     https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/
+//     Uebernommen ist der Aufbau in drei Teilen (Watcher besitzt den
+//     Namen, Host abonniert, Item zeichnet), die Reihenfolge beim
+//     Registrieren und die Regel, dass der Dienstname eines Items
+//     sowohl "busname" als auch "busname/pfad" sein darf. Der Code ist
+//     unserer.
+//
+// WARUM SELBST UND NICHT AstalTray
+//     GEMESSEN am 11.08.2026: lib/tray/meson.build des angehefteten
+//     Astal-Archivs verlangt `dependency('appmenu-glib-translator')`.
+//     `pacman -Si appmenu-glib-translator` antwortet "Paket wurde nicht
+//     gefunden" - das Paket ist nicht in den Arch-Repositorien, sondern
+//     im AUR, und Spec §4.3 hat das AUR ausgeschlossen. AstalTray zu
+//     benutzen hiesse also, ein weiteres Fremdprojekt zu paketieren und
+//     anzuheften, fuer eine Ablage mit vier Symbolen.
+//
+// WAS DIESE ABLAGE KANN UND WAS NICHT
+//     Sie kann: Symbol (nach Name oder als Bild), Beschriftung,
+//     Statuswechsel, Linksklick (Activate), Mittelklick
+//     (SecondaryActivate), Rechtsklick (ContextMenu).
+//     Sie kann NICHT: das com.canonical.dbusmenu-Menue eines Programms
+//     selbst zeichnen. Genau dafuer gibt es appmenu-glib-translator, und
+//     genau das ist der Teil, der hier fehlt. Programme, die auf
+//     ContextMenu ihr Menue selbst oeffnen - die Mehrheit - sind davon
+//     nicht betroffen; Programme, die stattdessen nur einen Menuepfad
+//     melden, zeigen auf Rechtsklick nichts. Das steht hier, damit es
+//     eine bekannte Grenze ist und keine Ueberraschung.
+
+import Gio from "gi://Gio"
+import GLib from "gi://GLib"
+import GdkPixbuf from "gi://GdkPixbuf"
+import { Gtk } from "ags/gtk4"
+
+const WATCHER_NAME = "org.kde.StatusNotifierWatcher"
+const WATCHER_PATH = "/StatusNotifierWatcher"
+const ITEM_INTERFACE = "org.kde.StatusNotifierItem"
+
+// Die Schnittstelle, die der Watcher anbietet. Wortlaut aus der
+// Spezifikation; jede Eigenschaft, die hier fehlte, liest ein Programm
+// als "kein Watcher da" und zeigt sein Symbol nirgends.
+const WATCHER_XML = `
+<node>
+  <interface name="org.kde.StatusNotifierWatcher">
+    <method name="RegisterStatusNotifierItem">
+      <arg type="s" direction="in" name="service"/>
+    </method>
+    <method name="RegisterStatusNotifierHost">
+      <arg type="s" direction="in" name="service"/>
+    </method>
+    <property name="RegisteredStatusNotifierItems" type="as" access="read"/>
+    <property name="IsStatusNotifierHostRegistered" type="b" access="read"/>
+    <property name="ProtocolVersion" type="i" access="read"/>
+    <signal name="StatusNotifierItemRegistered">
+      <arg type="s" name="service"/>
+    </signal>
+    <signal name="StatusNotifierItemUnregistered">
+      <arg type="s" name="service"/>
+    </signal>
+    <signal name="StatusNotifierHostRegistered"/>
+  </interface>
+</node>`
+
+/** Ein Dienstname, zerlegt in Busnamen und Objektpfad.
+ *
+ * Der Aufrufer darf beides schicken: "org.example.App" (dann liegt das
+ * Objekt auf dem Vorgabepfad) oder "org.example.App/StatusNotifierItem".
+ * Aeltere Programme schicken sogar nur den Pfad und verlassen sich
+ * darauf, dass der Watcher den Absender des Aufrufs als Busnamen nimmt -
+ * deshalb `sender`.
+ */
+function splitService(service: string, sender: string): { bus: string; path: string } {
+  if (service.startsWith("/")) {
+    return { bus: sender, path: service }
+  }
+  const slash = service.indexOf("/")
+  if (slash === -1) {
+    return { bus: service, path: "/StatusNotifierItem" }
+  }
+  return { bus: service.slice(0, slash), path: service.slice(slash) }
+}
+
+// Ein Bild aus IconPixmap: (Breite, Hoehe, Daten) in ARGB32, und die
+// Bytes stehen in Netzwerkreihenfolge.
+//
+// GdkPixbuf kennt nur RGBA in Speicherreihenfolge. Die Umsortierung
+// unten ist deshalb kein Detail, sondern der Unterschied zwischen einem
+// Symbol und einem blauen Fleck: ohne sie liest Pixbuf das A als R.
+// Dieselbe Rechnung steht in waybars item.cpp.
+function pixmapToPixbuf(pixmaps: Array<[number, number, Uint8Array]>): GdkPixbuf.Pixbuf | null {
+  if (!pixmaps.length) return null
+
+  // Das groesste Angebot, weil die Leiste herunterskaliert und nicht
+  // herauf: ein 16er Bild auf 24 px gezogen ist unscharf, ein 48er auf
+  // 24 px nicht.
+  let best = pixmaps[0]
+  for (const candidate of pixmaps) {
+    if (candidate[0] * candidate[1] > best[0] * best[1]) best = candidate
+  }
+
+  const [width, height, argb] = best
+  if (width <= 0 || height <= 0 || argb.length < width * height * 4) return null
+
+  const rgba = new Uint8Array(width * height * 4)
+  for (let index = 0; index < width * height; index++) {
+    const source = index * 4
+    rgba[source + 0] = argb[source + 1]
+    rgba[source + 1] = argb[source + 2]
+    rgba[source + 2] = argb[source + 3]
+    rgba[source + 3] = argb[source + 0]
+  }
+
+  return GdkPixbuf.Pixbuf.new_from_bytes(
+    new GLib.Bytes(rgba), GdkPixbuf.Colorspace.RGB, true, 8,
+    width, height, width * 4)
+}
+
+/** Ein Eintrag der Ablage: der Knopf und der Draht zu seinem Programm. */
+class TrayItem {
+  readonly button: Gtk.Button
+  private readonly image: Gtk.Image
+  private proxy: Gio.DBusProxy | null = null
+
+  constructor(private readonly bus: string, private readonly path: string,
+              private readonly iconSize: number,
+              private readonly onGone: () => void) {
+    this.image = new Gtk.Image({ pixel_size: iconSize })
+    this.button = new Gtk.Button({ can_focus: false })
+    this.button.set_child(this.image)
+    this.button.add_css_class("tray-item")
+
+    // Links, Mitte, rechts - drei Regler, weil GTK4 keinen Knopf mit
+    // drei Tasten kennt. Der linke bleibt der gewoehnliche "clicked",
+    // damit die Tastaturbedienung (Leertaste) ihn ebenfalls ausloest.
+    this.button.connect("clicked", () => this.call("Activate"))
+
+    const middle = new Gtk.GestureClick({ button: 2 })
+    middle.connect("pressed", () => this.call("SecondaryActivate"))
+    this.button.add_controller(middle)
+
+    const right = new Gtk.GestureClick({ button: 3 })
+    right.connect("pressed", () => this.call("ContextMenu"))
+    this.button.add_controller(right)
+
+    this.build()
+  }
+
+  private build(): void {
+    Gio.DBusProxy.new_for_bus(
+      Gio.BusType.SESSION,
+      Gio.DBusProxyFlags.NONE,
+      null, this.bus, this.path, ITEM_INTERFACE, null,
+      (_source, result) => {
+        try {
+          this.proxy = Gio.DBusProxy.new_for_bus_finish(result)
+        } catch (error) {
+          console.error(`Ablage: ${this.bus} antwortet nicht:`, error)
+          this.onGone()
+          return
+        }
+        // Jedes der vier Signale bedeutet "frag mich neu". Sie tragen
+        // absichtlich keine Nutzlast - das ist die Spezifikation, nicht
+        // eine Vereinfachung hier.
+        this.proxy.connect("g-signal", (_proxy, _sender, signal) => {
+          if (signal.startsWith("New")) this.update()
+        })
+        this.update()
+      })
+  }
+
+  private property<T>(name: string, fallback: T): T {
+    const value = this.proxy?.get_cached_property(name)
+    if (!value) return fallback
+    return value.deepUnpack() as T
+  }
+
+  /** Symbol und Beschriftung aus den Eigenschaften des Programms.
+   *
+   * Die Reihenfolge ist die der Spezifikation: ein Name aus dem
+   * Symbolthema gewinnt ueber ein mitgeliefertes Bild. Ein Thema-Symbol
+   * folgt der Symbolgroesse und dem Farbschema des Systems, ein
+   * eingebettetes Bild nicht.
+   */
+  private update(): void {
+    const themePath = this.property<string>("IconThemePath", "")
+    if (themePath) {
+      const display = this.button.get_display()
+      if (display) Gtk.IconTheme.get_for_display(display).add_search_path(themePath)
+    }
+
+    const status = this.property<string>("Status", "Active")
+    const iconName = status === "NeedsAttention"
+      ? this.property<string>("AttentionIconName", "")
+        || this.property<string>("IconName", "")
+      : this.property<string>("IconName", "")
+
+    if (iconName) {
+      this.image.set_from_icon_name(iconName)
+    } else {
+      const pixbuf = pixmapToPixbuf(
+        this.property<Array<[number, number, Uint8Array]>>("IconPixmap", []))
+      if (pixbuf) {
+        this.image.set_from_pixbuf(pixbuf)
+      } else {
+        // Lieber ein sichtbares Fragezeichen als ein leerer Knopf: ein
+        // Programm, dessen Symbol nicht ankommt, soll auffallen und
+        // anklickbar bleiben.
+        this.image.set_from_icon_name("image-missing")
+      }
+    }
+    this.image.set_pixel_size(this.iconSize)
+
+    const title = this.property<string>("Title", "") || this.bus
+    this.button.set_tooltip_text(title)
+
+    // "Passive" heisst nicht "weg". show-passive-items war in der
+    // Waybar-Fassung eingeschaltet, und das bleibt so: ein Programm, das
+    // sich selbst als passiv meldet, ist trotzdem das Programm, ueber
+    // das der Nutzer es wieder hervorholt.
+    this.button.set_css_classes(
+      status === "Passive" ? ["tray-item", "passive"]
+        : status === "NeedsAttention" ? ["tray-item", "needs-attention"]
+          : ["tray-item"])
+  }
+
+  private call(method: string): void {
+    if (!this.proxy) return
+    // x und y sind die Bildschirmkoordinaten des Klicks. Unter Wayland
+    // kann ein Klient sie nicht erfragen, und die Spezifikation laesst
+    // 0,0 zu; Programme benutzen sie ohnehin nur, um ein eigenes Menue
+    // zu platzieren, was unter Wayland der Compositor tut.
+    this.proxy.call(method, new GLib.Variant("(ii)", [0, 0]),
+      Gio.DBusCallFlags.NONE, -1, null, null)
+  }
+}
+
+/** Ein angemeldeter Dienst: der Busname, sein Objektpfad und der
+ * Schluessel, unter dem beide zusammen gefuehrt werden. */
+interface Service {
+  key: string
+  bus: string
+  path: string
+}
+
+/** Was eine Leiste vom Watcher braucht. */
+interface Registry {
+  services: () => Service[]
+  subscribe: (listener: () => void) => void
+}
+
+// Der eine Watcher dieses Prozesses. `null`, bis die erste Leiste ihn
+// anfordert.
+let registry: Registry | null = null
+
+/** Der StatusNotifierWatcher und der Host - genau einmal je Prozess.
+ *
+ * WARUM ER NICHT MEHR IN Tray() STECKT (Aufgabe #96, 12.08.2026)
+ *     Tray() wird EINMAL JE SCHIRM aufgerufen: ags-bar.template baut
+ *     eine Leiste je Gdk.Monitor, und jede davon holt sich ihr
+ *     Ablagemodul. Der Watcher stand bis heute im Rumpf von Tray(), also
+ *     rief die zweite Leiste `Gio.bus_own_name` fuer denselben Namen auf
+ *     DERSELBEN Verbindung ein zweites Mal.
+ *
+ *     Was GDBus daraufhin tut, ist der Fehler: es antwortet mit
+ *     ALREADY_OWNER und ruft den Erwerbs-Rueckruf trotzdem, und der
+ *     exportierte dann dasselbe Objekt noch einmal auf denselben Pfad:
+ *
+ *         JS ERROR: Gio.IOErrorEnum: An object is already exported for
+ *         the interface org.kde.StatusNotifierWatcher at
+ *         /StatusNotifierWatcher
+ *
+ *     Auf jeder Maschine mit zwei Schirmen also bei jedem Anmelden. Und
+ *     die Meldung, die der Nutzer stattdessen zu lesen bekam, war dazu
+ *     noch falsch: "gehoert schon einem anderen Programm" - es war
+ *     derselbe Prozess.
+ *
+ * WARUM DER WATCHER GETEILT WIRD UND DIE KNOEPFE NICHT
+ *     Ein Gtk.Widget hat genau einen Elternteil. Dieselben Knoepfe auf
+ *     zwei Leisten zu haengen ist also nicht moeglich; was geteilt wird,
+ *     ist die LISTE der Dienste, und jede Leiste baut ihre eigenen
+ *     Knoepfe daraus. Genau diese Trennung fehlte: die Dienstliste hing
+ *     an der Box, und deshalb musste der Watcher mit ihr vervielfacht
+ *     werden.
+ */
+function watcher(): Registry {
+  if (registry) return registry
+
+  const services: Service[] = []
+  const watches = new Map<string, number>()
+  const listeners: Array<() => void> = []
+  let exported: any = null
+  let hostRegistered = false
+
+  const announce = () => { for (const listener of listeners) listener() }
+
+  const forget = (key: string) => {
+    const index = services.findIndex(service => service.key === key)
+    if (index === -1) return
+    services.splice(index, 1)
+    const watch = watches.get(key)
+    if (watch !== undefined) {
+      Gio.bus_unwatch_name(watch)
+      watches.delete(key)
+    }
+    exported?.emit_signal("StatusNotifierItemUnregistered",
+      new GLib.Variant("(s)", [key]))
+    announce()
+  }
+
+  const definition = {
+    ProtocolVersion: 0,
+
+    get RegisteredStatusNotifierItems(): string[] {
+      return services.map(service => service.key)
+    },
+
+    get IsStatusNotifierHostRegistered(): boolean {
+      return hostRegistered
+    },
+
+    RegisterStatusNotifierItem(service: string, invocation: Gio.DBusMethodInvocation): void {
+      const sender = invocation.get_sender() ?? ""
+      const { bus, path } = splitService(service, sender)
+      const key = `${bus}${path}`
+      if (services.some(known => known.key === key)) return
+      services.push({ key, bus, path })
+
+      // Verschwindet das Programm, verschwindet sein Knopf. Ohne diese
+      // Ueberwachung bliebe nach jedem beendeten Programm ein Symbol
+      // stehen, das auf einen Bus zeigt, den es nicht mehr gibt - und
+      // ein Klick darauf laeuft in eine Zeitgrenze.
+      watches.set(key, Gio.bus_watch_name(
+        Gio.BusType.SESSION, bus, Gio.BusNameWatcherFlags.NONE,
+        null, () => forget(key)))
+
+      exported?.emit_signal("StatusNotifierItemRegistered",
+        new GLib.Variant("(s)", [key]))
+      announce()
+    },
+
+    RegisterStatusNotifierHost(_service: string): void {
+      hostRegistered = true
+      exported?.emit_signal("StatusNotifierHostRegistered", null)
+    },
+  }
+
+  // Der Watcher-Name gehoert dem, der ihn zuerst nimmt. Ist schon einer
+  // da - ein Panel eines anderen Schreibtischs -, wird das gemeldet und
+  // die Ablagen bleiben leer, statt dem anderen die Symbole wegzunehmen.
+  // REPLACE waere hier falsch: die Programme sind beim ersten Watcher
+  // angemeldet und melden sich nicht von selbst neu.
+  //
+  // Die Meldung nennt seit dem 12.08.2026 ausdruecklich ein FREMDES
+  // Programm, weil der haeufigste Fall - die zweite Leiste desselben
+  // Prozesses - jetzt gar nicht mehr hierher kommt.
+  Gio.bus_own_name(
+    Gio.BusType.SESSION, WATCHER_NAME, Gio.BusNameOwnerFlags.NONE,
+    (connection: Gio.DBusConnection) => {
+      exported = Gio.DBusExportedObject.wrapJSObject(WATCHER_XML, definition)
+      exported.export(connection, WATCHER_PATH)
+    },
+    () => {
+      // Der Host-Name ist das Signal an die Programme, dass jemand
+      // zusieht. Ohne ihn zeigen manche (nm-applet, blueman) gar kein
+      // Symbol an.
+      hostRegistered = true
+    },
+    () => {
+      console.error(
+        `Ablage: ${WATCHER_NAME} gehoert schon einem anderen Programm - `
+        + "die Leiste zeigt keine Ablagesymbole")
+    })
+
+  Gio.bus_own_name(
+    Gio.BusType.SESSION, `org.kde.StatusNotifierHost-${new Gio.Credentials().get_unix_pid()}`,
+    Gio.BusNameOwnerFlags.NONE, null, null, null)
+
+  registry = {
+    services: () => [...services],
+    subscribe: (listener: () => void) => { listeners.push(listener) },
+  }
+  return registry
+}
+
+/** Die Ablage EINER Leiste: die Box mit den Knoepfen der Dienste.
+ *
+ * EINE LEERE ABLAGE ZEIGT NICHTS, UND DAS IST GEMESSEN
+ *     Hier stand als Begruendung, die Box sei "leer, solange kein
+ *     Programm ein Symbol angemeldet hat - und das ist der Normalfall
+ *     auf einem frischen Schreibtisch". Der erste Halbsatz stimmte, der
+ *     Schluss daraus nicht: eine leere Box ist nicht dasselbe wie keine
+ *     Box. Die Leiste haengt ihr die Klasse `bar-module` an, und die
+ *     malt einen Grund.
+ *
+ *     GEMESSEN auf out/render/schreibtisch-1920.png (12.08.2026, frische
+ *     Sitzung, kein Programm mit Ablagesymbol): ein Block von 30x47
+ *     Bildpunkten bei x=1707..1736, zwischen "87%" und den drei
+ *     Symbolknoepfen rechts aussen. Eine Kachel ohne Inhalt, im
+ *     haeufigsten Zustand ueberhaupt.
+ *
+ *     `set_visible(false)` und nicht `remove()`: die Leiste kennt das
+ *     Modul, sie soll es nur nicht zeigen. Ein unsichtbares Widget
+ *     beantwortet gtk_widget_measure ausserdem mit 0, also kostet die
+ *     leere Ablage auch in der Einklapp-Rechnung nichts mehr - siehe
+ *     foldingOf() in ags-bar.template, das genau darauf baut.
+ *
+ *     Was dabei EINEN Takt hinterherhinkt: taucht das erste Symbol auf,
+ *     wird die Box sichtbar, ohne dass die Einklapp-Rechnung davon
+ *     erfaehrt. Sie laeuft beim naechsten Modultakt (clocks.sh, also
+ *     nach einer Sekunde) und ist dann richtig. Der Weg dahin ginge
+ *     ueber ags-bar.template, das den Einklapper haelt.
+ */
+export function Tray(iconSize: number): Gtk.Box {
+  const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 0 })
+  box.set_name("tray")
+
+  const items = new Map<string, TrayItem>()
+  const shared = watcher()
+
+  const drop = (key: string) => {
+    const item = items.get(key)
+    if (!item) return
+    box.remove(item.button)
+    items.delete(key)
+    box.set_visible(items.size > 0)
+  }
+
+  const rebuild = () => {
+    const wanted = new Map(shared.services().map(service => [service.key, service]))
+    for (const key of [...items.keys()]) {
+      if (!wanted.has(key)) drop(key)
+    }
+    for (const [key, service] of wanted) {
+      if (items.has(key)) continue
+      const item = new TrayItem(service.bus, service.path, iconSize,
+        () => drop(key))
+      items.set(key, item)
+      box.append(item.button)
+    }
+    box.set_visible(items.size > 0)
+  }
+
+  shared.subscribe(rebuild)
+  rebuild()
+  return box
+}

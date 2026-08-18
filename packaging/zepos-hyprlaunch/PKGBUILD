@@ -1,0 +1,244 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# hyprlaunch - der Anwendungsstarter auf SUPER+SPACE (Spec §7.1).
+#
+# WAS SICH AM 11.08.2026 GEAENDERT HAT: DIE QUELLE LIEGT JETZT HIER
+#     Bis dahin holte dieses Rezept einen Tarball von
+#     github.com/azzuriel/hyprlaunch, festgenagelt auf 24e5c8b. Das
+#     Paket hiess zepos-hyprlaunch und war ein Nachbau eines fremden
+#     Baums.
+#
+#     GEMESSEN am 11.08.2026, an der GitHub-API und am Tarball selbst:
+#
+#         Sterne 1, Forks 0, Tags 0, Beitragende 1
+#         letzter Commit 2026-02-10, also sechs Monate alt
+#         "license": null - es gibt keine LICENSE-Datei und keinen
+#             einzigen Urhebervermerk im ganzen Baum
+#
+#     Sechs Monate sind in Hyprland-Zeit vier Minor-Versionen. Das
+#     Argument "upstream zieht die Compositor-Version nach" ist bei
+#     diesem Baum also nicht bloss schwach, es ist gemessen falsch: die
+#     Portierung auf 0.56 steht in packaging/zepos-hyprland und in den
+#     Kommentaren dieses Projekts, nicht dort. ZepOS war schon der
+#     Pfleger; es besass die Quelle nur nicht.
+#
+#     Dazu die Verfuegbarkeit: ein Konto einer Privatperson, ohne Fork,
+#     der es ueberleben wuerde. Verschwindet es, laesst sich ZepOS nicht
+#     mehr bauen - und zwar an der Stelle, die den Anwendungsstarter
+#     liefert.
+#
+#     Die Quelle liegt deshalb unter plugins/hyprlaunch/ in diesem Baum,
+#     und dieses Rezept baut daraus. Dieselbe Bauart wie zepos-config,
+#     zepos-installer, zepos-logout und zepos-menu: packaging/build.sh
+#     macht den Tarball aus dem ARBEITSBAUM.
+#
+# WAS AN DER UEBERNOMMENEN QUELLE GEAENDERT WURDE
+#     Das Aussehen. 116 Zeilen CSS standen als `static const char*` im
+#     uebersetzten Objekt, mit zwanzig Farbliteralen in zehn Toenen -
+#     kein einziger davon aus src/brand.py, und der Schreibtisch ist
+#     petrolfarben. Die drei Fenstermasse standen als `static constexpr`
+#     daneben, wo der Regler aus src/sizes.py sie nicht erreichen
+#     konnte. Beides kommt jetzt aus erzeugten Dateien in
+#     ~/.config/hyprlaunch/. Die Koepfe der geaenderten Dateien fuehren
+#     die Messungen einzeln.
+#
+# DIE LIZENZ, UND WARUM SIE JETZT ALS DATEI MITKOMMT
+#     BSD-3-Clause erlaubt genau das hier - uebernehmen, aendern,
+#     weitergeben - unter der Bedingung, dass Urhebervermerk und
+#     Haftungsausschluss erhalten bleiben. Upstream hatte beides nicht:
+#     die Lizenz steht dort in einer Zeile der README und in keiner
+#     Datei. Ein Vermerk, den es nicht gibt, laesst sich nicht erhalten,
+#     also ist er in plugins/LICENSE zum ersten Mal ausgeschrieben, aus
+#     dem, was nachpruefbar ist. Dieses Rezept legt ihn unter
+#     /usr/share/licenses ab - was das vorherige, das denselben Code
+#     auslieferte, nicht tat.
+#
+# WARUM DAS PAKET ZWEI DATEIEN LEGT UND NICHT EINE
+#     Spec §4.2 sagt, ein Plugin-Paket legt genau eine Datei ab, das
+#     Objekt unter /usr/lib/hyprland/plugins/<name>.so, und dieser Satz
+#     ist ueber den Pfad recht, den src/plugins.py prueft. hyprlaunch
+#     ist trotzdem absichtlich zweigeteilt: das Plugin enthaelt kein GTK
+#     und keine Threads, und das Fenster ist ein eigener
+#     Layer-Shell-Prozess, den das Plugin mit
+#
+#         execlp("hyprlaunch-ui", "hyprlaunch-ui", arg, nullptr)   Globals.cpp
+#
+#     startet. execlp sucht in PATH, also muss /usr/bin/hyprlaunch-ui
+#     existieren. Ein Paket, das nur das Objekt auslieferte, gaebe einen
+#     Desktop, dessen SUPER+SPACE ein Plugin laedt, einen Dispatcher
+#     registriert, forkt und scheitert - und §7.4 hat einige Muehe
+#     darauf verwendet, dass diese Taste nie tot ist. Ein Paket, weil
+#     die zwei Haelften ein Programm sind: ein CMake-Projekt, ein
+#     gemeinsames ConfigParser.cpp.
+#
+# WAS DIE DREI zepos-hyprland-ABHAENGIGKEITEN SOLLEN
+#     packaging/zepos-hyprzones/PKGBUILD fuehrt es aus: die
+#     Versionsspanne ist Spec §7.3 und sieht einen Rebuild nicht, das
+#     ABI-Kuerzel sieht ihn, und Hyprlands eigene Ladeprüfung vergleicht
+#     die Zeichenkette "0.1" und sieht gar nichts.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-hyprlaunch
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="Der Anwendungsstarter von ZepOS: ein GTK4-Layer-Shell-Fenster und sein Hyprland-Plugin"
+arch=('x86_64')
+url="https://github.com/ZeptronIT/ZepOS"
+# Gemessen am 11.08.2026: der Quellbaum traegt KEINE Lizenzdatei und
+# keinen Copyright-Vermerk, die GitHub-API meldet "license": null. Hier
+# stand trotzdem BSD-3-Clause - vermutlich mitgewandert von den Plugins
+# des Hyprland-Projekts, die wirklich so lizenziert sind.
+#
+# 'custom' beschreibt die Lage, statt eine Lizenz zu behaupten: Leon
+# Marzoll hat am 11.08.2026 erklaert, dass ZepOS die Quellen verwenden
+# und veraendern darf. Eine Erlaubnis gilt dem, dem sie erteilt wurde -
+# was ein NUTZER von ZepOS mit diesem Code darf, steht damit nirgends.
+# plugins/LICENSE haelt das fest und nennt das eine, was die Luecke
+# schliesst: eine Lizenzdatei im Repositorium des Urhebers.
+license=('custom')
+
+# Das ABI-Kuerzel, das zepos-hyprland veroeffentlicht, aus der Datei
+# gelesen, die jenes Paket installiert. packaging/zepos-hyprzones/
+# PKGBUILD hat die Gruende vollstaendig: gelesen werden muss es hier
+# statt in package(), weil makepkg diese Felder auch ausserhalb der
+# Paketfunktionen auswertet und dann mit nichts gesetzt, und der
+# Rueckfall unten ist eine Zeichenkette, die kein Paket bereitstellt,
+# damit ein Bau ohne zepos-hyprland anhaelt statt zu raten.
+_abi_file="/usr/lib/hyprland/plugin-abi"
+_abi="$(cat "$_abi_file" 2>/dev/null || true)"
+: "${_abi:=zepos.hyprland.absent}"
+
+# gtk4 und gtk4-layer-shell gehoeren der UI-Haelfte und nicht dem
+# Plugin - das Objekt linkt gegen keins von beiden, und genau das ist
+# der Sinn der Teilung.
+#
+# Die drei Schriften stehen hier aus demselben Grund wie bei
+# zepos-menu: das erzeugte Stylesheet nennt die Familien aus
+# src/brand.py, und fontconfig beantwortet eine fehlende Familie durch
+# Ersatz. Das faellt nicht auf - es rendert nur in irgendetwas anderem.
+# adwaita-icon-theme traegt die Symbole fuer .desktop-Dateien, deren
+# eigenes Symbol das Thema nicht hat.
+depends=('zepos-hyprland>=0.56.1' 'zepos-hyprland<0.57.0'
+         "hyprland-plugin-abi=$_abi"
+         'gtk4' 'gtk4-layer-shell' 'glib2' 'glibc' 'libgcc' 'libstdc++'
+         'ttf-fira-code' 'ttf-jetbrains-mono-nerd' 'adwaita-icon-theme')
+makedepends=('cmake' 'ninja' 'zepos-hyprland')
+
+# zepos-config erzeugt ~/.config/hyprlaunch/config und style.css. Ohne
+# sie oeffnet der Starter trotzdem - in Full-HD-Groessen und
+# ungestylt -, und er sagt auf stderr, welcher Befehl die Dateien
+# schreibt. Deshalb eine Empfehlung und keine Abhaengigkeit, genau wie
+# bei zepos-logout: zwei Pakete, die einander nennen, sind ein Zyklus,
+# den pacman zwar aufloest und den niemand lesen kann.
+optdepends=('zepos-config: erzeugt config und style.css, ohne die der Starter ungestylt bleibt')
+
+# Erzeugt von packaging/build.sh aus dem Arbeitsbaum, mit auf
+# SOURCE_DATE_EPOCH geklemmten Zeitstempeln. SKIP aus demselben Grund
+# wie bei zepos-config: eine Pruefsumme ueber eine Datei, die dasselbe
+# Skript Sekunden vorher geschrieben hat, prueft nichts.
+source=("zepos-hyprlaunch-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_src="zepos-hyprlaunch-$pkgver"
+_plugin_dir="usr/lib/hyprland/plugins"
+
+build() {
+    cd "$srcdir/$_src"
+    cmake -S . -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_SKIP_RPATH=ON
+    cmake --build build --config Release
+}
+
+package() {
+    cd "$srcdir/$_src"
+    DESTDIR="$pkgdir" cmake --install build
+
+    test -f "$pkgdir/$_plugin_dir/hyprlaunch.so" || {
+        echo "das Plugin-Objekt liegt nicht unter /$_plugin_dir/hyprlaunch.so;" >&2
+        echo "src/plugins.py wuerde dieses Plugin wortlos fallen lassen" >&2
+        return 1
+    }
+
+    # Die Haelfte, die der Dispatcher forkt. Geprueft aus demselben
+    # Grund: das Versagen ist eine Taste, die nichts tut, ohne eine
+    # Zeile in irgendeinem Protokoll.
+    local ui="$pkgdir/usr/bin/hyprlaunch-ui"
+    test -x "$ui" || {
+        echo "hyprlaunch-ui liegt nicht in /usr/bin; das execlp des" >&2
+        echo "Plugins faende nichts und SUPER+SPACE waere eine tote Taste" >&2
+        return 1
+    }
+
+    # ZWEI WERKZEUGE, WEIL ES ZWEI VERSCHIEDENE FRAGEN SIND
+    #
+    #     readelf -d   was DIESES Objekt selbst angefordert hat
+    #     ldd          was beim Start tatsaechlich alles geladen wird
+    #
+    # Wortgleich zu packaging/zepos-logout/PKGBUILD, und die
+    # Begruendung gilt unveraendert: fuer "steht es auf GTK4" ist
+    # readelf richtig, fuer "kommt GTK3 durch eine Seitentuer" ist es
+    # FALSCH. Arch setzt -Wl,--as-needed, also traegt der Linker kein
+    # DT_NEEDED fuer eine Bibliothek ein, aus der kein Symbol benutzt
+    # wird; die Gefahr ist ohnehin die Bibliothek, die IHRERSEITS GTK3
+    # mitbringt, und die sieht nur ldd.
+    #
+    # GEMESSEN am 11.08.2026 an genau diesem Objekt, lokal gebaut:
+    #     objdump -p hyprlaunch-ui | grep NEEDED | grep gtk
+    #       NEEDED  libgtk-4.so.1
+    #       NEEDED  libgtk4-layer-shell.so.0
+    #     ldd hyprlaunch-ui | grep -c libgtk-3   ->  0
+    local needed
+    needed="$(readelf -d "$ui")"
+
+    grep -q "libgtk-4" <<<"$needed" || {
+        echo "hyprlaunch-ui ist nicht gegen GTK4 gelinkt." >&2
+        echo "Die Entscheidung vom 11.08.2026 stellt die Oberflaeche" >&2
+        echo "durchgehend auf GTK4." >&2
+        return 1
+    }
+    grep -q "gtk4-layer-shell" <<<"$needed" || {
+        echo "hyprlaunch-ui wurde ohne gtk4-layer-shell gebaut." >&2
+        echo "Das Fenster waere dann ein gewoehnliches Fenster, das der" >&2
+        echo "Compositor platziert und dem er den Fokus nimmt - ein" >&2
+        echo "Starter, der beim Tippen den Fokus verliert." >&2
+        return 1
+    }
+
+    local loaded
+    loaded="$(ldd "$ui")"
+    if grep -q "libgtk-3" <<<"$loaded"; then
+        echo "hyprlaunch-ui laedt libgtk-3:" >&2
+        grep "libgtk-3" <<<"$loaded" >&2
+        echo "Ein Programm, das beide Toolkits laedt, beantwortet die" >&2
+        echo "GTK4-Frage mit ja und zeigt trotzdem GTK3." >&2
+        return 1
+    fi
+
+    # Und die Gegenprobe zur Teilung: das Plugin-Objekt darf GAR KEIN
+    # GTK anfordern. Es wird in den Compositor geladen, und eine
+    # zweite GTK-Hauptschleife im Compositor-Prozess ist der Grund,
+    # aus dem upstream ueberhaupt geteilt hat.
+    if readelf -d "$pkgdir/$_plugin_dir/hyprlaunch.so" | grep -q "libgtk"; then
+        echo "das Plugin-Objekt linkt gegen GTK. Es wird IN den" >&2
+        echo "Compositor geladen; die Teilung in Plugin und" >&2
+        echo "Fensterprozess ist genau dafuer da." >&2
+        return 1
+    fi
+
+    # Erneut gelesen, nach dem Uebersetzen: ein `pacman -Syu` zwischen
+    # dem Einlesen dieser Datei und jetzt hinterliesse ein Objekt, das
+    # gegen den einen Headersatz uebersetzt ist und eine Abhaengigkeit
+    # auf einen anderen traegt.
+    [[ -f "$_abi_file" && "$(<"$_abi_file")" == "$_abi" ]] || {
+        echo "das ABI des Compositors ist nicht das, das dieser Bau" >&2
+        echo "angemeldet hat:" >&2
+        echo "  angemeldet: $_abi" >&2
+        echo "  installiert: $(cat "$_abi_file" 2>/dev/null || echo '<kein zepos-hyprland>')" >&2
+        return 1
+    }
+
+    install -Dm644 "$srcdir/$_src/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

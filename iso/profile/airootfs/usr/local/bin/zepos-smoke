@@ -1,0 +1,254 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# The smoke run: generate ZepOS's configuration, then start a session on
+# it, on a machine that has never done either.
+#
+# WHAT THIS SCRIPT IS FOR
+#     978 unit tests say each component does what it claims. None of them
+#     say a desktop comes up. This script is the shortest path from a
+#     cold boot to that answer, and - just as important - to an answer
+#     when it is "no": every phase reports its return code to the serial
+#     console before the next one starts, so a run that dies leaves a
+#     record of where.
+#
+# WHAT IT DELIBERATELY DOES NOT DO
+#     It does not work around anything. If `zepos-generate --all` fails,
+#     the session is attempted anyway and both failures are reported. An
+#     image that repairs its own configuration before starting would
+#     measure the repair, not the configuration.
+set -u
+
+SERIAL=/dev/ttyS0
+
+# Below the session's own runtime directory, not /run.
+#
+# Measured: /run/zepos-smoke could not be created at all - /run belongs
+# to root - and every write into it failed for the whole run, taking the
+# progress log, the generator's output and both return codes with it.
+# $XDG_RUNTIME_DIR is /run/user/1000, created by pam_systemd for this
+# login, owned by this user, and on tmpfs like /run itself. The fallback
+# is for a shell that got here without a logind session, where the whole
+# run is suspect anyway but should still be able to say so.
+EVIDENCE="${XDG_RUNTIME_DIR:-/tmp}/zepos-smoke"
+
+LAUNCHER="$HOME/.local/bin/start-hyprland"
+
+mkdir -p "$EVIDENCE"
+
+# Every progress line goes to three places, and each covers a way the
+# other two can be lost:
+#
+#   the serial console  the harness polls it to decide when to take a
+#                       screenshot. Needs the uucp membership from
+#                       etc/sysusers.d/zepos.conf.
+#   a file              travels out with the rest of the evidence, and
+#                       survives a harness that timed out.
+#   stdout, i.e. tty1   the screen. When both of the above fail there is
+#                       still a framebuffer dump, and it is the only
+#                       thing that can show how far a run got.
+say() {
+    printf 'ZEPOS-SMOKE: %s\n' "$*"
+    printf 'ZEPOS-SMOKE: %s\n' "$*" >>"$EVIDENCE/progress.log"
+    printf 'ZEPOS-SMOKE: %s\n' "$*" >>"$SERIAL" 2>/dev/null || true
+}
+
+say "BEGIN $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+say "kernel $(uname -r)"
+say "user $(id -un) uid=$(id -u) home=$HOME tty=$(tty)"
+say "session id=${XDG_SESSION_ID:-none} vt=${XDG_VTNR:-none} runtime=${XDG_RUNTIME_DIR:-none}"
+say "drm $(ls /dev/dri 2>/dev/null | tr '\n' ' ')"
+
+# --------------------------------------------------------------------
+# Which of the two runs this is
+# --------------------------------------------------------------------
+# The image answers two questions now, and they need the same machine in
+# two different states:
+#
+#   session   does a Hyprland desktop come up on the configuration this
+#             repository generates. That is everything below.
+#   install   does the installer partition a real disk and produce a
+#             system that boots. That runs as root in
+#             zepos-install-unattended.service, because archinstall needs
+#             privileges this session does not have.
+#
+# The discriminator is the disk, and it is the honest one: an
+# installation happens exactly when there is something to install onto.
+# The /run/archiso half matters on the OTHER side of the same run - the
+# installed system boots from a disk carrying that same serial, and runs
+# this very script to report on itself. Without the check it would see
+# its own root disk, decide an installation was wanted, and the first
+# boot of a freshly installed machine would be an attempt to reinstall
+# it.
+#
+# No session is started during an installation. Two things competing for
+# seat0 while a disk is being partitioned would make an unreadable
+# failure out of a clean one, and the compositor answers no question the
+# installation is asking.
+if [[ -e /run/archiso && -b /dev/disk/by-id/virtio-zepos-target ]]; then
+    say "PHASE install (zepos-install-unattended.service has it; this session stands down)"
+    say "IDLE"
+    sleep infinity
+fi
+
+# And a third run, on the other side of an installation:
+#
+#   update    can this INSTALLED system reach a ZepOS repository, verify
+#             it against the key zepos-keyring gave it, and install out
+#             of it. zepos-update-probe.service has that, for the same
+#             reason the installation runs as a service - pacman needs
+#             root and this session does not have it.
+#
+# Discriminated by a disk again, and deliberately NOT by /run/archiso:
+# this run happens after the medium is gone, so the path that separates
+# the two runs above does not exist here. The disk carries the URL of the
+# repository as well as the decision; zepos-smoke-update reads it.
+#
+# No session is started, for the same reason the installation starts
+# none: a compositor coming up while packages are being replaced turns a
+# clean failure into an unreadable one, and answers no question the
+# update is asking.
+if [[ -b /dev/disk/by-id/virtio-zepos-update ]]; then
+    say "PHASE update (zepos-update-probe.service has it; this session stands down)"
+    say "IDLE"
+    sleep infinity
+fi
+
+# What actually went into this image, recorded from inside it. The
+# build's package manifest says what was asked for; this says what is
+# there, which is the version information a later build gets compared
+# against.
+pacman -Q >"$EVIDENCE/packages.txt" 2>&1
+
+# --------------------------------------------------------------------
+# What Hyprland needs on a machine with no GPU: no environment variable,
+# and that was measured rather than assumed
+# --------------------------------------------------------------------
+# The obvious thing to write here is `export LIBGL_ALWAYS_SOFTWARE=1`. It
+# was written, and it was WRONG. Both variants were built and booted, and
+# their logs disagree:
+#
+#   with LIBGL_ALWAYS_SOFTWARE=1
+#       [EGL] eglQueryDeviceStringEXT errored out with EGL_BAD_PARAMETER
+#       CDRMRenderer(drm): Can't create renderer, no matching devices found
+#       drm: initMgpu: no renderer
+#       drm: Failed to update renderer state for Virtual-1 on applyCommit
+#     the last of them once per frame, for the whole session. Forcing the
+#     software device costs it EGL_EXT_device_drm, so aquamarine can no
+#     longer match the EGL device against the DRM node it just opened.
+#
+#   without it
+#       libEGL warning: NEEDS EXTENSION: falling back to kms_swrast
+#       Renderer: llvmpipe (LLVM 22.1.8, 256 bits)
+#     and not one renderer error in the log.
+#
+# Mesa reaches the software rasteriser by itself, through the fallback it
+# has for exactly this case. Overriding it does not help it get there; it
+# removes the information the compositor needs on the way.
+#
+# What a GPU-less machine does need is not a variable at all:
+#
+#   * a DRM device with dumb buffers. QEMU's -vga virtio gives
+#     /dev/dri/card0 with the virtio_gpu driver, and Hyprland reports the
+#     connector as Virtual-1.
+#   * a seat. That is why this runs from an autologin getty on tty1 and
+#     not from a system service: logind gives the session seat0, a VT
+#     number and an XDG_RUNTIME_DIR, and Hyprland takes the VT through
+#     libseat. A system unit has none of the three.
+#   * cursor:no_hardware_cursors, which
+#     hyprland-universal-config.template already sets.
+#
+# WLR_RENDERER_ALLOW_SOFTWARE is not set either, for a duller reason: it
+# is read by wlroots, Hyprland has not used wlroots since 0.42, and
+# nothing else in this image is a compositor. It would be configuration
+# for a library that is not here.
+
+# Aquamarine's own tracing. Noisy - roughly 20 kB of log per second - and
+# worth it exactly once: this is the first time this configuration has
+# been loaded by the programs it is for, and the backend's account of
+# which device it picked and why is the difference between "it did not
+# start" and a diagnosis. It is also what made the comparison above
+# possible.
+export AQ_TRACE=1
+
+# --------------------------------------------------------------------
+# Phase 1 - generate the configuration
+# --------------------------------------------------------------------
+say "PHASE generate"
+zepos-generate --all >"$EVIDENCE/generate.log" 2>&1
+generate_rc=$?
+printf '%s\n' "$generate_rc" >"$EVIDENCE/rc.generate"
+say "generate rc=$generate_rc"
+
+# --------------------------------------------------------------------
+# Phase 2 - ask Hyprland whether the result parses
+# --------------------------------------------------------------------
+# Cheap, and it separates two failures that look identical from the
+# outside: a configuration Hyprland rejects, and a compositor that cannot
+# reach the hardware. Spec §7.4 measures the plugin failsafe with exactly
+# this command.
+say "PHASE verify-config"
+Hyprland --verify-config >"$EVIDENCE/verify-config.log" 2>&1
+verify_rc=$?
+printf '%s\n' "$verify_rc" >"$EVIDENCE/rc.verify"
+say "verify-config rc=$verify_rc"
+
+# --------------------------------------------------------------------
+# And how many of those errors --verify-config is able to be right about
+# --------------------------------------------------------------------
+# MEASURED, on the first boot with the five plugin packages installed:
+# rc went from 0 to 1 and the three errors were
+#
+#   Invalid dispatcher, requested "hyprlaunch:toggle" does not exist
+#   Invalid dispatcher, requested "hyprlaunch:helpers" does not exist
+#   Invalid dispatcher, requested "hyprclipx:toggle" does not exist
+#
+# on a machine where all three work. --verify-config does not load
+# plugins and cannot: src/config/legacy/ConfigManager.cpp's handlePlugin
+# only records the path, and handlePluginLoads() returns immediately when
+# g_pPluginSystem is null - which it is, because no compositor was
+# created. The dispatchers a plugin registers therefore do not exist at
+# verification time and every bind that uses one is reported.
+#
+# In the session the same three errors appear once, during the first
+# parse, and are gone after the plugin system loads the objects and
+# reloads the configuration: `hyprctl binds` on this very run lists all
+# three. So spec §7.4's measurement still holds - the dispatcher bind is
+# the form Hyprland rejects - it just now says something about a
+# LIMITATION of --verify-config rather than about the configuration.
+#
+# Which leaves rc=1 as a permanent state on any machine with plugins,
+# and a permanently failing check hides the next real error behind it.
+# So the count that can still move is taken as well: config errors that
+# are not about a plugin dispatcher. That number has to be 0.
+verify_other="$(grep '^Config error' "$EVIDENCE/verify-config.log" 2>/dev/null \
+    | grep -vc 'Invalid dispatcher' || true)"
+: "${verify_other:=0}"
+printf '%s\n' "$verify_other" >"$EVIDENCE/rc.verify_other"
+say "verify-config errors that are not plugin dispatchers: $verify_other"
+
+# --------------------------------------------------------------------
+# Phase 3 - start the session, and watch it from outside
+# --------------------------------------------------------------------
+# The collector runs as a sibling, not as a step after the session:
+# start-hyprland does not return while the desktop is up, so anything
+# that has to look at a running desktop has to already be running.
+/usr/local/bin/zepos-smoke-collect &
+
+say "PHASE session"
+if [[ -x "$LAUNCHER" ]]; then
+    # No profile argument, so start-hyprland takes its auto-detect path -
+    # which is what a first boot is. It regenerates hyprland.conf and
+    # plugins.conf and then execs the compositor.
+    "$LAUNCHER" </dev/null >"$EVIDENCE/session.log" 2>&1
+    say "session exited rc=$?"
+else
+    say "session NOT STARTED: $LAUNCHER is missing or not executable"
+fi
+
+# The session is over, or never began. Wait for the collector to finish
+# writing the evidence out before going idle - the harness kills the
+# machine on its own schedule, and a half-written tar is worse than none.
+wait
+say "IDLE"
+sleep infinity

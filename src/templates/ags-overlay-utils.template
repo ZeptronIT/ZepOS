@@ -1,0 +1,689 @@
+// Das gemeinsame Handwerkszeug der Aufklappfenster (AGS v3, Astal Layer-Shell)
+// Von ZepOS erzeugt
+// Enthaelt: createOverlayWindow(), OverlayWidget
+//
+// ES GIBT GENAU EINEN WEG, EIN AUFKLAPPFENSTER ZU BAUEN, UND DAS IST
+// SEIT DEM 12.08.2026 KEINE VERABREDUNG MEHR, SONDERN EINE ZUSICHERUNG
+//     getOverlayPosition() war bis dahin exportiert, und genau ein
+//     Widget hat davon Gebrauch gemacht: ags-network.template holte sich
+//     die Raender und baute sein Astal.Window selbst. Es bekam damit
+//     weder den Hoehendeckel noch die Bildlaufleiste, und GEMESSEN im
+//     verschachtelten Compositor stand es 721 Punkte hoch da, wo der
+//     Deckel 540 sagt.
+//
+//     Eine Abkuerzung, die exportiert ist, wird genommen. Sie ist
+//     deshalb keine mehr: getOverlayPosition() ist modulintern, und wer
+//     die Lage eines Fensters braucht, bekommt sie nur mitsamt dem
+//     Fenster. Der Buendler faellt um, wenn jemand es wieder
+//     importiert - eine Zusicherung, die schon beim Uebersetzen greift,
+//     ist die einzige, die niemand vergessen kann.
+//
+//     tests/src/test_modal_rule.py haelt dieselbe Regel ueber ALLE
+//     Vorlagen und nennt jedes selbst gebaute Ueberlagerungsfenster beim
+//     Namen.
+
+import Astal from "gi://Astal?version=4.0"
+import { Gtk, Gdk } from "ags/gtk4"
+import { execAsync } from "ags/process"
+
+const CLOSE_ICON = "{{ICON_CLOSE}}"
+
+// Der Abstand zum Schirmrand, und es ist DERSELBE, den die Leiste haelt.
+//
+// GEMESSEN am 12.08.2026 auf einem Bildschirmabzug des verschachtelten
+// Compositors: hier stand die Zahl 20, die Leiste darueber haelt
+// {{STYLE_GAPS_OUT}} - an diesem Tag 24. Der Kalender begann bei x=20,
+// die Leiste bei x=24, und dieser Versatz von vier Punkten ist auf dem
+// Bild zu sehen. Zwei Randzahlen sind ausserdem eine zu viel: die aus
+// dem Stilsystem folgt dem Groessenregler, eine getippte nicht.
+const EDGE_GAP = {{STYLE_GAPS_OUT}}
+
+// Wie viel vom Schirm ein Fenster hoechstens nimmt, das sich VOR etwas
+// anderes stellt.
+//
+// EINER VON VIER ABDRUECKEN EINER ZAHL, DIE IN src/sizes.py STEHT
+//     Dort heisst sie MEASURE_MODAL_SHARE und ist begruendet. Sie ist
+//     mit Absicht KEIN Platzhalter - sizes.py sagt warum: "eine Anzahl
+//     und keine Laenge ... gelesen wird sie nicht von einer Vorlage,
+//     sondern von den Programmen, die ein solches Fenster aufziehen".
+//     Dies hier ist eines dieser Programme; die anderen drei sind
+//     menu/zepos_menu/window.py,
+//     plugins/hyprlaunch/include/hyprlaunch/Config.hpp und
+//     plugins/hyprclipx/include/hyprclipx/Config.hpp.
+//
+//     Am 12.08.2026 waren es noch zwei, und die beiden eigenen
+//     Programme daneben kannten die Regel gar nicht: der Starter
+//     rechnete gegen den GANZEN Schirm, der Zwischenablageverlauf gegen
+//     nichts. tests/src/test_modal_rule.py haelt seither alle vier an
+//     EINER Stelle gegen die Groessentabelle - vier einzelne
+//     Zusicherungen faenden genau den fuenften Abdruck nicht, den
+//     jemand ohne sie hinzufuegt.
+//
+// WAS SIE HIER BEHEBT, GEMESSEN am 12.08.2026
+//     Das Kontrollzentrum meldete sich als 400x580 an und stand als
+//     545x1622 auf einem Schirm mit 1080 Zeilen - 645 Punkte davon
+//     unter dem Bildrand, darunter eine ganze Abschnittsueberschrift.
+//     Der Kalender: angemeldet 420x480, gestanden 472x810.
+const MODAL_SHARE = 0.5
+
+// ============================================================================
+// DIE TYPEN
+// ============================================================================
+
+export interface OverlayWidget {
+  window: Astal.Window
+  /** `at` ist das Bedienelement, das dieses Fenster aufmacht. */
+  show: (at?: OverlayAnchor) => Promise<void>
+  hide: () => void
+}
+
+// WO EIN AUFKLAPPFENSTER AUFGEHT, UND WARUM DAS SEIT DEM 17.08.2026
+// NICHT MEHR DER MAUSZEIGER ENTSCHEIDET
+//
+//     GEMELDET, woertlich: "die modale fuer kontroll zentrum erscheint
+//     ganz links im fenster buggy wir brauchen es aber dort der user mit
+//     maus raufklickt".
+//
+//     GEMESSEN am selben Tag im verschachtelten Compositor, Schirm
+//     1920x1200 (der des Nutzers), das Zahnrad rechts aussen bei x=1848
+//     mit 48 Punkten Breite, seine Mitte also 1872. Dreimal derselbe
+//     Aufruf `ags request control`, nur der Zeiger stand woanders:
+//
+//         Zeiger 1872 (auf dem Zahnrad)   Fenster x=1401  - richtig
+//         Zeiger  960 (Bildmitte)         Fenster x= 713
+//         Zeiger  120 (am Datum)          Fenster x=  24  - GANZ LINKS
+//
+//     Beide Runden je Fall gaben dieselbe Zahl; das zweite Aufgehen war
+//     also nicht der Unterschied. Der Unterschied war der ZEIGER: das
+//     Fenster ging dort auf, wo die Maus GERADE STAND, und nicht dort,
+//     wo das Bedienelement sitzt, das es aufmacht. Die 24 sind EDGE_GAP,
+//     also die Klemmung an den linken Bildrand - genau das Bild aus der
+//     Meldung.
+//
+//     Der Zeiger ist nur solange derselbe Punkt wie das Bedienelement,
+//     wie ein Mausklick der Ausloeser ist und die Maus sich seither
+//     nicht bewegt hat. Er ist es NICHT bei einer Tastenbindung, nicht
+//     bei einem Knopf im Kontrollzentrum, der ein anderes Fenster
+//     aufmacht, und nicht, wenn die Maus zwischen Klick und Aufgehen
+//     wandert.
+//
+//     Seither sagt der AUSLOESER, wo er sitzt: die Leiste rechnet die
+//     Mitte des angeklickten Moduls aus (siehe anchorOf() in
+//     ags-bar.template) und reicht sie herein. Der Zeiger bleibt der
+//     Rueckfall fuer alles, was kein Bedienelement mit einer Lage hat -
+//     dort ist er die richtige Antwort, weil die Maus dann wirklich das
+//     Letzte ist, was der Nutzer angefasst hat.
+export interface OverlayAnchor {
+  /** Der Anschlussname des Schirms, auf dem das Bedienelement sitzt. */
+  monitor: string
+  /** Seine MITTE, waagerecht, in den Koordinaten DIESES Schirms. */
+  x: number
+}
+
+// Der Punkt, gegen den gerechnet wird - einer von zweien.
+//
+// "pointer" traegt Koordinaten des COMPOSITORS und muss deshalb erst
+// einem Schirm zugeordnet werden; "widget" nennt den Schirm selbst und
+// rechnet in dessen Koordinaten. Beides in EINEM Typ, weil beides
+// dieselbe Frage beantwortet und getOverlayPosition() sonst zweimal
+// dastuende.
+type Spot =
+  | { kind: "pointer"; x: number; y: number }
+  | { kind: "widget"; monitor: string; x: number }
+
+// Der Punkt, an dem ein Fenster aufgeht.
+//
+// ER WIRD EINMAL GELESEN UND DANN FESTGEHALTEN, SEIT DEM 17.08.2026
+//     getOverlayPosition() fragte `hyprctl cursorpos` bei JEDEM Aufruf
+//     selbst - auch in der Nachfuehrung, die nach dem Aufgehen zwei
+//     Sekunden lang laeuft. Wer in dieser Zeit die Maus bewegt, zieht
+//     das offene Fenster hinter sich her.
+//
+//     GEMESSEN am 17.08.2026 im verschachtelten Compositor: Klick auf
+//     das Zahnrad bei x=1860, Fenster geht bei x=1401 auf, Zeiger
+//     danach nach x=300 - 100 ms spaeter steht das Fenster bei x=24,
+//     dem linken Bildschirmrand. Genau das hat der Nutzer gemeldet
+//     ("beim zweiten klick erscheint das modal links am rand des
+//     bildschirms").
+//
+//     Ein Fenster gehoert dorthin, wo geklickt wurde. Wo der Zeiger
+//     eine halbe Sekunde spaeter steht, ist eine andere Frage, und sie
+//     wird hier nicht mehr gestellt.
+/** Wo der Zeiger JETZT steht - in den Koordinaten des Compositors. */
+async function pointerPosition(): Promise<Spot | null> {
+  try {
+    const result = await execAsync("hyprctl cursorpos -j")
+    const cursor = JSON.parse(result)
+    return { kind: "pointer", x: cursor.x, y: cursor.y }
+  } catch (e) {
+    console.error("Der Zeigerstand liess sich nicht lesen:", e)
+    return null
+  }
+}
+
+// Die Lage UND die Groesse. Beides kommt aus derselben Rechnung, weil
+// beides denselben Schirm meint; getrennt gerechnet wuerde ein Fenster
+// nach der einen Zahl gestellt und nach der anderen gebaut.
+//
+// marginBottom und marginRight standen bis zum 12.08.2026 hier und
+// wurden von NIEMANDEM gelesen - das Fenster haengt an TOP|LEFT, und
+// show() setzt genau die beiden. Zwei Felder, die eine Lage behaupten,
+// die kein Anker je einnimmt, sind schlimmer als keine.
+interface OverlayPosition {
+  marginTop: number
+  marginLeft: number
+  width: number
+  height: number
+  monitor: number
+  monitorName: string
+}
+
+// Einen Hyprland-Ausgangsnamen (etwa "DP-7") zu seinem Gdk.Monitor
+// aufloesen. Hyprlands Monitorkennungen und die Indizes von GDK sind
+// NICHT dieselben, deshalb wird ueber den Anschlussnamen gesucht und
+// nicht der Zahl vertraut.
+function findGdkMonitorByName(name: string): Gdk.Monitor | null {
+  const display = Gdk.Display.get_default()
+  if (!display) return null
+  const monitors = display.get_monitors()
+  for (let i = 0; i < monitors.get_n_items(); i++) {
+    const m = monitors.get_item(i) as Gdk.Monitor
+    if (m.connector === name) return m
+  }
+  return null
+}
+
+interface OverlayConfig {
+  name: string
+  width: number
+  height: number
+  cssClass: string
+  headerIcon: string
+  headerTitle: string
+  accentCssClass?: string
+  buildContent: (win: Astal.Window, closeWindow: () => void) => Gtk.Widget
+  onShow?: () => void
+  onHide?: () => void
+  // Was ESC tut, BEVOR das Fenster zugeht. true heisst "verbraucht",
+  // das Fenster bleibt stehen.
+  //
+  // WARUM ES DIESES FELD SEIT DEM 12.08.2026 GIBT
+  //     Es ist der Grund, aus dem ags-network.template sich sein
+  //     Astal.Window bis dahin SELBST gebaut hat: sein ESC muss aus der
+  //     Passwort- und der Detailansicht zurueck zur Liste, statt zu
+  //     schliessen. Eine Fabrik, die genau eine Sache nicht kann, wird
+  //     nicht ergaenzt, sondern umgangen - und wer sie umgeht, verliert
+  //     alles andere gleich mit. GEMESSEN am selben Tag im
+  //     verschachtelten Compositor: das Netzwerkfenster stand 721 Punkte
+  //     hoch auf einem 1080er Schirm, wo der Deckel 540 sagt, und hatte
+  //     als einziges der elf keine Bildlaufleiste.
+  //
+  //     Ein Feld mit einem einzigen Leser ist billiger als ein zweiter
+  //     Weg, ein Fenster zu bauen.
+  onEscape?: () => boolean
+}
+
+// ============================================================================
+// WO EIN AUFKLAPPFENSTER HINKOMMT UND WIE GROSS ES WIRD
+// ============================================================================
+
+/**
+ * Lage und Groesse eines Aufklappfensters, aus dem Anhaltspunkt und dem
+ * Schirm.
+ *
+ * `anchor` ist der Punkt, an dem geklickt wurde - er wird von aussen
+ * hereingereicht und hier NICHT nachgeschlagen, damit dieselbe Rechnung
+ * beim Aufgehen und beim Nachfuehren dasselbe Ergebnis hat.
+ *
+ * - waagerecht am Anhaltspunkt zentriert
+ * - senkrecht unter der Leiste (deren exklusive Zone den Versatz haelt)
+ * - EDGE_GAP Abstand zu jedem Schirmrand, dieselbe Zahl wie die Leiste
+ * - die Groesse gedeckelt: auf MODAL_SHARE des Schirms und auf das,
+ *   was zwischen den Raendern ueberhaupt Platz hat
+ * - die Lage so beschnitten, dass das Fenster ganz auf dem Schirm liegt
+ */
+async function getOverlayPosition(
+  winWidth: number,
+  winHeight: number,
+  anchor: Spot | null
+): Promise<OverlayPosition> {
+  try {
+    // Ohne Anhaltspunkt gibt es keinen Schirm, auf dem gesucht werden
+    // koennte. Dann gilt der Rueckfall unten - auf demselben Weg wie
+    // ein hyprctl, das nicht geantwortet hat, denn es ist derselbe Fall.
+    if (!anchor) throw new Error("kein Anhaltspunkt")
+
+    const monitorsResult = await execAsync("hyprctl monitors -j")
+    const monitors = JSON.parse(monitorsResult) as Array<{
+      id: number
+      name: string
+      x: number
+      y: number
+      width: number
+      height: number
+      scale: number
+      transform: number
+      reserved: number[]
+    }>
+
+    for (const mon of monitors) {
+      const mx = mon.x
+      const my = mon.y
+      // Hyprland meldet die Masse der Hardware; die Drehungen 1/3/5/7
+      // (90°/270°) vertauschen Breite und Hoehe
+      const rotated = (mon.transform & 1) === 1
+      const physW = mon.width / mon.scale
+      const physH = mon.height / mon.scale
+      const mw = rotated ? physH : physW
+      const mh = rotated ? physW : physH
+      const barHeight = mon.reserved?.[1] || 50
+
+      // IST DIES DER SCHIRM? Zwei Anhaltspunkte, zwei Antworten - und
+      // die zweite ist die genauere.
+      //
+      //   "widget"   Der Ausloeser NENNT seinen Schirm. Das ist der
+      //              Anschlussname, den auch die Leiste je Flaeche
+      //              benutzt (Bar() in ags-bar.template), also ein
+      //              Vergleich und keine Suche.
+      //   "pointer"  Nur Koordinaten. Dann muss der Schirm gesucht
+      //              werden, auf dem sie liegen.
+      const trifft = anchor.kind === "widget"
+        ? mon.name === anchor.monitor
+        : (anchor.x >= mx && anchor.x < mx + mw &&
+           anchor.y >= my && anchor.y < my + mh)
+
+      if (trifft) {
+
+        // Die exklusive Zone der Leiste gilt - nutzbar ist, was darunter
+        // liegt.
+        const usableW = mw
+        const usableH = mh - barHeight
+
+        // Die Groesse, die dieses Fenster WIRKLICH bekommt, aus drei
+        // Grenzen, und jede hat einen eigenen Grund:
+        //
+        //   winWidth/winHeight   was das Widget sich wuenscht. Es bleibt
+        //                        eine Bitte und wird nie ueberschritten.
+        //   MODAL_SHARE          die Regel des Entwurfssystems: ein
+        //                        Fenster, das sich vor die Arbeit
+        //                        stellt, nimmt hoechstens die Haelfte
+        //                        des Schirms. Gerechnet auf den GANZEN
+        //                        Schirm, so wie src/sizes.py es sagt
+        //                        ("wie viel vom Schirm") und wie
+        //                        menu/zepos_menu/window.py es tut.
+        //   usable - 2*EDGE_GAP  der harte Platz. Er bindet erst auf
+        //                        kleinen Schirmen, und dann rettet er.
+        const effectiveW = Math.min(winWidth, Math.floor(mw * MODAL_SHARE),
+                                    usableW - 2 * EDGE_GAP)
+        const effectiveH = Math.min(winHeight, Math.floor(mh * MODAL_SHARE),
+                                    usableH - 2 * EDGE_GAP)
+
+        // Waagerecht am Anhaltspunkt zentriert, senkrecht ein EDGE_GAP
+        // unter der Leiste.
+        //
+        // Der Zeiger kommt in Koordinaten des COMPOSITORS und muss auf
+        // diesen Schirm umgerechnet werden; ein Bedienelement nennt
+        // seine Lage schon in dessen Koordinaten - es sitzt IN einer
+        // Flaeche, die auf diesem Schirm liegt, und weiss von den
+        // Nachbarschirmen nichts.
+        const punkt = anchor.kind === "widget" ? anchor.x : anchor.x - mx
+        let localX = punkt - effectiveW / 2
+        let localY = EDGE_GAP
+
+        // Auf den Schirm beschneiden, Rand eingerechnet
+        if (localX < EDGE_GAP) localX = EDGE_GAP
+        if (localX + effectiveW > usableW - EDGE_GAP) localX = usableW - effectiveW - EDGE_GAP
+        if (localY + effectiveH > usableH - EDGE_GAP) localY = usableH - effectiveH - EDGE_GAP
+        if (localY < EDGE_GAP) localY = EDGE_GAP
+
+        return {
+          marginTop: Math.round(localY),
+          marginLeft: Math.round(localX),
+          width: Math.round(effectiveW),
+          height: Math.round(effectiveH),
+          monitor: mon.id,
+          monitorName: mon.name,
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Die Lage der Ueberlagerung liess sich nicht bestimmen:", e)
+  }
+
+  // Der Rueckfall. Er gibt die GEWUENSCHTE Groesse zurueck und keine
+  // erfundene: wer den Schirm nicht kennt, kennt auch seinen Deckel
+  // nicht, und eine geratene Grenze waere schlimmer als keine.
+  return { marginTop: EDGE_GAP, marginLeft: EDGE_GAP,
+           width: winWidth, height: winHeight, monitor: 0, monitorName: "" }
+}
+
+// ============================================================================
+// DIE FABRIK FUER AUFKLAPPFENSTER
+// ============================================================================
+
+/**
+ * Ein Astal.Window als Aufklappfenster.
+ *
+ * - Ebene: OVERLAY (ueber allem, nicht vom Fenstermanager verwaltet)
+ * - Tastenmodus: ON_DEMAND (nimmt den Fokus beim Aufgehen, gibt ihn zurueck)
+ * - Anker: TOP|LEFT - die Raender bestimmen die Lage
+ * - ESC schliesst, sofern onEscape die Taste nicht vorher verbraucht
+ * - Schliesskreuz im Kopf, rechts aussen
+ * - Lage am Zeiger, nach dem Zeichnen nachgefuehrt
+ * - Groesse gedeckelt, Inhalt darunter im Bildlauf
+ */
+export function createOverlayWindow(config: OverlayConfig): OverlayWidget {
+  // DER WIDGETNAME IST NICHT MEHR DER NAME DES FENSTERS, UND DAS IST
+  // EINE MESSUNG VOM 17.08.2026
+  //
+  //     Hier stand `name: config.name`. Ein Gtk.Widget-Name ist in GTK4
+  //     nichts anderes als der CSS-Wahlausdruck `#name` - und die
+  //     Leiste vergibt IHRE Modulkennungen aus demselben Vorrat:
+  //     src/styles/bar-style.template traegt `#network`, `#bluetooth`
+  //     und `#battery`, und drei Ueberlagerungen heissen genauso.
+  //
+  //     bar.css haengt am DISPLAY (applyBarStyle() in
+  //     ags-config.template) und damit an jedem Fenster dieses
+  //     Prozesses. `#bluetooth { margin-right: {{STYLE_MODULE_SPACING}} }`
+  //     - der Abstand zum naechsten Leistenmodul - lag also auch auf dem
+  //     Bluetooth-FENSTER.
+  //
+  //     GEMESSEN im verschachtelten Compositor, Schirm 1920x1200, mit
+  //     einem gekoppelten Geraet:
+  //
+  //         Flaeche laut hyprctl     490 breit
+  //         win.get_width()          475
+  //         Sichtfenster             449, Inhalt 464 -> 15 verdeckt
+  //
+  //     Genau 15, und STYLE_MODULE_SPACING ist an diesem Tag 15. Das
+  //     Netzfenster daneben hatte den Fehler NICHT, und auch das passt:
+  //     `#network` traegt STYLE_GROUP_INTERNAL, und das ist "0px"
+  //     (src/style_definition.py). Ein Fenster mit einem Aussenrand
+  //     rechts ist um genau diesen Rand schmaler als seine Flaeche - der
+  //     Streifen daneben blieb leer, und die Ecke darunter sah eckig
+  //     aus, weil die Platte dort gar nicht mehr hinreichte.
+  //
+  //     Ein Fenster braucht diesen Namen nicht. Dem Compositor nennt es
+  //     sich ueber `namespace` (daran haengen die Glasregeln, siehe
+  //     GLASS_LAYERS), dem Stylesheet ueber `config.cssClass`. Der
+  //     dritte Name war der einzige, der niemandem gehoerte - und der
+  //     einzige, der mit einem fremden Vorrat kollidieren konnte.
+  const win = new Astal.Window({
+    namespace: config.name,
+    name: `overlay-${config.name}`,
+    layer: Astal.Layer.OVERLAY,
+    keymode: Astal.Keymode.ON_DEMAND,
+    anchor: Astal.WindowAnchor.TOP | Astal.WindowAnchor.LEFT,
+    visible: false,
+  })
+
+  win.add_css_class(config.cssClass)
+
+  const closeWindow = () => {
+    win.visible = false
+    config.onHide?.()
+  }
+
+  // Die ESC-Taste. Erst fragen, ob das Fenster selbst etwas damit
+  // vorhat - eine Unteransicht geht damit zurueck statt zu.
+  const keyController = new Gtk.EventControllerKey()
+  keyController.connect("key-pressed", (_: Gtk.EventControllerKey, keyval: number) => {
+    if (keyval === Gdk.KEY_Escape) {
+      if (config.onEscape?.()) return true
+      closeWindow()
+      return true
+    }
+    return false
+  })
+  win.add_controller(keyController)
+
+  // ===== DIE PLATTE =====
+  const outerBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
+  outerBox.add_css_class("overlay-outer")
+
+  // ----- Kopf: Zeichen + Titel + Luecke + Schliesskreuz -----
+  const headerBox = new Gtk.Box({ spacing: 10 })
+  headerBox.add_css_class("overlay-header")
+  if (config.accentCssClass) headerBox.add_css_class(config.accentCssClass)
+
+  const headerIconLabel = new Gtk.Label({ label: config.headerIcon })
+  headerIconLabel.add_css_class("overlay-header-icon")
+
+  const headerTitleLabel = new Gtk.Label({ label: config.headerTitle })
+  headerTitleLabel.add_css_class("overlay-header-title")
+
+  const headerSpacer = new Gtk.Box({ hexpand: true })
+
+  const closeBtn = new Gtk.Button({ can_focus: false })
+  closeBtn.add_css_class("overlay-close-btn")
+  closeBtn.set_child(new Gtk.Label({ label: CLOSE_ICON }))
+  closeBtn.connect("clicked", closeWindow)
+
+  headerBox.append(headerIconLabel)
+  headerBox.append(headerTitleLabel)
+  headerBox.append(headerSpacer)
+  headerBox.append(closeBtn)
+
+  outerBox.append(headerBox)
+
+  // ----- Der Inhalt, in einer Bildlaufleiste -----
+  //
+  // WARUM SIE HIER STEHT UND NICHT IN JEDEM WIDGET
+  //     Sechs der elf Ueberlagerungen haben sich selbst eine gebaut
+  //     (Speicherplatz, Netzwerk, Tastenkuerzel, VPN-Einstellungen,
+  //     Hintergruende, Style Editor), fuenf nicht - und das
+  //     Kontrollzentrum, das keine hatte, war am 12.08.2026 mit 1622
+  //     Punkten das hoechste von allen. Eine Vorsichtsmassnahme, an die
+  //     sich jedes neue Widget erst erinnern muss, ist keine.
+  //
+  // SIE IST ZUGLEICH DAS, WAS DEN DECKEL ERST WIRKEN LAESST
+  //     Ein Gtk.Window wird nie kleiner als die MINDESTgroesse seines
+  //     Kindes. Ein Kasten voller Zeilen meldet als Mindestgroesse seine
+  //     ganze Hoehe an; set_default_size() daran ist wirkungslos - genau
+  //     das war der Zustand, in dem die deklarierten 580 Punkte des
+  //     Kontrollzentrums Zierrat waren. Eine Bildlaufleiste meldet eine
+  //     kleine Mindesthoehe und ihre NATUERLICHE Hoehe getrennt; damit
+  //     entscheidet die Vorgabegroesse, und der Inhalt bleibt
+  //     erreichbar.
+  //
+  //     propagate_natural_height, damit ein Fenster, dessen Inhalt
+  //     kuerzer ist als sein Deckel, seine wahre Hoehe weitermeldet
+  //     statt auf null zusammenzufallen.
+  //
+  // Der Kopf bleibt DRAUSSEN: ein Titel, der beim Blaettern verschwindet,
+  // nimmt dem Fenster den Namen und dem Nutzer das Schliesskreuz.
+  // WARUM DIE WAAGERECHTE LEISTE SEIT DEM 17.08.2026 AUTOMATIC IST UND
+  // NICHT MEHR NEVER
+  //     Gtk.PolicyType.NEVER heisst nicht "keine Leiste", sondern "der
+  //     Inhalt bestimmt die Breite": eine Gtk.ScrolledWindow mit NEVER
+  //     meldet die MINDESTbreite ihres Kindes als eigene Mindestbreite
+  //     weiter, und ein Gtk.Window wird nie schmaler als die
+  //     Mindestbreite seines Kindes. Der Deckel aus MODAL_SHARE hat
+  //     damit senkrecht gegriffen und waagerecht nie.
+  //
+  //     GEMESSEN am 17.08.2026 im verschachtelten Compositor, mit den
+  //     Zeilen einer laufenden Maschine (WLAN-Name, Druckerstatus,
+  //     Datenschutzzeile):
+  //
+  //         erstes Aufgehen   measure(HORIZONTAL) = min 495 / nat 495
+  //                           -> Fenster 495 breit, Lage stimmt
+  //         zweites Aufgehen  measure(HORIZONTAL) = min 930 / nat 930
+  //                           -> Fenster 930 breit, gestellt wurde es
+  //                              fuer 495
+  //
+  //     Der Unterschied sind die Beschriftungen: beim ERSTEN Messen
+  //     stehen dort noch "Lade …" und "VPN: Aus", denn updateDisplay()
+  //     laeuft in onShow und damit NACH measure(). Beim zweiten tragen
+  //     dieselben Beschriftungen noch den Text des letzten Mals. Genau
+  //     das ist der gemeldete Unterschied zwischen erstem und zweitem
+  //     Klick.
+  //
+  //     Mit AUTOMATIC ist die Mindestbreite der Bildlaufleiste klein,
+  //     und propagate_natural_width meldet daneben, wie breit der Inhalt
+  //     GERN waere - dieselbe Paarung wie senkrecht. Damit entscheidet
+  //     wieder set_default_size(), also der Deckel.
+  const content = config.buildContent(win, closeWindow)
+  const scroller = new Gtk.ScrolledWindow({
+    hscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+    vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+    propagate_natural_width: true,
+    propagate_natural_height: true,
+    // Die Leiste liegt NEBEN dem Inhalt und nicht darueber.
+    //
+    // GTK4 blendet die schwebende Bildlaufleiste erst ein, wenn der
+    // Zeiger im Fenster ist. GEMESSEN am 12.08.2026: das
+    // Kontrollzentrum endete damit mitten in der Ueberschrift "TON &
+    // BILD", und nichts am Bild sagte, dass darunter noch vier
+    // Abschnitte stehen - es sah aus wie der abgeschnittene Zustand,
+    // der gerade behoben werden sollte. Ein abgeschnittenes Wort ohne
+    // Leiste daneben ist ein Fehler; mit Leiste ist es eine Seite.
+    overlay_scrolling: false,
+    vexpand: true,
+  })
+  scroller.set_child(content)
+  outerBox.append(scroller)
+
+  win.set_child(outerBox)
+
+  // ===== AUFGEHEN / ZUGEHEN =====
+  let sizeMonitorId: ReturnType<typeof setInterval> | null = null
+
+  const show = async (angeklickt?: OverlayAnchor) => {
+    // Der Punkt des Klicks, EINMAL bestimmt. Er gilt fuer dieses
+    // Aufgehen, auch fuer die Nachfuehrung unten - siehe OverlayAnchor.
+    //
+    // ZUERST DAS BEDIENELEMENT, DANN DER ZEIGER. Wer weiss, wo er
+    // geklickt hat, sagt es; wer es nicht weiss, bekommt die Maus als
+    // beste verfuegbare Naeherung. Die Reihenfolge ist der ganze
+    // Unterschied zum 17.08.2026, an dem es nur die Naeherung gab und
+    // das Kontrollzentrum bei einem Zeiger am linken Rand auf x=24
+    // stand, obwohl sein Zahnrad bei x=1872 sitzt.
+    const anchor: Spot | null = angeklickt
+      ? { kind: "widget", monitor: angeklickt.monitor, x: angeklickt.x }
+      : await pointerPosition()
+    const pos = await getOverlayPosition(config.width, config.height, anchor)
+    // Ueber den Anschlussnamen suchen - Hyprlands Kennung ist nicht der
+    // Index von GDK
+    const gdkMon = pos.monitorName ? findGdkMonitorByName(pos.monitorName) : null
+    if (gdkMon) {
+      win.gdkmonitor = gdkMon
+    } else {
+      win.monitor = pos.monitor
+    }
+
+    // Die Groesse VOR dem Sichtbarwerden. Die Layer-Shell fragt beim
+    // Anlegen der Flaeche einmal nach der gewuenschten Groesse; wer sie
+    // danach setzt, verschiebt ein Fenster, das schon steht.
+    //
+    // WARUM DER INHALT VORHER GEMESSEN WIRD
+    //     set_default_size() ist keine Obergrenze, sondern eine Ansage:
+    //     GEMESSEN am 12.08.2026 stand der Kalender auf einem 2160er
+    //     Schirm mit genau 1080 Punkten da - der Deckel, nicht sein
+    //     Inhalt. Ein Fenster, das seinen Deckel ausfuellt, hat unter
+    //     dem Inhalt eine leere Flaeche, und die sieht aus wie ein
+    //     Fehler, weil sie einer ist.
+    //
+    //     measure() liefert die natuerliche Hoehe des ganzen Aufbaus -
+    //     Kopf plus Inhalt, ueber die Bildlaufleiste hinweg, weil sie
+    //     propagate_natural_height traegt. Das Fenster wird damit so
+    //     hoch wie noetig und nie hoeher als erlaubt.
+    //
+    //     UND SEIT DEM 17.08.2026 GILT DERSELBE SATZ WAAGERECHT
+    //     So breit wie noetig, nie breiter als erlaubt. Bis dahin ging
+    //     nur pos.width hier hinein, und das war wirkungslos, solange
+    //     die Bildlaufleiste die Mindestbreite des Inhalts
+    //     weitermeldete (siehe dort). Beides zusammen ist der Deckel:
+    //     die Rechnung sagt, was erlaubt ist, die Bildlaufleiste laesst
+    //     es zu.
+    const [, naturalWidth] = outerBox.measure(Gtk.Orientation.HORIZONTAL, -1)
+    const [, naturalHeight] = outerBox.measure(Gtk.Orientation.VERTICAL, -1)
+
+    // UND DIE BILDLAUFLEISTE KOSTET BREITE, DIE measure() NICHT KENNT
+    //
+    //     Sie liegt NEBEN dem Inhalt und nicht darueber
+    //     (overlay_scrolling: false, siehe oben). Ob es sie gibt, haengt
+    //     an der HOEHE: eine Gtk.ScrolledWindow mit AUTOMATIC zeigt sie
+    //     erst, wenn der Inhalt hoeher ist als das Fenster - und das
+    //     entscheidet sich erst mit set_default_size(), also NACH
+    //     measure(). Die gemessene Breite ist deshalb um genau diese
+    //     Leiste zu klein.
+    //
+    //     GEMESSEN am 17.08.2026 am Bluetooth-Fenster im
+    //     verschachtelten Compositor, Schirm 1920x1200, mit einem
+    //     gekoppelten Geraet: der Inhalt misst sich 466 breit, das
+    //     Fenster wird 466 breit, und der DRITTE Knopf ueber der Liste -
+    //     der, der blueman oeffnet - liegt hinter der rechten Kante. Ein
+    //     Bedienelement, das man nicht erreicht, ist nach Spec §7.4 kein
+    //     Schoenheitsfehler.
+    //
+    //     Gefragt wird die Leiste selbst und keine geratene Zahl: ihre
+    //     Breite kommt aus dem Thema und folgt dem Groessenregler.
+    //
+    //     IMMER UND NICHT NUR, WENN DIE HOEHE GERADE GEDECKELT WIRD.
+    //     Der erste Anlauf hat `naturalHeight > pos.height` gefragt und
+    //     beim Bluetooth-Fenster nichts geaendert: es ist 446 hoch bei
+    //     einem Deckel von 550, also NICHT gedeckelt - und die Leiste
+    //     stand trotzdem da und schnitt den Knopf ab. Das ist kein
+    //     Widerspruch, sondern der Punkt von AUTOMATIC: der Inhalt
+    //     dieser Fenster AENDERT sich, solange sie offen sind (jeder
+    //     Takt baut die Liste neu), und die Leiste kommt und geht damit.
+    //     Eine Breite, die nur fuer den Zustand beim Aufgehen reicht,
+    //     ist eine, die beim naechsten Geraet wieder zu klein ist.
+    //
+    //     Sie zu reservieren kostet nichts: der Deckel aus MODAL_SHARE
+    //     steht darueber, und ein Fenster, das die Leiste gerade nicht
+    //     braucht, hat dann rechts denselben Rand wie links.
+    const leiste =
+      scroller.get_vscrollbar()?.measure(Gtk.Orientation.HORIZONTAL, -1)[1] ?? 0
+    win.set_default_size(Math.min(naturalWidth + leiste, pos.width),
+                         Math.min(naturalHeight, pos.height))
+
+    // Erst sichtbar machen - die Layer-Shell-Flaeche muss angelegt sein,
+    // bevor Raender ueberhaupt wirken (entscheidend beim ersten Aufgehen
+    // nach einem Generatorlauf)
+    win.visible = true
+
+    // Die Raender, nachdem die Flaeche da ist
+    win.marginTop = pos.marginTop
+    win.marginLeft = pos.marginLeft
+    config.onShow?.()
+
+    // Zwei Sekunden lang die Groesse beobachten, wegen:
+    // 1. der ersten Anlage der Flaeche (Raender wirken erst nach einer
+    //    Runde ueber den Compositor)
+    // 2. Inhalt, der nachwaechst (etwa der Style Editor, der seine Daten
+    //    nachlaedt)
+    let checksRemaining = 20
+    let lastW = 0
+    let lastH = 0
+    if (sizeMonitorId !== null) clearInterval(sizeMonitorId)
+    sizeMonitorId = setInterval(async () => {
+      if (!win.visible || checksRemaining <= 0) {
+        if (sizeMonitorId !== null) { clearInterval(sizeMonitorId); sizeMonitorId = null }
+        return
+      }
+      checksRemaining--
+      const w = win.get_allocated_width()
+      const h = win.get_allocated_height()
+      if (w > 0 && h > 0 && (w !== lastW || h !== lastH)) {
+        lastW = w
+        lastH = h
+        // MIT DEMSELBEN Zeigerstand wie beim Aufgehen. Ein frisch
+        // gelesener zoege das Fenster der Maus hinterher; die Messung
+        // dazu steht bei Pointer.
+        const adj = await getOverlayPosition(w, h, anchor)
+        if (win.visible) {
+          win.marginTop = adj.marginTop
+          win.marginLeft = adj.marginLeft
+        }
+      }
+    }, 100)
+  }
+
+  const hide = () => {
+    if (sizeMonitorId !== null) { clearInterval(sizeMonitorId); sizeMonitorId = null }
+    closeWindow()
+  }
+
+  return { window: win, show, hide }
+}

@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Der Rueckweg aus einer falschen Bildschirmeinstellung.
+
+Ein eigener Prozess, und genau das ist der Punkt: ein Zeitgeber INNERHALB
+der Oberflaeche stirbt mit ihr, und dann bleibt der schwarze Schirm.
+src/displays.py fuehrt die Messung an nwg-displays, das genau diesen
+Zeitgeber hat.
+
+Er nimmt keine Schalter entgegen. Sein Plan kommt als eine Zeile JSON
+ueber die Standardeingabe, und die Pipe, ueber die sie kommt, ist
+gleichzeitig die Leine: bricht sie, ist die Oberflaeche tot, und der
+Rueckfall laeuft sofort.
+
+Die Entscheidungen liegen in displays.guard_main(); src/cli.py's header
+explains how the four lines below find it, and why they have to be here
+rather than in a module.
+"""
+import os
+import sys
+from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent
+_ROOT = Path(os.environ.get("ZEPOS_SYSTEM_ROOT") or (
+    _HERE.parent if (_HERE.parent / "cli.py").is_file() else "/usr/share/zepos"))
+sys.path.insert(0, str(_ROOT))
+
+try:
+    import displays
+except ImportError as exc:
+    raise SystemExit(
+        f"ZepOS could not be found in {_ROOT}: {exc}\n"
+        "That directory holds the templates, the generator and the modules "
+        "this command imports. Reinstall the zepos-config package, or set "
+        "ZEPOS_SYSTEM_ROOT to the directory it lives in."
+    ) from exc
+
+raise SystemExit(displays.guard_main(sys.argv[1:]))

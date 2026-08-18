@@ -1,0 +1,49 @@
+# The update probe, as a system service on the INSTALLED system.
+#
+# WHY IT IS IN THE ISO PROFILE AND NOT ENABLED HERE
+#     There is no symlink for it under multi-user.target.wants, so the
+#     live medium never starts it. It lives here because this is where
+#     everything the harness installs onto the target lives -
+#     zepos-install-unattended copies it into the new root and enables it
+#     there, next to the two smoke scripts it already copies. A second
+#     home for one unit file would be a second place to forget it.
+#
+# WHY A SERVICE AND NOT THE LOGIN SHELL
+#     `pacman -Syu` needs root. The installed system autologins the user
+#     account on tty1 and runs zepos-smoke from its .bash_profile, and
+#     that account has sudo - but driving sudo from an unattended script
+#     means putting the password of the machine into the script, and the
+#     account's privileges are not what is under test. The unattended
+#     installation answered the same question the same way.
+#
+# WHY IT RUNS ON EVERY BOOT OF THE INSTALLED SYSTEM
+#     Because deciding is cheaper than configuring, and the decision is
+#     one line: the script exits within a second unless the harness
+#     attached /dev/disk/by-id/virtio-zepos-update. A
+#     ConditionPathExists on that device would be evaluated once, when
+#     systemd starts the unit, and would turn a udev race into a run that
+#     silently does nothing.
+#
+# WHY network-online AND NOT JUST network
+#     The whole run is HTTP to the host. network.target means "the
+#     network stack has been configured", not "an address has been
+#     leased"; NetworkManager-wait-online.service is what means the
+#     second, and archinstall enabled it on this machine.
+[Unit]
+Description=ZepOS update probe (harness scaffolding)
+Documentation=file:///usr/local/bin/zepos-smoke-update
+After=network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# No timeout. The run downloads packages over a link that is a QEMU user
+# network; systemd's default would kill it mid-transaction and leave a
+# machine whose pacman.conf still points at the harness's server, which
+# is the one state this script exists to put back.
+TimeoutStartSec=infinity
+ExecStart=/usr/local/bin/zepos-smoke-update
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,734 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: zepos-installer\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: de\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: installer/core/model.py
+msgid "unsupported schema_version {version}, expected {expected}"
+msgstr "Nicht unterstützte Schemaversion {version}, erwartet wird {expected}"
+
+#: installer/core/validate.py
+msgid "At least one user account must be created."
+msgstr "Es muss mindestens ein Benutzerkonto erstellt werden."
+
+#: installer/core/validate.py
+msgid "A user account has no name."
+msgstr "Ein Benutzerkonto hat keinen Namen."
+
+#: installer/core/validate.py
+msgid "The password for '{user}' is shorter than {minimum} characters."
+msgstr "Das Passwort für '{user}' ist kürzer als {minimum} Zeichen."
+
+#: installer/core/validate.py
+msgid "The hostname may contain only letters, digits and hyphens, and may not start or end with a hyphen."
+msgstr "Der Hostname darf nur Buchstaben, Ziffern und Bindestriche enthalten und darf nicht mit einem Bindestrich beginnen oder enden."
+
+#: installer/core/validate.py
+msgid "No disk was selected."
+msgstr "Es wurde keine Festplatte ausgewählt."
+
+#: installer/core/validate.py installer/core/translate.py
+msgid "The selected disk is too small. At least {minimum} MiB are required."
+msgstr "Die ausgewählte Festplatte ist zu klein. Es werden mindestens {minimum} MiB benötigt."
+
+#: installer/core/translate.py
+msgid "No target disk was selected."
+msgstr "Es wurde keine Zielfestplatte ausgewählt."
+
+#: installer/core/validate.py
+msgid "No password was given for the wireless network."
+msgstr "Für das drahtlose Netzwerk wurde kein Passwort angegeben."
+
+#: installer/core/passwords.py
+msgid "Could not run openssl to hash the password: {reason}"
+msgstr "OpenSSL konnte nicht zum Hashing des Passworts ausgeführt werden: {reason}"
+
+#: installer/core/passwords.py
+msgid "Hashing the password failed: {reason}"
+msgstr "Das Hashing des Passworts ist fehlgeschlagen: {reason}"
+
+#: installer/core/wifi.py
+msgid "Could not run iwctl: {reason}"
+msgstr "iwctl konnte nicht ausgeführt werden: {reason}"
+
+#: installer/core/wifi.py
+msgid "iwctl {args} failed: {reason}"
+msgstr "iwctl {args} ist fehlgeschlagen: {reason}"
+
+#: installer/core/netprofile.py
+msgid "Refusing to write a wireless profile without an SSID."
+msgstr "Ohne SSID wird kein WLAN-Profil geschrieben."
+
+#: installer/core/netprofile.py
+msgid "The wireless network name contains control characters."
+msgstr "Der WLAN-Netzwerkname enthält Steuerzeichen."
+
+#: installer/core/netprofile.py
+msgid "The wireless password contains control characters."
+msgstr "Das WLAN-Passwort enthält Steuerzeichen."
+
+#: installer/core/netprofile.py
+msgid "The wireless network name contains no characters usable in a profile filename."
+msgstr "Der WLAN-Netzwerkname enthält keine Zeichen, die für einen Profildateinamen verwendbar sind."
+
+#: installer/core/netprofile.py
+msgid "The wireless network name is too long to use as a profile filename."
+msgstr "Der WLAN-Netzwerkname ist zu lang, um als Profildateiname verwendet zu werden."
+
+#: installer/core/runner.py
+msgid "Could not run archinstall: {reason}"
+msgstr "archinstall konnte nicht ausgeführt werden: {reason}"
+
+#: installer/core/disks.py
+msgid "Could not run lsblk: {reason}"
+msgstr "lsblk konnte nicht ausgeführt werden: {reason}"
+
+#: installer/core/disks.py
+msgid "lsblk failed: {reason}"
+msgstr "lsblk ist fehlgeschlagen: {reason}"
+
+#: installer/tui/app.py
+msgid "Choice"
+msgstr "Auswahl"
+
+#: installer/tui/app.py
+msgid "Please enter one of the offered numbers."
+msgstr "Bitte eine der angebotenen Nummern eingeben."
+
+#: installer/tui/app.py
+msgid "The password is too short. At least {minimum} characters are required."
+msgstr "Das Passwort ist zu kurz. Es werden mindestens {minimum} Zeichen benötigt."
+
+#: installer/tui/app.py
+msgid "Select language"
+msgstr "Sprache wählen"
+
+#: installer/tui/app.py
+msgid "German"
+msgstr "Deutsch"
+
+#: installer/tui/app.py
+msgid "English"
+msgstr "Englisch"
+
+#: installer/tui/app.py
+msgid "Skip"
+msgstr "Überspringen"
+
+#: installer/tui/app.py
+msgid "Select wireless network"
+msgstr "WLAN-Netzwerk wählen"
+
+#: installer/tui/app.py
+msgid "Password for {ssid}"
+msgstr "Passwort für {ssid}"
+
+#: installer/tui/app.py
+msgid "Select installation disk"
+msgstr "Installationsdatenträger wählen"
+
+#: installer/tui/app.py
+msgid "Hostname"
+msgstr "Rechnername"
+
+#: installer/tui/app.py
+msgid "Username"
+msgstr "Benutzername"
+
+#: installer/tui/app.py
+msgid "Password"
+msgstr "Passwort"
+
+#: installer/tui/app.py
+msgid "Root password"
+msgstr "Root-Passwort"
+
+#: installer/tui/app.py
+msgid "Timezone"
+msgstr "Zeitzone"
+
+#: installer/tui/app.py
+msgid "Location for the weather widget"
+msgstr "Ort für das Wetter-Widget"
+
+#: installer/tui/app.py
+msgid "Enable ZepOS plugins?"
+msgstr "ZepOS-Plugins aktivieren?"
+
+#: installer/tui/app.py
+msgid "Yes"
+msgstr "Ja"
+
+#: installer/tui/app.py
+msgid "No"
+msgstr "Nein"
+
+#: installer/tui/app.py
+msgid "Summary"
+msgstr "Zusammenfassung"
+
+#: installer/tui/app.py
+msgid "Hostname: {value}"
+msgstr "Rechnername: {value}"
+
+#: installer/tui/app.py
+msgid "Disk: {value}"
+msgstr "Datenträger: {value}"
+
+#: installer/tui/app.py
+msgid "Username: {value}"
+msgstr "Benutzername: {value}"
+
+#: installer/tui/app.py
+msgid "Timezone: {value}"
+msgstr "Zeitzone: {value}"
+
+#: installer/tui/app.py
+msgid "Start installation now?"
+msgstr "Installation jetzt starten?"
+
+#: installer/tui/app.py
+msgid "Could not list disks: {reason}"
+msgstr "Die Datenträger konnten nicht aufgelistet werden: {reason}"
+
+#: installer/tui/app.py
+msgid "No installable disk was found."
+msgstr "Es wurde kein installierbarer Datenträger gefunden."
+
+#: installer/tui/app.py
+msgid "The installation cannot start:"
+msgstr "Die Installation kann nicht gestartet werden:"
+
+#: installer/tui/app.py
+msgid "Installation cancelled."
+msgstr "Installation abgebrochen."
+
+#: installer/tui/app.py
+msgid "Starting installation."
+msgstr "Installation wird gestartet."
+
+#: installer/tui/app.py
+msgid "Repeat the password"
+msgstr "Passwort wiederholen"
+
+#: installer/tui/app.py
+msgid "The passwords do not match."
+msgstr "Die Passwörter stimmen nicht überein."
+
+#: installer/tui/app.py
+msgid "This entry may not be empty."
+msgstr "Diese Angabe darf nicht leer sein."
+
+#: installer/tui/app.py
+msgid "No disk is large enough to install ZepOS. At least {minimum} MiB are required."
+msgstr "Kein Datenträger ist groß genug, um ZepOS zu installieren. Es werden mindestens {minimum} MiB benötigt."
+
+#: installer/gui/app.py
+msgid "Install ZepOS"
+msgstr "ZepOS installieren"
+
+#: installer/gui/app.py
+msgid "Back"
+msgstr "Zurück"
+
+#: installer/gui/app.py
+msgid "Next"
+msgstr "Weiter"
+
+#: installer/gui/app.py
+msgid "Install"
+msgstr "Installieren"
+
+#: installer/gui/app.py
+msgid "Network"
+msgstr "Netzwerk"
+
+#: installer/gui/app.py
+msgid "User"
+msgstr "Benutzer"
+
+#: installer/gui/app.py
+msgid "ZepOS Options"
+msgstr "ZepOS-Optionen"
+
+#: installer/gui/app.py
+msgid "This erases the entire disk."
+msgstr "Dies löscht die gesamte Festplatte."
+
+#: installer/gui/pages.py installer/tui/app.py
+msgid "Installation completed successfully."
+msgstr "Installation erfolgreich abgeschlossen."
+
+#: installer/gui/pages.py installer/tui/app.py
+msgid "Installation failed (exit code {code})."
+msgstr "Installation fehlgeschlagen (Exit-Code {code})."
+
+#: installer/bin/zepos-install
+msgid "The graphical interface could not start ({reason})."
+msgstr "Die grafische Oberfläche konnte nicht gestartet werden ({reason})."
+
+#: installer/bin/zepos-install
+msgid "Falling back to the text interface."
+msgstr "Es wird auf die Textoberfläche gewechselt."
+
+#: installer/core/netprofile.py
+msgid "The wireless profile is missing from the installed system: {path}"
+msgstr "Das WLAN-Profil fehlt im installierten System: {path}"
+
+#: installer/core/netprofile.py
+msgid "The wireless profile in the installed system is readable by others: {path}"
+msgstr "Das WLAN-Profil im installierten System ist für andere lesbar: {path}"
+
+#: installer/core/runner.py
+msgid "The selected disk {device} is no longer available. It may have been unplugged, or it may now be mounted."
+msgstr "Die ausgewählte Festplatte {device} ist nicht mehr verfügbar. Sie wurde möglicherweise abgezogen oder ist inzwischen eingehängt."
+
+#: installer/core/runner.py
+msgid "The disk {device} is not the one that was selected: its size has changed since then."
+msgstr "Die Festplatte {device} ist nicht die ausgewählte: Ihre Größe hat sich seitdem geändert."
+
+#: installer/core/firmware.py
+msgid "ZepOS can only be installed on a computer started in UEFI mode. This computer started in BIOS mode. ZepOS has never been tested that way, and an installation would erase the disk before anybody could find out whether the result starts."
+msgstr "ZepOS kann nur auf einem Computer installiert werden, der im UEFI-Modus gestartet wurde. Dieser Computer wurde im BIOS-Modus gestartet. ZepOS ist auf diesem Weg nie erprobt worden, und eine Installation würde die Festplatte löschen, bevor sich zeigen könnte, ob das Ergebnis startet."
+
+#: installer/tui/app.py installer/gui/pages.py
+msgid "Nothing on the disk {device} was changed."
+msgstr "Auf der Festplatte {device} wurde nichts verändert."
+
+#: installer/core/runner.py
+msgid "The system was installed, but a final step did not finish: {reason}"
+msgstr "Das System wurde installiert, aber ein letzter Schritt wurde nicht abgeschlossen: {reason}"
+
+#: installer/gui/pages.py
+msgid "This erases the entire disk {device}."
+msgstr "Dies löscht die gesamte Festplatte {device}."
+
+#: installer/gui/pages.py
+msgid "Installation completed"
+msgstr "Installation abgeschlossen"
+
+#: installer/gui/pages.py
+msgid "Installation failed"
+msgstr "Installation fehlgeschlagen"
+
+#: installer/gui/pages.py installer/tui/app.py
+msgid "The installation could not be carried out: {reason}"
+msgstr "Die Installation konnte nicht durchgeführt werden: {reason}"
+
+#: installer/gui/app.py
+msgid "ZepOS is being installed."
+msgstr "ZepOS wird installiert."
+
+#: installer/gui/app.py
+msgid "Please do not switch the computer off."
+msgstr "Bitte den Computer nicht ausschalten."
+
+#: installer/gui/app.py
+msgid "OK"
+msgstr "OK"
+
+#: installer/core/wifi.py
+msgid "No wireless adapter was found."
+msgstr "Es wurde kein WLAN-Adapter gefunden."
+
+#: installer/core/wifi.py
+msgid "Connected to {ssid}, but no connection to the internet was found. The installation continues from the offline package source."
+msgstr "Mit {ssid} verbunden, aber es wurde keine Verbindung zum Internet gefunden. Die Installation wird mit der Offline-Paketquelle fortgesetzt."
+
+#: installer/tui/app.py
+msgid "Try the wireless network again?"
+msgstr "Erneut mit dem WLAN-Netzwerk verbinden?"
+
+#: installer/gui/app.py
+msgid "Connecting to the wireless network."
+msgstr "Es wird mit dem WLAN-Netzwerk verbunden."
+
+#: installer/gui/app.py
+msgid "Wireless network"
+msgstr "WLAN-Netzwerk"
+
+#: installer/core/passwords.py
+msgid "The password contains control characters."
+msgstr "Das Passwort enthält Steuerzeichen."
+
+#: installer/core/passwords.py
+msgid "Hashing the password produced more than one hash."
+msgstr "Beim Hashing des Passworts ist mehr als ein Hash entstanden."
+
+#: installer/core/disks.py
+msgid "Disk"
+msgstr "Datenträger"
+
+#: installer/core/disks.py
+msgid "removable"
+msgstr "Wechselmedium"
+
+#: installer/core/disks.py
+msgid "no partitions"
+msgstr "keine Partitionen"
+
+#: installer/core/disks.py
+msgid "unknown"
+msgstr "unbekannt"
+
+#: installer/core/disks.py
+msgid "{count} partition"
+msgid_plural "{count} partitions"
+msgstr[0] "{count} Partition"
+msgstr[1] "{count} Partitionen"
+
+#: installer/gui/app.py
+msgid "Step {position} of {total}"
+msgstr "Schritt {position} von {total}"
+
+#: installer/gui/app.py
+msgid "Installing"
+msgstr "Installation läuft"
+
+#: installer/gui/app.py
+msgid "Scan again"
+msgstr "Erneut suchen"
+
+#: installer/gui/app.py
+msgid "Searching for networks…"
+msgstr "Netzwerke werden gesucht…"
+
+#: installer/gui/app.py
+msgid "Network name (SSID)"
+msgstr "Netzwerkname (SSID)"
+
+#: installer/gui/app.py
+msgid "Other network (enter the name)"
+msgstr "Anderes Netzwerk (Namen eingeben)"
+
+#: installer/gui/app.py
+msgid "{count} network found"
+msgid_plural "{count} networks found"
+msgstr[0] "{count} Netzwerk gefunden"
+msgstr[1] "{count} Netzwerke gefunden"
+
+#: installer/gui/app.py
+msgid "Close"
+msgstr "Schließen"
+
+#: installer/core/wifi.py
+msgid "Could not store the wireless passphrase: {reason}"
+msgstr "Das WLAN-Passwort konnte nicht abgelegt werden: {reason}"
+
+#: installer/gui/app.py
+msgid "{percent}% - please do not switch the computer off."
+msgstr "{percent}% - bitte den Computer nicht ausschalten."
+
+#: installer/gui/app.py
+msgid "Restart now"
+msgstr "Jetzt neu starten"
+
+#: installer/gui/app.py
+msgid "Restart failed"
+msgstr "Neustart fehlgeschlagen"
+
+#: installer/gui/app.py
+msgid "The system did not accept the restart request."
+msgstr "Das System hat die Neustart-Anforderung nicht angenommen."
+
+# --- UI-5: die Einteilung der Platte ----------------------------------
+# Gemeldet als "ausserdem soll man im wizard die festplatten bereinigen
+# koennen und neu zuweisen mit partitionen usw. das fehlt noch komplett".
+
+#: installer/core/layout.py
+msgid "EFI system partition ({mountpoint})"
+msgstr "EFI-Systempartition ({mountpoint})"
+
+#: installer/core/layout.py
+msgid "Swap"
+msgstr "Auslagerung"
+
+#: installer/core/layout.py
+msgid "no mount point"
+msgstr "kein Einhängepunkt"
+
+#: installer/core/layout.py
+msgid "{start} to {end}"
+msgstr "{start} bis {end}"
+
+#: installer/core/layout.py
+msgid "Please enter a size, for example 20G."
+msgstr "Bitte eine Größe angeben, zum Beispiel 20G."
+
+#: installer/core/layout.py
+msgid "There is no free space left on the disk."
+msgstr "Auf der Festplatte ist kein Platz mehr frei."
+
+#: installer/core/layout.py
+msgid "A size needs a unit, for example 20G or 512M. The word rest means all remaining space."
+msgstr "Eine Größe braucht eine Einheit, zum Beispiel 20G oder 512M. Das Wort Rest bedeutet den ganzen verbleibenden Platz."
+
+#: installer/core/layout.py
+msgid "A partition must be at least 1 MiB."
+msgstr "Eine Partition muss mindestens 1 MiB groß sein."
+
+#: installer/core/layout.py installer/gui/pages.py
+msgid "{wanted} does not fit; at most {available} are free."
+msgstr "{wanted} passen nicht; höchstens {available} sind frei."
+
+#: installer/core/layout.py
+msgid "The layout is empty. Nothing would be installed."
+msgstr "Die Einteilung ist leer. Es würde nichts installiert."
+
+#: installer/core/layout.py
+msgid "There is no EFI system partition. ZepOS cannot boot without one."
+msgstr "Es fehlt eine EFI-Systempartition. Ohne sie startet ZepOS nicht."
+
+#: installer/core/layout.py
+msgid "There is no root partition. Add one with the mount point /."
+msgstr "Es fehlt eine Wurzelpartition. Bitte eine mit dem Einhängepunkt / anlegen."
+
+#: installer/core/layout.py
+msgid "There is more than one EFI system partition."
+msgstr "Es gibt mehr als eine EFI-Systempartition."
+
+#: installer/core/layout.py
+msgid "There is more than one root partition."
+msgstr "Es gibt mehr als eine Wurzelpartition."
+
+#: installer/core/layout.py
+msgid "The EFI system partition must be formatted as {expected}, not {actual}."
+msgstr "Die EFI-Systempartition muss {expected} sein, nicht {actual}."
+
+#: installer/core/layout.py
+msgid "The EFI system partition is only {size}; a boot loader needs at least {minimum}."
+msgstr "Die EFI-Systempartition hat nur {size}; ein Bootloader braucht mindestens {minimum}."
+
+#: installer/core/layout.py
+msgid "The root partition is only {size}; at least {minimum} are required."
+msgstr "Die Wurzelpartition hat nur {size}; es werden mindestens {minimum} gebraucht."
+
+#: installer/core/layout.py
+msgid "The root partition cannot be swap space."
+msgstr "Die Wurzelpartition kann keine Auslagerung sein."
+
+#: installer/core/layout.py
+msgid "Two partitions are mounted at {mountpoint}."
+msgstr "Zwei Partitionen liegen auf {mountpoint}."
+
+#: installer/core/layout.py
+msgid "A partition starts before {minimum}; the GPT header is there."
+msgstr "Eine Partition beginnt vor {minimum}; dort liegt der GPT-Kopf."
+
+#: installer/core/layout.py
+msgid "{first} and {second} overlap."
+msgstr "{first} und {second} überschneiden sich."
+
+#: installer/core/layout.py
+msgid "{partition} runs past the end of the disk; only {available} of {total} can be used."
+msgstr "{partition} ragt über das Ende der Festplatte hinaus; von {total} sind nur {available} nutzbar."
+
+#: installer/gui/pages.py
+msgid "There is no partition on this disk."
+msgstr "Auf dieser Festplatte liegt keine Partition."
+
+#: installer/gui/pages.py
+msgid "{count} partition will be deleted:"
+msgid_plural "{count} partitions will be deleted:"
+msgstr[0] "{count} Partition wird gelöscht:"
+msgstr[1] "{count} Partitionen werden gelöscht:"
+
+#: installer/gui/pages.py
+msgid "The following will be created:"
+msgstr "Neu angelegt wird:"
+
+#: installer/gui/pages.py
+msgid "{free} of {total} still free."
+msgstr "{free} von {total} noch frei."
+
+#: installer/gui/app.py
+msgid "Partitioning"
+msgstr "Einteilung der Festplatte"
+
+#: installer/gui/app.py
+msgid "{mountpoint} (EFI system partition)"
+msgstr "{mountpoint} (EFI-Systempartition)"
+
+#: installer/gui/app.py
+msgid "Swap (no mount point)"
+msgstr "Auslagerung (kein Einhängepunkt)"
+
+#: installer/gui/app.py
+msgid "New layout"
+msgstr "Neue Einteilung"
+
+#: installer/gui/app.py
+msgid "Use suggestion"
+msgstr "Vorschlag einsetzen"
+
+#: installer/gui/app.py
+msgid "Clear the disk"
+msgstr "Festplatte bereinigen"
+
+#: installer/gui/app.py
+msgid "Add a partition"
+msgstr "Partition hinzufügen"
+
+#: installer/gui/app.py
+msgid "Mount point"
+msgstr "Einhängepunkt"
+
+#: installer/gui/app.py
+msgid "File system"
+msgstr "Dateisystem"
+
+#: installer/gui/app.py
+msgid "Size (for example 20G, or rest)"
+msgstr "Größe (zum Beispiel 20G, oder Rest)"
+
+#: installer/gui/app.py
+msgid "Remove"
+msgstr "Entfernen"
+
+#: installer/gui/app.py
+msgid "Partition: {value}"
+msgstr "Partition: {value}"
+
+#: installer/gui/app.py
+msgid "Office applications"
+msgstr "Büroanwendungen"
+
+#: installer/gui/app.py
+msgid "LibreOffice with German and English dictionaries, about 646 MB. It has no GTK4 version, so it is the one window that does not carry the ZepOS colours."
+msgstr "LibreOffice mit deutschen und englischen Wörterbüchern, etwa 646 MB. Es gibt es nicht in einer GTK4-Fassung, also ist es das eine Fenster, das die ZepOS-Farben nicht trägt."
+
+#: installer/gui/app.py
+msgid "Development tools"
+msgstr "Entwicklungswerkzeuge"
+
+#: installer/gui/app.py
+msgid "base-devel and git, for building software, about 440 MB."
+msgstr "base-devel und git, zum Übersetzen von Software, etwa 440 MB."
+
+#: installer/gui/app.py
+msgid "Install Firefox as well"
+msgstr "Firefox zusätzlich installieren"
+
+#: installer/gui/app.py
+msgid "ZepOS ships GNOME Web, the only browser built on GTK4. Firefox is built on GTK3 and will not follow the ZepOS colours, about 292 MB."
+msgstr "ZepOS liefert GNOME Web aus, den einzigen Browser auf GTK4. Firefox steht auf GTK3 und folgt den ZepOS-Farben nicht, etwa 292 MB."
+
+#: installer/tui/app.py
+msgid "Install office applications (LibreOffice, about 646 MB)?"
+msgstr "Büroanwendungen installieren (LibreOffice, etwa 646 MB)?"
+
+#: installer/tui/app.py
+msgid "Install development tools (base-devel and git, about 440 MB)?"
+msgstr "Entwicklungswerkzeuge installieren (base-devel und git, etwa 440 MB)?"
+
+#: installer/tui/app.py
+msgid "Install Firefox as well (about 292 MB)?"
+msgstr "Firefox zusätzlich installieren (etwa 292 MB)?"
+
+#: installer/core/crypt.py
+msgid "The passphrase is too short. At least {minimum} characters are required, and there is no way to reset it later."
+msgstr "Die Passphrase ist zu kurz. Es sind mindestens {minimum} Zeichen nötig, und sie lässt sich später nicht zurücksetzen."
+
+#: installer/core/crypt.py
+msgid "The passphrases do not match."
+msgstr "Die Passphrasen stimmen nicht überein."
+
+#: installer/core/crypt.py
+msgid "If you lose this passphrase, every file on this disk is lost with it. There is no reset, no second key and no back door - not by ZepOS, not by anybody. Write it down and keep it somewhere that is not this computer."
+msgstr "Wenn Sie diese Passphrase verlieren, ist jede Datei auf dieser Platte mit verloren. Es gibt kein Zurücksetzen, keinen Zweitschlüssel und keine Hintertür - nicht durch ZepOS und durch niemanden sonst. Schreiben Sie sie auf und bewahren Sie sie an einem Ort auf, der nicht dieser Rechner ist."
+
+#: installer/core/crypt.py
+msgid "At every start ZepOS asks for this passphrase before anything else appears, and unlocking then takes about ten seconds. That wait is the protection: an attacker guessing at your disk pays it for every attempt."
+msgstr "Bei jedem Start fragt ZepOS nach dieser Passphrase, bevor irgendetwas anderes erscheint, und das Entsperren dauert dann rund zehn Sekunden. Diese Wartezeit IST der Schutz: wer Ihre Platte durchprobiert, zahlt sie bei jedem Versuch."
+
+#: installer/core/crypt.py
+msgid "At the start ZepOS asks for this passphrase in its own window, before the desktop exists. That window uses the keyboard layout you chose on the first page, so letters such as y and z and any accented character land where that layout puts them - and you cannot see it, because the characters stay hidden."
+msgstr "Beim Start fragt ZepOS diese Passphrase in einem eigenen Fenster ab, noch bevor es einen Schreibtisch gibt. Dieses Fenster benutzt die Tastaturbelegung, die Sie auf der ersten Seite gewählt haben - Buchstaben wie y und z und jeder Umlaut liegen dort, wo diese Belegung sie hinlegt. Sehen können Sie es nicht, denn die Zeichen bleiben verdeckt."
+
+#: installer/core/crypt.py
+msgid "This processor has no AES hardware support, so encryption runs in software. Expect roughly 500 MB/s instead of several thousand - noticeable on a fast SSD, not on an older one."
+msgstr "Dieser Prozessor hat keine AES-Hardwareunterstützung, die Verschlüsselung läuft also in Software. Rechnen Sie mit etwa 500 MB/s statt mehreren Tausend - spürbar auf einer schnellen SSD, nicht auf einer älteren."
+
+#: installer/core/crypt.py
+msgid "A swap partition stays unencrypted. Anything the machine held in memory can end up there in the clear, including what you were working on."
+msgstr "Eine Auslagerungspartition bleibt unverschlüsselt. Alles, was der Rechner im Arbeitsspeicher hatte, kann dort im Klartext landen - auch das, woran Sie gerade gearbeitet haben."
+
+#: installer/core/crypt.py
+msgid "The EFI system partition stays unencrypted. It has to: the firmware reads it before anything could decrypt it. It carries the kernel and the start-up files, not your data."
+msgstr "Die EFI-Systempartition bleibt unverschlüsselt. Sie muss es: die Firmware liest sie, bevor irgendetwas entschlüsseln könnte. Auf ihr liegen der Kernel und die Startdateien, nicht Ihre Daten."
+
+#: installer/core/translate.py
+msgid "Disk encryption was requested without a passphrase. archinstall would silently install an unencrypted system."
+msgstr "Es wurde Verschlüsselung ohne Passphrase verlangt. archinstall würde stillschweigend ein unverschlüsseltes System installieren."
+
+#: installer/core/translate.py
+msgid "Disk encryption was requested, but no partition in this layout can be encrypted."
+msgstr "Es wurde Verschlüsselung verlangt, aber in dieser Einteilung lässt sich keine Partition verschlüsseln."
+
+#: installer/core/validate.py
+msgid "Disk encryption is switched on, but no passphrase was given. Without one the disk would be installed unencrypted."
+msgstr "Die Verschlüsselung ist eingeschaltet, aber es wurde keine Passphrase angegeben. Ohne sie würde die Platte unverschlüsselt installiert."
+
+#: installer/core/validate.py
+msgid "Disk encryption is switched on, but this layout has nothing that can be encrypted."
+msgstr "Die Verschlüsselung ist eingeschaltet, aber diese Einteilung enthält nichts, was sich verschlüsseln lässt."
+
+#: installer/gui/app.py
+msgid "Encryption"
+msgstr "Verschlüsselung"
+
+#: installer/gui/app.py
+msgid "Encrypt this disk"
+msgstr "Diese Festplatte verschlüsseln"
+
+#: installer/gui/app.py
+msgid "AES-256, the strength governments use for classified material. Without the passphrase the disk is unreadable, even taken out of this computer."
+msgstr "AES-256, die Stärke, mit der Behörden Verschlusssachen schützen. Ohne die Passphrase ist die Platte nicht lesbar, auch ausgebaut nicht."
+
+#: installer/gui/app.py
+msgid "Disk passphrase"
+msgstr "Passphrase der Festplatte"
+
+#: installer/gui/app.py
+msgid "Repeat the passphrase"
+msgstr "Passphrase wiederholen"
+
+#: installer/gui/app.py
+msgid "Encryption: {value}"
+msgstr "Verschlüsselung: {value}"
+
+#: installer/gui/app.py
+msgid "yes, AES-256"
+msgstr "ja, AES-256"
+
+#: installer/gui/app.py
+msgid "no"
+msgstr "nein"
+
+#: installer/gui/pages.py
+msgid "The disk will be encrypted."
+msgstr "Die Festplatte wird verschlüsselt."
+
+#: installer/tui/app.py
+msgid "ZepOS can encrypt this disk with AES-256, the strength governments use for classified material. Without the passphrase the disk is unreadable, even taken out of this computer."
+msgstr "ZepOS kann diese Festplatte mit AES-256 verschlüsseln, der Stärke, mit der Behörden Verschlusssachen schützen. Ohne die Passphrase ist die Platte nicht lesbar, auch ausgebaut nicht."
+
+#: installer/tui/app.py
+msgid "Encrypt this disk?"
+msgstr "Diese Festplatte verschlüsseln?"
+
+#: installer/core/preflight.py
+msgid "This medium names no package source: {mirrorlist} contains no server. ZepOS fetches the Arch Linux base system from there during every installation, so none can be carried out from this medium."
+msgstr "Dieses Medium nennt keine Paketquelle: In {mirrorlist} steht kein Server. ZepOS holt das Arch-Linux-Grundsystem bei jeder Installation von dort, deshalb lässt sich von diesem Medium keine durchführen."
+
+#: installer/core/preflight.py
+msgid "The Arch Linux package source cannot be reached: {url}. ZepOS fetches the base system from there during every installation - without a network there is nothing to install from. Connect a network cable, or go back and join a wireless network, and try again."
+msgstr "Die Arch-Linux-Paketquelle ist nicht erreichbar: {url}. ZepOS holt das Grundsystem bei jeder Installation von dort – ohne Netzwerk gibt es nichts, woraus installiert werden könnte. Schließen Sie ein Netzwerkkabel an, oder gehen Sie zurück und verbinden Sie sich mit einem WLAN, und versuchen Sie es erneut."
+
+#: installer/core/preflight.py
+msgid "The clock was not set from the network within {seconds} seconds. The installation continues with the time this computer started with. If that time is far wrong, package signatures can be refused and the installation fails at the first package."
+msgstr "Die Uhr wurde innerhalb von {seconds} Sekunden nicht aus dem Netz gestellt. Die Installation läuft mit der Zeit weiter, mit der dieser Rechner gestartet ist. Geht diese Zeit weit falsch, können Paketsignaturen abgelehnt werden und die Installation scheitert am ersten Paket."

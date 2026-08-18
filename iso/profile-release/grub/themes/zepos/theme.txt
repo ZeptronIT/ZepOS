@@ -1,0 +1,185 @@
+# The ZepOS boot menu, on the UEFI path.
+#
+# HOW THIS FILE REACHES THE IMAGE
+#     mkarchiso copies everything in a profile's grub/ directory that is
+#     NOT a *.cfg into /boot/grub/ on the ISO 9660 filesystem, verbatim
+#     and recursively (_make_bootmode_uefi.grub, the `!(*.cfg)` glob). So
+#     this directory arrives as /boot/grub/themes/zepos/, which is the
+#     path grub.cfg names in `set theme=`. Neither half of that is
+#     automatic: a theme at a path the configuration does not name, or a
+#     name the copy does not produce, is a menu that comes up as white
+#     text on black and reports nothing.
+#
+# WHAT HAPPENS IF ANY OF IT IS MISSING
+#     Nothing visible. GRUB falls back to the text console without an
+#     error when the theme, the font or the image cannot be read - which
+#     is why iso/test-boot.py --scenario boot-menu photographs the menu
+#     and measures the frame instead of trusting that this file was
+#     shipped.
+#
+# THE COLOURS ARE NOT DECORATION
+#     Every value below comes from src/brand.py and every pair of them is
+#     recomputed against WCAG AA by tests/iso/test_boot_theme.py, which
+#     parses this file rather than being told the numbers:
+#
+#       #DCEEF4 on #0D3D47   9.90:1   an entry, on the petrol
+#       #0D3D47 on #FFCB00   7.77:1   the SELECTED entry, on the yellow
+#       #A9C6CF on #0D3D47   6.57:1   the help line, and the countdown
+#       #FFCB00 on #2F728A   3.54:1   the countdown BAR, filled against
+#                                     its trough - a shape, not a word,
+#                                     so 1.4.11's 3:1 is its line
+#       #4197B6 on the picture 3.56:1 the bar's own edge, so it exists
+#                                     before it has filled
+#
+#     A boot menu is read once, quickly, often on a panel nobody
+#     calibrated. None of these is close to the line.
+#
+#     The petrol they are measured against is the worst case and not an
+#     average: everything the menu draws lands between 38% and 92% of the
+#     height, background.png is deliberately empty brand colour there,
+#     and the gradient across it only ever goes darker. That is checked
+#     too - test_nothing_behind_the_text_is_lighter_than_the_petrol.
+
+title-text: ""
+desktop-image: "background.png"
+
+# "crop" and not "stretch". The image is 16:9 and the firmware picks the
+# mode; on the 4:3 that OVMF and most older machines come up in, stretch
+# makes the wordmark 33% too wide. Crop keeps the aspect ratio, scales to
+# cover and takes the overflow off the left and right - so the vertical
+# percentages below land exactly where the picture was drawn for them,
+# on every screen that is not wider than 16:9.
+desktop-image-scale-method: "crop"
+
+# The colour underneath, in case the firmware hands GRUB a mode the image
+# cannot be scaled into. It is the brand petrol, so the failure of the
+# picture is a plain brand-coloured menu rather than a black one.
+desktop-color: "#0D3D47"
+
+# The `c` command line and any message GRUB prints over the menu.
+terminal-font: "Roboto Regular 16"
+terminal-left: "8%"
+terminal-top: "40%"
+terminal-width: "84%"
+terminal-height: "45%"
+message-color: "#DCEEF4"
+message-bg-color: "#0D3D47"
+
++ boot_menu {
+    left = 19%
+    top = 41%
+    width = 62%
+    height = 30%
+
+    item_font = "Roboto Regular 24"
+    selected_item_font = "Roboto Bold 24"
+    item_color = "#DCEEF4"
+    selected_item_color = "#0D3D47"
+
+    # The nine-slice box behind the selected entry: a solid brand-yellow
+    # block, ten pixels larger than the text row on every side. A second
+    # channel besides the colour change, because a boot menu is read by
+    # somebody who is not looking for the highlight and has a few seconds
+    # before the timeout answers for them.
+    selected_item_pixmap_style = "select_*.png"
+
+    item_height = 40
+    item_spacing = 24
+    item_padding = 14
+    icon_width = 0
+    icon_height = 0
+
+    # Two entries. A scrollbar would need four more pixmaps to exist for
+    # a thing that can never be drawn.
+    scrollbar = false
+}
+
+# The countdown, in two parts, and the split is a contrast decision.
+#
+# MEASURED, and it is why show_text is false: GRUB draws a progress bar's
+# own text CENTRED INSIDE THE BAR, so one string would have to be legible
+# on the fill AND on the trough, while the boundary between the two moves
+# once a second. A bar filled with #FFCB00 makes that impossible in the
+# most obvious way - the yellow is bright and the trough is not, so any
+# colour that reads on one fails on the other. It was already impossible
+# when the fill was cyan (#DCEEF4 on #0096C0 was 2.87:1, under AA, on the
+# one line of the menu the eye goes to).
+#
+# So the text is not on the bar at all: it is a label of its own, above
+# it, on the picture, at 5.88:1 or better.
+#
+# The bar itself stays. It is the part that can be read without reading.
+#
+# YELLOW FILLS IT, and that is a decision about what the colour MEANS
+# rather than about how it looks. Yellow is the active thing everywhere
+# in ZepOS: the selected entry of this menu, the filled part of this
+# countdown, the progress in the installer's header. The trough is the
+# light petrol #2F728A - structure, not state. Measured: #FFCB00 on
+# #2F728A is 3.54:1, over the 3:1 that WCAG 1.4.11 asks of a shape.
+#
+# The border is #4197B6 and not the trough colour, so the component has
+# an edge before anything has filled it. #2F728A against the picture
+# behind it is 2.19:1 and would be a bar with no visible extent until it
+# started emptying. #4197B6 is the brand shade lightened until it clears
+# the line - #3B88A5 itself measures 2.96:1 on the petrol and was tried
+# first, which is 0.04 short and exactly the kind of miss a comment
+# would have rounded up.
++ label {
+    id = "__timeout__"
+    left = 19%
+    top = 72%
+    width = 62%
+    align = "center"
+    font = "Roboto Regular 16"
+    color = "#A9C6CF"
+
+    # GRUB's own @TIMEOUT_NOTIFICATION_*@ tokens expand to gettext
+    # strings, and mkarchiso builds this loader with --locales="en@quot"
+    # - so asking for one of them puts an English sentence under a German
+    # menu. What a label's `text` actually becomes is a printf template
+    # that GRUB fills with the seconds remaining, so the German is
+    # written here directly.
+    #
+    # "%d s" and not "%d Sekunden", and this is one of the places the two
+    # boot paths CANNOT say the same thing: syslinux's MENU AUTOBOOT has
+    # a singular/plural form in its own syntax (# Sekunde{,n}) and GRUB's
+    # template is a bare printf with no such thing. "in 1 Sekunden" is
+    # wrong German for one second of every countdown; the unit symbol is
+    # right for every value of it.
+    text = "Automatischer Start in %d s"
+}
+
++ progress_bar {
+    id = "__timeout__"
+    left = 19%
+    top = 78%
+    width = 62%
+    height = 22
+
+    show_text = false
+
+    fg_color = "#FFCB00"
+    bg_color = "#2F728A"
+    border_color = "#4197B6"
+}
+
+# German, because the entries are. GRUB is built here with the English
+# locale only (mkarchiso passes --locales="en@quot"), so a translated
+# @-string would come back in English - this one is written out instead.
+#
+# The same sentence stands under the BIOS menu, with one word changed:
+# GRUB edits an entry on `e` and syslinux on Tab, and a help line that
+# named the other loader's key would be worse than none. Written without
+# an umlaut so that both loaders can say it - syslinux draws text through
+# a codepage font and would put two boxes where an "ä" is, while this
+# font has the glyph. One sentence that is right in both places beats two
+# that differ for a reason nobody can see.
++ label {
+    left = 0
+    top = 86%
+    width = 100%
+    align = "center"
+    font = "Roboto Regular 16"
+    color = "#A9C6CF"
+    text = "Pfeiltasten bewegen die Auswahl  |  Eingabetaste startet  |  e bearbeitet die Startoptionen"
+}

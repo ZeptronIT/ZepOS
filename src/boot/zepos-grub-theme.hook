@@ -1,0 +1,41 @@
+# Der Haken, der das Startmenue auf die Partition legt, aus der GRUB
+# liest. Installiert nach
+# /usr/share/libalpm/hooks/90-zepos-grub-theme.hook.
+#
+# WARUM ES IHN GEBEN MUSS
+#     Das Thema gehoert dem Paket und liegt unter
+#     /usr/share/grub/themes/zepos - auf einer ZepOS-Installation also
+#     auf der verschluesselten Wurzel, und dort ist es fuer
+#     grub-mkconfig unlesbar. src/boot/grub-zepos.cfg traegt die Messung
+#     vom 17.08.2026, mit der diese Bedingung gefunden wurde, und
+#     src/boot/zepos-grub-theme sagt, was der Befehl dagegen tut.
+#
+# WARUM `Type = Path` UND NICHT `Type = Package`
+#     Damit er nur laeuft, wenn sich am Thema wirklich etwas geaendert
+#     hat, und nicht bei jedem `pacman -Syu`, in dem irgendetwas an
+#     zepos-config neu ist. Derselbe Grund wie bei
+#     src/system/zepos-update.hook, wo der Absatz ausgeschrieben steht.
+#
+# WARUM `Operation = Remove` FEHLT
+#     Weil eine Kopie unter /boot, die stehenbleibt, nichts kostet: die
+#     grub.cfg zeigt nur dann auf sie, wenn auch das Drop-in noch da ist,
+#     und beide verschwinden mit demselben Paket. Ein Haken, der beim
+#     Entfernen unter /boot aufraeumt, liefe dagegen auch bei jedem
+#     Aktualisieren mit - pacman fasst Upgrades als Remove+Install an -
+#     und loeschte die Kopie, die die Install-Haelfte gerade angelegt
+#     hat.
+#
+# WARUM DIE 90 IM NAMEN
+#     pacman arbeitet seine Haken alphabetisch ab, und die Nummer haelt
+#     die Reihenfolge lesbar. 90-zepos-grub-theme laeuft vor
+#     90-zepos-update; beide haengen an nichts, was der andere tut.
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Target = usr/share/grub/themes/zepos/*
+
+[Action]
+Description = ZepOS-Startmenue nach /boot spiegeln...
+When = PostTransaction
+Exec = /usr/bin/zepos-grub-theme

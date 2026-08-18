@@ -1,0 +1,254 @@
+#!/bin/bash
+# Wer gerade zuhoert und wer gerade zusieht
+# Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+# Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-privacy-scripts.template kopieren
+#
+# WOFUER ES DAS GIBT
+#     macOS zeigt einen Punkt, sobald IRGENDEIN Programm das Mikrofon
+#     oder die Kamera benutzt. ZepOS hatte dafuer nichts.
+#
+#     Es hatte etwas, das so AUSSAH: das Leistenmodul
+#     "pulseaudio#microphone". GEMESSEN am 12.08.2026 an
+#     ags-bar.template und bar-status-config.template - sein Klick ist
+#     `pamixer --default-source -t`, sein Rad `-i 5`/`-d 5`, sein Text
+#     `wpctl get-volume @DEFAULT_AUDIO_SOURCE@`. Das ist ein
+#     LAUTSTAERKEREGLER. Er sagt, wie laut das Mikrofon EINGESTELLT ist,
+#     und beantwortet die Frage "hoert gerade jemand zu?" mit keiner
+#     Silbe: ein Mikrofon auf 100 % ist nicht offen, und ein Programm,
+#     das aufnimmt, dreht die Lautstaerke nicht.
+#
+#     Auf einem System, das mit einem Browser ausgeliefert wird, ist das
+#     die einzige Luecke der Leiste, die etwas kostet, das man nicht
+#     zurueckbekommt.
+#
+# DIE FORM DER ANTWORT
+#     Die drei Felder, die jedes Leistenskript dieses Baums schreibt,
+#     plus zwei, die nur das Kontrollzentrum liest:
+#
+#         {"text": "...", "tooltip": "...", "class": "...",
+#          "mic": ["firefox"], "cam": ["firefox"]}
+#
+#     ZWEI LESER, EIN SKRIPT, und das ist der Grund fuer die zwei
+#     zusaetzlichen Felder. Die Leiste zeigt DASS etwas laeuft, das
+#     Kontrollzentrum zeigt WER - "etwas hoert zu" ohne "wer" ist eine
+#     Warnung, mit der niemand etwas anfangen kann. Zwei Skripte dafuer
+#     waeren zwei Messzeitpunkte und damit zwei Antworten, die einander
+#     auf demselben Bildschirm widersprechen koennen.
+#
+#     Leeres "text" heisst "niemand nimmt auf". Die Leiste blendet das
+#     Modul dann aus (applyPayload in Bar.tsx), und genau so soll es
+#     sein: die Leiste traegt achtzehn Module und laeuft auf 1366x768
+#     schon ueber. Ein Modul, das immer da ist, macht das schlimmer; ein
+#     bedingtes nicht.
+set -uo pipefail
+
+ICON_RECORDING="{{ICON_RECORDING}}"
+ICON_MIC="{{ICON_MIC}}"
+ICON_WEBCAM="{{ICON_WEBCAM}}"
+
+# Wo die Prozesse liegen. Die einzige Angabe in diesem Skript, die weder
+# aus einem Werkzeug noch aus HOME kommt - dieselbe Bauart wie
+# ZEPOS_POWER_SUPPLY_ROOT in bar-status-config.template und aus
+# demselben Grund: sonst haenge die Antwort daran, ob auf dem Rechner,
+# auf dem die Suite laeuft, gerade jemand die Kamera aufhat, und der
+# Zweig, den man dort nicht messen kann, waere immer der ungetestete.
+PROC_ROOT="${ZEPOS_PROC_ROOT:-/proc}"
+
+# ---------------------------------------------------------------------
+# Das Mikrofon
+# ---------------------------------------------------------------------
+#
+# WELCHER WEG WIRKLICH AUSKUNFT GIBT, GEMESSEN am 12.08.2026 auf einem
+# Notebook (pipewire, pipewire-pulse, wireplumber), indem ein
+# Aufnahmestrom mit `parec` geoeffnet und wieder geschlossen wurde:
+#
+#   pactl list source-outputs   MELDET ihn. Ein Datensatz je Strom, mit
+#                               "Corked", der Quellnummer und den
+#                               Eigenschaften des Programms. 1701 Byte,
+#                               2.9 ms im Median ueber sieben Laeufe.
+#   pw-dump                     MELDET ihn ebenfalls, als Knoten mit
+#                               media.class "Stream/Input/Audio" und
+#                               state "running". 130319 Byte, 6.8 ms.
+#   wpctl                       gibt Lautstaerken, keine Stroeme.
+#
+# Genommen ist der erste: dieselbe Auskunft, ein Vierundsiebzigstel der
+# Ausgabe und die Haelfte der Zeit. Der zweite braucht ausserdem jq auf
+# 130 KB, alle zwei Sekunden, dauerhaft.
+#
+# Es ist auch das eine Mal in diesem Baum, in dem NICHT wpctl genommen
+# wird, obwohl bar-status-config.template es mit Begruendung tut ("es
+# gehoert zu dem Dienst, der die Antwort HAT"). Der Grund ist genau
+# diese Begruendung: wireplumber hat die LAUTSTAERKEN. Die Liste der
+# offenen Aufnahmestroeme hat es nicht - `wpctl status` zeichnet sie als
+# Baum fuer Menschen, ohne Corked-Zustand und ohne die Eigenschaften,
+# an denen unten drei Sorten Falschmeldung haengen.
+
+# Die Quellen, die ein MONITOR sind - der Mithoerausgang eines
+# Lautsprechers.
+#
+# WARUM SIE AUSGENOMMEN WERDEN
+#     Ein Programm, das `auto_null.monitor` aufnimmt, nimmt auf, was aus
+#     den LAUTSPRECHERN kommt - eine Bildschirmaufnahme mit Ton tut
+#     genau das. Das ist keine Mikrofonaufnahme, und ein Punkt, der
+#     dabei angeht, macht aus "jemand hoert dich" ein "irgendwas laeuft
+#     halt". Eine Warnung, die zu oft angeht, ist nach einer Woche keine
+#     mehr.
+monitor_sources() {
+    pactl list short sources 2>/dev/null | awk '$2 ~ /\.monitor$/ { print $1 }'
+}
+
+# Die Programme, die gerade wirklich vom Mikrofon lesen.
+#
+# DREI SORTEN FALSCHMELDUNG WERDEN HIER AUSSORTIERT, und jede hat ihr
+# eigenes Feld im Datensatz:
+#
+#   Corked: yes              Der Strom steht. PulseAudio haelt ihn
+#                            offen, es kommt aber nichts durch - ein
+#                            Programm, das die Aufnahme pausiert hat.
+#   stream.capture.sink      Der Strom liegt am AUSGANG. Genau der Fall
+#                            oben, und pipewire-pulse schreibt die
+#                            Eigenschaft selbst hin; GEMESSEN am
+#                            12.08.2026 an `parec -d auto_null.monitor`,
+#                            das sie als "true" fuehrte.
+#   stream.monitor           Ein Pegelmesser. pavucontrol und jeder
+#                            Mischer oeffnen so einen, um einen
+#                            Ausschlagbalken zu zeichnen; sie HOEREN
+#                            nicht zu, sie zeigen an. Ein Punkt, der
+#                            angeht, weil jemand den Lautstaerkeregler
+#                            offen hat, ist genau die Meldung, die man
+#                            danach abschaltet.
+#
+# Der Programmname kommt aus application.name und faellt auf
+# application.process.binary zurueck. Beide standen am 12.08.2026 im
+# gemessenen Datensatz ("parec" und "pacat"); der erste ist der Name,
+# den das Programm sich gibt, der zweite der, unter dem es auf der
+# Platte liegt. Ohne den Rueckfall hiesse ein Programm, das sich keinen
+# Namen gibt, gar nicht - und "etwas hoert zu" ohne "wer" ist der
+# Zustand, den dieses Skript beheben soll.
+mic_users() {
+    local monitors
+    monitors=" $(monitor_sources | tr '\n' ' ')"
+
+    pactl list source-outputs 2>/dev/null | awk -v monitors="$monitors" '
+        function quoted(line,   value) {
+            value = line
+            sub(/^[^"]*"/, "", value)
+            sub(/"$/, "", value)
+            return value
+        }
+        function flush() {
+            if (!started) return
+            if (corked || sink || meter) return
+            if (index(monitors, " " source " ") > 0) return
+            who = (name != "") ? name : binary
+            if (who != "") print who
+        }
+        /^Source Output #/ {
+            flush()
+            started = 1; corked = 0; sink = 0; meter = 0
+            source = ""; name = ""; binary = ""
+            next
+        }
+        /^[[:space:]]*Corked: yes/                        { corked = 1; next }
+        /^[[:space:]]*Source: /                           { source = $2; next }
+        /^[[:space:]]*application\.name = /               { name = quoted($0); next }
+        /^[[:space:]]*application\.process\.binary = /    { binary = quoted($0); next }
+        /^[[:space:]]*stream\.capture\.sink = "true"/     { sink = 1; next }
+        /^[[:space:]]*stream\.monitor = "true"/           { meter = 1; next }
+        END { flush() }
+    ' | sort -u
+}
+
+# ---------------------------------------------------------------------
+# Die Kamera
+# ---------------------------------------------------------------------
+#
+# UEBER /proc UND NICHT UEBER PIPEWIRE, UND DAS IST GEMESSEN
+#     Am 12.08.2026 wurde die eingebaute Kamera dieses Rechners mit
+#     `v4l2-ctl -d /dev/video0 --stream-mmap` geoeffnet - derselbe Weg,
+#     den ein Browser nimmt, wenn er nicht ueber das Portal geht. Dabei:
+#
+#         pw-dump, Knoten mit media.class "Stream/Input/Video":  KEINER
+#         find ueber /proc/*/fd:                                 gefunden,
+#                                                                mit dem
+#                                                                Namen des
+#                                                                Programms
+#
+#     PipeWire sieht eine Kamera nur, wenn sie ueber PipeWire geoeffnet
+#     wird. Ein direkter v4l2-Zugriff geht am Dienst vorbei, und das ist
+#     der haeufigste Fall ueberhaupt. Ein Datenschutzpunkt, der genau
+#     den nicht sieht, ist schlimmer als keiner: er behauptet, es sei
+#     nachgesehen worden.
+#
+#     Der Kernel fuehrt keine Liste "wer hat die Kamera auf". Was er
+#     fuehrt, sind die offenen Dateien jedes Prozesses, und ein
+#     geoeffnetes /dev/video* IST die Antwort - das ist auch das, woran
+#     die Leuchtdiode neben der Linse haengt.
+#
+# WAS DAS KOSTET
+#     GEMESSEN am 12.08.2026 bei 439 laufenden Prozessen: 6 bis 9 ms je
+#     Lauf, fuenfmal nacheinander. Ein `find`-Prozess, nicht einer je
+#     Prozess - `readlink` in einer Schleife waere hier tausend
+#     Prozessstarts alle zwei Sekunden.
+#
+# WAS ES NICHT SIEHT
+#     Prozesse anderer Konten. /proc/<pid>/fd ist nur fuer den Eigner
+#     lesbar, und das bleibt so: der Ausweg waere ein Rechteschritt in
+#     einem Skript, das die Leiste alle zwei Sekunden ruft. Der Browser,
+#     um den es geht, laeuft ohnehin unter dem Konto des Nutzers.
+cam_users() {
+    local directory link pid program
+
+    while read -r directory link; do
+        pid=${directory#"$PROC_ROOT"/}
+        pid=${pid%/fd}
+        program=""
+        [ -r "$PROC_ROOT/$pid/comm" ] && read -r program < "$PROC_ROOT/$pid/comm"
+        [ -n "$program" ] || continue
+        printf '%s\n' "$program"
+    done < <(find "$PROC_ROOT"/[0-9]*/fd -maxdepth 1 -lname '/dev/video*' \
+                  -printf '%h %l\n' 2>/dev/null) | sort -u
+}
+
+# ---------------------------------------------------------------------
+# Die Antwort
+# ---------------------------------------------------------------------
+
+# Zeilen zu einem JSON-Feld. Ueber jq und nicht ueber printf, aus
+# demselben Grund wie in bar-status-config.template: ein Programmname
+# darf ein Anfuehrungszeichen tragen, und ein von Hand gebautes JSON
+# waere daran zerbrochen - dann zeigte die Leiste GAR nichts mehr an,
+# nicht nur dieses Modul.
+as_array() {
+    printf '%s' "$1" | jq -R -s -c 'split("\n") | map(select(length > 0))'
+}
+
+mic=$(mic_users)
+cam=$(cam_users)
+
+text=""
+class=""
+tooltip=""
+
+if [ -n "$mic" ] && [ -n "$cam" ]; then
+    text="$ICON_RECORDING $ICON_MIC$ICON_WEBCAM"
+    class="privacy privacy-mic privacy-cam"
+    tooltip="Mikrofon: $(printf '%s' "$mic" | paste -sd ', ')
+Kamera: $(printf '%s' "$cam" | paste -sd ', ')"
+elif [ -n "$mic" ]; then
+    text="$ICON_RECORDING $ICON_MIC"
+    class="privacy privacy-mic"
+    tooltip="Mikrofon: $(printf '%s' "$mic" | paste -sd ', ')"
+elif [ -n "$cam" ]; then
+    text="$ICON_RECORDING $ICON_WEBCAM"
+    class="privacy privacy-cam"
+    tooltip="Kamera: $(printf '%s' "$cam" | paste -sd ', ')"
+fi
+
+jq -n -c \
+    --arg text "$text" \
+    --arg tooltip "$tooltip" \
+    --arg class "$class" \
+    --argjson mic "$(as_array "$mic")" \
+    --argjson cam "$(as_array "$cam")" \
+    '{text: $text, tooltip: $tooltip, class: $class, mic: $mic, cam: $cam}'

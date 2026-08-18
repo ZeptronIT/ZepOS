@@ -1,0 +1,141 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# zepos-logout - die Abmeldemaske, die SUPER+M oeffnet.
+#
+# WAS HIER VORHER STAND
+#     packaging/wlogout/PKGBUILD, das ArtsyMacaw/wlogout auf einen Commit
+#     festgenagelt selbst baute, weil kein Arch-Repositorium ein Paket
+#     dieses Namens fuehrt. Das Ergebnis war gemessen GTK3:
+#
+#         objdump -p /usr/bin/wlogout | grep NEEDED
+#           NEEDED  libgtk-3.so.0
+#           NEEDED  libgtk-layer-shell.so.0
+#
+#     Der Nutzer hat am 11.08.2026 entschieden, dass die Oberflaeche
+#     durchgehend auf GTK4 steht und selbst gebaut wird, wo die Pakete es
+#     nicht koennen. wlogout kann es nicht: HEAD 350fe88 vom 26.05.2024
+#     fordert in meson.build `gtk+-wayland-3.0` und nennt gtk4 im ganzen
+#     Baum nicht. Der Kopf von logout/zepos-logout.c fuehrt diese Messung
+#     und die drei verworfenen Alternativen - wleave, ein AGS-Widget und
+#     ein Fork von wlogout - mit ihren Zahlen.
+#
+# WARUM DIE QUELLE NICHT AUS DEM NETZ KOMMT
+#     Weil sie in diesem Baum liegt, unter logout/. Dieselbe Bauart wie
+#     zepos-config und zepos-installer: packaging/build.sh macht den
+#     Tarball aus dem ARBEITSBAUM, mit auf SOURCE_DATE_EPOCH geklemmten
+#     mtimes, und sha256sums ist SKIP, weil eine Pruefsumme ueber eine
+#     Datei, die derselbe Lauf gerade erzeugt hat, nichts pruefen wuerde,
+#     was nicht schon gilt.
+#
+# WARUM DAS OBJEKT NACH DEM BAU ZWEIMAL BEFRAGT WIRD
+#     Die Pruefung auf gtk4-layer-shell erbt zepos-logout von seinem
+#     Vorgaenger, und die Begruendung gilt unveraendert: wlogouts
+#     meson.build hatte `required : false` fuer die Bibliothek, baute
+#     ohne sie weiter und fiel dann still auf das xdg-Protokoll zurueck -
+#     die Maske erschien als gewoehnliches Fenster, das der Compositor
+#     platziert und fokussiert. logout/meson.build macht die Abhaengigkeit
+#     erforderlich, sodass der Bau ausfaellt statt zurueckzufallen; hier
+#     wird trotzdem am fertigen Objekt nachgesehen, weil eine Zusicherung
+#     im Bauskript und eine Messung am Ergebnis zwei verschiedene Dinge
+#     sind.
+#
+#     Die zweite Frage ist neu und ist der ganze Grund fuer diese
+#     Aenderung: linkt das Objekt gegen GTK4 - und gegen GTK3 NICHT. Die
+#     zweite Haelfte ist nicht ueberfluessig. Ein Programm kann beide
+#     laden, wenn eine Bibliothek dazwischen GTK3 hereinzieht, und dann
+#     ist die erste Antwort "ja" und der Bildschirm trotzdem halb GTK3.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-logout
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="Die Abmeldemaske von ZepOS: ein GTK4-Layer-Shell-Raster auf SUPER+M"
+arch=('x86_64')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+# json-glib liest das erzeugte layout.json. Es steht hier und nicht unter
+# makedepends, weil das Programm zur Laufzeit dagegen gelinkt ist - der
+# Bau braucht nur zusaetzlich die Header, und die liegen in Arch im
+# selben Paket.
+depends=('gtk4' 'gtk4-layer-shell' 'json-glib' 'glib2' 'glibc')
+makedepends=('meson' 'ninja' 'pkgconf')
+
+# zepos-config schreibt layout.json und style.css, und ohne die beiden
+# zeigt dieses Programm nichts an - es nennt dann den Befehl, der sie
+# erzeugt. Trotzdem eine Empfehlung und keine Abhaengigkeit: umgekehrt
+# haengt zepos-config nicht an diesem Paket, und zwei Pakete, die
+# einander nennen, sind ein Zyklus, den pacman zwar aufloest und den
+# niemand lesen kann. zepos-desktop nennt beide, das ist die Stelle, an
+# der der Desktop zusammengesetzt wird.
+optdepends=('zepos-config: erzeugt layout.json und style.css, ohne die die Maske leer bliebe')
+
+source=("zepos-logout-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_src="zepos-logout-$pkgver"
+
+build() {
+    # arch-meson aus demselben Grund, aus dem die Plugin-Rezepte es
+    # nehmen: Prefix, Buildtype und makepkgs Haertungsflags an einer
+    # Stelle.
+    arch-meson "$srcdir/$_src/logout" "$srcdir/build"
+    meson compile -C "$srcdir/build"
+}
+
+package() {
+    meson install -C "$srcdir/build" --destdir "$pkgdir"
+
+    local binary="$pkgdir/usr/bin/zepos-logout"
+    test -x "$binary" || {
+        echo "zepos-logout liegt nicht in /usr/bin; SUPER+M waere eine tote Taste" >&2
+        return 1
+    }
+
+    # ZWEI WERKZEUGE, WEIL ES ZWEI VERSCHIEDENE FRAGEN SIND
+    #
+    #     readelf -d   was DIESES Objekt selbst angefordert hat
+    #     ldd          was beim Start tatsaechlich alles geladen wird
+    #
+    # Fuer "steht es auf GTK4" ist readelf richtig: es soll direkt
+    # dagegen gelinkt sein, nicht ueber drei Ecken.
+    #
+    # Fuer "kommt GTK3 durch eine Seitentuer" ist readelf FALSCH, und das
+    # ist gemessen. Der Versuch, die Pruefung zu brechen, indem
+    # logout/meson.build zusaetzlich `dependency('gtk+-3.0')` bekam,
+    # erzeugte ein Paket, das diese Pruefung bestand - Arch setzt in
+    # /etc/makepkg.conf `-Wl,--as-needed`, und der Linker traegt kein
+    # DT_NEEDED fuer eine Bibliothek ein, aus der kein Symbol benutzt
+    # wird. Die Gefahr war ohnehin nie der direkte Eintrag, den jeder in
+    # der depends-Zeile sieht, sondern die Bibliothek, die IHRERSEITS
+    # GTK3 mitbringt. Genau die sieht nur ldd.
+    local needed
+    needed="$(readelf -d "$binary")"
+
+    grep -q "libgtk-4" <<<"$needed" || {
+        echo "zepos-logout ist nicht gegen GTK4 gelinkt." >&2
+        echo "Die Entscheidung vom 11.08.2026 stellt die Oberflaeche" >&2
+        echo "durchgehend auf GTK4; dieses Paket ist der Grund, aus dem" >&2
+        echo "wlogout sie verlassen hat." >&2
+        return 1
+    }
+    grep -q "gtk4-layer-shell" <<<"$needed" || {
+        echo "zepos-logout wurde ohne gtk4-layer-shell gebaut." >&2
+        echo "Das Fenster waere dann ein gewoehnliches Fenster, das der" >&2
+        echo "Compositor platziert, statt einer Oberflaeche ueber allem." >&2
+        return 1
+    }
+
+    local loaded
+    loaded="$(ldd "$binary")"
+    if grep -q "libgtk-3" <<<"$loaded"; then
+        echo "zepos-logout laedt libgtk-3:" >&2
+        grep "libgtk-3" <<<"$loaded" >&2
+        echo "Ein Programm, das beide Toolkits laedt, beantwortet die" >&2
+        echo "GTK4-Frage mit ja und zeigt trotzdem GTK3." >&2
+        return 1
+    fi
+
+    install -Dm644 "$srcdir/$_src/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

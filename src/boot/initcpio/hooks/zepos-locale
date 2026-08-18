@@ -1,0 +1,41 @@
+#!/usr/bin/ash
+# ZepOS - ein UTF-8-Gebietsschema fuer die Initramfs, und zwar bevor
+# irgendein Haken plymouthd startet.
+#
+# EINE ZEILE, UND DAS IST DER GANZE SINN. Dieser Haken steht in der
+# Zeile, die darueber entscheidet, ob die Maschine startet. Was er tut,
+# ist eine Zuweisung ohne Verzweigung, ohne Datei, ohne Programmaufruf -
+# es gibt darin nichts, was scheitern koennte. Fehlen die Daten des
+# Gebietsschemas, dann laeuft setlocale() ins Leere und alles bleibt, wie
+# es ohne diesen Haken waere; kaputtgehen kann daran nichts.
+#
+# WARUM run_earlyhook UND NICHT run_hook, gemessen am 17.08.2026 an der
+# ausgelieferten Initramfs von iso/out/ppz-target.img:
+#
+#     usr/lib/initcpio/hooks/plymouth startet plymouthd in run_hook
+#     (`plymouthd --mode=boot --pid-file=/run/plymouth/pid
+#     --attach-to-session`), und /init ruft `run_hookfunctions
+#     'run_earlyhook' ... $EARLYHOOKS` VOR `run_hookfunctions 'run_hook'
+#     ... $HOOKS`. Jeder fruehe Haken laeuft also vor jedem spaeten -
+#     die Variable steht damit auch dann, wenn jemand die Reihenfolge in
+#     der HOOKS-Zeile durcheinanderbringt.
+#
+#     Und sie BLEIBT stehen: run_hookfunctions holt jeden Haken mit `.`
+#     in DIESELBE Shell (usr/lib/initcpio/init_functions, Zeile 97) und
+#     ruft die Funktion dort auf. Ein `export` hier gilt darum fuer den
+#     ganzen weiteren Start und fuer jedes Programm, das er anwirft.
+#
+# WARUM LC_ALL UND NICHT LANG: LC_ALL schlaegt jede andere Angabe, und
+# in einer Initramfs gibt es keine, gegen die es sich durchsetzen
+# muesste. Es ist die Form, die am 17.08.2026 gemessen wurde.
+#
+# WARUM C.UTF-8 UND NICHT de_DE.UTF-8: gebraucht wird der ZEICHENSATZ
+# und nicht die Sprache - die Saetze der Abfrage stehen als Literale im
+# Thema (packaging/make-plymouth-theme.py) und werden nicht uebersetzt.
+# C.UTF-8 kostet 374805 Bytes an Daten und im komprimierten Abbild
+# 41 KB (gemessen, siehe installer/core/translate.py, PLYMOUTH_COMMAND);
+# de_DE.UTF-8 laege im locale-archive und waere ein Vielfaches davon.
+
+run_earlyhook() {
+    export LC_ALL=C.UTF-8
+}

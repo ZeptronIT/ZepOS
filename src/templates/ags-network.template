@@ -1,0 +1,723 @@
+// Das Netzwerkfenster (AGS v3, GTK4) - eine Ueberlagerung aus der Fabrik
+// Von ZepOS erzeugt
+// Enthaelt: WLAN-Liste, Verbinden und Trennen, Passwortabfrage, Details
+//
+// WAS SICH AM 12.08.2026 GEAENDERT HAT, UND WARUM ES DER GANZE PUNKT IST
+//     Diese Datei baute sich ihr Astal.Window SELBST. Sie rief aus
+//     utils/overlay.ts nur getOverlayPosition() fuer die Raender und ging
+//     an createOverlayWindow() vorbei - als einzige von zehn
+//     Aufklappflaechen.
+//
+//     GEMESSEN im verschachtelten Compositor (tests/render/), Schirm
+//     1920x1080, Leiste 107 Punkte hoch:
+//
+//         netzwerk        x=825 y=131  b=462 h=721
+//         speicherplatz   x=406 y=131  b=532 h=540
+//         kalender        x= 24 y=131  b=472 h=540
+//
+//     540 ist der Deckel: MEASURE_MODAL_SHARE mal 1080. Die beiden
+//     Fenster aus der Fabrik halten ihn auf den Punkt, dieses stand 181
+//     Punkte darueber. Auf einem 1366x768-Notebook waeren 721 Punkte
+//     mehr als der ganze Platz unter der Leiste.
+//
+//     Dazu fehlte ihm alles andere, was die Fabrik mitbringt: die
+//     Bildlaufleiste neben dem Inhalt, die gemessene natuerliche Hoehe,
+//     die Nachfuehrung der Lage, die Aufloesung des Monitors ueber den
+//     Anschlussnamen. Auf dem Bild vom selben Tag war das als eine leere
+//     Flaeche von rund 350 Punkten unter der Zeile "WLAN-Netzwerke" zu
+//     sehen - ein Fenster, das seinen Deckel ausfuellt, ohne Inhalt zu
+//     haben.
+//
+//     Der Grund fuer den eigenen Bau war eine EINZIGE Sache, die die
+//     Fabrik nicht konnte: ESC soll hier aus der Passwort- und der
+//     Detailansicht zurueck zur Liste. Dafuer gibt es jetzt onEscape.
+
+import { Gtk } from "ags/gtk4"
+import { execAsync } from "ags/process"
+import { interval } from "ags/time"
+import GLib from "gi://GLib"
+// Fuer JEDE Beschriftung, deren Text von aussen kommt - hier der
+// Netzname, die Adressen und die Sicherheitsangabe.
+//
+// WARUM DIESE ZEILE DER GANZE PUNKT DES 17.08.2026 IST
+//     GEMELDET, woertlich: "die ags fenster die du gebaut hast sind so
+//     eingequetscht das man nach rechts und nach unten scrollen muss".
+//
+//     GEMESSEN am selben Tag im verschachtelten Compositor, Schirm
+//     1920x1200, mit einem WLAN namens "WLAN-Router 4711 AX Gastnetz"
+//     (28 Zeichen) und vier weiteren in der Liste. Der Messfuehler stand
+//     in der erzeugten utils/overlay.ts und hat jeden Kasten des
+//     Inhalts einzeln gefragt:
+//
+//         Inhalt insgesamt        min=660  nat=660
+//           .net-current          min=660  nat=660
+//           die Knopfzeile        min=430  nat=430
+//           .net-item (aktiv)     min=447  nat=447
+//         Fenster 500 breit, Sichtfenster 474 -> 186 Punkte verdeckt
+//
+//     DER NETZNAME IST ERFUNDEN, SEINE FORM IST GEMESSEN (17.08.2026).
+//     Gemessen wurde mit dem WLAN, das an dem Schreibtisch stand; hier
+//     steht ein Kunstname an seiner Stelle, weil eine SSID sagt, in
+//     wessen Wohnung dieser Rechner steht. Was die Zahlen oben traegt,
+//     ist die LAENGE des Namens - eine Beschriftung ohne `ellipsize`
+//     meldet ihre ganze Zeile als Mindestbreite, also waechst min=660
+//     mit ihm. Der Ersatz ist deshalb genauso lang (28 Zeichen) und in
+//     keiner der Schriften dieses Projekts schmaler - NACHGEMESSEN mit
+//     Pango bei 11 pt: Roboto 215 gegen 213 Punkte, Fira Code 252
+//     gegen 252, weil beide Namen gleich viele Zeichen haben. Ein
+//     kuerzerer Name haette die Messung oben stillschweigend zu einer
+//     anderen gemacht.
+//
+//     min IST nat. Genau das ist der Fehler, und er ist keine Frage der
+//     Fensterbreite: eine Gtk.Viewport teilt ihrem Kind
+//     MAX(Mindestbreite, Sichtfenster) zu - GEMESSEN unter
+//     gtk4-broadwayd, hscroll-policy ist von Haus aus MINIMUM (0). Eine
+//     Beschriftung OHNE `ellipsize` meldet ihre ganze Zeile als
+//     MINDESTbreite; sie kann also gar nicht schmaler werden, und die
+//     Bildlaufleiste ist die einzige Antwort, die GTK darauf bleibt.
+//
+//     Dieselbe Messung am Ende: mit `ellipsize` meldet dieselbe
+//     Beschriftung 13 Punkte Mindestbreite (die Punkte) und 405 Punkte
+//     natuerliche Breite. Der Inhalt passt sich dem Fenster an, und ein
+//     Name, der zu lang ist, endet mit drei Punkten - statt hinter der
+//     Kante zu liegen.
+import Pango from "gi://Pango"
+import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
+import { _, format } from "../utils/i18n"
+
+const HOME = GLib.get_home_dir()
+const WINDOW_NAME = "network"
+const UPDATE_INTERVAL = 5000
+
+// Die Masse, die dieses Fenster sich WUENSCHT. utils/overlay.ts deckelt
+// sie auf MEASURE_MODAL_SHARE des Schirms und auf die gemessene
+// natuerliche Hoehe des Inhalts - auf 1080 Zeilen kommt davon 540 an,
+// auf 1440 sind es 550, weil dann der Wunsch die kleinere der beiden
+// Zahlen ist.
+//
+// DIE BREITE IST AM 17.08.2026 VON 460 AUF 480 GEGANGEN, und es sind
+// zwei gemessene Punkte gewesen.
+//
+//     NACHGEMESSEN im verschachtelten Compositor auf einem Schirm, auf
+//     dem weder MODAL_SHARE noch der Wunsch bindet, und ZWEIMAL
+//     geoeffnet - die Fabrik misst in show() VOR onShow und sieht beim
+//     ersten Mal den leeren Inhalt:
+//
+//         erstes Aufgehen    450x365
+//         zweites Aufgehen   462x365   mit der Statuszeile darin
+//
+//     462 gegen 460 heisst: eine waagerechte Bildlaufleiste fuer zwei
+//     Punkte, und die drei Knoepfe ueber der Liste stehen ganz rechts.
+//
+//     Dazu kommt die SENKRECHTE Leiste, die neben dem Inhalt liegt
+//     (overlay_scrolling: false in der Fabrik) und deshalb Breite
+//     kostet. Mit einem Wunsch von 620, unter dem weder er noch
+//     MODAL_SHARE bindet, steht das Fenster 486 breit da; 500 ist die
+//     naechste Zehnerstufe darueber und dieselbe Zahl wie im
+//     Bluetooth-Fenster nebenan, weil es dieselbe Sorte Fenster ist.
+//
+// NACHTRAG VOM 17.08.2026, NACHMITTAG: DIE BREITE WAR NIE DAS PROBLEM
+//     GEMELDET: "die ags fenster die du gebaut hast sind so
+//     eingequetscht das man nach rechts und nach unten scrollen muss".
+//
+//     GEMESSEN mit einem Messfuehler in der erzeugten utils/overlay.ts,
+//     Schirm 1920x1200, mit "WLAN-Router 4711 AX Gastnetz" in der Liste
+//     (derselbe Kunstname wie oben, aus demselben Grund):
+//     der Inhalt meldete 660 Punkte MINDESTbreite in einem 500 Punkte
+//     breiten Fenster - 186 lagen hinter der Kante, darunter alle drei
+//     Knoepfe ueber der Liste. Kein Fenster ist breit genug fuer eine
+//     Mindestbreite, die mit dem Namen des Routers waechst; die Antwort
+//     steht deshalb bei `ellipsize` im Kopf dieser Datei und nicht hier.
+//
+//     Nach der Aenderung, derselbe Aufbau: Mindestbreite 430,
+//     Sichtfenster 474, hadj oben == Seitenbreite - keine waagerechte
+//     Bildlaufleiste mehr.
+const WIN_WIDTH = 500
+
+// DIE HOEHE, DIESELBE ZAHL WIE IM BLUETOOTH-FENSTER NEBENAN UND AUS
+// DEMSELBEN GRUND (17.08.2026)
+//     MEASURE_MODAL_SHARE mal 1200 - die Schirmhoehe des Nutzers - ist
+//     genau 600, und das Kontrollzentrum steht dort ebenso hoch da. Auf
+//     Schirmen unter 1200 Zeilen entscheidet weiter MODAL_SHARE, auf
+//     groesseren dieser Wunsch.
+//
+//     Dass die WLAN-Liste darunter trotzdem senkrecht blaettert, ist
+//     kein Rest: GEMESSEN wollte sie mit fuenf Netzen 745 Punkte, mit
+//     zwoelf (der Deckel in updateDisplay) ueber 1300. Eine Liste, die
+//     laenger ist als der halbe Schirm, GEHOERT in eine Bildlaufleiste -
+//     das ist der Fall, fuer den es sie gibt. Waagerecht ist es nie.
+const WIN_HEIGHT = 600
+
+// Skripte
+const SCRIPTS = {
+  network: `${HOME}/.local/bin/ags-network-scripts`,
+}
+
+// Zeichen
+const ICONS = {
+  network: "{{ICON_NETWORK}}",
+  wifi: "{{ICON_WIFI}}",
+  wifiOff: "{{ICON_WIFI_OFF}}",
+  ethernet: "{{ICON_ETHERNET}}",
+  lock: "{{ICON_LOCK}}",
+  signal4: "{{ICON_WIFI_4}}",
+  signal3: "{{ICON_WIFI_3}}",
+  signal2: "{{ICON_WIFI_2}}",
+  signal1: "{{ICON_WIFI_1}}",
+  refresh: "{{ICON_REFRESH}}",
+  connected: "{{ICON_CHECK}}",
+  back: "{{ICON_BACK}}",
+  connect: "{{ICON_CONNECT}}",
+  info: "{{ICON_INFO}}",
+  disconnect: "{{ICON_DISCONNECT}}",
+  settings: "{{ICON_SETTINGS}}",
+}
+
+// Das Wort, mit dem ags-network-scripts eine Kabelverbindung meldet.
+// Es steht hier als Konstante, weil es an ZWEI Stellen gebraucht wird -
+// beim Erkennen der Verbindungsart und in der Zeile, die der Nutzer
+// liest - und weil ein zweites getipptes "Kabelverbindung" beim
+// naechsten Umbenennen genau eine der beiden Stellen erwischt.
+const WIRED_NAME = "Kabelverbindung"
+const NOT_CONNECTED = "Nicht verbunden"
+
+// Was an der Stelle einer fehlenden Angabe steht.
+const NOTHING = "—"
+
+interface WifiNetwork {
+  ssid: string
+  signal: number
+  security: string
+  active: boolean
+}
+
+// Zustand
+let connectingSsid = ""
+let currentView: "main" | "password" | "detail" = "main"
+
+function getSignalIcon(signal: number): string {
+  if (signal >= 75) return ICONS.signal4
+  if (signal >= 50) return ICONS.signal3
+  if (signal >= 25) return ICONS.signal2
+  return ICONS.signal1
+}
+
+async function scanWifi(): Promise<WifiNetwork[]> {
+  const networks: WifiNetwork[] = []
+  try {
+    const output = await execAsync([SCRIPTS.network, "list", "rescan"])
+    const parsed = JSON.parse(output.trim())
+    for (const net of parsed) {
+      networks.push({ ssid: net.ssid, signal: net.signal, security: net.secure ? "WPA" : "", active: net.active })
+    }
+  } catch (e) { console.error("Die WLAN-Suche schlug fehl:", e) }
+  return networks.sort((a, b) => b.signal - a.signal)
+}
+
+async function getConnectionInfo(): Promise<{ type: string; name: string; ip: string; signal: number }> {
+  try {
+    const name = await execAsync([SCRIPTS.network, "info"])
+    const ip = await execAsync([SCRIPTS.network, "ip"])
+    let type = "none", signal = 0
+    if (name.trim() && name.trim() !== NOT_CONNECTED) {
+      if (name.trim() === WIRED_NAME) { type = "ethernet" }
+      else {
+        type = "wifi"
+        const networks = await scanWifi()
+        const active = networks.find(n => n.active)
+        if (active) signal = active.signal
+      }
+    }
+    return { type, name: name.trim() || NOT_CONNECTED, ip: ip.trim() || "", signal }
+  } catch { return { type: "none", name: NOT_CONNECTED, ip: "", signal: 0 } }
+}
+
+async function connectToNetwork(ssid: string, password?: string): Promise<boolean> {
+  try {
+    if (password) { await execAsync([SCRIPTS.network, "connect", ssid, password]) }
+    else { await execAsync([SCRIPTS.network, "connect", ssid]) }
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    const info = await getConnectionInfo()
+    return info.name === ssid || info.type !== "none"
+  } catch (e) { console.error("Das Verbinden schlug fehl:", e); return false }
+}
+
+async function disconnect() {
+  try { await execAsync(["bash", "-c", "nmcli con down $(nmcli -t -f NAME con show --active | head -1) 2>/dev/null || true"]) }
+  catch (e) { console.error("Das Trennen schlug fehl:", e) }
+}
+
+async function toggleWifi() {
+  try {
+    const status = await execAsync("nmcli radio wifi")
+    await execAsync(`nmcli radio wifi ${status.trim() === "enabled" ? "off" : "on"}`)
+  } catch (e) { console.error("Das Umschalten des WLAN-Adapters schlug fehl:", e) }
+}
+
+function removeAllChildren(box: Gtk.Box) {
+  let child = box.get_first_child()
+  while (child) { const next = child.get_next_sibling(); box.remove(child); child = next }
+}
+
+export default function NetworkManager(): OverlayWidget {
+  // Die Widgets, die spaeter beschrieben werden. Sie stehen hier und
+  // nicht in buildContent(), weil updateDisplay() und die drei
+  // Ansichtswechsel sie von aussen erreichen muessen.
+  let statusIcon: Gtk.Label, statusLabel: Gtk.Label, ipLabel: Gtk.Label, wifiToggle: Gtk.Button
+  let networkList: Gtk.Box, passwordBox: Gtk.Box, passwordEntry: Gtk.Entry
+  let passwordSsidLabel: Gtk.Label, passwordErrorLabel: Gtk.Label, mainContent: Gtk.Box
+  let detailBox: Gtk.Box, detailSsidLabel: Gtk.Label, detailSignalLabel: Gtk.Label, detailSignalIcon: Gtk.Label
+  let detailSecurityLabel: Gtk.Label, detailIpLabel: Gtk.Label, detailGatewayLabel: Gtk.Label, detailDnsLabel: Gtk.Label
+  let currentConnectionInfo: { type: string; name: string; ip: string; signal: number } = { type: "none", name: "", ip: "", signal: 0 }
+
+  // Steht das Fenster gerade auf dem Schirm? Gesetzt in onShow und
+  // onHide, und die beiden sind vollstaendig: die Fabrik ruft onHide bei
+  // ESC, beim Schliesskreuz und bei hide() aus app.ts.
+  let windowIsUp = false
+
+  const showPassword = (ssid: string) => {
+    connectingSsid = ssid
+    currentView = "password"
+    passwordSsidLabel.set_text(
+      format(_("Password for \"{ssid}\""), { ssid }))
+    passwordEntry.set_text("")
+    passwordErrorLabel.set_text("")
+    passwordBox.set_visible(true)
+    mainContent.set_visible(false)
+    detailBox.set_visible(false)
+    passwordEntry.grab_focus()
+  }
+
+  const getSignalClass = (signal: number): string => {
+    if (signal >= 75) return "signal-strong"
+    if (signal >= 50) return "signal-medium"
+    if (signal >= 25) return "signal-weak"
+    return "signal-poor"
+  }
+
+  const showDetail = async () => {
+    currentView = "detail"
+    mainContent.set_visible(false)
+    passwordBox.set_visible(false)
+    detailBox.set_visible(true)
+
+    detailSsidLabel.set_text(currentConnectionInfo.name)
+    detailSignalLabel.set_text(`${currentConnectionInfo.signal}%`)
+    detailSignalIcon.set_text(getSignalIcon(currentConnectionInfo.signal))
+    // Die Farbklasse der Signalstaerke nachziehen
+    for (const cls of ["signal-strong", "signal-medium", "signal-weak", "signal-poor"]) detailSignalIcon.remove_css_class(cls)
+    detailSignalIcon.add_css_class(getSignalClass(currentConnectionInfo.signal))
+    detailIpLabel.set_text(currentConnectionInfo.ip || NOTHING)
+
+    try {
+      const gatewayOut = await execAsync("bash -c \"ip route | grep default | awk '{print \\$3}'\"")
+      detailGatewayLabel.set_text(gatewayOut.trim() || NOTHING)
+    } catch { detailGatewayLabel.set_text(NOTHING) }
+
+    try {
+      const dnsOut = await execAsync("bash -c \"cat /etc/resolv.conf | grep nameserver | head -1 | awk '{print \\$2}'\"")
+      detailDnsLabel.set_text(dnsOut.trim() || NOTHING)
+    } catch { detailDnsLabel.set_text(NOTHING) }
+
+    try {
+      const secOut = await execAsync(`bash -c "LANG=C nmcli -t -f 802-11-wireless-security.key-mgmt connection show '${currentConnectionInfo.name}' 2>/dev/null | cut -d: -f2"`)
+      detailSecurityLabel.set_text(
+        secOut.trim() ? secOut.trim().toUpperCase() : _("Open"))
+    } catch { detailSecurityLabel.set_text(NOTHING) }
+  }
+
+  const showMain = () => {
+    currentView = "main"
+    connectingSsid = ""
+    passwordBox.set_visible(false)
+    detailBox.set_visible(false)
+    mainContent.set_visible(true)
+  }
+
+  const tryConnect = async () => {
+    const password = passwordEntry.get_text()
+    if (!password) {
+      passwordErrorLabel.set_text(_("Please enter the password"))
+      return
+    }
+    passwordErrorLabel.set_text(_("Connecting ..."))
+    const success = await connectToNetwork(connectingSsid, password)
+    if (success) { showMain(); setTimeout(updateDisplay, 1000) }
+    else {
+      passwordErrorLabel.set_text(_("Connection failed"))
+      passwordEntry.set_text("")
+    }
+  }
+
+  const createNetworkRow = (network: WifiNetwork): Gtk.Button => {
+    const row = new Gtk.Button({ can_focus: false })
+    row.add_css_class("net-item")
+    if (network.active) row.add_css_class("active")
+
+    const rowBox = new Gtk.Box({ spacing: 12 })
+    const signalIcon = new Gtk.Label({ label: getSignalIcon(network.signal) })
+    signalIcon.add_css_class("net-signal-icon")
+    signalIcon.add_css_class(getSignalClass(network.signal))
+
+    const infoBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true })
+    // Der Netzname kommt von einem fremden Router und ist beliebig lang;
+    // die Zeile darunter ist unsere und bleibt es auch, wenn ein
+    // Sicherheitsverfahren einmal einen laengeren Namen bekommt.
+    const ssidLbl = new Gtk.Label({
+      label: network.ssid, xalign: 0,
+      ellipsize: Pango.EllipsizeMode.END,
+      max_width_chars: {{STYLE_MEASURE_LINE}},
+    })
+    ssidLbl.add_css_class("net-ssid")
+    const detailLbl = new Gtk.Label({
+      label: format(_("{signal}% • {security}"), {
+        signal: network.signal,
+        security: network.security || _("open"),
+      }),
+      xalign: 0,
+      ellipsize: Pango.EllipsizeMode.END,
+      max_width_chars: {{STYLE_MEASURE_LINE}},
+    })
+    detailLbl.add_css_class("net-detail")
+    infoBox.append(ssidLbl)
+    infoBox.append(detailLbl)
+
+    rowBox.append(signalIcon)
+    rowBox.append(infoBox)
+
+    if (network.active) {
+      const connIcon = new Gtk.Label({ label: ICONS.connected })
+      connIcon.add_css_class("net-connected-icon")
+      rowBox.append(connIcon)
+    } else if (network.security) {
+      const lockIcon = new Gtk.Label({ label: ICONS.lock })
+      lockIcon.add_css_class("net-lock-icon")
+      rowBox.append(lockIcon)
+    }
+
+    row.set_child(rowBox)
+
+    row.connect("clicked", async () => {
+      if (network.active) { await disconnect(); setTimeout(updateDisplay, 1000) }
+      else if (network.security) {
+        const success = await connectToNetwork(network.ssid)
+        if (!success) showPassword(network.ssid)
+        else setTimeout(updateDisplay, 1000)
+      } else { await connectToNetwork(network.ssid); setTimeout(updateDisplay, 1000) }
+    })
+
+    return row
+  }
+
+  const updateDisplay = async () => {
+    if (currentView !== "main") return
+    // Ein geschlossenes Fenster wird nicht aufgefrischt.
+    //
+    // GEMESSEN am 12.08.2026: der Takt unten laeuft ab dem Aufbau der
+    // Oberflaeche und ohne Ende, und jeder Durchlauf ruft
+    // `ags-network-scripts list rescan`. Das ist ein WLAN-Suchlauf des
+    // NetworkManagers alle fuenf Sekunden, den ganzen Tag, fuer ein
+    // Fenster, das die meiste Zeit zu ist. Der Akku und die laufende
+    // Verbindung zahlen dafuer.
+    if (!windowIsUp) return
+
+    const connInfo = await getConnectionInfo()
+    currentConnectionInfo = connInfo
+    const networks = await scanWifi()
+    const wifiEnabled = (await execAsync("nmcli radio wifi").catch(() => "disabled")).trim() === "enabled"
+
+    if (connInfo.type === "ethernet") {
+      statusIcon.set_text(ICONS.ethernet); statusLabel.set_text(WIRED_NAME); ipLabel.set_text(connInfo.ip || NOTHING)
+    } else if (connInfo.type === "wifi") {
+      statusIcon.set_text(getSignalIcon(connInfo.signal)); statusLabel.set_text(connInfo.name); ipLabel.set_text(connInfo.ip || NOTHING)
+    } else {
+      statusIcon.set_text(ICONS.wifiOff); statusLabel.set_text(NOT_CONNECTED); ipLabel.set_text(NOTHING)
+    }
+
+    if (wifiEnabled) { wifiToggle.add_css_class("active"); wifiToggle.remove_css_class("inactive") }
+    else { wifiToggle.remove_css_class("active"); wifiToggle.add_css_class("inactive") }
+
+    removeAllChildren(networkList)
+    for (const network of networks.slice(0, 12)) { networkList.append(createNetworkRow(network)) }
+  }
+
+  return createOverlayWindow({
+    name: WINDOW_NAME,
+    width: WIN_WIDTH,
+    height: WIN_HEIGHT,
+    cssClass: "NetworkManager",
+    headerIcon: ICONS.network,
+    headerTitle: _("Network"),
+    accentCssClass: "network-accent",
+    // ESC geht aus einer Unteransicht ZURUECK und nicht ZU. Ohne diese
+    // vier Zeilen haette dieses Fenster einen zweiten Grund gebraucht,
+    // sich selbst zu bauen - und genau der war der erste.
+    onEscape: () => {
+      if (currentView === "main") return false
+      showMain()
+      return true
+    },
+    onShow: () => {
+      windowIsUp = true
+      showMain()
+      updateDisplay()
+    },
+    onHide: () => {
+      windowIsUp = false
+    },
+    buildContent: (_win, closeWindow) => {
+      // ----- Die Passwortabfrage -----
+      passwordBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, visible: false })
+      passwordBox.add_css_class("net-password-box")
+
+      const pwBackBtn = new Gtk.Button({ can_focus: false })
+      pwBackBtn.add_css_class("net-back-btn")
+      pwBackBtn.set_child(
+        new Gtk.Label({ label: `${ICONS.back} ${_("Back")}` }))
+      pwBackBtn.connect("clicked", showMain)
+
+      // Auch hier steht ein fremder Name darin: `Passwort für "<SSID>"`.
+      passwordSsidLabel = new Gtk.Label({
+        label: _("Password for network"),
+        ellipsize: Pango.EllipsizeMode.END,
+        max_width_chars: {{STYLE_MEASURE_LINE}},
+      })
+      passwordSsidLabel.add_css_class("net-pw-title")
+
+      passwordEntry = new Gtk.Entry({
+        visibility: false,
+        placeholder_text: _("Enter the Wi-Fi password ..."),
+      })
+      passwordEntry.add_css_class("net-pw-entry")
+      passwordEntry.connect("activate", tryConnect)
+
+      const pwConnectBtn = new Gtk.Button({
+        label: `${ICONS.connect} ${_("Connect")}`, can_focus: false,
+      })
+      pwConnectBtn.add_css_class("net-connect-btn")
+      pwConnectBtn.connect("clicked", tryConnect)
+
+      passwordErrorLabel = new Gtk.Label({ label: "" })
+      passwordErrorLabel.add_css_class("net-pw-error")
+
+      passwordBox.append(pwBackBtn)
+      passwordBox.append(passwordSsidLabel)
+      passwordBox.append(passwordEntry)
+      passwordBox.append(pwConnectBtn)
+      passwordBox.append(passwordErrorLabel)
+
+      // ----- Die Hauptansicht -----
+      mainContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
+
+      const currentBox = new Gtk.Box({ spacing: 0 })
+      currentBox.add_css_class("net-current")
+
+      const currentInner = new Gtk.Box({ spacing: 16 })
+      statusIcon = new Gtk.Label({ label: ICONS.wifi, valign: Gtk.Align.CENTER })
+      statusIcon.add_css_class("net-status-icon")
+
+      const statusInfo = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
+      // Die BREITESTE der gemessenen Zeilen: 660 Punkte Mindestbreite
+      // standen hier, weil in dieser Beschriftung der Netzname steht.
+      // Siehe den Kopf dieser Datei.
+      statusLabel = new Gtk.Label({
+        label: NOTHING, xalign: 0,
+        ellipsize: Pango.EllipsizeMode.END,
+        max_width_chars: {{STYLE_MEASURE_LINE}},
+      })
+      statusLabel.add_css_class("net-status-label")
+      ipLabel = new Gtk.Label({
+        label: NOTHING, xalign: 0,
+        ellipsize: Pango.EllipsizeMode.END,
+        max_width_chars: {{STYLE_MEASURE_LINE}},
+      })
+      ipLabel.add_css_class("net-ip-label")
+      statusInfo.append(statusLabel)
+      statusInfo.append(ipLabel)
+
+      const detailBtn = new Gtk.Button({ can_focus: false })
+      detailBtn.add_css_class("net-detail-btn")
+      detailBtn.set_child(new Gtk.Label({ label: ICONS.info }))
+      detailBtn.connect("clicked", () => { if (currentConnectionInfo.type !== "none") showDetail() })
+
+      currentInner.append(statusIcon)
+      currentInner.append(statusInfo)
+      currentInner.append(detailBtn)
+      currentBox.append(currentInner)
+
+      // ----- Die Zeile ueber der Liste: Ueberschrift und drei Knoepfe -----
+      //
+      // DER KNOPF FUER DIE NETZWERKVERWALTUNG STAND BIS ZUM 12.08.2026 IM KOPF
+      //     Er war das einzige zusaetzliche Ding in einem der elf
+      //     Koepfe: neun tragen Zeichen, Titel, Luecke, Schliesskreuz -
+      //     dieser trug davor noch ein Zahnrad. Ein zehnter Kopf mit
+      //     einem zehnten Aufbau ist der Anfang von zehn verschiedenen
+      //     Koepfen, und der Kopf ist das, was der Nutzer bei jedem
+      //     Fenster zuerst sieht.
+      //
+      //     Hier unten gehoert er ohnehin hin: er oeffnet dieselbe
+      //     Oberflaeche, die auch das Netzmodul der Leiste oeffnet, und
+      //     steht damit neben den beiden anderen Knoepfen, die etwas mit
+      //     dem WLAN tun.
+      const toggleRow = new Gtk.Box({ spacing: 12 })
+      // hexpand an der Ueberschrift, damit die drei Knoepfe rechts
+      // stehen - dieselbe Aufteilung wie im Kopf, wo eine leere Box die
+      // Luecke haelt.
+      const wifiHeader = new Gtk.Label({
+        label: _("Wi-Fi networks"), xalign: 0, hexpand: true,
+      })
+      wifiHeader.add_css_class("net-section-title")
+
+      wifiToggle = new Gtk.Button({ can_focus: false })
+      wifiToggle.add_css_class("net-wifi-toggle")
+      wifiToggle.set_child(new Gtk.Label({ label: ICONS.wifi }))
+      wifiToggle.set_tooltip_text(_("Turn Wi-Fi on or off"))
+      wifiToggle.connect("clicked", () => { toggleWifi(); setTimeout(updateDisplay, 1000) })
+
+      const refreshBtn = new Gtk.Button({ can_focus: false })
+      refreshBtn.add_css_class("net-refresh-btn")
+      refreshBtn.set_child(new Gtk.Label({ label: ICONS.refresh }))
+      refreshBtn.set_tooltip_text(_("Scan again"))
+      refreshBtn.connect("clicked", updateDisplay)
+
+      const nmBtn = new Gtk.Button({ can_focus: false })
+      nmBtn.add_css_class("net-nm-btn")
+      nmBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
+      nmBtn.set_tooltip_text(_("Open network management"))
+      // GEMESSEN am 12.08.2026: hier stand `nm-connection-editor`. Das
+      // Paket gleichen Namens liefert ZepOS nicht aus - es ist GTK3 und
+      // steht in keinem Rezept -, also war dieser Knopf auf jeder
+      // Installation einer, hinter dem nichts passiert. Spec §7.4.
+      //
+      // Die Oberflaeche fuer dieselbe Aufgabe ist unsere und wird
+      // erzeugt: network-manager-gui-config.template schreibt sie nach
+      // ~/.local/bin/network-manager-gui, und das Netzmodul der Leiste
+      // oeffnet sie mit demselben Klick. Zwei Wege zu einer Aufgabe, von
+      // denen der eine ins Leere fuehrt, sind ein Weg und ein Fehler.
+      nmBtn.connect("clicked", () => { execAsync(`${HOME}/.local/bin/network-manager-gui`); closeWindow() })
+
+      toggleRow.append(wifiHeader)
+      toggleRow.append(wifiToggle)
+      toggleRow.append(refreshBtn)
+      toggleRow.append(nmBtn)
+
+      // ----- Die Liste, OHNE eigene Bildlaufleiste -----
+      //
+      // WARUM HIER KEIN Gtk.ScrolledWindow MEHR STEHT
+      //     Es stand eines hier, mit `.net-scroll { min-height: 350px }`
+      //     aus ags-style.template. Diese 350 Punkte waren der Grund fuer
+      //     die gemessenen 721: ein Mindestmass, das eine leere Liste
+      //     genauso beansprucht wie eine volle. Auf dem Bild vom
+      //     12.08.2026 war das eine handtellergrosse leere Flaeche unter
+      //     der Zeile "WLAN-Netzwerke".
+      //
+      //     Die Fabrik haengt eine Bildlaufleiste um den GANZEN Inhalt,
+      //     und zwar eine, die neben dem Inhalt liegt statt darueber
+      //     (overlay_scrolling: false). Zwei Bildlaufleisten
+      //     ineinander sind ausserdem zwei Raeder unter einem Finger:
+      //     GTK schickt das Scrollen an die innere, und die aeussere
+      //     bewegt sich erst, wenn die innere am Anschlag ist.
+      networkList = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
+      networkList.add_css_class("net-list")
+
+      const divider = new Gtk.Box()
+      divider.add_css_class("net-divider")
+
+      mainContent.append(currentBox)
+      mainContent.append(divider)
+      mainContent.append(toggleRow)
+      mainContent.append(networkList)
+
+      // ----- Die Detailansicht -----
+      detailBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, visible: false })
+      detailBox.add_css_class("net-detail-box")
+
+      const detailBackBtn = new Gtk.Button({ can_focus: false })
+      detailBackBtn.add_css_class("net-back-btn")
+      detailBackBtn.set_child(
+        new Gtk.Label({ label: `${ICONS.back} ${_("Back")}` }))
+      detailBackBtn.connect("clicked", showMain)
+
+      const detailHeader = new Gtk.Box({ spacing: 16 })
+      detailHeader.add_css_class("net-detail-header")
+      detailSignalIcon = new Gtk.Label({ label: ICONS.wifi, valign: Gtk.Align.CENTER })
+      detailSignalIcon.add_css_class("net-detail-icon")
+      const detailNameBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
+      detailSsidLabel = new Gtk.Label({
+        label: NOTHING, xalign: 0,
+        ellipsize: Pango.EllipsizeMode.END,
+        max_width_chars: {{STYLE_MEASURE_LINE}},
+      })
+      detailSsidLabel.add_css_class("net-detail-ssid")
+      detailSignalLabel = new Gtk.Label({ label: NOTHING, xalign: 0 })
+      detailSignalLabel.add_css_class("net-detail-signal")
+      detailNameBox.append(detailSsidLabel)
+      detailNameBox.append(detailSignalLabel)
+      detailHeader.append(detailSignalIcon)
+      detailHeader.append(detailNameBox)
+
+      const detailGrid = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
+      detailGrid.add_css_class("net-detail-grid")
+
+      const createDetailRow = (labelText: string): [Gtk.Box, Gtk.Label] => {
+        const row = new Gtk.Box({ spacing: 12 })
+        row.add_css_class("net-detail-row")
+        const lbl = new Gtk.Label({ label: labelText, xalign: 0 })
+        lbl.add_css_class("net-detail-label")
+        lbl.set_size_request(90, -1)
+        // Der WERT kommt von aussen - eine IPv6-Adresse ist 39 Zeichen
+        // lang, und `nmcli` gibt bei einem Unternehmensnetz auch schon
+        // einmal "wpa-eap-suite-b-192" zurueck.
+        const val = new Gtk.Label({
+          label: NOTHING, xalign: 0, hexpand: true,
+          ellipsize: Pango.EllipsizeMode.END,
+          max_width_chars: {{STYLE_MEASURE_LINE}},
+        })
+        val.add_css_class("net-detail-value")
+        row.append(lbl)
+        row.append(val)
+        return [row, val]
+      }
+
+      const [ipRow, ipVal] = createDetailRow(_("IP address"))
+      detailIpLabel = ipVal
+      const [gwRow, gwVal] = createDetailRow(_("Gateway"))
+      detailGatewayLabel = gwVal
+      const [dnsRow, dnsVal] = createDetailRow(_("DNS"))
+      detailDnsLabel = dnsVal
+      const [secRow, secVal] = createDetailRow(_("Security"))
+      detailSecurityLabel = secVal
+
+      detailGrid.append(ipRow)
+      detailGrid.append(gwRow)
+      detailGrid.append(dnsRow)
+      detailGrid.append(secRow)
+
+      const disconnectBtn = new Gtk.Button({ can_focus: false })
+      disconnectBtn.add_css_class("net-disconnect-btn")
+      const disconnectBtnBox = new Gtk.Box({ spacing: 8, halign: Gtk.Align.CENTER })
+      disconnectBtnBox.append(new Gtk.Label({ label: ICONS.disconnect }))
+      disconnectBtnBox.append(new Gtk.Label({ label: _("Disconnect") }))
+      disconnectBtn.set_child(disconnectBtnBox)
+      disconnectBtn.connect("clicked", async () => { await disconnect(); showMain(); setTimeout(updateDisplay, 1000) })
+
+      detailBox.append(detailBackBtn)
+      detailBox.append(detailHeader)
+      detailBox.append(detailGrid)
+      detailBox.append(disconnectBtn)
+
+      // ----- Die drei Ansichten untereinander, immer genau eine sichtbar -----
+      const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
+      container.append(passwordBox)
+      container.append(detailBox)
+      container.append(mainContent)
+
+      // Derselbe Takt wie beim Akku, beim Speicherplatz und im
+      // Kontrollzentrum, an derselben Stelle. updateDisplay() steigt
+      // oben aus, solange das Fenster zu ist.
+      interval(UPDATE_INTERVAL, updateDisplay)
+
+      return container
+    },
+  })
+}

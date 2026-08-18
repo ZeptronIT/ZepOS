@@ -1,0 +1,735 @@
+// Das Dock (GTK4, Layer-Shell) - der Ersatz fuer nwg-dock-hyprland
+// Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+// Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-dock.template kopieren
+//
+// WARUM ES HIER STEHT UND NICHT IN EINEM EIGENEN PROGRAMM
+//     Ein Dock ist dasselbe wie eine Leiste: eine Layer-Shell-Flaeche
+//     mit Symbolen darauf. nwg-dock-hyprland war GTK3 und hat keine
+//     GTK4-Fassung - `git grep -i gtk4` in seinem Baum findet nichts -,
+//     also waere der Weg "GTK4 ueberall" entweder ein Port eines fremden
+//     Go-Programms oder diese Datei.
+//
+// WAS ES ZEIGT, UND WAS AM 11.08.2026 GEFEHLT HAT
+//     Der Nutzer, nachdem er das gebaute System zum ersten Mal benutzt
+//     hat: "die nwg dock unten geht nicht mehr dateien und datei manager
+//     ist auch nicht vorhanden und screenshot tool auch nicht es fehlt
+//     gefuehlt alles" - und danach: "es muss wie apple os funktionieren
+//     ist dir das klar".
+//
+//     Er hat recht, und der Grund stand in dieser Datei. Sie zeigte
+//     einen Knopf JE OFFENEM FENSTER und sonst nichts, und dazu
+//     `box.set_visible(clients.length > 0)`: auf einem frischen
+//     Schreibtisch war das Dock leer und hat sich deshalb selbst
+//     versteckt. Das abgeloeste nwg-dock-hyprland lief mit
+//     `-nolauncher`, aber es war seinem Wesen nach ein STARTER mit
+//     angehefteten Programmen - beim Ersetzen ist diese Haelfte
+//     verlorengegangen, und uebrig blieb ein Fensterumschalter, den man
+//     nur sieht, wenn ohnehin schon Fenster da sind.
+//
+//     Jetzt zeigt es beides, in dieser Reihenfolge:
+//
+//       1. die angehefteten Anwendungen - IMMER, auch wenn keine davon
+//          laeuft. Welche das sind, sagt src/apps.py, und zwar aus
+//          packaging/zepos-apps/PKGBUILD: der Auswahl, die dieses
+//          Projekt einmal getroffen und begruendet hat. Es gibt keine
+//          zweite Liste, die veralten koennte.
+//       2. dahinter, hinter einem Trenner, jedes offene Fenster, das zu
+//          keiner angehefteten Anwendung gehoert.
+//
+//     Ein Klick auf eine angeheftete Anwendung, die schon laeuft, holt
+//     ihr Fenster nach vorn statt ein zweites zu starten - das ist die
+//     Regel, die "wie Apple OS" meint, und sie kostet drei Zeilen.
+//     Mittelklick auf ein Fenster schliesst es, wie vorher.
+//
+// WAS PASSIERT, WENN EINE ANGEHEFTETE ANWENDUNG NICHT DA IST
+//     Sie bekommt keinen Knopf, und die Meldung darueber steht im
+//     AGS-Protokoll.
+//
+//     Das ist eine Entscheidung gegen die Alternative, und sie folgt
+//     Spec §7.4: ein Bedienelement, das nichts tut, ist der schlimmste
+//     Fehler, den ZepOS erzeugen kann, weil ihn niemand meldet. Ein
+//     ausgegrauter Knopf waere genau das - er sieht aus wie ein Dock-
+//     Symbol und startet nichts. Zwei Faelle fallen darunter und beide
+//     sind gutartig: ein Name, dessen Paket jemand entfernt hat, und ein
+//     Name, der nie ein Fenster hatte.
+//
+// DAS ZAHNRAD IM FUSS, UND WOHER ES WIRKLICH KAM (Aufgabe #93)
+//     GEMELDET am 12.08.2026, nachdem ein Mensch das gebaute Medium
+//     benutzt hat: "das einstellungs icon im footer laesst sich garnicht
+//     oeffnen es erscheint nie" - und noch einmal: "im footer war ein
+//     einstellungs icon was man nicht oeffnen konnte".
+//
+//     Hier stand als Begruendung, `cups` und `xdg-desktop-portal-gnome`
+//     traegen keine .desktop-Datei und fielen deshalb "von selbst
+//     heraus". DAS IST FALSCH, und zwar messbar. GEMESSEN am 12.08.2026
+//     mit `pacman -Ql` gegen die Pakete des angehefteten Schnappschusses
+//     (cups 2:2.4.19-1, xdg-desktop-portal-gnome 50.0-1):
+//
+//         cups                      /usr/share/applications/cups.desktop
+//         xdg-desktop-portal-gnome  /usr/share/applications/
+//                                   xdg-desktop-portal-gnome.desktop
+//
+//     Beide tragen einen Eintrag. Und derselbe Lauf, mit gjs und genau
+//     dem entryFor() weiter unten, hat gezeigt, was das Dock daraus
+//     gemacht hat:
+//
+//         xdg-desktop-portal-gnome  name="Portal"
+//                                   icon=applications-system-symbolic
+//                                   exec=/usr/lib/xdg-desktop-portal-gnome
+//                                   nodisplay=true
+//
+//     `applications-system-symbolic` IST das Zahnrad - nachgesehen in
+//     Papirus (die Sitzung setzt icon-theme 'Papirus-Dark') UND in
+//     Adwaita, in beiden ein Zahnkranz. Der Knopf sah also aus wie die
+//     Einstellungen, und sein Klick rief einen D-Bus-Dienst auf, der
+//     grundsaetzlich kein Fenster hat. "Es erscheint nie" ist keine
+//     Vermutung des Nutzers gewesen, sondern die genaue Beschreibung.
+//
+//     DIE REGEL, DIE DAS AUSSCHLIESST, STEHT IN DER SPEZIFIKATION UND
+//     NICHT IN EINER AUSNAHMELISTE: `NoDisplay=true` heisst nach der
+//     Freedesktop-Desktop-Entry-Spec woertlich "this application exists,
+//     but don't display it in the menus" - es ist die Markierung, mit
+//     der ein Dienst seinen Eintrag als NICHT-ANWENDUNG kennzeichnet.
+//     Ein Dock ist ein Menue. Also faellt der Portal-Eintrag heraus,
+//     ohne dass irgendwo sein Name steht, und derselbe Satz gilt fuer
+//     jeden Dienst, den jemand spaeter in die Auswahl aufnimmt.
+//
+//     `cups` bleibt und ist KEIN toter Knopf: sein Eintrag heisst
+//     "Druckerverwaltung", traegt kein NoDisplay, sein Symbol ist ein
+//     Drucker (Papirus, gemessen) und seine Exec-Zeile ist
+//     `xdg-open http://localhost:631/`. Ein Klick oeffnet die
+//     CUPS-Weboberflaeche - man mag finden, dass das nicht auf ein Dock
+//     gehoert, aber es ist das Gegenteil von "es erscheint nie", und
+//     §7.4 spricht von Bedienelementen, die NICHTS tun.
+//
+//     Und der Fall "Datei liegt noch da, Programm ist weg" faellt
+//     ebenfalls heraus, ohne dass diese Datei etwas dafuer tut. GEMESSEN
+//     am 11.08.2026 mit gjs gegen ein Verzeichnis mit drei identisch
+//     gebauten Eintraegen: firefox und nautilus kamen zurueck, gimp als
+//     NULL - der Unterschied war nicht die Datei, sondern der PATH.
+//     GIO liefert einen Anwendungseintrag nur aus, wenn das Programm
+//     seiner Exec-Zeile auffindbar ist. Eine verwaiste .desktop-Datei
+//     erzeugt hier also keinen toten Knopf.
+//
+// WIE EIN PAKETNAME ZU EINEM ANWENDUNGSEINTRAG WIRD
+//     Ueber das ausfuehrbare Programm des Eintrags, nicht ueber eine
+//     Uebersetzungstabelle. Jeder Name in der Auswahl ist in Arch
+//     zugleich der Name des Programms - nautilus, loupe, papers,
+//     celluloid, baobab, file-roller, gnome-text-editor, firefox -, und
+//     eine Tabelle waere wieder eine zweite Liste. Gesucht wird deshalb
+//     der Eintrag, dessen Exec-Zeile mit genau diesem Programm beginnt.
+//
+// DIE RESERVIERTE ZONE IST ZURUECK, UND DAS IST KEINE RUECKNAHME
+//     Hier stand Exclusivity.IGNORE, mit der Begruendung, nwg-dock
+//     reserviere "einen Streifen Bildschirm, den kein Fenster benutzen
+//     darf und auf dem nichts steht". Der zweite Halbsatz war der
+//     tragende, und er gilt nicht mehr: auf dem Streifen stehen jetzt
+//     die angehefteten Anwendungen, immer. Ein Dock, das dauerhaft
+//     sichtbar ist und den Fenstern trotzdem im Weg liegt, waere die
+//     naechste Beschwerde. SUPER+B schaltet es weg und gibt den Platz
+//     frei.
+//
+// "IMMER ANGEZEIGT UNTEN IM FOOTER SOZUSAGEN" (Aufgabe #90)
+//     GEMELDET am 12.08.2026, im selben Satz wie die Bitte, die Leiste
+//     nach oben zu holen: "und nwg dock auch nachgebaut gtk4 immer
+//     angezeigt unten im footer sozusagen".
+//
+//     GEPRUEFT, WAS DAVON SCHON DA WAR, statt es noch einmal zu bauen:
+//     Anker BOTTOM, Exclusivity.EXCLUSIVE und `visible: true` stehen
+//     seit dem 11.08.2026 unten in dieser Datei. Das Dock IST also
+//     schon eine Fusszeile. Was gefehlt hat, ist die Messung - keine
+//     einzige Zusicherung sagte, wo es liegt, dass es sich seinen
+//     Streifen nimmt und was dieser Streifen kostet. Die drei stehen
+//     jetzt in tests/src/test_bar_headless.py und in
+//     tests/src/test_placement.py.
+//
+//     DAUERHAFT SICHTBAR UND NICHT BEI ANNAEHERUNG, und das ist eine
+//     Entscheidung mit einem Preis, den man beziffern kann:
+//
+//       Dafuer   "immer angezeigt" ist der woertliche Wortlaut, und
+//                eine Fusszeile, die sich versteckt, ist keine. Ein
+//                Dock, das man erst herbeifuehren muss, ist fuer den,
+//                der die Geste nicht kennt, dasselbe wie keines - genau
+//                die Beschwerde vom 11.08.2026 ("die nwg dock unten
+//                geht nicht mehr"), nur eine Stufe subtiler.
+//       Dagegen  der Streifen kostet Bildschirmhoehe, und zwar
+//                dauerhaft. GEMESSEN am 12.08.2026, kopflos unter
+//                gtk4-broadwayd und bei der ausgelieferten Groesse:
+//                83 px hoher Inhalt plus 24 px Aussenabstand
+//                (STYLE_GAPS_OUT), also 107 px reservierte Zone.
+//                Zusammen mit den 83 px der Leiste oben sind das 190 px,
+//                die den Fenstern fehlen - auf einem 768 px hohen Schirm
+//                24.7 %, auf 1080 px 17.6 %.
+//       Warum    die Symbolgroesse ist der groesste Posten davon (57 px
+//       trotzdem  von 83) und EINZELN einstellbar:
+//                sizes.values.STYLE_DOCK_ICON_SIZE schlaegt die
+//                Ableitung aus STYLE_BAR_THICKNESS (siehe src/sizes.py).
+//                Wem der Fuss zu hoch ist, der stellt das Symbol
+//                kleiner, ohne die Schrift des ganzen Schreibtischs
+//                anzufassen - und hat dann allerdings zwei verschieden
+//                dicke Streifen. Und SUPER+B nimmt den Streifen ganz
+//                weg. Zwei Wege aus dem Preis heraus, und beide sind
+//                eine Entscheidung des Nutzers - anders als ein Dock,
+//                das von selbst verschwindet.
+//
+//     Nachgehalten wird der Preis, nicht behauptet: die Zahl steht in
+//     test_the_bar_and_the_footer_leave_the_windows_room, und sie faellt
+//     auf, sobald jemand den Fuss dicker macht.
+
+import Astal from "gi://Astal?version=4.0"
+import Gio from "gi://Gio"
+import GLib from "gi://GLib"
+// GioUnix und nicht Gio: GLib 2.80 hat DesktopAppInfo in eine eigene
+// plattformabhaengige Bibliothek verschoben, und gjs meldet den alten
+// Weg als Gjs-WARNING. Eine Warnung ist in diesem Projekt ein
+// Testfehler - gemessen am 11.08.2026 in tests/src/test_bar_headless.py,
+// wo genau diese Zeile den Lauf hat auffallen lassen.
+import GioUnix from "gi://GioUnix?version=2.0"
+import { Gtk, Gdk } from "ags/gtk4"
+import * as Hyprland from "../utils/hyprland"
+
+const ICON_SIZE = {{STYLE_DOCK_ICON_SIZE}}
+
+// Das Zeichen fuer ein Fenster, dessen Anwendung sich nicht ermitteln
+// laesst. Siehe iconFor() weiter unten, warum es KEIN Zahnrad mehr ist.
+const UNKNOWN_WINDOW_ICON = "{{ICON_DOCK_WINDOW}}"
+
+// Der Abstand, den die Fusszeile zum unteren Schirmrand haelt. Er
+// gehoert zur reservierten Zone: gtk4-layer-shell rechnet sie aus der
+// Groesse der Flaeche PLUS dem Aussenabstand an der verankerten Kante.
+//
+// DIESELBE ZAHL, DIE DIE LEISTE NACH OBEN HAELT, und dieselbe, die die
+// FENSTER zum Rand halten. Bis zum 12.08.2026 stand hier
+// STYLE_DOCK_MARGIN_BOTTOM - eine feste 10, waehrend die Leiste
+// STYLE_GAPS_OUT hielt und damit dem Groessenregler folgte. Der Nutzer
+// am selben Tag: "der abstand des header zum rand kann genauso lang
+// sein wie der nwg dock zum footer abstand hat ja". Zwei Zahlen, die
+// gleich sein sollen, sind eine Zahl; die Begruendung, warum diese
+// gewonnen hat, steht in src/sizes.py bei STYLE_GAPS_OUT.
+//
+// Exportiert, damit die Abnahme ihn nicht ein zweites Mal aus der
+// Tabelle holen muss. Was der Fuss kostet, ist Inhaltshoehe + dieser
+// Wert, und beide Summanden sollen aus DERSELBEN Quelle kommen wie das,
+// was auf dem Schirm landet.
+export const DOCK_MARGIN_BOTTOM = {{STYLE_GAPS_OUT}}
+
+// Die ausgelieferte Anwendungsauswahl. Diese Zeile wird beim Erzeugen
+// von src/apps.py gesetzt - sie traegt eine Marke und darf ihre Form
+// nicht verlieren, sonst bricht der Lauf ab statt still ein leeres Dock
+// zu schreiben.
+const PINNED: string[] = []  // zepos-pinned
+
+/** Der Anwendungseintrag zu einem Paketnamen, oder null.
+ *
+ * Zwei Versuche, der billige zuerst: die meisten Pakete legen
+ * <name>.desktop ab, und GioUnix.DesktopAppInfo.new() ist ein Dateizugriff.
+ * Erst wenn das nichts findet - GNOME benennt seine Eintraege in
+ * Umkehr-DNS, org.gnome.Nautilus.desktop - wird das ganze Verzeichnis
+ * durchgesehen und der Eintrag gesucht, dessen Programm so heisst.
+ */
+function entryFor(program: string): GioUnix.DesktopAppInfo | null {
+  const direct = GioUnix.DesktopAppInfo.new(`${program}.desktop`)
+  if (direct) return direct
+
+  for (const info of Gio.AppInfo.get_all()) {
+    const executable = info.get_executable()
+    if (!executable) continue
+    // basename, weil eine Exec-Zeile auch /usr/bin/<name> sein darf.
+    const name = executable.split("/").pop()
+    if (name === program) return info as GioUnix.DesktopAppInfo
+  }
+  return null
+}
+
+/** Ob ein Fenster zu diesem Anwendungseintrag gehoert.
+ *
+ * Hyprland meldet die Klasse so, wie das Fenster sie setzt. Drei
+ * Schreibweisen kommen vor und alle drei werden geprueft, weil jede von
+ * ihnen auf dieser Auswahl wirklich auftritt: "firefox" (der
+ * Programmname), "org.gnome.Nautilus" (die Kennung des Eintrags ohne
+ * .desktop) und was der Eintrag selbst unter StartupWMClass angibt.
+ */
+function belongsTo(appClass: string, info: GioUnix.DesktopAppInfo,
+                   program: string): boolean {
+  if (!appClass) return false
+  const candidates = [program]
+  const id = info.get_id()
+  if (id) candidates.push(id.replace(/\.desktop$/, ""))
+  const wmClass = info.get_startup_wm_class()
+  if (wmClass) candidates.push(wmClass)
+  return candidates.some(
+    candidate => candidate.toLowerCase() === appClass.toLowerCase())
+}
+
+/** Der Symbolname zu einer Fensterklasse, oder null.
+ *
+ * Nur noch fuer Fenster, die zu KEINER angehefteten Anwendung gehoeren -
+ * die angehefteten bringen ihr Symbol aus ihrem Eintrag mit.
+ *
+ * Hyprland meldet die Klasse so, wie das Fenster sie setzt - "firefox",
+ * "org.kde.dolphin", "Alacritty". Das Symbolthema kennt sie in
+ * Kleinschreibung oder unter der vollen Umkehr-DNS-Form. Deshalb drei
+ * Versuche in dieser Reihenfolge.
+ *
+ * NULL UND NICHT MEHR `application-x-executable`, und das ist der Kern
+ * der Meldung vom 13.08.2026 - siehe iconFor() darunter.
+ */
+function iconNameFor(appClass: string, theme: Gtk.IconTheme): string | null {
+  const candidates = [
+    appClass,
+    appClass.toLowerCase(),
+    appClass.split(".").pop() ?? appClass,
+  ]
+  for (const candidate of candidates) {
+    if (candidate && theme.has_icon(candidate)) return candidate
+  }
+  return null
+}
+
+/** Das Programm hinter einem Fenster, aus /proc.
+ *
+ * `comm` und nicht `cmdline`: es ist der Name, unter dem der Kern den
+ * Prozess fuehrt, also genau der Basisname des Programms - dieselbe
+ * Form, die entryFor() fuer die angehefteten Anwendungen sucht. cmdline
+ * traegt zusaetzlich die Argumente und muesste erst zerlegt werden.
+ *
+ * Kein Fehler, wenn es nichts gibt: ein Fenster kann zu einem Prozess
+ * gehoeren, der gerade endet, und auf einer Maschine ohne /proc gaebe es
+ * gar keinen Compositor.
+ */
+function programOf(pid: number): string | null {
+  if (!pid) return null
+  try {
+    const [ok, contents] = GLib.file_get_contents(`/proc/${pid}/comm`)
+    if (!ok) return null
+    const name = new TextDecoder().decode(contents).trim()
+    return name || null
+  } catch {
+    return null
+  }
+}
+
+/** Das Symbol eines Fensters, das zu keiner Anheftung gehoert.
+ *
+ * DAS ZAHNRAD FUER JEDES TERMINAL, UND WOHER ES KAM (13.08.2026)
+ *     GEMELDET: "terminal icon auch bereitstellen aktuell kriegen die
+ *     terminals das einstellung icon".
+ *
+ *     GEMESSEN am selben Tag an den Bildern des Abnahmelaufs
+ *     (iso/out/run-release-installed/key-39-14-super-q-terminal.png):
+ *     das geoeffnete Terminal steht hinter dem Trenner und traegt Punkt
+ *     fuer Punkt `application-x-executable` aus Papirus-Dark - und das
+ *     ist dort ein ZAHNKRANZ, genau wie
+ *     `applications-system-symbolic`, ueber das dieselbe Datei am
+ *     12.08.2026 schon einmal gestolpert ist.
+ *
+ *     Die Ursache ist NICHT das Symbolthema. Papirus fuehrt "kitty",
+ *     hicolor auch (kitty bringt sein eigenes Bild mit). Sie steht in
+ *     hyprland-universal-config.template:
+ *
+ *         bind = $mainMod, Q, exec, kitty --directory ~ --class="floating-default"
+ *
+ *     Das Terminal dieses Systems meldet also die Klasse
+ *     "floating-default" - ein Name, der eine FENSTERREGEL ausloest und
+ *     keine Anwendung benennt. iconNameFor() konnte ihn nicht finden und
+ *     fiel auf das Ersatzsymbol zurueck.
+ *
+ * DREI QUELLEN, IN DIESER REIHENFOLGE, UND JEDE BEANTWORTET EINE ANDERE
+ * FRAGE
+ *     1. Die Klasse im Symbolthema. Sie stimmt fuer jedes Fenster, das
+ *        heisst, wie sein Programm heisst - der Normalfall.
+ *     2. Der Anwendungseintrag zum PROGRAMM aus /proc/<pid>/comm. Das
+ *        ist die Frage "was laeuft da wirklich", und sie kommt an keiner
+ *        selbstgesetzten Klasse vorbei. Ihr Ergebnis ist ein GIcon aus
+ *        dem Eintrag, also dasselbe, was auch die angehefteten
+ *        Anwendungen zeigen - und es wird beim ZEICHNEN aufgeloest,
+ *        haengt also nicht daran, welches Symbolthema in dem Moment
+ *        galt, in dem der Knopf entstand.
+ *     3. Das Programm selbst als Symbolname. Deckt den Fall ab, dass es
+ *        ein Bild gibt, aber keinen Eintrag.
+ *
+ * UND WARUM DAS ERSATZSYMBOL NICHT MEHR DAS ZAHNRAD IST
+ *     Weil ein Zahnrad "Einstellungen" heisst und nicht "unbekanntes
+ *     Fenster". Der Nutzer hat am 12.08.2026 schon einmal versucht, ein
+ *     solches Bild anzuklicken, und am 13.08. das zweite Mal danach
+ *     gefragt. Der Rueckfall ist deshalb ein FENSTER-Zeichen aus der
+ *     eigenen Zeichenquelle (src/icon_definition.py) - es sagt genau
+ *     das, was ZepOS ueber dieses Fenster weiss, naemlich dass es eines
+ *     ist. Ein Gtk.Label und kein Gtk.Image, weil ein Nerd-Font-Zeichen
+ *     Schrift ist; die Groesse ist dieselbe wie die der Symbole, damit
+ *     der Knopf gleich gross bleibt.
+ */
+function iconFor(client: Hyprland.Client, theme: Gtk.IconTheme): Gtk.Widget {
+  const image = new Gtk.Image({ pixel_size: ICON_SIZE })
+
+  const byClass = iconNameFor(client.class, theme)
+  if (byClass) {
+    image.set_from_icon_name(byClass)
+    return image
+  }
+
+  const program = programOf(client.pid)
+  if (program) {
+    const info = entryFor(program)
+    const icon = info ? info.get_icon() : null
+    if (icon) {
+      image.set_from_gicon(icon)
+      return image
+    }
+    if (theme.has_icon(program)) {
+      image.set_from_icon_name(program)
+      return image
+    }
+  }
+
+  console.error(
+    `Dock: kein Symbol fuer das Fenster "${client.class}"`
+    + (program ? ` (Programm "${program}")` : " (kein Programm zu seiner PID)")
+    + " - es bekommt das Ersatzzeichen")
+  const label = new Gtk.Label({ label: UNKNOWN_WINDOW_ICON })
+  label.add_css_class("dock-unknown")
+  return label
+}
+
+// Das Terminal, in dem eine Anwendung ohne eigenes Fenster laeuft.
+// Derselbe Name wie in ags-bar.template ("kitty -e btop" am Hardware-
+// Modul) und dieselbe harte Abhaengigkeit von zepos-desktop; ein
+// Platzhalter waere die Wahl eines Terminals, die dieses System nicht
+// anbietet.
+const TERMINAL = "kitty"
+
+// Die Feldcodes der Freedesktop-Spezifikation. Sie stehen fuer Dateien
+// und Adressen, die ein Dock-Klick nicht mitgibt - `%U` an ein Terminal
+// weiterzureichen hiesse, dem Programm ein Argument zu geben, das
+// woertlich "%U" heisst.
+const FIELD_CODE = /\s*%[fFuUdDnNickvm]/g
+
+/** Der Befehl, mit dem ein Eintrag in einem Terminal startet - oder null.
+ *
+ * DIE ZWEITE TOTE TASTE IM FUSS, UND SIE WAR STILL (12.08.2026)
+ *     GEMESSEN mit gjs auf einer vollstaendigen Maschine, PATH auf
+ *     /usr/bin, kitty und foot installiert:
+ *
+ *         GioUnix.DesktopAppInfo.new("btop.desktop").launch([], null)
+ *         -> WIRFT: "Fuer die Anwendung benoetigtes Terminal konnte
+ *                    nicht gefunden werden"
+ *
+ *     btop steht in der Auswahl von zepos-apps, sein Eintrag traegt
+ *     Terminal=true, und GLib sucht dafuer in einer FESTEN Liste
+ *     bekannter Terminals - kgx, gnome-terminal, konsole, xterm und so
+ *     weiter. kitty steht dort nicht, und ZepOS liefert keins der
+ *     anderen aus. Der Knopf war also da, sah richtig aus, und ein
+ *     Klick warf eine Ausnahme ins AGS-Protokoll: dasselbe Muster wie
+ *     beim Zahnrad, nur mit einem Symbol, das niemand verwechselt.
+ *
+ *     Deshalb hier und nicht in der Auswahl: btop gehoert auf dieses
+ *     System, sein Eintrag ist richtig, und was fehlte, war die Antwort
+ *     auf "womit". Die steht jetzt an einer Stelle und gilt fuer jeden
+ *     kuenftigen Konsoleneintrag.
+ *
+ * null heisst "startet selbst", also der Normalfall.
+ */
+export function terminalCommand(info: GioUnix.DesktopAppInfo): string | null {
+  if (!info.get_boolean("Terminal")) return null
+  const line = (info.get_commandline() ?? "").replace(FIELD_CODE, "").trim()
+  return line ? `${TERMINAL} -e ${line}` : null
+}
+
+interface Pin {
+  program: string
+  info: GioUnix.DesktopAppInfo
+  button: Gtk.Button
+}
+
+/** Die angehefteten Anwendungen, einmal aufgeloest.
+ *
+ * Einmal und nicht bei jedem Ereignis: welche Programme installiert
+ * sind, aendert sich nicht, waehrend jemand ein Fenster verschiebt, und
+ * Gio.AppInfo.get_all() liest jedes .desktop auf der Maschine.
+ */
+function resolvePins(): Pin[] {
+  const pins: Pin[] = []
+  for (const program of PINNED) {
+    const info = entryFor(program)
+    if (!info) {
+      // Kein Fehlschlag der Sitzung: das Programm ist nicht (mehr)
+      // installiert. Gehoert ins Protokoll und nicht auf das Dock.
+      console.log(`Dock: kein Anwendungseintrag fuer "${program}" - nicht angeheftet`)
+      continue
+    }
+
+    // DER EINTRAG, DER SAGT, DASS ER KEINE ANWENDUNG IST.
+    //
+    // Siehe den Kopf: das ist die eine Zeile, die das Zahnrad im Fuss
+    // wegnimmt, ohne dass irgendwo "xdg-desktop-portal-gnome" steht.
+    // Ein Dienst markiert seinen Eintrag mit NoDisplay=true, weil er
+    // fuer den Menschen nicht zu starten ist - GIO liefert ihn
+    // trotzdem aus (GEMESSEN am 12.08.2026: DesktopAppInfo.new(
+    // "xdg-desktop-portal-gnome.desktop") gibt ein Objekt zurueck,
+    // nicht null), also muss das Dock selbst hinsehen.
+    if (info.get_nodisplay()) {
+      console.log(`Dock: "${program}" ist ein Dienst (NoDisplay=true) - `
+        + `nicht angeheftet; sein Eintrag "${info.get_display_name()}" `
+        + `startet kein Fenster`)
+      continue
+    }
+    const button = new Gtk.Button({ can_focus: false })
+    button.add_css_class("dock-button")
+    button.add_css_class("dock-pin")
+    button.set_tooltip_text(info.get_display_name() || program)
+
+    // Ein Eintrag OHNE Icon-Zeile. Selten, aber moeglich - und der
+    // Rueckfall darf hier so wenig ein Zahnrad sein wie unten bei den
+    // losen Fenstern: `application-x-executable` stand an beiden
+    // Stellen und ist in Papirus-Dark ein Zahnkranz, also das Bild der
+    // Systemeinstellungen. Dieselbe Verwechslung, dieselbe Antwort.
+    const icon = info.get_icon()
+    if (icon) {
+      const image = new Gtk.Image({ pixel_size: ICON_SIZE })
+      image.set_from_gicon(icon)
+      button.set_child(image)
+    } else {
+      console.error(`Dock: der Eintrag von "${program}" nennt kein Symbol - `
+        + "der Knopf bekommt das Ersatzzeichen")
+      const label = new Gtk.Label({ label: UNKNOWN_WINDOW_ICON })
+      label.add_css_class("dock-unknown")
+      button.set_child(label)
+    }
+
+    pins.push({ program, info, button })
+  }
+  return pins
+}
+
+/** Der Inhalt des Docks: die Reihe Knoepfe.
+ *
+ * Getrennt vom Fenster, aus demselben Grund wie BarContent in Bar.tsx:
+ * ein Gtk.Box laesst sich unter gtk4-broadwayd bauen und zaehlen, eine
+ * Layer-Shell-Flaeche nicht.
+ */
+export function DockContent(): Gtk.Box {
+  const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
+  box.set_name("dock")
+
+  const pins = resolvePins()
+  for (const pin of pins) box.append(pin.button)
+
+  // Der Trenner zwischen den angehefteten Anwendungen und den uebrigen
+  // Fenstern. Er steht auch dann im Kasten, wenn rechts von ihm nichts
+  // ist - dann unsichtbar; ein Trenner, der bei jedem Fensterwechsel neu
+  // eingehaengt wird, waere ein Kind mehr, dessen Platz sich verschiebt.
+  const separator = new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL })
+  separator.add_css_class("dock-separator")
+  separator.set_visible(false)
+  box.append(separator)
+
+  const buttons = new Map<string, Gtk.Button>()
+  // Die Klick-Verbindung je angehefteter Anwendung, damit sie ersetzt
+  // und nicht gestapelt wird: ein Knopf, der nach zehn Ereignissen zehn
+  // Rueckrufe traegt, startet beim naechsten Klick zehn Programme.
+  const handlers = new Map<Gtk.Button, number>()
+
+  const update = (state: Hyprland.HyprlandState) => {
+    const display = box.get_display()
+    const theme = display ? Gtk.IconTheme.get_for_display(display) : null
+
+    // Sonderarbeitsbereiche haben negative Kennungen. Ihre Fenster sind
+    // per Definition weggelegt; sie im Dock zu zeigen hiesse, das
+    // Weglegen rueckgaengig zu machen, ohne dass jemand darum gebeten
+    // hat.
+    const visible = state.clients
+      .filter(client => client.workspace.id > 0)
+      .sort((left, right) => left.workspace.id - right.workspace.id
+        || left.title.localeCompare(right.title))
+
+    // Jedes Fenster gehoert entweder zu einer angehefteten Anwendung
+    // oder auf einen eigenen Knopf. Ein Fenster an beiden Stellen waere
+    // dasselbe Programm zweimal im Dock.
+    const owned = new Map<string, Hyprland.Client[]>()
+    const loose: Hyprland.Client[] = []
+    for (const client of visible) {
+      const pin = pins.find(candidate =>
+        belongsTo(client.class, candidate.info, candidate.program))
+      if (pin) {
+        const list = owned.get(pin.program) ?? []
+        list.push(client)
+        owned.set(pin.program, list)
+      } else {
+        loose.push(client)
+      }
+    }
+
+    for (const pin of pins) {
+      const windows = owned.get(pin.program) ?? []
+      const classes = ["dock-button", "dock-pin"]
+      if (windows.length) classes.push("running")
+      if (windows.some(client => client.workspace.id === state.focused)) {
+        classes.push("active")
+      }
+      pin.button.set_css_classes(classes)
+      pin.button.set_tooltip_text(
+        windows.length
+          ? `${pin.info.get_display_name() || pin.program} (${windows.length})`
+          : (pin.info.get_display_name() || pin.program))
+      // Neu verbunden, weil das Ziel sich mit jedem Ereignis aendert:
+      // laeuft die Anwendung, holt der Klick ihr erstes Fenster nach
+      // vorn; laeuft sie nicht, startet er sie ueber ihren Eintrag - und
+      // damit mit der Exec-Zeile, die das Paket vorgesehen hat, statt
+      // mit einem Programmnamen, den diese Datei erraten haette.
+      //
+      // GESCHLUESSELT NACH DEM KNOPF UND NICHT NACH DEM PROGRAMMNAMEN,
+      // seit dem 17.08.2026. Das ist der ganze Fehler von diesem Tag:
+      //
+      //     GEMELDET: "wenn ich auf den claude icon druecke spammt er
+      //     terminal mit claude auf die oberflaeche immer mehr bis alles
+      //     laggt".
+      //
+      //     src/apps.py fuehrte zepos-claude-code ZWEIMAL - einmal als
+      //     fremde Anwendung (zepos-apps nennt es in seinen
+      //     Abhaengigkeiten) und einmal als eigenes Paket. Zwei
+      //     Eintraege, ein Programmname, EIN Platz in dieser Tabelle:
+      //     der zweite Durchlauf holte die Verbindung des ERSTEN
+      //     Knopfes und trennte sie am ZWEITEN - wo sie nicht sass.
+      //     Also blieb sie am ersten haengen, und der bekam bei jedem
+      //     Hyprland-Ereignis eine weitere dazu. Ein Klick startete
+      //     danach so viele Programme, wie seit dem Anmelden Ereignisse
+      //     gekommen waren, und jedes neue Fenster war ein weiteres
+      //     Ereignis.
+      //
+      //     Die Liste ist repariert (src/apps.py, `shipped`). Diese
+      //     Zeile ist die zweite Haelfte: ein Knopf ist als Objekt
+      //     eindeutig, ein Name ist es nicht. Wer morgen dieselbe
+      //     Anwendung zweimal anheftet - von Hand, ueber die
+      //     Einstellungen -, bekommt zwei Zeichen und keine Fork-Bombe.
+      const previousHandler = handlers.get(pin.button)
+      if (previousHandler !== undefined) pin.button.disconnect(previousHandler)
+      const first = windows[0]
+      handlers.set(pin.button, pin.button.connect("clicked", () => {
+        if (first) {
+          Hyprland.dispatch(`focuswindow address:${first.address}`)
+          return
+        }
+        // Ueber den Compositor und nicht ueber GIO, wenn der Eintrag ein
+        // Terminal braucht - siehe terminalCommand(). Fuer alles andere
+        // bleibt es bei launch(), also bei der Exec-Zeile, die das Paket
+        // vorgesehen hat.
+        const terminal = terminalCommand(pin.info)
+        if (terminal) Hyprland.dispatch(`exec ${terminal}`)
+        else pin.info.launch([], null)
+      }))
+    }
+
+    separator.set_visible(pins.length > 0 && loose.length > 0)
+
+    const addresses = loose.map(client => client.address)
+    for (const [address, button] of buttons) {
+      if (!addresses.includes(address)) {
+        box.remove(button)
+        buttons.delete(address)
+      }
+    }
+
+    let previous: Gtk.Widget | null = separator
+    for (const client of loose) {
+      let button = buttons.get(client.address)
+      if (!button) {
+        button = new Gtk.Button({ can_focus: false })
+        button.add_css_class("dock-button")
+
+        if (theme) button.set_child(iconFor(client, theme))
+
+        button.connect("clicked", () =>
+          Hyprland.dispatch(`focuswindow address:${client.address}`))
+
+        const middle = new Gtk.GestureClick({ button: 2 })
+        middle.connect("released", () =>
+          Hyprland.dispatch(`closewindow address:${client.address}`))
+        button.add_controller(middle)
+
+        buttons.set(client.address, button)
+        box.append(button)
+      }
+
+      button.set_tooltip_text(client.title || client.class)
+      button.set_css_classes(
+        client.workspace.id === state.focused
+          ? ["dock-button", "active"] : ["dock-button"])
+
+      box.reorder_child_after(button, previous)
+      previous = button
+    }
+  }
+
+  update(Hyprland.refresh())
+  Hyprland.subscribe(() => update(Hyprland.refresh()))
+  return box
+}
+
+export interface DockHandle {
+  windows: Astal.Window[]
+  toggle: () => void
+  visible: () => boolean
+}
+
+/** Ein Dock je Schirm, unten am Rand, sichtbar.
+ *
+ * Sichtbar, und das ist die zweite Haelfte der Antwort auf "die nwg dock
+ * unten geht nicht mehr". Hier stand `visible: false`, mit der
+ * Begruendung, SUPER+B sei der einzige Weg, auf dem es auch wieder
+ * verschwindet. Das stimmt weiterhin - und es hiess, dass ein Nutzer,
+ * der die Taste nicht kennt, nie ein Dock zu sehen bekam. Eine
+ * Oberflaeche, die man erst herbeirufen muss, ist fuer den, der sie
+ * nicht kennt, dasselbe wie keine.
+ *
+ * DREI EIGENSCHAFTEN MACHEN AUS DIESER FLAECHE EINE FUSSZEILE, und
+ * keine davon steht hier zufaellig:
+ *
+ *   anchor BOTTOM        unten und nur unten. Mit LEFT und RIGHT dazu
+ *                        zoege sich die Flaeche ueber die volle Breite
+ *                        und reservierte einen Streifen, der zu beiden
+ *                        Seiten des Docks leer waere.
+ *   EXCLUSIVE            der Streifen gehoert ihr. Ohne das laege sie
+ *                        UEBER dem untersten Fenster, und ein
+ *                        maximiertes Fenster verdeckte seine eigene
+ *                        Fusszeile.
+ *   visible: true        sie steht da, ohne dass jemand eine Taste
+ *                        kennt.
+ *
+ * Alle drei werden gemessen und nicht behauptet - siehe
+ * tests/src/test_placement.py.
+ */
+export default function Dock(): DockHandle {
+  const display = Gdk.Display.get_default()
+  const windows: Astal.Window[] = []
+  if (!display) {
+    console.error("Keine Anzeige - es gibt kein Dock")
+    return { windows, toggle: () => {}, visible: () => false }
+  }
+
+  const monitors = display.get_monitors()
+  for (let index = 0; index < monitors.get_n_items(); index++) {
+    const monitor = monitors.get_item(index) as Gdk.Monitor
+    const window = new Astal.Window({
+      namespace: "zepos-dock",
+      name: `dock-${monitor.connector}`,
+      layer: Astal.Layer.TOP,
+      anchor: Astal.WindowAnchor.BOTTOM,
+      exclusivity: Astal.Exclusivity.EXCLUSIVE,
+      gdkmonitor: monitor,
+      visible: true,
+    })
+    window.add_css_class("dock-window")
+    window.set_margin_bottom(DOCK_MARGIN_BOTTOM)
+    window.set_child(DockContent())
+    windows.push(window)
+  }
+
+  return {
+    windows,
+    toggle: () => {
+      const showing = windows.some(window => window.visible)
+      for (const window of windows) window.visible = !showing
+    },
+    visible: () => windows.some(window => window.visible),
+  }
+}

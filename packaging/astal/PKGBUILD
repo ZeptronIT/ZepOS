@@ -1,0 +1,141 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# The three Astal libraries AGS is built on.
+#
+# WHY THIS RECIPE EXISTS AT ALL
+#     Spec §4.3 lists aylurs-gtk-shell as one of five components that are
+#     not in the Arch repositories. What it does not say is that AGS does
+#     not stand alone: `ags run` is a Go program that hands a bundled
+#     TypeScript file to gjs, and the first thing that file does is
+#
+#         import Astal from "gi://Astal?version=4.0"
+#
+#     which is a GObject-Introspection typelib that has to exist on disk.
+#     Without these three libraries AGS installs, starts, and dies on the
+#     first import - so packaging AGS without packaging Astal produces a
+#     command that cannot run the fifteen templates it was packaged for.
+#
+#     The three are exactly what ZepOS's own widgets reach for, and no
+#     more: Astal 4.0 (every widget), AstalIO (AGS's own runtime), and
+#     AstalNotifd (ags-notifications.template, which replaces mako).
+#     Upstream ships a dozen more; each one that is not imported is a
+#     library nobody would notice breaking.
+#
+# WHY A COMMIT AND NOT A TAG
+#     github.com/Aylur/astal has no tags at all - `git ls-remote --tags`
+#     comes back empty, which is why every AUR recipe for it is a -git
+#     package with sha256sums=('SKIP'). A distribution cannot ship that:
+#     spec §4.3 rejected AUR precisely because "no cut-off date, no
+#     signature, no promise it still builds tomorrow". So the pin is a
+#     commit hash and a checksum over the tarball at that commit, and the
+#     version number follows the AUR's own convention (rNNN.shorthash) so
+#     that the two can be compared.
+#
+# WHY ONE RECIPE AND THREE PACKAGES
+#     One source tree, three meson projects, three sonames, three
+#     dependency sets. A single package would make a machine that only
+#     wants notifications carry the GTK4 stack. Building them in one
+#     makepkg run is what makes the staging in build() necessary - see
+#     there.
+_commit=9dac92f20e6c89b9373bbb238c49b1cb115724db
+
+pkgbase=astal
+pkgname=('libastal-io' 'libastal-4' 'libastal-notifd')
+pkgver=r912.9dac92f
+pkgrel=1
+arch=('x86_64')
+url="https://github.com/Aylur/astal"
+license=('LGPL-2.1-only')
+makedepends=('meson' 'vala' 'gobject-introspection' 'python'
+             'gtk4' 'gtk4-layer-shell' 'gdk-pixbuf2' 'json-glib' 'glib2')
+source=("astal-$_commit.tar.gz::https://github.com/Aylur/astal/archive/$_commit.tar.gz")
+sha256sums=('b99021bcaf5bec125e3c57ee1e223d8710bacac28bc06eb194a371e3de47ba3a')
+
+_src() { printf '%s/astal-%s' "$srcdir" "$_commit"; }
+
+build() {
+    # Where astal-io is installed so that astal-4 and astal-notifd can be
+    # built against it, in the same makepkg run and without touching the
+    # build machine.
+    #
+    # This is the whole difficulty of a split package over a dependency
+    # chain: the second library needs the first INSTALLED, and the first
+    # is not installed until the package is built, signed and added to a
+    # repository. Three separate recipes would have let the driver
+    # install each one before building the next, at the price of three
+    # recipes for one tarball.
+    #
+    # Every one of the five variables below was needed, and each covers a
+    # different consumer of the staged tree - measured by removing them
+    # one at a time:
+    #
+    #   PKG_CONFIG_PATH  meson's dependency('astal-io-0.1')
+    #   VALAFLAGS        valac resolving --pkg astal-io-0.1 to its .vapi.
+    #                    meson passes --pkg for pkg-config dependencies
+    #                    but no --vapidir, and valac does not read the
+    #                    .pc file.
+    #   CPPFLAGS         the C compile of the Vala output. The .pc file's
+    #                    -I is /usr/include, which is where astal-io is
+    #                    NOT yet - that failure is `fatal error:
+    #                    astal-io.h: No such file or directory` on every
+    #                    generated .c file.
+    #   LDFLAGS          the link.
+    #   XDG_DATA_DIRS,
+    #   GI_TYPELIB_PATH  g-ir-compiler resolving AstalIO-0.1.gir while it
+    #                    builds Astal-4.0.
+    local stage="$srcdir/stage"
+
+    export PKG_CONFIG_PATH="$stage/usr/lib/pkgconfig"
+    export VALAFLAGS="--vapidir=$stage/usr/share/vala/vapi"
+    export CPPFLAGS="${CPPFLAGS:-} -I$stage/usr/include"
+    export LDFLAGS="${LDFLAGS:-} -L$stage/usr/lib"
+    export LD_LIBRARY_PATH="$stage/usr/lib"
+    export XDG_DATA_DIRS="$stage/usr/share:/usr/share"
+    export GI_TYPELIB_PATH="$stage/usr/lib/girepository-1.0"
+
+    # -Dcli=false on notifd, and it is not an optimisation: the daemon's
+    # command line tool links against `quarrel`, a fourth Astal library
+    # that ZepOS has no other use for. The library half - the only half
+    # ags-notifications.template imports - does not.
+    _build_one lib/astal/io   "$stage"
+    _build_one lib/astal/gtk4 "$stage"
+    _build_one lib/notifd     "$stage" -Dcli=false
+}
+
+_build_one() {
+    local project="$1" stage="$2"; shift 2
+
+    cd "$(_src)/$project"
+    arch-meson build "$@"
+    meson compile -C build
+    # Staged as well as built: the next project in the list reads it
+    # through the variables above.
+    DESTDIR="$stage" meson install -C build
+}
+
+package_libastal-io() {
+    pkgdesc="Astal's IO library: subprocesses, files, timers and the socket AGS talks to"
+    depends=('glib2' 'glibc')
+    provides=("libastal-io.so=0-64")
+
+    meson install -C "$(_src)/lib/astal/io/build" --destdir "$pkgdir"
+    install -Dm644 "$(_src)/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
+
+package_libastal-4() {
+    pkgdesc="Astal's GTK4 building blocks: the layer-shell window every ZepOS widget is"
+    depends=('glib2' 'glibc' 'gtk4' 'gtk4-layer-shell' 'gdk-pixbuf2' 'libastal-io')
+    provides=("libastal-4.so=4-64")
+
+    meson install -C "$(_src)/lib/astal/gtk4/build" --destdir "$pkgdir"
+    install -Dm644 "$(_src)/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
+
+package_libastal-notifd() {
+    pkgdesc="Astal's notification daemon library, which ZepOS uses in place of mako"
+    depends=('glib2' 'glibc' 'json-glib' 'gdk-pixbuf2')
+    provides=("libastal-notifd.so=0-64")
+
+    meson install -C "$(_src)/lib/notifd/build" --destdir "$pkgdir"
+    install -Dm644 "$(_src)/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

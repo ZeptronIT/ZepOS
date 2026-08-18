@@ -1,0 +1,112 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# Die Eingabezeile. Das Theme, das src/templates/p10k-config.template
+# konfiguriert.
+#
+# WARUM ES DIESES REZEPT GIBT
+#     Weil das Paket, das es sonst liefern wuerde, nicht mehr existiert.
+#     GEMESSEN am 12.08.2026 gegen den angehefteten Schnappschuss
+#     2026/08/04 (extra.db, entpackt und durchgesehen): kein
+#     zsh-theme-powerlevel10k, in [core] genauso wenig. Was es dort an
+#     zsh gibt, sind zsh, zsh-autocomplete, zsh-autosuggestions,
+#     zsh-completions, zsh-doc, zsh-history-substring-search,
+#     zsh-lovers, zsh-syntax-highlighting und zshdb - und keins davon
+#     ist ein Prompt.
+#
+#     Der Nutzer hat am 12.08.2026 powerlevel10k namentlich verlangt
+#     ("es soll irgendwie die moeglichkeit geben powerlevel 10k
+#     einzurichten"), und zshrc-config.template hat es seit jeher
+#     konfiguriert. Die Konfiguration ohne das Programm war der Fehler,
+#     der behoben wird; dieses Rezept ist die andere Haelfte davon.
+#
+# WARUM DER NAME NICHT MIT zepos- ANFAENGT
+#     Weil hier nichts von ZepOS drin ist. Es ist der Baum des Ursprungs,
+#     unveraendert, an der Stelle, an der Arch ihn hatte - genau wie
+#     astal und hyprland-plugins. Ein zepos-Name wuerde behaupten, dass
+#     dieses Projekt den Code pflegt, und die Datei laege ausserdem an
+#     einem anderen Pfad als der, den jede Anleitung im Netz nennt.
+#
+# WARUM EIN TAG UND NICHT DER LETZTE COMMIT
+#     v1.20.0 ist die Fassung, die der Ursprung als Veroeffentlichung
+#     bezeichnet hat. Der Hauptzweig traegt am 12.08.2026 103 Commits
+#     mehr (`git describe`: v1.20.0-103-g9253fb1c), die niemand
+#     freigegeben hat. Spec §4.3 verlangt einen Stichtag; ein Tag IST
+#     einer, ein Zwischenstand des Hauptzweigs ist bloss ein Datum.
+#
+#     Gepinnt wird trotzdem der Commit-Hash und nicht der Tagname: ein
+#     Tag ist ein Zeiger und laesst sich verschieben, ein Hash nicht.
+_commit=35833ea15f14b71dbcebc7e54c104d8d56ca5268
+
+pkgname=zsh-theme-powerlevel10k
+pkgver=1.20.0
+pkgrel=1
+pkgdesc="A fast reimplementation of the Powerlevel9k ZSH theme - the ZepOS prompt"
+arch=('any')
+url="https://github.com/romkatv/powerlevel10k"
+license=('MIT')
+depends=('zsh')
+optdepends=(
+    # Ohne git zeigt das vcs-Feld nichts an - und es ist kein Fehler,
+    # sondern ein Rechner ohne Repositories. Eine harte Abhaengigkeit
+    # waere hier ein Versionsverwaltungssystem, das ein Prompt
+    # installiert.
+    'git: der Zweig und der Zustand im vcs-Feld des Prompts'
+)
+source=("powerlevel10k-$_commit.tar.gz::$url/archive/$_commit.tar.gz")
+sha256sums=('c1316f3b812baa45c0f28feef8856f3e68f5f3d174c4d7253094761926208a64')
+
+package() {
+    local src="$srcdir/powerlevel10k-$_commit"
+    local dest="$pkgdir/usr/share/zsh-theme-powerlevel10k"
+
+    # DER PFAD IST TEIL DER SCHNITTSTELLE.
+    # src/templates/zshrc-config.template sourct
+    # /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme
+    # namentlich, und tests/src/test_zshrc.py haelt beide Seiten
+    # gegeneinander. Er ist derselbe, den Arch benutzt hat, damit jede
+    # Anleitung im Netz weiter stimmt.
+    install -dm755 "$dest"
+
+    # Der Baum, Datei fuer Datei, mit gesetzten Rechten - und nicht
+    # `cp -a`: eine Kopie uebernimmt die Rechte aus dem Tarball des
+    # Ursprungs, und was dort steht, entscheidet nicht dieses Paket.
+    local file
+    while IFS= read -r -d '' file; do
+        install -Dm644 "$file" "$dest/${file#$src/}"
+    done < <(find "$src" -maxdepth 1 -type f \
+        \( -name '*.zsh-theme' -o -name 'prompt_*_setup' \) -print0)
+
+    local directory
+    for directory in config internal gitstatus; do
+        while IFS= read -r -d '' file; do
+            install -Dm644 "$file" "$dest/${file#$src/}"
+        done < <(find "$src/$directory" -type f -print0)
+    done
+
+    # gitstatus/install und gitstatus/build sind Programme und keine
+    # Textdateien - sie muessen ausfuehrbar bleiben, sonst ist ein Paket
+    # ausgeliefert, in dem ein Aufruf mit "Permission denied" endet
+    # statt mit einer Meldung, die etwas erklaert.
+    #
+    # DASS SIE UEBERHAUPT MITKOMMEN, ist eine Entscheidung mit einem
+    # Schloss daneben. gitstatusd ist ein C++-Programm, das ZepOS nicht
+    # baut (sein Bauskript laedt seine Abhaengigkeiten zur Bauzeit aus
+    # dem Netz), und gitstatus/install wuerde beim ersten Prompt eine
+    # fertige Binaerdatei herunterladen - in das Heimatverzeichnis des
+    # Nutzers, an jeder Paketverwaltung vorbei. Genau das darf nicht
+    # passieren, und deshalb steht in der erzeugten ~/.p10k.zsh
+    # POWERLEVEL9K_DISABLE_GITSTATUS=true UND GITSTATUS_AUTO_INSTALL=0.
+    #
+    # Weggelassen werden die Dateien trotzdem nicht: ein Nutzer, der den
+    # Schalter umlegt, bekaeme sonst ein vcs-Feld, das stumm nichts mehr
+    # anzeigt - und nichts sagte ihm, warum.
+    local program
+    for program in install build; do
+        if [[ -f "$dest/gitstatus/$program" ]]; then
+            chmod 0755 "$dest/gitstatus/$program"
+        fi
+    done
+
+    install -Dm644 "$src/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

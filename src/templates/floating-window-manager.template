@@ -1,0 +1,656 @@
+#!/bin/bash
+# Notnagel, und nur wenn er wirklich gebraucht wird.
+#
+# Aus einem Leistenmodul oder einer Tastenbelegung heraus kann PATH fast
+# leer sein, und dann findet dieses Skript weder jq noch hyprctl - dafür
+# stehen die üblichen Verzeichnisse hier.
+#
+# ZWEI FEHLER, EINER NACH DEM ANDEREN GEMESSEN
+#   1. Vorangestellt haben diese Verzeichnisse den PATH des Aufrufers
+#      ÜBERSTIMMT: wer ein neueres jq in ~/.local/bin hat, bekam trotzdem
+#      das aus /usr/bin. Behoben durch Anhängen statt Voranstellen.
+#   2. Anhängen allein reicht nicht. Wer PATH bewusst einschränkt - der
+#      Testlauf startet jeden Kindprozess über `env -i` mit einem
+#      einzigen Verzeichnis darin - bekam die Einschränkung nur für die
+#      Befehle, die es dort auch gab. Jeder andere fiel unbemerkt auf das
+#      echte /usr/bin durch, also genau auf das, wovor die Einschränkung
+#      schützen soll. Und ein gefundener Befehl beschwert sich nicht:
+#      "command not found" kam nie, weil er eben gefunden wurde.
+#
+# Also erst nachsehen, ob die Werkzeuge überhaupt fehlen. Fehlen sie
+# nicht, bleibt der PATH des Aufrufers unangetastet - samt seiner
+# Einschränkung. Fehlen sie, ist ein zu weiter PATH immer noch besser als
+# ein Skript, das gar nicht läuft.
+if ! command -v hyprctl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+    export PATH="$PATH:/usr/bin:/bin:/usr/local/bin:$HOME/.local/bin"
+fi
+# Floating Window Manager für Hyprland
+# Speichert und lädt Positionen von floating Fenstern
+
+CONFIG_DIR="$HOME/.config/hypr/floating-positions"
+CONFIG_FILE="$CONFIG_DIR/positions.json"
+LAYOUTS_DIR="$CONFIG_DIR/layouts"
+
+# Erstelle Config-Verzeichnisse
+mkdir -p "$CONFIG_DIR"
+mkdir -p "$LAYOUTS_DIR"
+
+save_positions() {
+    local workspace="${1:-all}"
+    echo " Speichere floating Fenster Positionen..."
+
+    # Hole NUR FLOATING Fenster.
+    #
+    # Der Workspace geht als --argjson hinein und nicht in den Filtertext:
+    # ein Wert im Quelltext von jq ist Code, kein Datum.
+    local filter='.[] | select(.floating == true) | select(.class != "")'
+    if [ "$workspace" != "all" ]; then
+        filter='.[] | select(.workspace.id == $ws) | select(.floating == true) | select(.class != "")'
+    fi
+
+    local workspace_argument="$workspace"
+    [ "$workspace" = "all" ] && workspace_argument="null"
+
+    # Jedes Fenster als eine JSON-Zeile, damit unten nichts mehr an
+    # Trennzeichen zerlegt werden muss. Der Titel eines Fensters ist
+    # Fremdtext - ein Browser-Tab heisst schon mal
+    # `"Rust" in 2026 - YouTube` - und enthält Anführungszeichen,
+    # Backslashes und Senkrechtstriche.
+    local windows
+    windows=$(hyprctl clients -j | jq -c --argjson ws "$workspace_argument" \
+        "$filter | {class, title, workspace: .workspace.id, at, size, pid,
+                    initial_title: (.initialTitle // .title)}") || {
+        echo " Fehler: Fensterliste konnte nicht gelesen werden!" >&2
+        return 1
+    }
+
+    # Gesammelt und in EINEM Zug geschrieben: die Zieldatei wird erst
+    # angefasst, wenn das JSON vollständig und gültig ist. Vorher wurde
+    # sie zeilenweise zusammengesetzt, und ein Fenster, dessen Titel ein
+    # Anführungszeichen enthielt, hinterliess eine kaputte Datei, die
+    # niemand mehr laden konnte.
+    local entries=()
+    local window
+    while IFS= read -r window; do
+        [ -n "$window" ] || continue
+
+        local class title ws x y width height
+        class=$(printf '%s' "$window" | jq -r '.class')
+        title=$(printf '%s' "$window" | jq -r '.title')
+        ws=$(printf '%s' "$window" | jq -r '.workspace')
+        x=$(printf '%s' "$window" | jq -r '.at[0]')
+        y=$(printf '%s' "$window" | jq -r '.at[1]')
+        width=$(printf '%s' "$window" | jq -r '.size[0]')
+        height=$(printf '%s' "$window" | jq -r '.size[1]')
+
+        # Erstelle Window Fingerprint für bessere Identifikation
+        local window_fingerprint=""
+        if [[ "$class" == "jetbrains-"* ]]; then
+            # Bei JetBrains: Speichere ob es ein Hauptfenster ist
+            if [[ "$title" =~ \[.*\].*–.* ]]; then
+                window_fingerprint="main_window"
+            else
+                # Tool-Fenster: Verwende den Tool-Namen
+                window_fingerprint=$(echo "$title" | awk -F' - ' '{print $1}')
+            fi
+        fi
+
+        # Speichere mehr Identifikationsmerkmale. Alles, was aus dem
+        # Fenster stammt, kommt als --arg herein; jq maskiert es.
+        local entry
+        entry=$(printf '%s' "$window" | jq -c \
+            --arg fingerprint "$window_fingerprint" \
+            --argjson order "$(date +%s%N)" \
+            '{class, title, initial_title, workspace,
+              position: {x: .at[0], y: .at[1]},
+              size: {width: .size[0], height: .size[1]},
+              pid, window_fingerprint: $fingerprint, save_order: $order}') || {
+            echo " Fehler: Fenster '$class' konnte nicht gespeichert werden!" >&2
+            return 1
+        }
+        entries+=("$entry")
+
+        echo " Gespeichert: $class auf Workspace $ws bei $x,$y (${width}x${height})"
+    done <<< "$windows"
+
+    local document
+    if [ ${#entries[@]} -eq 0 ]; then
+        document=$(jq -n --arg saved_at "$(date -Iseconds)" \
+            '{saved_at: $saved_at, windows: []}') || return 1
+    else
+        document=$(printf '%s\n' "${entries[@]}" | jq -s \
+            --arg saved_at "$(date -Iseconds)" \
+            '{saved_at: $saved_at, windows: .}') || return 1
+    fi
+
+    printf '%s\n' "$document" > "$CONFIG_FILE"
+
+    echo " Positionen gespeichert in: $CONFIG_FILE"
+}
+
+load_positions() {
+    echo " Lade floating Fenster Positionen..."
+    
+    # Debug: Log to file when called from the bar
+    if [ -n "$BAR_OUTPUT_MODE" ]; then
+        echo "[$(date)] load_positions called from the bar" >> /tmp/floating-window-manager.log
+    fi
+    
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo " Keine gespeicherten Positionen gefunden!"
+        return 1
+    fi
+    
+    # Prüfe ob JSON valide ist
+    if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+        echo " Fehler: Gespeicherte Datei ist kein valides JSON!"
+        return 1
+    fi
+    
+    # Zähle Fenster für Progressbar
+    local total_windows=$(jq -r '.windows | length' "$CONFIG_FILE" 2>/dev/null || echo "0")
+    local current_window=0
+    
+    # Hole aktuelle Fenster - mit kurzer Verzögerung für Stabilität
+    sleep 0.2
+    local current_windows=$(hyprctl clients -j)
+    
+    # Array für bereits positionierte Fenster
+    local positioned_addresses=""
+    
+    # Erstelle eine Named Pipe für Zenity Progress
+    local pipe=$(mktemp -u)
+    mkfifo "$pipe"
+    
+    # Trap für Cleanup bei Fehler oder Unterbrechung
+    trap "exec 3>&-; rm -f '$pipe'; kill $zenity_pid 2>/dev/null" EXIT INT TERM
+    
+    # Starte Zenity Progress Dialog im Hintergrund
+    (
+        zenity --progress \
+            --title="{{ICON_WINDOW_FLOATING}} Layout laden" \
+            --text="Layout wird vorbereitet..." \
+            --percentage=0 \
+            --auto-close \
+            --width=500 \
+            --height=150 \
+            --no-cancel < "$pipe"
+    ) &
+    local zenity_pid=$!
+    
+    # Öffne Pipe zum Schreiben
+    exec 3>"$pipe"
+    
+    # Lade jede gespeicherte Position
+    while IFS= read -r window_json; do
+        local class=$(echo "$window_json" | jq -r '.class')
+        local workspace=$(echo "$window_json" | jq -r '.workspace')
+        local x=$(echo "$window_json" | jq -r '.position.x')
+        local y=$(echo "$window_json" | jq -r '.position.y')
+        local width=$(echo "$window_json" | jq -r '.size.width')
+        local height=$(echo "$window_json" | jq -r '.size.height')
+        
+        # Hole title für bessere Zuordnung
+        local title=$(echo "$window_json" | jq -r '.title')
+        local window_fingerprint=$(echo "$window_json" | jq -r '.window_fingerprint // ""')
+        
+        # Verbesserte Fenster-Zuordnung
+        local address=""
+        local pid=$(echo "$window_json" | jq -r '.pid // 0')
+        local initial_title=$(echo "$window_json" | jq -r '.initial_title // ""')
+        
+        # Ab hier wird gesucht, und jeder gesuchte Wert - Klasse, Titel,
+        # Projektname, Adresse - stammt aus einem Fenster, das jemand
+        # anderes benannt hat. Er geht deshalb als --arg in jq hinein und
+        # nie in dessen Quelltext: dort wäre er Programm, kein Datum.
+        # Gemessen an genau der Zeile weiter unten, die
+        # `startswith("$project_name \[")` zusammensetzte - `\[` ist keine
+        # gültige JSON-Maskierung, jq brach mit "Invalid escape at line 1,
+        # column 4" ab, und dieser Zweig hat noch nie irgendetwas
+        # gefunden.
+
+        # Strategie 1: Versuche PID-Match (nur wenn PID noch existiert und eindeutig ist)
+        if [ "$pid" -ne 0 ] && kill -0 "$pid" 2>/dev/null; then
+            # Prüfe ob PID eindeutig ist (nur ein Fenster mit dieser PID)
+            local pid_count=$(echo "$current_windows" | jq -r --argjson pid "$pid" '.[] | select(.pid == $pid) | .address' | wc -l)
+            if [ "$pid_count" -eq 1 ]; then
+                address=$(echo "$current_windows" | jq -r --argjson pid "$pid" --arg class "$class" '.[] | select(.pid == $pid and .class == $class) | .address' | head -1)
+                [ -n "$address" ] && echo "   -> Strategie 1 (Eindeutige PID): $address"
+            else
+                echo "   -> Strategie 1 übersprungen: $pid_count Fenster mit PID $pid"
+            fi
+        fi
+
+        # Strategie 2: Exakter Titel-Match
+        if [ -z "$address" ]; then
+            # Bei mehreren Fenstern der gleichen Klasse: Versuche beste Übereinstimmung
+            # Priorität: Titel-Match UND bereits auf richtigem Workspace
+            for addr in $(echo "$current_windows" | jq -r --arg class "$class" --arg title "$title" --argjson ws "$workspace" '.[] | select(.class == $class and .title == $title and .workspace.id == $ws) | .address'); do
+                if [[ ! " $positioned_addresses " =~ " $addr " ]]; then
+                    address="$addr"
+                    break
+                fi
+            done
+
+            # Wenn nicht gefunden, dann nur Titel-Match
+            if [ -z "$address" ]; then
+                for addr in $(echo "$current_windows" | jq -r --arg class "$class" --arg title "$title" '.[] | select(.class == $class and .title == $title) | .address'); do
+                    if [[ ! " $positioned_addresses " =~ " $addr " ]]; then
+                        address="$addr"
+                        echo "   -> Strategie 2.2 (Nur Titel): $address"
+                        break
+                    fi
+                done
+            fi
+        fi
+        
+        # Strategie 3: Window Fingerprint Match (für JetBrains IDEs)
+        if [ -z "$address" ] && [ -n "$window_fingerprint" ] && [[ "$class" == "jetbrains-"* ]]; then
+            if [ "$window_fingerprint" = "main_window" ]; then
+                # Suche nach JetBrains Hauptfenster (mit Projekt-Klammern und Datei)
+                for addr in $(echo "$current_windows" | jq -r --arg class "$class" '.[] | select(.class == $class and (.title | test("\\[.*\\].*–.*"))) | .address'); do
+                    if [[ ! " $positioned_addresses " =~ " $addr " ]]; then
+                        # Prüfe ob es das richtige Hauptfenster ist (gleiche Größe)
+                        local curr_width=$(echo "$current_windows" | jq -r --arg addr "$addr" '.[] | select(.address == $addr) | .size[0]')
+                        local curr_height=$(echo "$current_windows" | jq -r --arg addr "$addr" '.[] | select(.address == $addr) | .size[1]')
+                        if [ $((curr_width - width)) -lt 100 ] && [ $((curr_width - width)) -gt -100 ] &&
+                           [ $((curr_height - height)) -lt 100 ] && [ $((curr_height - height)) -gt -100 ]; then
+                            address="$addr"
+                            echo "   -> Strategie 3 (JetBrains Hauptfenster via Fingerprint + Größe): $address"
+                            break
+                        fi
+                    fi
+                done
+            else
+                # Tool-Fenster: Suche nach exaktem Tool-Namen
+                for addr in $(echo "$current_windows" | jq -r --arg class "$class" --arg prefix "$window_fingerprint" '.[] | select(.class == $class and (.title | startswith($prefix))) | .address'); do
+                    if [[ ! " $positioned_addresses " =~ " $addr " ]]; then
+                        address="$addr"
+                        echo "   -> Strategie 3 (JetBrains Tool-Fenster via Fingerprint): $address"
+                        break
+                    fi
+                done
+            fi
+        fi
+        
+        # Strategy 3b: special case for the main window of a JetBrains IDE (fallback)
+        if [ -z "$address" ] && [[ "$class" == "jetbrains-"* ]] && [[ "$title" =~ \[.*\] ]]; then
+            # Extract the project name from the title, e.g. "myproject"
+            # out of "myproject [~/src/myproject] - ..."
+            local project_name=$(echo "$title" | sed -n 's/^\([^[]*\) \[.*/\1/p')
+            if [ -n "$project_name" ]; then
+                echo "   -> Suche JetBrains Hauptfenster für Projekt: $project_name"
+                for addr in $(echo "$current_windows" | jq -r --arg class "$class" --arg prefix "$project_name [" '.[] | select(.class == $class and (.title | startswith($prefix)) and (.title | contains(" – "))) | .address'); do
+                    if [[ ! " $positioned_addresses " =~ " $addr " ]]; then
+                        address="$addr"
+                        echo "   -> Strategie 3 (JetBrains Hauptfenster): $address"
+                        break
+                    fi
+                done
+            fi
+        fi
+        
+        # Strategie 3b: Initial-Titel Match (für Terminals nützlich)
+        #
+        # Die Klammern um die beiden Hälften des `or` sind nicht kosmetisch:
+        # `.title | contains($x) or .initialTitle == $x` bindet die Pipe
+        # schwächer als das `or`, also wurde `.initialTitle` auf dem
+        # TITEL ausgewertet - "Cannot index string with initialTitle" -,
+        # sobald contains() nicht schon wahr war.
+        if [ -z "$address" ] && [ -n "$initial_title" ]; then
+            for addr in $(echo "$current_windows" | jq -r --arg class "$class" --arg initial "$initial_title" '.[] | select(.class == $class and ((.title | contains($initial)) or (.initialTitle == $initial))) | .address'); do
+                if [[ ! " $positioned_addresses " =~ " $addr " ]]; then
+                    address="$addr"
+                    echo "   -> Strategie 3b (Initial-Titel): $address"
+                    break
+                fi
+            done
+        fi
+        
+        # Strategie 4: Klasse + Workspace + ähnliche Größe
+        if [ -z "$address" ]; then
+            local tolerance=50  # Pixel Toleranz
+            for addr in $(echo "$current_windows" | jq -r --arg class "$class" --argjson ws "$workspace" '.[] | select(.class == $class and .workspace.id == $ws) | .address'); do
+                if [[ ! " $positioned_addresses " =~ " $addr " ]]; then
+                    # Prüfe ob Größe ähnlich ist
+                    local curr_width=$(echo "$current_windows" | jq -r --arg addr "$addr" '.[] | select(.address == $addr) | .size[0]')
+                    local curr_height=$(echo "$current_windows" | jq -r --arg addr "$addr" '.[] | select(.address == $addr) | .size[1]')
+                    
+                    if [ $((curr_width - width)) -lt $tolerance ] && [ $((curr_width - width)) -gt -$tolerance ] &&
+                       [ $((curr_height - height)) -lt $tolerance ] && [ $((curr_height - height)) -gt -$tolerance ]; then
+                        address="$addr"
+                        break
+                    fi
+                fi
+            done
+        fi
+        
+        # Strategie 5: ENTFERNT - Kein Fallback mehr!
+        # Wenn kein passendes Fenster gefunden wurde, wird es übersprungen
+        if [ -z "$address" ]; then
+            echo "   -> WARNUNG: Kein passendes Fenster für '$title' gefunden - überspringe!"
+        fi
+        
+        if [ -n "$address" ]; then
+            echo " Positioniere $class ($title):"
+            echo "   -> Gefundene Adresse: $address"
+            
+            # Führe Hyprctl-Befehle sequentiell aus für mehr Stabilität
+            hyprctl dispatch setfloating "address:$address"
+            sleep 0.1
+            
+            hyprctl dispatch movetoworkspace "$workspace,address:$address"
+            sleep 0.1
+            
+            hyprctl dispatch movewindowpixel "exact $x $y,address:$address"
+            sleep 0.1
+            
+            hyprctl dispatch resizewindowpixel "exact $width $height,address:$address"
+            
+            echo "   -> Workspace: $workspace, Position: $x,$y, Größe: ${width}x${height}"
+            
+            # Merke diese Adresse als positioniert
+            positioned_addresses="$positioned_addresses $address"
+            echo "   -> Bereits positionierte Adressen: $positioned_addresses"
+        else
+            echo " Überspringe $class - $title (Fenster existiert nicht)"
+        fi
+        
+        # Update Progressbar
+        current_window=$((current_window + 1))
+        local progress=$((current_window * 100 / total_windows))
+        
+        # Sende Update an Zenity
+        echo "$progress" >&3
+        # Center the text
+        local status_text="[$current_window/$total_windows] $title"
+        # Truncate if too long
+        if [ ${#status_text} -gt 60 ]; then
+            status_text="${status_text:0:57}..."
+        fi
+        # Center with padding
+        local text_len=${#status_text}
+        local padding=$(( (60 - text_len) / 2 ))
+        local centered_text=$(printf "%*s%s" $padding "" "$status_text")
+        echo "# $centered_text" >&3
+        
+        sleep 0.2
+    done < <(jq -r '.windows[] | @json' "$CONFIG_FILE")
+    
+    # Schließe Progress Dialog
+    echo "100" >&3
+    local final_text="Abgeschlossen: $current_window Fenster positioniert"
+    local text_len=${#final_text}
+    local padding=$(( (60 - text_len) / 2 ))
+    local centered_final=$(printf "%*s%s" $padding "" "$final_text")
+    echo "# $centered_final" >&3
+    
+    # Schließe Pipe
+    exec 3>&-
+    
+    # Warte auf Zenity
+    wait $zenity_pid 2>/dev/null
+    
+    # Cleanup
+    rm -f "$pipe"
+    trap - EXIT INT TERM
+    
+    # Zeige Abschluss-Notification
+    notify-send -t 3000 \
+        "{{ICON_SUCCESS}} Layout geladen" \
+        "$current_window Fenster erfolgreich positioniert"
+    
+    echo " Positionen geladen!"
+}
+
+save_layout() {
+    local layout_name="$1"
+    
+    if [ -z "$layout_name" ]; then
+        # Zeige existierende Layouts und erlaube neuen Namen
+        local existing_layouts=""
+        if [ -d "$LAYOUTS_DIR" ]; then
+            existing_layouts=$(ls -1 "$LAYOUTS_DIR" 2>/dev/null | grep '\.json$' | sed 's/\.json$//' | sort)
+        fi
+        
+        # Menuezeilen mit "Neues Layout" Option und existierenden Layouts
+        local menu_input="[Neues Layout]\n"
+        if [ -n "$existing_layouts" ]; then
+            menu_input+="$existing_layouts"
+        fi
+        
+        # Wähle oder erstelle Layout-Namen
+        layout_name=$(echo -e "$menu_input" | zepos-menu --dmenu --prompt "Layout speichern als:" --cache-file=/dev/null 2>/dev/null)
+        
+        if [ -z "$layout_name" ]; then
+            notify-send " Floating Layouts" "Speichern abgebrochen" -t 2000
+            return 1
+        fi
+        
+        # Wenn "Neues Layout" gewählt, frage nach Namen
+        if [ "$layout_name" = "[Neues Layout]" ]; then
+            layout_name=$(echo "" | zepos-menu --dmenu --prompt "Neuer Layout Name:" --cache-file=/dev/null 2>/dev/null)
+            if [ -z "$layout_name" ]; then
+                notify-send " Floating Layouts" "Speichern abgebrochen" -t 2000
+                return 1
+            fi
+        fi
+    fi
+    
+    # Prüfe ob Layout bereits existiert
+    local layout_file="$LAYOUTS_DIR/${layout_name}.json"
+    if [ -f "$layout_file" ]; then
+        # Layout existiert bereits - Bestätigung anfordern
+        local confirm=$(echo -e "Ja\nNein" | zepos-menu --dmenu --prompt "Layout '$layout_name' existiert bereits. Überschreiben?" --cache-file=/dev/null 2>/dev/null)
+        if [ "$confirm" != "Ja" ]; then
+            notify-send " Floating Layouts" "Überschreiben abgebrochen" -t 2000
+            return 1
+        fi
+    fi
+    
+    # Speichere aktuelle Positionen in benanntes Layout
+    if ! save_positions all > /dev/null; then
+        notify-send -u critical " Fehler" "Positionen konnten nicht gelesen werden" -t 3000
+        return 1
+    fi
+
+    if [ -f "$CONFIG_FILE" ]; then
+        # Füge Layout-Namen hinzu.
+        #
+        # Erst in eine Nebendatei, dann prüfen, dann umbenennen: `jq ... >
+        # "$layout_file"` legt die Zieldatei an, BEVOR jq überhaupt läuft.
+        # Scheiterte jq - und das tat es an jedem Fenstertitel mit einem
+        # Anführungszeichen darin -, blieb eine 0 Byte grosse Datei
+        # zurück, und weil niemand den Rückgabewert las, meldete das
+        # Skript darüber "Layout gespeichert".
+        local staged="${layout_file}.neu"
+        if ! jq --arg name "$layout_name" '. + {layout_name: $name}' \
+                "$CONFIG_FILE" > "$staged"; then
+            rm -f "$staged"
+            notify-send -u critical " Fehler" \
+                "Layout '$layout_name' konnte nicht geschrieben werden" -t 3000
+            return 1
+        fi
+        mv "$staged" "$layout_file"
+
+        notify-send " Layout gespeichert" "Layout '$layout_name' wurde gespeichert" -t 3000
+        echo " Layout '$layout_name' gespeichert in: $layout_file"
+    else
+        notify-send " Fehler" "Keine Fenster zum Speichern gefunden" -t 3000
+        return 1
+    fi
+}
+
+load_layout() {
+    local layout_name="$1"
+    
+    if [ -z "$layout_name" ]; then
+        # Liste verfügbare Layouts
+        local layouts=$(ls -1 "$LAYOUTS_DIR"/*.json 2>/dev/null | xargs -n1 basename | sed 's/\.json$//')
+        
+        if [ -z "$layouts" ]; then
+            notify-send " Keine Layouts" "Keine gespeicherten Layouts vorhanden" -t 3000
+            return 1
+        fi
+        
+        # Wähle Layout
+        layout_name=$(echo "$layouts" | zepos-menu --dmenu --prompt "Layout wählen:" --cache-file=/dev/null 2>/dev/null)
+        
+        if [ -z "$layout_name" ]; then
+            notify-send " Floating Layouts" "Laden abgebrochen" -t 2000
+            return 1
+        fi
+    fi
+    
+    local layout_file="$LAYOUTS_DIR/${layout_name}.json"
+    
+    if [ -f "$layout_file" ]; then
+        # Kopiere Layout zu aktiver Config
+        cp "$layout_file" "$CONFIG_FILE"
+        
+        # Lade Positionen (die Funktion zeigt ihre eigene Progressbar)
+        load_positions
+    else
+        notify-send " Fehler" "Layout '$layout_name' nicht gefunden" -t 3000
+        return 1
+    fi
+}
+
+list_layouts() {
+    local format="${1:-text}"
+    
+    if [ "$format" = "json" ]; then
+        # JSON Format für die Leiste
+        local layouts_json='{"layouts":[]}'
+        
+        for layout_file in "$LAYOUTS_DIR"/*.json; do
+            if [ -f "$layout_file" ]; then
+                local name=$(basename "$layout_file" .json)
+                local window_count=$(jq -r '.windows | length' "$layout_file" 2>/dev/null || echo 0)
+                local saved_at=$(jq -r '.saved_at' "$layout_file" 2>/dev/null || echo "")
+                
+                layouts_json=$(echo "$layouts_json" | jq --arg name "$name" --arg count "$window_count" --arg date "$saved_at" \
+                    '.layouts += [{"name": $name, "windows": $count, "saved_at": $date}]')
+            fi
+        done
+        
+        echo "$layouts_json"
+    else
+        # Text Format
+        echo " Gespeicherte Layouts:"
+        echo " ────────────────────"
+        
+        local found=false
+        for layout_file in "$LAYOUTS_DIR"/*.json; do
+            if [ -f "$layout_file" ]; then
+                found=true
+                local name=$(basename "$layout_file" .json)
+                local window_count=$(jq -r '.windows | length' "$layout_file" 2>/dev/null || echo 0)
+                echo "   $name ($window_count Fenster)"
+            fi
+        done
+        
+        if [ "$found" = false ]; then
+            echo "   Keine Layouts vorhanden"
+        fi
+    fi
+}
+
+delete_layout() {
+    local layout_name="$1"
+    
+    if [ -z "$layout_name" ]; then
+        # Liste verfügbare Layouts
+        local layouts=$(ls -1 "$LAYOUTS_DIR"/*.json 2>/dev/null | xargs -n1 basename | sed 's/\.json$//')
+        
+        if [ -z "$layouts" ]; then
+            notify-send " Keine Layouts" "Keine Layouts zum Löschen vorhanden" -t 3000
+            return 1
+        fi
+        
+        # Wähle Layout
+        layout_name=$(echo "$layouts" | zepos-menu --dmenu --prompt "Layout löschen:" --cache-file=/dev/null 2>/dev/null)
+        
+        if [ -z "$layout_name" ]; then
+            return 1
+        fi
+    fi
+    
+    local layout_file="$LAYOUTS_DIR/${layout_name}.json"
+    
+    if [ -f "$layout_file" ]; then
+        rm "$layout_file"
+        notify-send " Layout gelöscht" "Layout '$layout_name' wurde entfernt" -t 3000
+    else
+        notify-send " Fehler" "Layout '$layout_name' nicht gefunden" -t 3000
+        return 1
+    fi
+}
+
+show_status() {
+    echo " Floating Window Manager Status"
+    echo " ───────────────────────────────"
+    
+    if [ -f "$CONFIG_FILE" ]; then
+        local saved_at=$(jq -r '.saved_at' "$CONFIG_FILE")
+        local window_count=$(jq -r '.windows | length' "$CONFIG_FILE")
+        echo " Gespeicherte Positionen: $window_count Fenster"
+        echo " Gespeichert am: $saved_at"
+        echo ""
+        echo " Gespeicherte Fenster:"
+        jq -r '.windows[] | "   - \(.class) (Workspace \(.workspace))"' "$CONFIG_FILE"
+    else
+        echo " Keine gespeicherten Positionen vorhanden"
+    fi
+    
+    echo ""
+    list_layouts
+    
+    echo ""
+    echo " Aktuelle floating Fenster:"
+    hyprctl clients -j | jq -r '.[] | select(.floating == true) | "   - \(.class) (Workspace \(.workspace.id))"'
+}
+
+# Hauptprogramm
+case "$1" in
+    save)
+        save_positions "$2"
+        ;;
+    load)
+        load_positions
+        ;;
+    save-layout)
+        save_layout "$2"
+        ;;
+    load-layout)
+        load_layout "$2"
+        ;;
+    list-layouts)
+        list_layouts "$2"
+        ;;
+    delete-layout)
+        delete_layout "$2"
+        ;;
+    status)
+        show_status
+        ;;
+    bar)
+        # Spezial-Modus für die Leiste
+        list_layouts json
+        ;;
+    *)
+        echo " Floating Window Manager für Hyprland"
+        echo ""
+        echo " Verwendung:"
+        echo "   $0 save [workspace]     - Speichert floating Fenster"
+        echo "   $0 load                 - Lädt letzte Positionen"
+        echo "   $0 save-layout [name]   - Speichert benanntes Layout"
+        echo "   $0 load-layout [name]   - Lädt benanntes Layout"
+        echo "   $0 list-layouts [json]  - Listet gespeicherte Layouts"
+        echo "   $0 delete-layout [name] - Löscht Layout"
+        echo "   $0 status              - Zeigt Status"
+        echo "   $0 bar                 - JSON Output für die Leiste"
+        echo ""
+        echo " Config-Verzeichnis: $CONFIG_DIR"
+        ;;
+esac

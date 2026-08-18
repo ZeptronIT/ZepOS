@@ -1,0 +1,339 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# zepos-apps - die Anwendungen, die ZepOS ausmachen.
+#
+# WARUM ES DIESES PAKET GIBT
+#     Der Nutzer am 11.08.2026: "ausserdem wurden alle install.sh pakete
+#     die dort aufgelistet wurden nicht installiert wie firefox browser
+#     usw." Er hat recht, und die Zahl dazu ist gemessen: das Vorbild
+#     ~/.config/iconmanager/install-system.sh benennt 104 Pflichtpakete
+#     aus den offiziellen Quellen, 7 optionale und 25 aus dem AUR.
+#     zepos-desktop hatte davon keine einzige ANWENDUNG - firefox stand
+#     dort unter optdepends, und optdepends installiert pacman nicht. Wer
+#     ZepOS bis heute installierte, bekam einen Compositor, eine Leiste
+#     und keinen Browser.
+#
+# WARUM ES EIN ZWEITES PAKET IST UND NICHT EINE LAENGERE LISTE IN
+# zepos-desktop
+#     Weil die REGEL eine andere ist, und eine Regel, die anders ist,
+#     gehoert in eine Datei, in der man sie lesen kann.
+#
+#     zepos-desktop nennt, was die erzeugte Konfiguration selbst startet
+#     oder was eine Standardbindung braucht. Das ist eine Frage, die die
+#     Vorlagen beantworten: steht das Programm in einem exec-once oder in
+#     einem bind, dann muss es da sein, sonst nicht.
+#
+#     Hier gilt: EINE Anwendung je Aufgabe, und die Aufgabe muss zu
+#     denen gehoeren, ohne die ein Schreibtisch keiner ist. Das ist eine
+#     Frage, die keine Vorlage beantwortet - sie ist eine Entscheidung
+#     der Distribution. Apple liefert Safari, Finder und Mail; nicht vier
+#     Browser und nicht keinen. Der Ursprung dieses Projekts war die
+#     Konfiguration eines einzelnen Schreibtischs und durfte alles
+#     mitnehmen, was dort lag. Eine Distribution muss begruenden, was
+#     mitkommt.
+#
+#     zepos-desktop haengt trotzdem an diesem Paket, und das ist kein
+#     Widerspruch, sondern §7.4: SUPER+E, SUPER+T und die Druckerzeile
+#     der Kontrollzentrale zeigen nach dieser Aenderung auf Programme von
+#     hier. Eine Taste, die nichts tut, ist die schlimmste Folge, die
+#     ZepOS erzeugen kann, weil niemand sie meldet - also darf die Kante
+#     nicht fehlen.
+#
+# DIE ZWEITE REGEL: GTK4, UND SIE HAT DIE AUSWAHL ENTSCHIEDEN
+#     Der Nutzer am selben Tag: "wir nutzen global gtk4 ist das klar für
+#     alles wenn die packete das nicht können müssen wir das selber
+#     bauen." Und im selben Atemzug: "wir wollen professioneller wirken
+#     wie Apple OS".
+#
+#     Das ist dieselbe Forderung, zweimal gesagt. Eine GTK4/libadwaita-
+#     Anwendung liest ~/.config/gtk-4.0/gtk.css, und diese Datei erzeugt
+#     ZepOS aus src/brand.py (Route gtk4-colors-config). Eine GTK3-
+#     Anwendung liest sie nicht - sie liest ~/.config/gtk-3.0/gtk.css,
+#     mit anderen Farbnamen. Zwei Werkzeugfamilien sind damit zwangslaeu-
+#     fig zwei Kopien der Marke, und zwei Kopien einer Farbe sind eine
+#     Farbe, die auseinanderlaeuft. Genau daran ist der Ursprung
+#     gescheitert: dort standen Catppuccin-Werte an drei Stellen, und
+#     `warning` war an zweien #f9e2af und an der dritten #fab387.
+#
+#     Deshalb steht hinter jedem Namen unten eine Messung des Toolkits,
+#     und deshalb fehlen unten Namen, die der Nutzer kennt.
+#
+# WAS ABSICHTLICH FEHLT, UND WARUM
+#     firefox stand hier bis zum 11.08.2026 unter "fehlt": er traegt
+#     gtk3, und die Regel des Tages hiess "global GTK4". Diese Datei
+#     lieferte deshalb epiphany aus, den einzigen GTK4-Browser im
+#     Schnappschuss, und bot firefox als Haken im Installer an.
+#
+#     Der Nutzer hat die Regel daraufhin am selben Tag praezisiert:
+#
+#         "was externe dienste und pakete angeht koennen wir das nicht
+#          verhindern daher darf dort gtk3 verwendet werden"
+#
+#     Sie gilt den Oberflaechen, die ZepOS SELBST baut. firefox ist
+#     seither harte Abhaengigkeit, epiphany und der Haken sind weg. Der
+#     Preis steht bei der Zeile: sein Fenster nimmt die 45
+#     libadwaita-Farben nicht an.
+#
+#     chromium 151.0.7922.71-1 traegt ebenfalls gtk3 und kommt trotzdem
+#     nicht mit - nicht wegen des Toolkits, sondern weil EINE Anwendung
+#     je Aufgabe die Regel dieses Pakets ist.
+#
+#     brave-bin, microsoft-edge-stable-bin, sublime-text-4, ferdium-bin,
+#     onlyoffice-bin, ncspot als AUR-Paket: Spec §4.3 schliesst das AUR
+#     aus. `tar tzf extra.db` zaehlt 14860 Namen und keinen davon.
+#
+#     thunar 4.20.9-1: haengt ueber libxfce4ui an GTK3. Es stand bis
+#     heute als optdepend hier und war das Ziel von SUPER+E - eine
+#     Bindung auf ein Programm, das ZepOS nicht installiert.
+#     dolphin, ark, gwenview: Qt6. Ein drittes Werkzeug neben GTK4 waere
+#     eine dritte Kopie der Marke; kdeglobals und BreezeDark.colors
+#     zeigen im Baum schon, wie das aussieht - sie tragen bis heute
+#     Breeze-Grau und keine einzige Farbe aus brand.py.
+#     eog 50.2-1, xarchiver, gnome-disk-utility 46.1-3, gparted 1.8.1-2,
+#     system-config-printer 1.5.18-6, evince: GTK3, alle gemessen.
+#     vlc 3.0.23_2-9: Qt5.
+#
+#     ncspot 1.3.4-1 IST im Schnappschuss und kommt trotzdem nicht mit.
+#     Ein Musikdienst-Client mit Kontozwang ist der Schreibtisch des
+#     Ursprungs und keine Aussage einer Distribution. Die Bindung
+#     SUPER+N, die ihn startete, entfaellt mit ihm - eine Bindung ohne
+#     Programm waere genau der Fehler, den §7.4 verbietet.
+#
+#     gnome-calculator 50.0-1 ist GTK4 und fehlt trotzdem: nichts in
+#     ZepOS zeigt darauf, und "es ist auf der Marke" ist kein Grund, ein
+#     Paket zu installieren. Auswaehlen heisst auch weglassen.
+#
+#     Eine Partitionsoberflaeche fehlt, und dafuer gibt es keinen Ersatz:
+#     im Schnappschuss steht kein GTK4-Werkzeug dieser Art. Partitioniert
+#     wird mit dem ZepOS-Installer; Wechselmedien haengt der Dateimanager
+#     ueber udisks2 selbst ein (kommt mit nautilus ueber gvfs); was die
+#     Platte fuellt, sagt baobab. Das ist die Aufgabe, aufgeteilt auf
+#     das, was es gibt - nicht ein GTK3-Fenster, das so tut, als waere
+#     die Luecke keine.
+#
+# DIE EINE GTK3-FLAECHE, DIE TROTZDEM MITKOMMT
+#     xdg-user-dirs-gtk 0.16-1 haengt an GTK3 und ist eine HARTE
+#     Abhaengigkeit von nautilus - es gibt keinen Weg, das eine ohne das
+#     andere zu haben. Es zeigt hoechstens einmal etwas an, naemlich beim
+#     ersten Anmelden nach einem Sprachwechsel, wenn es fragt, ob
+#     ~/Dokumente umbenannt werden soll. Das ist gemessen und wird hier
+#     benannt statt verschwiegen: die Regel ist eingehalten, so weit die
+#     offiziellen Quellen sie einhalten lassen, und nicht weiter.
+#
+# WAS DAS KOSTET
+#     Gemessen gegen den angehefteten Schnappschuss 2026/08/04, als
+#     Huelle ueber core und extra, gegen eine Grundlinie aus der
+#     archinstall-Basis plus zepos-desktop (469 Pakete, 1022,7 MiB
+#     Download, 2,7 GiB installiert):
+#
+#         diese Liste       +95 Pakete   +107,4 MiB   +436,6 MiB
+#
+#     Das Medium waechst dabei NICHT. Die Offline-Ablage auf der ISO
+#     traegt nur ZepOS' eigene Pakete (installer/core/source.py:
+#     OFFLINE_REPO_URL bewegt ausschliesslich [zepos]); die Basis kommt
+#     in beiden Faellen ueber das Netz aus dem angehefteten Schnappschuss.
+#     Dieses Paket selbst besitzt eine Datei, die LICENSE.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-apps
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="Die Anwendungsauswahl von ZepOS: eine je Aufgabe, alle auf GTK4"
+arch=('any')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+depends=(
+    # --- der Browser -------------------------------------------------
+    # firefox 153.0.1-1. Er traegt gtk3, und das ist hier KEIN Verstoss
+    # gegen die GTK4-Regel.
+    #
+    # Diese Datei hatte zuerst epiphany, mit der Begruendung, firefox
+    # falle unter die Regel. Der Nutzer hat die Regel daraufhin am
+    # 11.08.2026 praezisiert:
+    #
+    #     "was externe dienste und pakete angeht koennen wir das nicht
+    #      verhindern daher darf dort gtk3 verwendet werden"
+    #
+    # Sie gilt also fuer die Oberflaechen, die ZepOS SELBST baut -
+    # Installer, Anmeldung, Leiste, Dock, Auswahlfenster, Abmeldemaske.
+    # Eine fremde Anwendung, die es nur in GTK3 gibt, ist kein Grund,
+    # dem Nutzer den Browser vorzuenthalten, den er zweimal beim Namen
+    # genannt hat.
+    #
+    # Der Preis steht trotzdem hier, weil er sichtbar sein wird:
+    # firefox nimmt die 45 libadwaita-Farben aus
+    # gtk4-colors-config.template NICHT an - sie gelten fuer GTK4. Sein
+    # Fenster wird sich vom Rest des Systems unterscheiden, bis jemand
+    # ein GTK3-Blatt oder ein firefox-Thema dazulegt. Das ist eine
+    # eigene Aufgabe und keine Zeile hier.
+    'firefox'
+
+    # --- der Dateimanager --------------------------------------------
+    # nautilus 50.2.2-1, GTK4 + libadwaita. Ziel von SUPER+E und des
+    # Knopfes im Datentraeger-Widget (ags-disk.template). Bringt gvfs und
+    # damit udisks2 mit, also das Einhaengen von Wechselmedien.
+    'nautilus'
+
+    # --- der Dateiauswahldialog --------------------------------------
+    # Und das ist die Zeile mit dem besten Verhaeltnis in dieser Datei.
+    #
+    # "Datei oeffnen" ist die Flaeche, die ein Nutzer am haeufigsten
+    # sieht und die am wenigsten nach einer Anwendung aussieht - sie
+    # gehoert dem Portal, nicht dem Programm, das sie aufruft. Bisher
+    # zeichnete sie xdg-desktop-portal-gtk, und das ist GTK3 (depends
+    # nennt gtk3): der eine Dialog, den jede Anwendung teilt, war der
+    # eine, der die Marke nicht trug.
+    #
+    # xdg-desktop-portal-gnome 50.0-1 ist die GTK4/libadwaita-Fassung
+    # und kostet fast nichts, weil ihre schwere Abhaengigkeit nautilus
+    # ist und nautilus ohnehin eine Zeile hoeher steht: gemessen +0,2 MiB
+    # Download und +0,9 MiB installiert gegenueber derselben Liste ohne
+    # sie. xdg-desktop-portal-gtk bleibt daneben stehen - das GNOME-
+    # Portal fordert es selbst an (>=1.10.0-2) und traegt nur einen Teil
+    # der Schnittstellen; es ist die Rueckwand, nicht mehr die Flaeche.
+    'xdg-desktop-portal-gnome'
+
+    # --- Archive -----------------------------------------------------
+    # file-roller 44.7-1, GTK4 + libadwaita. Haengt an
+    # libnautilus-extension, sitzt also im Kontextmenue des
+    # Dateimanagers, statt ein zweites Fenster zu sein, das man erst
+    # suchen muss. Das ist der Unterschied, den "wie Apple OS" meint.
+    'file-roller'
+
+    # --- Bilder, Dokumente, Medien -----------------------------------
+    'loupe'              # 50.0-1, GTK4 + libadwaita. eog ist GTK3.
+    'papers'             # 50.2-1, GTK4 + libadwaita. evince ist GTK3.
+    # celluloid 0.30-2, GTK4 + libadwaita, eine Oberflaeche fuer mpv -
+    # und mpv kommt damit mit. vlc waere Qt5, totem gibt es nicht mehr.
+    'celluloid'
+
+    # --- Text --------------------------------------------------------
+    # gnome-text-editor 50.1-1, GTK4 + libadwaita. Ziel von SUPER+T.
+    # Vorher stand dort `sub`, ein Symlink auf sublime-text-4 aus dem
+    # AUR, den install-system.sh in setup_sublime_symlink() anlegte - auf
+    # jedem ZepOS eine Taste ohne Programm.
+    'gnome-text-editor'
+
+    # --- Datentraeger ------------------------------------------------
+    # baobab 50.0-1, GTK4 + libadwaita. Das Widget zeigt den Ring, das
+    # hier sagt, warum er voll ist.
+    'baobab'
+
+    # --- der Assistent ------------------------------------------------
+    # zepos-claude-code. GEMELDET am 13.08.2026: "kann man claude code
+    # auch bei ZepOS immer direkt vor installieren direkt zu beginn".
+    #
+    # Er steht hier und nicht unter optdepends, weil "immer" genau das
+    # heisst - pacman installiert optdepends nicht, und ein Eintrag im
+    # Starter ohne Programm dahinter ist Spec 7.4.
+    #
+    # Das Rezept daneben erklaert, warum die Binaerdatei direkt aus der
+    # npm-Registry kommt statt ueber `npm install` oder das AUR, und was
+    # sie kostet: rund 310 MiB entpackt, der groesste einzelne Zuwachs,
+    # den ZepOS bisher bekommen hat.
+    'zepos-claude-code'
+
+    # --- der Rechner --------------------------------------------------
+    # gnome-calculator 50.0-1. GEMELDET am 13.08.2026: "es fehlt ein
+    # calculator".
+    #
+    # Er ist GTK4 und libadwaita - `pacman -Si` nennt gtk4, libadwaita
+    # und gtksourceview5 und kein gtk3 -, faellt also nicht unter die
+    # Ausnahme, die firefox braucht. Von den Rechnern in den offiziellen
+    # Quellen ist er der einzige, der das ohne Umweg erfuellt: galculator
+    # ist GTK3, qalculate-gtk ebenso, und kcalc zoege halb KDE nach.
+    #
+    # Eine Aufgabe, eine Anwendung - dieselbe Regel wie bei allen
+    # anderen hier, und tests/packaging/test_apps.py haelt sie fest.
+    'gnome-calculator'
+
+    # --- die Systemueberwachung ---------------------------------------
+    # btop 1.4.5-1, aus [extra] im angehefteten Schnappschuss
+    # 2026/08/04.
+    #
+    # GEMELDET am 12.08.2026, zweimal im selben Satz: "akku anzeige
+    # fehlt btop in der waybar mikrofon und lautstaerke fehlt", und
+    # vorher schon als fehlendes Paket. Er stand in install-system.sh des
+    # Ursprungs und ist bei der Auswahl vom 12.08. herausgefallen.
+    #
+    # WARUM ER UNTER DIESE REGEL FAELLT
+    #     "Eine Anwendung je Aufgabe, und die Aufgabe muss zu denen
+    #     gehoeren, ohne die ein Schreibtisch keiner ist." Die Aufgabe
+    #     heisst: sehen, was den Rechner gerade beschaeftigt, und einen
+    #     Prozess beenden, der nicht mehr antwortet. Ohne sie bleibt nur
+    #     der Ausschalter. Zweite Anwendung fuer dieselbe Aufgabe gibt es
+    #     keine - htop und gnome-system-monitor kommen nicht mit.
+    #
+    # UND ER IST NICHT NUR EINE AUSWAHL, SONDERN EINE KANTE
+    #     ags-bar.template oeffnet ihn mit dem linken Klick auf das
+    #     Hardware-Modul (`kitty -e btop`). Das ist zugleich die Regel
+    #     von zepos-desktop - was die erzeugte Konfiguration nennt, muss
+    #     da sein -, und sie war hier verletzt: GEMESSEN am 12.08.2026
+    #     fand `grep -rn btop` ueber den ganzen Baum GENAU EINE Zeile,
+    #     naemlich jene, und kein Rezept nannte das Paket.
+    #
+    # KEIN GTK-FENSTER, also keine Toolkit-Frage: btop zeichnet in ein
+    # Terminal, und das Terminal ist kitty aus zepos-desktop. Es bringt
+    # kein X11- und kein GTK3-Paket mit; seine Abhaengigkeiten sind
+    # gcc-libs, libdrm, glibc.
+    'btop'
+
+    # --- das Terminal ------------------------------------------------
+    # GEMELDET am 17.08.2026: "es fehlt auch noch ein terminal icon".
+    #
+    # kitty WAR schon da - als Abhaengigkeit von zepos-desktop ("the
+    # terminal every terminal bind opens"). Installiert war es also
+    # immer; im Dock stand es nie, denn die angeheftete Liste liest
+    # src/apps.py aus GENAU DIESEM depends-Block und aus keinem anderen
+    # Rezept (from_recipe, _DEPENDS_BLOCK).
+    #
+    # Es hier ein zweites Mal zu nennen ist kein Versehen: pacman stoert
+    # eine Abhaengigkeit nicht, die zwei Pakete zugleich erklaeren, und
+    # dies ist die eine Zeile, die entscheidet, ob ein Terminal im Dock
+    # steht. Die Alternative waere ein Sonderfall in src/apps.py gewesen
+    # - eine zweite Quelle fuer dieselbe Liste, und damit die Sorte
+    # Naht, an der zwei Antworten auseinanderlaufen.
+    #
+    # Sein Platz: neben btop. Das Hardware-Modul oeffnet btop mit
+    # `kitty -e btop`, die beiden gehoeren ohnehin zusammen.
+    'kitty'
+
+    # --- der Drucker -------------------------------------------------
+    # Kein Fenster, also keine Toolkit-Frage: die Oberflaeche ist unsere.
+    # printer-manager-config.template ruft lpstat, lpinfo und lpadmin,
+    # ags-network-scripts.template ruft `lpstat -p` fuer die Druckerzeile
+    # der Kontrollzentrale. Beide kommen aus cups, und cups stand
+    # nirgends - die Zeile in der Kontrollzentrale meldete deshalb auf
+    # jeder Installation "Kein Drucker", und zwar auch dann, wenn einer
+    # im Netz stand. Genau die Regel von zepos-desktop, nur bisher nicht
+    # angewandt: die erzeugte Konfiguration nennt das Programm, also
+    # installiert das Paket es.
+    'cups'
+)
+
+package() {
+    # Wie bei zepos-desktop: ein Metapaket besitzt eine Datei, damit
+    # `pacman -Qo` es findet und jemand herausbekommen kann, was diese
+    # Maschine zusammengesetzt hat.
+    install -Dm644 "$_zepos_repo/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # DER ABDRUCK DIESER LISTE, fuer alles, was sie auf der Maschine
+    # lesen muss.
+    #
+    # Das Dock heftet die Anwendungen dieser Auswahl an (src/apps.py,
+    # src/templates/ags-dock.template). Im Checkout liest es dieses
+    # Rezept; auf einer Installation gibt es kein packaging/, und die
+    # Alternativen waeren beide schlechter gewesen: die Liste ein zweites
+    # Mal in eine Vorlage schreiben - dann veraltet sie beim ersten
+    # Tausch -, oder pacman befragen - dann haengt eine erzeugte
+    # Konfiguration an der Sprache von `pacman -Qi`.
+    #
+    # Hier wird sie aus "${depends[@]}" geschrieben, also aus genau der
+    # Zeile darueber. Sie KANN nicht abweichen; sie ist derselbe Satz in
+    # einer Datei statt in einem Array.
+    printf '%s\n' "${depends[@]}" > "$srcdir/shipped-applications"
+    install -Dm644 "$srcdir/shipped-applications" \
+        "$pkgdir/usr/share/zepos/shipped-applications"
+}

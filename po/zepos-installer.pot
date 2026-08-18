@@ -1,0 +1,628 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: zepos-installer\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: \n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: installer/core/model.py
+msgid "unsupported schema_version {version}, expected {expected}"
+msgstr ""
+
+#: installer/core/validate.py
+msgid "At least one user account must be created."
+msgstr ""
+
+#: installer/core/validate.py
+msgid "A user account has no name."
+msgstr ""
+
+#: installer/core/validate.py
+msgid "The password for '{user}' is shorter than {minimum} characters."
+msgstr ""
+
+#: installer/core/validate.py
+msgid "The hostname may contain only letters, digits and hyphens, and may not start or end with a hyphen."
+msgstr ""
+
+#: installer/core/validate.py
+msgid "No disk was selected."
+msgstr ""
+
+#: installer/core/validate.py installer/core/translate.py
+msgid "The selected disk is too small. At least {minimum} MiB are required."
+msgstr ""
+
+#: installer/core/translate.py
+msgid "No target disk was selected."
+msgstr ""
+
+#: installer/core/validate.py
+msgid "No password was given for the wireless network."
+msgstr ""
+
+#: installer/core/passwords.py
+msgid "Could not run openssl to hash the password: {reason}"
+msgstr ""
+
+#: installer/core/passwords.py
+msgid "Hashing the password failed: {reason}"
+msgstr ""
+
+#: installer/core/wifi.py
+msgid "Could not run iwctl: {reason}"
+msgstr ""
+
+#: installer/core/wifi.py
+msgid "iwctl {args} failed: {reason}"
+msgstr ""
+
+#: installer/core/netprofile.py
+msgid "Refusing to write a wireless profile without an SSID."
+msgstr ""
+
+#: installer/core/netprofile.py
+msgid "The wireless network name contains control characters."
+msgstr ""
+
+#: installer/core/netprofile.py
+msgid "The wireless password contains control characters."
+msgstr ""
+
+#: installer/core/netprofile.py
+msgid "The wireless network name contains no characters usable in a profile filename."
+msgstr ""
+
+#: installer/core/netprofile.py
+msgid "The wireless network name is too long to use as a profile filename."
+msgstr ""
+
+#: installer/core/runner.py
+msgid "Could not run archinstall: {reason}"
+msgstr ""
+
+#: installer/core/disks.py
+msgid "Could not run lsblk: {reason}"
+msgstr ""
+
+#: installer/core/disks.py
+msgid "lsblk failed: {reason}"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Choice"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Please enter one of the offered numbers."
+msgstr ""
+
+#: installer/tui/app.py
+msgid "The password is too short. At least {minimum} characters are required."
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Select language"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "German"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "English"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Skip"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Select wireless network"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Password for {ssid}"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Select installation disk"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Hostname"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Username"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Password"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Root password"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Timezone"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Location for the weather widget"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Enable ZepOS plugins?"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Yes"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "No"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Summary"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Hostname: {value}"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Disk: {value}"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Username: {value}"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Timezone: {value}"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Start installation now?"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Could not list disks: {reason}"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "No installable disk was found."
+msgstr ""
+
+#: installer/tui/app.py
+msgid "The installation cannot start:"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Installation cancelled."
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Starting installation."
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Repeat the password"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "The passwords do not match."
+msgstr ""
+
+#: installer/tui/app.py
+msgid "This entry may not be empty."
+msgstr ""
+
+#: installer/tui/app.py
+msgid "No disk is large enough to install ZepOS. At least {minimum} MiB are required."
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Install ZepOS"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Back"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Next"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Install"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Network"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "User"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "ZepOS Options"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "This erases the entire disk."
+msgstr ""
+
+#: installer/gui/pages.py installer/tui/app.py
+msgid "Installation completed successfully."
+msgstr ""
+
+#: installer/gui/pages.py installer/tui/app.py
+msgid "Installation failed (exit code {code})."
+msgstr ""
+
+#: installer/bin/zepos-install
+msgid "The graphical interface could not start ({reason})."
+msgstr ""
+
+#: installer/bin/zepos-install
+msgid "Falling back to the text interface."
+msgstr ""
+
+#: installer/core/netprofile.py
+msgid "The wireless profile is missing from the installed system: {path}"
+msgstr ""
+
+#: installer/core/netprofile.py
+msgid "The wireless profile in the installed system is readable by others: {path}"
+msgstr ""
+
+#: installer/core/runner.py
+msgid "The selected disk {device} is no longer available. It may have been unplugged, or it may now be mounted."
+msgstr ""
+
+#: installer/core/runner.py
+msgid "The disk {device} is not the one that was selected: its size has changed since then."
+msgstr ""
+
+#: installer/core/firmware.py
+msgid "ZepOS can only be installed on a computer started in UEFI mode. This computer started in BIOS mode. ZepOS has never been tested that way, and an installation would erase the disk before anybody could find out whether the result starts."
+msgstr ""
+
+#: installer/tui/app.py installer/gui/pages.py
+msgid "Nothing on the disk {device} was changed."
+msgstr ""
+
+#: installer/core/runner.py
+msgid "The system was installed, but a final step did not finish: {reason}"
+msgstr ""
+
+#: installer/gui/pages.py
+msgid "This erases the entire disk {device}."
+msgstr ""
+
+#: installer/gui/pages.py
+msgid "Installation completed"
+msgstr ""
+
+#: installer/gui/pages.py
+msgid "Installation failed"
+msgstr ""
+
+#: installer/gui/pages.py installer/tui/app.py
+msgid "The installation could not be carried out: {reason}"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "ZepOS is being installed."
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Please do not switch the computer off."
+msgstr ""
+
+#: installer/gui/app.py
+msgid "OK"
+msgstr ""
+
+#: installer/core/wifi.py
+msgid "No wireless adapter was found."
+msgstr ""
+
+#: installer/core/wifi.py
+msgid "Connected to {ssid}, but no connection to the internet was found. The installation continues from the offline package source."
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Try the wireless network again?"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Connecting to the wireless network."
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Wireless network"
+msgstr ""
+
+#: installer/core/passwords.py
+msgid "The password contains control characters."
+msgstr ""
+
+#: installer/core/passwords.py
+msgid "Hashing the password produced more than one hash."
+msgstr ""
+
+#: installer/core/disks.py
+msgid "Disk"
+msgstr ""
+
+#: installer/core/disks.py
+msgid "removable"
+msgstr ""
+
+#: installer/core/disks.py
+msgid "no partitions"
+msgstr ""
+
+#: installer/core/disks.py
+msgid "unknown"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Step {position} of {total}"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Installing"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Scan again"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Searching for networks…"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Network name (SSID)"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Other network (enter the name)"
+msgstr ""
+
+#: installer/core/disks.py
+msgid "{count} partition"
+msgid_plural "{count} partitions"
+msgstr[0] ""
+msgstr[1] ""
+
+#: installer/gui/app.py
+msgid "{count} network found"
+msgid_plural "{count} networks found"
+msgstr[0] ""
+msgstr[1] ""
+
+#: installer/gui/app.py
+msgid "Close"
+msgstr ""
+
+#: installer/core/wifi.py
+msgid "Could not store the wireless passphrase: {reason}"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "{percent}% - please do not switch the computer off."
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Restart now"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Restart failed"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "The system did not accept the restart request."
+msgstr ""
+
+# --- UI-5: die Einteilung der Platte ----------------------------------
+
+#: installer/core/layout.py
+msgid "EFI system partition ({mountpoint})"
+msgstr ""
+
+#: installer/core/layout.py
+msgid "Swap"
+msgstr ""
+
+#: installer/core/layout.py
+msgid "no mount point"
+msgstr ""
+
+#: installer/core/layout.py
+msgid "{start} to {end}"
+msgstr ""
+
+#: installer/core/layout.py
+msgid "Please enter a size, for example 20G."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "There is no free space left on the disk."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "A size needs a unit, for example 20G or 512M. The word rest means all remaining space."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "A partition must be at least 1 MiB."
+msgstr ""
+
+#: installer/core/layout.py installer/gui/pages.py
+msgid "{wanted} does not fit; at most {available} are free."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "The layout is empty. Nothing would be installed."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "There is no EFI system partition. ZepOS cannot boot without one."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "There is no root partition. Add one with the mount point /."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "There is more than one EFI system partition."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "There is more than one root partition."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "The EFI system partition must be formatted as {expected}, not {actual}."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "The EFI system partition is only {size}; a boot loader needs at least {minimum}."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "The root partition is only {size}; at least {minimum} are required."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "The root partition cannot be swap space."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "Two partitions are mounted at {mountpoint}."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "A partition starts before {minimum}; the GPT header is there."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "{first} and {second} overlap."
+msgstr ""
+
+#: installer/core/layout.py
+msgid "{partition} runs past the end of the disk; only {available} of {total} can be used."
+msgstr ""
+
+#: installer/gui/pages.py
+msgid "There is no partition on this disk."
+msgstr ""
+
+#: installer/gui/pages.py
+msgid "{count} partition will be deleted:"
+msgid_plural "{count} partitions will be deleted:"
+msgstr[0] ""
+msgstr[1] ""
+
+#: installer/gui/pages.py
+msgid "The following will be created:"
+msgstr ""
+
+#: installer/gui/pages.py
+msgid "{free} of {total} still free."
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Partitioning"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "{mountpoint} (EFI system partition)"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Swap (no mount point)"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "New layout"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Use suggestion"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Clear the disk"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Add a partition"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Mount point"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "File system"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Size (for example 20G, or rest)"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Remove"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Partition: {value}"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Office applications"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "LibreOffice with German and English dictionaries, about 646 MB. It has no GTK4 version, so it is the one window that does not carry the ZepOS colours."
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Development tools"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "base-devel and git, for building software, about 440 MB."
+msgstr ""
+
+#: installer/gui/app.py
+msgid "Install Firefox as well"
+msgstr ""
+
+#: installer/gui/app.py
+msgid "ZepOS ships GNOME Web, the only browser built on GTK4. Firefox is built on GTK3 and will not follow the ZepOS colours, about 292 MB."
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Install office applications (LibreOffice, about 646 MB)?"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Install development tools (base-devel and git, about 440 MB)?"
+msgstr ""
+
+#: installer/tui/app.py
+msgid "Install Firefox as well (about 292 MB)?"
+msgstr ""

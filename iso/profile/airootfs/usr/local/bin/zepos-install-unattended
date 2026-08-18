@@ -1,0 +1,496 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# One unattended ZepOS installation, from inside the live environment.
+#
+# WHAT THIS SCRIPT IS FOR
+#     The installer's core has 34 test call sites and every one of them
+#     runs dry or against a fake. Nothing had ever partitioned a disk,
+#     and no installed system had ever been booted. This is the shortest
+#     path from a live medium to that answer - and, just as important, to
+#     an answer when it is "no": every phase reports to the serial
+#     console before the next one starts, so a run that dies leaves a
+#     record of where.
+#
+# WHY IT DRIVES install() AND BUILDS NO COMMAND LINE OF ITS OWN
+#     README.md: "an unattended installation needs only a serialized
+#     model rather than a second code path - InstallConfig.from_dict()
+#     plus installer.core.runner.install() is the whole of it." A script
+#     that assembled its own `archinstall` invocation would test a
+#     command line that ships nowhere; --mountpoint and --offline would
+#     then appear in no real run at all, and a wrong spelling of either
+#     kills every installation at the argument parser while every mocked
+#     test keeps passing. The same reasoning tests/integration/
+#     test_dry_run.sh already applies to the dry run.
+#
+# WHY IT RUNS AS A SYSTEM SERVICE AND NOT FROM THE LOGIN SHELL
+#     archinstall requires root - it says so and exits 1 otherwise - and
+#     this image has no sudo: `sudo` is not in packages.x86_64 and
+#     zepos-desktop, which would pull it in, is what gets installed onto
+#     the TARGET rather than into the live medium. The live user exists
+#     to run a desktop session, and giving it passwordless root so that
+#     it can erase disks would be a change to the thing under test.
+#
+# WHAT IT DELIBERATELY DOES NOT DO
+#     It does not work around anything. If install() refuses, the
+#     refusal is reported and the run stops there; nothing is retried
+#     with a check removed. An image that repairs its own installation
+#     before performing it would measure the repair.
+set -u
+
+SERIAL=/dev/ttyS0
+
+# Root's own directory rather than a login session's: this runs as a
+# system service and has no XDG_RUNTIME_DIR. On tmpfs like /run/user, so
+# nothing here survives the poweroff at the end - which is correct, since
+# all of it leaves on the evidence disk first.
+EVIDENCE=/run/zepos-install
+
+# The two disks the harness attaches, found by the serial it gave them
+# and never by position. /dev/vda is a guess about enumeration order that
+# happens to be right while there is exactly one virtio disk; this run
+# has two, and the next boot has two of which one is the system disk. A
+# tar written to the wrong one of those would destroy the very thing
+# being measured.
+TARGET_DISK=/dev/disk/by-id/virtio-zepos-target
+EVIDENCE_DISK=/dev/disk/by-id/virtio-zepos-evidence
+
+# The serialized model, committed in the profile so the run is
+# repeatable, and completed at run time with the two facts that can only
+# be known here: which device the target disk actually is, and how big it
+# is. runner.install() re-enumerates the disks immediately before the
+# erase and compares BOTH against the configuration, so a guessed size
+# would be refused - correctly.
+CONFIG=/usr/local/share/zepos-install/unattended-install.json
+
+# Written into the working profile by iso/build.sh out of
+# iso/profile/pacman.conf, so the date is pinned in one place. See the
+# mirrorlist step below for what it is for.
+SNAPSHOT_FILE=/usr/local/share/zepos-install/ala-snapshot
+
+TARGET=/mnt
+
+mkdir -p "$EVIDENCE"
+
+say() {
+    printf 'ZEPOS-SMOKE: %s\n' "$*"
+    printf 'ZEPOS-SMOKE: %s\n' "$*" >>"$EVIDENCE/progress.log"
+    printf 'ZEPOS-SMOKE: %s\n' "$*" >>"$SERIAL" 2>/dev/null || true
+}
+
+# --------------------------------------------------------------------
+# Is this an installation run at all?
+# --------------------------------------------------------------------
+# Two conditions, and both are needed.
+#
+#   /run/archiso   only the live medium has it. The INSTALLED system
+#                  boots from a disk carrying the same serial, and this
+#                  service is not copied into it - but if it ever were,
+#                  this is what stops a machine from reinstalling itself
+#                  over itself on every boot.
+#   the target     an installation with no disk to install onto is not a
+#                  failure, it is the ordinary session run of this image.
+if [[ ! -e /run/archiso ]]; then
+    say "not a live medium - refusing to install"
+    exit 0
+fi
+
+# Polled rather than assumed present the moment multi-user.target is
+# reached: the by-id symlink is made by a udev rule, and "the unit
+# started" and "udev has finished with the disk" are two different
+# events. Fifteen seconds is far more than the gap and costs nothing on
+# a session run, where the loop simply runs out.
+waited=0
+while [[ ! -b "$TARGET_DISK" && $waited -lt 15 ]]; do
+    sleep 1
+    waited=$(( waited + 1 ))
+done
+
+if [[ ! -b "$TARGET_DISK" ]]; then
+    say "no disk at $TARGET_DISK - this is a session run, nothing to install"
+    exit 0
+fi
+
+device="$(readlink -f "$TARGET_DISK")"
+size_bytes="$(blockdev --getsize64 "$device")"
+
+say "BEGIN $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+say "target $TARGET_DISK -> $device ($size_bytes bytes)"
+say "firmware $([[ -d /sys/firmware/efi ]] && echo UEFI || echo BIOS)"
+say "archinstall $(pacman -Q archinstall 2>&1)"
+
+# --------------------------------------------------------------------
+# Phase 1 - the mirrors the base system comes from
+# --------------------------------------------------------------------
+# The live medium's /etc/pacman.conf is the one the `pacman` package
+# ships: [core] and [extra] both say `Include = /etc/pacman.d/mirrorlist`,
+# and pacman-mirrorlist's file has every server commented out. So the
+# live environment can reach no Arch repository at all until this runs,
+# and `pacstrap` fails at its first `pacman -Syy`.
+#
+# iso/profile/pacman.conf's snapshot rather than a mirror, for spec
+# §8.4's first row - "Basissystem von den Arch-Spiegeln (ALA-Stichtag)" -
+# and for §8.7: two installations from one image have to produce the same
+# system, which a mirror list makes a function of the day.
+#
+# It reaches the TARGET as well, and that is the point rather than a side
+# effect: pacstrap(8) copies the host's mirrorlist into the new root
+# (copymirrorlist=1, read out of arch-install-scripts 31), so the pin the
+# image was built with is the pin the installed system keeps.
+say "PHASE mirrorlist"
+snapshot="$(<"$SNAPSHOT_FILE")"
+printf '# Pinned by ZepOS (spec 8.7): the Arch Linux Archive snapshot\n# this image was built against.\nServer = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' \
+    "$snapshot" >/etc/pacman.d/mirrorlist
+say "mirrorlist pinned to $snapshot"
+
+# --------------------------------------------------------------------
+# Phase 2 - a keyring, so that SigLevel = Required means something
+# --------------------------------------------------------------------
+# mkarchiso builds the image with `pacstrap -G`, so the live medium has
+# no pacman keyring at all - which is also why zepos-keyring's install
+# scriptlet skipped its own --populate while the image was being built
+# (it guards on `pacman-key -l`, and there was nothing to list).
+#
+# Without this every package pacstrap installs is refused: the ZepOS ones
+# for a key the machine has never been told to trust, and the Arch ones
+# for the same reason. `--populate` with no argument takes every keyring
+# in /usr/share/pacman/keyrings, which is archlinux.gpg from the pacman
+# dependency and zepos.gpg from the package this image installs for
+# exactly this moment.
+say "PHASE keyring"
+pacman-key --init >"$EVIDENCE/pacman-key.log" 2>&1
+pacman-key --populate >>"$EVIDENCE/pacman-key.log" 2>&1
+key_rc=$?
+say "pacman-key rc=$key_rc keys=$(pacman-key -l 2>/dev/null | grep -c '^pub' || echo 0)"
+
+# --------------------------------------------------------------------
+# Phase 3 - the installation
+# --------------------------------------------------------------------
+# A heartbeat, because install() sends archinstall's output to a file:
+# the graphical surface reads that file back while the installation runs,
+# and here it would otherwise mean twenty silent minutes on the serial
+# line, which is indistinguishable from a hang.
+say "PHASE install"
+(
+    while sleep 30; do
+        [[ -f "$EVIDENCE/archinstall.log" ]] || continue
+        printf 'ZEPOS-SMOKE: ... %s\n' \
+            "$(tail -n 1 "$EVIDENCE/archinstall.log" | tr -d '\r' | cut -c1-100)" \
+            >>"$SERIAL" 2>/dev/null || true
+    done
+) &
+heartbeat=$!
+
+python - "$CONFIG" "$device" "$size_bytes" "$EVIDENCE" "$TARGET" \
+    >"$EVIDENCE/driver.log" 2>&1 <<'PY'
+import json
+import sys
+from pathlib import Path
+
+# /usr/share/zepos-installer and not site-packages: `installer` is a
+# top-level name python-installer already owns there. The zepos-install
+# command resolves the same directory before its first import; this is
+# the same four lines for the same reason.
+sys.path.insert(0, "/usr/share/zepos-installer")
+
+from installer.core.model import InstallConfig
+from installer.core.runner import InstallationRefused, install
+from installer.core.source import probe
+
+config_path, device, size_bytes, evidence, target = sys.argv[1:6]
+
+data = json.loads(Path(config_path).read_text(encoding="utf-8"))
+cfg = InstallConfig.from_dict(data)
+
+# The two facts the committed file cannot carry. runner.install()
+# re-enumerates the disks immediately before the erase and refuses if
+# either the name or the byte count has moved since the choice was made,
+# so both have to be what lsblk reports right now rather than what
+# somebody wrote down.
+cfg.disk.device = device
+cfg.disk.size_bytes = int(size_bytes)
+
+warnings: list[str] = []
+
+
+def warn(message: str) -> None:
+    warnings.append(message)
+    print(f"WARNING {message}", flush=True)
+
+
+# The package source is PROBED, exactly as the shipping medium probes
+# it. That one word is the whole of this change and the reason for it.
+#
+# It used to read `source=PackageSource.OFFLINE`, hard-coded, under a
+# comment explaining correctly that nothing has ever been published to
+# https://zeptronit.github.io/ZepOS. The explanation was true and the
+# override was the defect: it made this run - the only installation that
+# had ever completed - take a branch the shipping medium cannot take, so
+# the shipping medium's 404 was invisible here until somebody drove that
+# image by hand and lost a partitioned disk to it. A test path that
+# differs from the real one in the one line that matters measures the
+# test path.
+#
+# probe() now asks the repository whose location it is deciding instead
+# of asking archlinux.org whether there is internet, so it answers
+# OFFLINE here for the right reason and will answer ONLINE by itself the
+# day packaging/publish.sh publishes. Either answer installs: the BASE
+# system comes over the network from the pinned ALA snapshot regardless,
+# because mirror_config() leaves mirror_regions empty, archinstall
+# therefore writes no mirrorlist of its own, and pacstrap uses the live
+# medium's - which phase 1 above pinned. That combination IS spec §8.4's
+# first row: base system from the Arch mirrors at the snapshot date,
+# ZepOS packages from the ISO's own repository.
+#
+# is_uefi is deliberately NOT injected. install() refuses on a machine
+# that started in BIOS mode, because to_archinstall_config() wires
+# systemd-boot to an EFI system partition unconditionally, and a run that
+# bypassed that check would be measuring a layout ZepOS does not build.
+source = probe()
+print(f"package source {source.value}", flush=True)
+
+try:
+    code = install(
+        cfg,
+        source=source,
+        dry_run=False,
+        target_root=Path(target),
+        log_path=Path(evidence) / "archinstall.log",
+        on_warning=warn,
+    )
+except InstallationRefused as refusal:
+    # The type carries a fact no message can: nothing on the target disk
+    # was touched. Worth printing as such, because after "Starting
+    # installation" it is the one thing that cannot be seen from outside.
+    print(f"REFUSED (the disk is unchanged): {refusal}", flush=True)
+    sys.exit(90)
+except Exception as failure:                       # noqa: BLE001
+    # Anything else may have left a partitioned disk behind, so it must
+    # NOT be reported as a refusal.
+    print(f"FAILED while archinstall was running: {failure!r}", flush=True)
+    sys.exit(91)
+
+print(f"install() returned {code}", flush=True)
+print(f"warnings {len(warnings)}", flush=True)
+sys.exit(code)
+PY
+install_rc=$?
+kill "$heartbeat" 2>/dev/null
+printf '%s\n' "$install_rc" >"$EVIDENCE/rc.install"
+say "install rc=$install_rc"
+sed -n '1,40p' "$EVIDENCE/driver.log" | while read -r line; do say "driver: $line"; done
+
+# Which branch probe() actually took, lifted out of the driver's own
+# output so it reaches the RESULT line and can be graded rather than
+# read. It matters now that it is a decision and not a constant: an
+# unpublished repository must produce `pkgsource=offline`, and the day
+# publishing happens the same run has to say `online` without anybody
+# editing this file.
+pkgsource="$(sed -n 's/^package source //p' "$EVIDENCE/driver.log" | head -n1)"
+
+# --------------------------------------------------------------------
+# Phase 4 - what the installed system was left pointing at (spec 8.5b)
+# --------------------------------------------------------------------
+# Read out of the target rather than asserted, and read even when the
+# installation failed: the file is the evidence either way, and §8.5b's
+# own test case is "nach der Installation pruefen, dass die pacman.conf
+# des Ziels keine file://-Quelle enthaelt".
+say "PHASE pacman.conf"
+if [[ -f "$TARGET/etc/pacman.conf" ]]; then
+    cp "$TARGET/etc/pacman.conf" "$EVIDENCE/target-pacman.conf"
+    cp "$TARGET/etc/pacman.d/mirrorlist" "$EVIDENCE/target-mirrorlist" 2>/dev/null
+    sections="$(grep -c '^\[zepos\]' "$TARGET/etc/pacman.conf" || true)"
+    servers="$(sed -n '/^\[zepos\]/,/^\[/{/^Server/p}' "$TARGET/etc/pacman.conf" \
+        | sed 's/^Server *= *//' | paste -sd, - || true)"
+    # ACTIVE sources only. A plain `grep -c 'file://'` reported 1 on the
+    # first installed system ZepOS ever produced, and the hit was
+    # pacman's own commented example (`#Server = file:///home/custompkgs`)
+    # - a count that says 1 when the answer is 0 cannot say anything when
+    # the answer is 1, which is the case §8.5b exists for.
+    file_urls="$(grep -cE '^[[:space:]]*Server[[:space:]]*=[[:space:]]*file://' \
+        "$TARGET/etc/pacman.conf" || true)"
+    say "target pacman.conf zepos-sections=${sections:-0} servers=${servers:-none} file-urls=${file_urls:-0}"
+else
+    say "target pacman.conf ABSENT"
+fi
+
+# --------------------------------------------------------------------
+# Phase 5 - make the installed system able to report on itself
+# --------------------------------------------------------------------
+# HARNESS SCAFFOLDING, and named as such. None of it is part of a ZepOS
+# installation; it exists so that the next boot - from the disk, with the
+# ISO removed - can answer the same question this image answers about
+# itself, in the guest's own words rather than in a screenshot somebody
+# interprets.
+#
+# Five pieces, each closing one gap between "a system is installed" and
+# "the system can say so":
+#
+#   the probe       the same two scripts this image uses, so the answer
+#                   is comparable rather than merely similar
+#   the update probe  a third script and a unit, for the question this
+#                   image CANNOT answer about itself: whether the machine
+#                   can reach the ZepOS repository its own pacman.conf
+#                   names and install out of it. A live medium installs
+#                   from file:///opt/zepos-repo, which is exactly the
+#                   source spec §8.5b replaces
+#   autologin       there is no display manager (spec §4.2) and nobody at
+#                   the keyboard
+#   two groups      /dev/ttyS0 is root:uucp and block devices are
+#                   root:disk, and the evidence leaves through both.
+#                   Written as sysusers.d because systemd-sysusers runs
+#                   at boot and the accounts already exist by then
+#   a serial console on the kernel command line, so that a boot which
+#                   dies before userspace still leaves a record. Without
+#                   it a failed first boot is a black screen.
+if [[ "$install_rc" -eq 0 && -d "$TARGET/usr" ]]; then
+    say "PHASE firstboot-probe"
+    user="$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["users"][0]["username"])' "$CONFIG")"
+    uid="$(awk -F: -v u="$user" '$1==u{print $3}' "$TARGET/etc/passwd")"
+    gid="$(awk -F: -v u="$user" '$1==u{print $4}' "$TARGET/etc/passwd")"
+    home="$(awk -F: -v u="$user" '$1==u{print $6}' "$TARGET/etc/passwd")"
+    say "probe user=$user uid=${uid:-none} home=${home:-none}"
+
+    install -Dm755 /usr/local/bin/zepos-smoke "$TARGET/usr/local/bin/zepos-smoke"
+    install -Dm755 /usr/local/bin/zepos-smoke-collect \
+        "$TARGET/usr/local/bin/zepos-smoke-collect"
+
+    # The update probe and its unit. Enabled through the target's own
+    # systemctl rather than by writing the .wants symlink by hand: a
+    # symlink written from outside is right until the unit gains an
+    # [Install] section that says something else, and `systemctl enable`
+    # is what reads that section.
+    install -Dm755 /usr/local/bin/zepos-smoke-update \
+        "$TARGET/usr/local/bin/zepos-smoke-update"
+    install -Dm644 /etc/systemd/system/zepos-update-probe.service \
+        "$TARGET/etc/systemd/system/zepos-update-probe.service"
+    arch-chroot "$TARGET" systemctl enable zepos-update-probe.service \
+        >>"$EVIDENCE/firstboot-probe.log" 2>&1
+    say "zepos-update-probe.service enabled rc=$?"
+
+    install -d "$TARGET/etc/systemd/system/getty@tty1.service.d"
+    cat >"$TARGET/etc/systemd/system/getty@tty1.service.d/autologin.conf" <<EOF
+# HARNESS SCAFFOLDING, written by zepos-install-unattended.
+[Service]
+ExecStart=
+ExecStart=-/usr/bin/agetty --autologin $user --noclear %I 38400 linux
+EOF
+
+    # Twice, and deliberately.
+    #
+    # gpasswd through arch-chroot is the one that is certainly in effect
+    # on the first boot. systemd-sysusers.service carries
+    # ConditionNeedsUpdate=/etc, which is true on a freshly installed
+    # system and would probably run - "probably" being the wrong word for
+    # the mechanism that decides whether the evidence of that boot can be
+    # written at all, since /dev/ttyS0 is root:uucp and block devices are
+    # root:disk.
+    #
+    # The sysusers.d file stays as the declarative record of what the
+    # memberships are for, and costs nothing if it has already happened.
+    cat >"$TARGET/etc/sysusers.d/zepos-firstboot-probe.conf" <<EOF
+# HARNESS SCAFFOLDING, written by zepos-install-unattended.
+# /dev/ttyS0 is root:uucp and block devices are root:disk; the evidence
+# of the first boot leaves through both.
+m $user uucp
+m $user disk
+m $user systemd-journal
+EOF
+    for group in uucp disk systemd-journal; do
+        arch-chroot "$TARGET" gpasswd -a "$user" "$group" \
+            >>"$EVIDENCE/firstboot-probe.log" 2>&1
+        say "gpasswd $user $group rc=$?"
+    done
+
+    if [[ -n "${home:-}" && -d "$TARGET$home" ]]; then
+        cat >"$TARGET$home/.bash_profile" <<'EOF'
+# HARNESS SCAFFOLDING, written by zepos-install-unattended.
+if [[ "$(tty)" == /dev/tty1 && -z "${ZEPOS_SMOKE_ENTERED:-}" ]]; then
+    export ZEPOS_SMOKE_ENTERED=1
+    exec /usr/local/bin/zepos-smoke
+fi
+EOF
+        chown "${uid:-1000}:${gid:-1000}" "$TARGET$home/.bash_profile"
+    else
+        say "probe home $TARGET$home is missing - no .bash_profile written"
+    fi
+
+    # Die serielle Konsole auf der Kernel-Zeile des Ziels.
+    #
+    # Hier stand eine Schleife ueber "$TARGET"/boot/loader/entries/*.conf,
+    # also systemd-boots Format. Seit installer/core/translate.py GRUB
+    # einrichtet, gibt es dieses Verzeichnis nicht mehr - die Schleife
+    # lief ins Leere, ohne ein Wort zu sagen, und der erste Start des
+    # installierten Systems haette seine Kernel-Meldungen nirgendwohin
+    # geschickt. Genau der stille Ausfall, den dieses Bild messen soll.
+    #
+    # GRUB liest /etc/default/grub.d/*.cfg nach der Hauptdatei
+    # (grub-mkconfig, Zeile 163), und 99- kommt nach dem 10- des Pakets.
+    #
+    # ERSETZT und nicht angehaengt: Archs Vorgabe ist
+    # "loglevel=3 quiet", und das ist das Gegenteil dessen, was ein
+    # Messlaeufer von einem Start wissen will, der die Sitzung nie
+    # erreicht.
+    install -Dm644 /dev/stdin \
+        "$TARGET/etc/default/grub.d/99-zepos-smoke-serial.cfg" <<'GRUBEOF'
+# HARNESS SCAFFOLDING, written by zepos-install-unattended.
+GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0,115200"
+GRUBEOF
+    if arch-chroot "$TARGET" grub-mkconfig -o /boot/grub/grub.cfg \
+            >>"$EVIDENCE/firstboot-probe.log" 2>&1; then
+        say "grub cmdline: $(grep -m1 -o 'console=ttyS0[^ ]*' \
+            "$TARGET/boot/grub/grub.cfg" || echo 'NICHT GESETZT')"
+    else
+        say "WARNUNG grub-mkconfig im Ziel scheiterte - der erste Start"
+        say "WARNUNG erzaehlt dann nichts auf der seriellen Leitung"
+    fi
+    cp -a "$TARGET/boot/grub/grub.cfg" "$EVIDENCE/target-grub.cfg" 2>/dev/null
+    ls -la "$TARGET/boot" >"$EVIDENCE/target-boot.txt" 2>&1
+    ls -la "$TARGET/boot/EFI" "$TARGET/boot/EFI"/* >>"$EVIDENCE/target-boot.txt" 2>&1
+fi
+
+# --------------------------------------------------------------------
+# Phase 6 - everything worth looking at afterwards
+# --------------------------------------------------------------------
+say "PHASE collect"
+lsblk -o NAME,SIZE,TYPE,FSTYPE,PARTLABEL,MOUNTPOINTS >"$EVIDENCE/lsblk.txt" 2>&1
+[[ -f "$TARGET/etc/fstab" ]] && cp "$TARGET/etc/fstab" "$EVIDENCE/target-fstab"
+[[ -d /var/log/archinstall ]] && cp -a /var/log/archinstall "$EVIDENCE/archinstall-logs"
+cp /etc/pacman.conf "$EVIDENCE/live-pacman.conf" 2>/dev/null
+cp /etc/pacman.d/mirrorlist "$EVIDENCE/live-mirrorlist" 2>/dev/null
+journalctl -b --no-pager >"$EVIDENCE/journal.txt" 2>&1
+if [[ -x "$TARGET/usr/bin/pacman" ]]; then
+    # The package list of the installed system, asked of the target's own
+    # database rather than of the live one.
+    pacman -Q --root "$TARGET" --dbpath "$TARGET/var/lib/pacman" \
+        >"$EVIDENCE/target-packages.txt" 2>&1
+    say "target packages $(wc -l <"$EVIDENCE/target-packages.txt" 2>/dev/null || echo 0)"
+fi
+
+say "RESULT install=${install_rc} pkgsource=${pkgsource:-unknown}" \
+    "zepos-sections=${sections:-?} file-urls=${file_urls:-?}" \
+    "servers=${servers:-none}"
+
+# --------------------------------------------------------------------
+# Hand it over, then stop the machine
+# --------------------------------------------------------------------
+# The unmount is not tidiness: the target's ext4 is still mounted when
+# archinstall exits (its Installer.__exit__ syncs but does not unmount),
+# and the run that follows this one boots that filesystem.
+sync
+umount -R "$TARGET" 2>>"$EVIDENCE/collect.log"
+say "umount rc=$?"
+
+if [[ -b "$EVIDENCE_DISK" ]]; then
+    if tar cf "$EVIDENCE_DISK" -C "$EVIDENCE" . </dev/null 2>>"$EVIDENCE/collect.log"; then
+        say "evidence written to $EVIDENCE_DISK"
+    else
+        say "evidence FAILED to write to $EVIDENCE_DISK"
+    fi
+else
+    say "no evidence disk at $EVIDENCE_DISK - the run is only as good as the serial log"
+fi
+
+say "DONE"
+sync
+systemctl poweroff

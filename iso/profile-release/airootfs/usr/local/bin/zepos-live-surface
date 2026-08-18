@@ -1,0 +1,21 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# The installer, inside the terminal, inside the compositor.
+#
+# Three lines with one job: run the shipped entry point and record that
+# it ran. zepos-live-session cannot see into the compositor - `cage`
+# exits 0 whether the program inside it installed a system or died on
+# its first import - so the exit code written here is the only thing
+# that tells the difference between "the graphical session came up and
+# the user used it" and "the graphical session came up empty", and the
+# second of those has to fall through to the console.
+#
+# /usr/bin/zepos-install and not one of the two surfaces directly: which
+# one runs is its decision, taken by trying (spec §8.5). Inside this
+# terminal both outcomes are visible - the GTK4 window opens over it, or
+# the reason it could not appears in it, followed by the text interface.
+set -u
+
+zepos-install
+printf '%s' "$?" >/run/zepos-install.rc

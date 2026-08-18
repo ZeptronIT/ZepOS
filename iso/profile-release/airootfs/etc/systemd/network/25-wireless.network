@@ -1,0 +1,26 @@
+# DHCP on a wireless interface, once iwd has joined a network.
+#
+# The installer's wireless step (spec §8.2, step 2) drives iwctl, and
+# iwctl only associates - it authenticates with the access point and
+# stops there, because iwd's own network configuration is off by default.
+# Without this file the user watches "connected" appear in the installer
+# and then has no address, which looks exactly like a wrong passphrase.
+#
+# The wired file next to this one carries the reasoning for using
+# systemd-networkd here rather than NetworkManager. The INSTALLED system
+# gets NetworkManager - archinstall's network_config type is "nm", and
+# installer/core/netprofile.py writes the wireless profile into it - so
+# the connection the user makes here follows them across the reboot.
+[Match]
+Type=wlan
+
+[Network]
+DHCP=yes
+
+[DHCPv4]
+# Below the wired metric of 100: a machine with both plugged in should
+# install over the cable.
+RouteMetric=600
+
+[IPv6AcceptRA]
+RouteMetric=600

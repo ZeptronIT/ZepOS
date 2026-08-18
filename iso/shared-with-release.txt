@@ -1,0 +1,78 @@
+# What the shipping profile takes from the smoke profile. An ALLOW-LIST.
+#
+# HOW THE TWO PROFILES RELATE
+#     iso/profile/          the smoke test harness. Autologs in, ships a
+#                           /etc/shadow, installs unattended from a file
+#                           with a root password in it, writes the
+#                           session's state to a raw disk, and puts
+#                           console=ttyS0 on the kernel command line.
+#     iso/profile-release/  the image a person can be handed. Boots into
+#                           the installer and carries none of the above.
+#
+#     They are not two copies. iso/build.sh --profile release assembles
+#     the shipping profile out of exactly the files named below plus
+#     everything in iso/profile-release/, which wins on any collision.
+#
+# WHY AN ALLOW-LIST AND NOT A LIST OF THINGS TO LEAVE OUT
+#     The difference between the two images is the safety-relevant part,
+#     and a deny-list gets that difference wrong by OMISSION: the next
+#     person who adds a file to iso/profile/ - a second collector, a
+#     second answer file, a rescue autologin - gets it into the shipping
+#     image unless they remember to exclude it, and nothing about their
+#     change looks wrong. With this list the same mistake produces an
+#     image that is MISSING something, which is a build that fails or an
+#     image that visibly does not work, not an image that quietly ships a
+#     known root password.
+#
+#     So: everything in iso/profile/ is harness by default. A file
+#     reaches the shipping image only by being written down here, on
+#     purpose, by somebody who had to think about it.
+#
+# WHAT MAY BE ADDED HERE
+#     Only files that carry no credential, no automatic login, no
+#     evidence channel and nothing that exists to be measured.
+#     tests/iso/test_release_profile.py checks every entry against those
+#     properties rather than trusting the list, and
+#     tests/iso/test_smoke_profile.py checks the same properties against
+#     the assembled shipping profile as a whole.
+#
+# Paths are relative to a profile root, one per line. Blank lines and
+# lines starting with # are ignored. Symlinks are copied as symlinks -
+# three of the entries below are one.
+
+# The Arch Linux Archive pin (spec §8.7) and the [zepos] repository
+# section. Both images install the same packages from the same snapshot;
+# an image whose pin drifted from the one that was smoke-tested would be
+# a different system with the same name.
+pacman.conf
+
+# UTF-8 and a keymap. Neither is a measurement: without a UTF-8 locale
+# the installer's own German strings come out as question marks, and
+# without a keymap the user types a password on a layout that is not
+# the one printed on their keys.
+airootfs/etc/locale.conf
+airootfs/etc/vconsole.conf
+
+# UTC, and the resolver stub systemd-resolved owns. The installer asks
+# for a timezone and writes the answer into the target; what the live
+# medium itself runs on only has to be defined.
+airootfs/etc/localtime
+airootfs/etc/resolv.conf
+
+# systemd-firstboot, masked. mkarchiso leaves machine-id "uninitialized",
+# so ConditionFirstBoot is true on every boot of either image and
+# systemd-firstboot asks a human for a timezone before sysinit.target is
+# reached. Measured on the smoke image, where it stopped the first boot
+# dead; on the shipping image it would be a prompt in front of the
+# installer, asking the same questions the installer asks properly.
+airootfs/etc/systemd/system/systemd-firstboot.service
+
+# The archiso initramfs hook. Without it neither image boots at all -
+# the initramfs cannot mount the squashfs it was booted from.
+airootfs/etc/mkinitcpio.conf.d/archiso.conf
+airootfs/etc/mkinitcpio.d/linux.preset
+
+# DHCP on the wired interface. The smoke image needed it so that an
+# unattended installation could reach the mirrors; the shipping image
+# needs it for the same reason, with a person doing the answering.
+airootfs/etc/systemd/network/20-ethernet.network

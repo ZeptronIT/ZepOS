@@ -1,0 +1,203 @@
+/* Die Anmeldemaske von ZepOS im Thema "zeptronit" -
+ * installiert nach /etc/greetd/zepos-greeter-zeptronit.css
+ *
+ * ERZEUGT AUS src/greeter.py stylesheet(). NICHT VON HAND AENDERN.
+ * tests/src/test_greeter.py vergleicht diese Datei Byte fuer Byte mit
+ * dem, was das Modul baut, und faellt um, sobald die beiden auseinander
+ * sind. Wer hier etwas aendern will, aendert src/greeter.py.
+ *
+ * Jede Farbe kommt aus src/theme.py, jeder Abstand und jede Ecke aus
+ * src/sizes.py. Dieselbe Marke, aus derselben Mitte, wie der
+ * Assistent - der sie aus installer/gui/branding.py bezieht, weil er
+ * dieses Paket nicht importieren darf (Spec 4.2).
+ */
+
+
+/* ------------------------------------------------------------------
+   Die Marke, in libadwaitas eigenen Namen
+   ------------------------------------------------------------------ */
+@define-color window_bg_color #0D3D47;
+@define-color window_fg_color #DCEEF4;
+@define-color view_bg_color #08262C;
+@define-color view_fg_color #DCEEF4;
+@define-color headerbar_bg_color #08262C;
+@define-color headerbar_fg_color #DCEEF4;
+@define-color popover_bg_color #08262C;
+@define-color popover_fg_color #DCEEF4;
+@define-color card_bg_color #214F59;
+@define-color card_fg_color #DCEEF4;
+@define-color dialog_bg_color #08262C;
+@define-color dialog_fg_color #DCEEF4;
+
+/* Der Anmeldeknopf. Das Marken-Cyan in voller Staerke mit der Tinte
+   darauf. Weiss auf derselben Flaeche waere schlechter lesbar - und ist
+   das, was libadwaita getan hat. Dieselbe Messung wie im Assistenten,
+   und tests/src/test_greeter.py rechnet sie fuer jedes Thema nach. */
+@define-color accent_bg_color #0096C0;
+@define-color accent_fg_color #08262C;
+@define-color accent_color #33C9EE;
+
+@define-color success_color #57D9A3;
+@define-color warning_color #FFCB00;
+@define-color error_color #FF8A8A;
+
+
+/* ------------------------------------------------------------------
+   Die Schrift
+   ------------------------------------------------------------------ */
+* {
+    font-family: "Roboto", "Cantarell", sans-serif;
+}
+
+
+/* ------------------------------------------------------------------
+   Die zwei Flaechen, die regreet ".background" nennt
+   ------------------------------------------------------------------ */
+frame.background {
+    background-color: #08262C;
+    border: 1px solid #214F59;
+    border-radius: 20px;
+    padding: 12px;
+}
+
+/* ------------------------------------------------------------------
+   Die Bedienelemente: Feld, Auswahlfeld, Stiftknopf, Knopf
+   ------------------------------------------------------------------
+   Sie sitzen AUF der Kachel und muessen sich davon abheben - dieselbe
+   Staffelung wie bei den Ueberlagerungen des Schreibtischs.
+
+   `background-image: none` ist die Zeile, an der das haengt, und sie
+   steht ZUERST: GTKs Adwaita malt jeden Knopf mit einem Verlauf, und
+   ohne diese Zeile faerbt die Farbe darunter nichts. Gemessen am
+   13.08.2026 - siehe der Kopf dieser Funktion.
+
+   `box-shadow: none` aus demselben Grund: Adwaita setzt eine helle
+   Kante an die Oberseite jedes Knopfes, die auf dunklem Petrol wie ein
+   Kratzer aussitzt. */
+entry, combobox button, button {
+    background-image: none;
+    background-color: #0D3D47;
+    color: #DCEEF4;
+    border: 1px solid #214F59;
+    border-radius: 8px;
+    box-shadow: none;
+    padding: 6px 18px;
+    min-height: 37px;
+    font-size: 20px;
+}
+
+/* Der Fokus. Auf einem Anmeldebildschirm ist das die wichtigste
+   Auskunft, die die Maske gibt - sie sagt, wohin das Getippte geht,
+   und zwar bevor jemand ein Passwort in das falsche Feld schreibt.
+   Adwaita zeichnet dafuer einen blauen Ring; hier ist es der der
+   Marke, an Rahmen UND Ring, damit er auch dort auffaellt, wo der
+   Rahmen ohnehin dunkel ist. */
+entry:focus, entry:focus-within, combobox button:focus,
+button:focus, button:focus-visible {
+    border-color: #0096C0;
+    outline-color: #0096C0;
+}
+
+/* Die Beschriftungen NEBEN den Feldern, und der Gruss darueber.
+   `grid > label` und nicht `label`: eine Knopfbeschriftung ist auch
+   ein Label, und die Regel hat sie bis zum 13.08.2026 alle
+   uebermalt - der Anmeldeknopf stand dadurch auf 1,91:1.
+
+   Der Gruss ist das erste Kind des Rasters (templates.rs haengt
+   message_label vor jede andere Zelle) und das einzige, das laut sein
+   darf: er ist die Ueberschrift und stand vorher leiser als die Werte
+   darunter. */
+frame.background grid > label {
+    color: #A9C6CF;
+}
+
+frame.background grid > label:first-child {
+    color: #DCEEF4;
+}
+
+/* Die Meldungsleiste, in der ein "Login failed" erscheint. */
+infobar {
+    background-color: #08262C;
+    color: #DCEEF4;
+}
+
+
+/* ------------------------------------------------------------------
+   Das Aufklappmenue der Auswahlfelder
+   ------------------------------------------------------------------ */
+popover > contents {
+    background-color: #08262C;
+    color: #DCEEF4;
+    border: 1px solid #214F59;
+    border-radius: 12px;
+    padding: 6px;
+}
+
+/* Eine Zeile des Menues. `background-image: none` aus demselben Grund
+   wie bei den Knoepfen - GTKs Adwaita legt auch hier ein Bild an, und
+   eine Farbe darunter saehe niemand. */
+modelbutton {
+    background-image: none;
+    background-color: transparent;
+    color: #DCEEF4;
+    border-radius: 8px;
+    padding: 6px 18px;
+    min-height: 37px;
+    font-size: 20px;
+}
+
+modelbutton:hover {
+    background-color: #10333B;
+}
+
+/* Die Zeile, auf der die Auswahl steht. Das Marken-Cyan mit der Tinte
+   darauf - dieselbe Paarung wie am Anmeldeknopf, damit "ausgewaehlt"
+   auf diesem Bildschirm ueberall dasselbe aussieht. */
+modelbutton:checked, modelbutton:selected {
+    background-color: #0096C0;
+    color: #08262C;
+}
+
+
+/* ------------------------------------------------------------------
+   Die Kostenleiter: sicher / Neustart / Ausschalten
+   ------------------------------------------------------------------ */
+
+/* SICHER - der Knopf, fuer den dieser Bildschirm da ist. */
+button.suggested-action {
+    background-color: #0096C0;
+    background-image: none;
+    color: #08262C;
+    border: 1px solid #0096C0;
+}
+
+button.suggested-action:hover {
+    background-color: #66D9FF;
+    color: #08262C;
+}
+
+/* NEUSTART - die Maschine kommt wieder, alles Ungesicherte nicht.
+   Zuerst fuer JEDEN Endknopf, damit die Regel darunter nur noch
+   verschaerft und nichts freilegt. */
+button.destructive-action {
+    background-color: transparent;
+    background-image: none;
+    color: #FFCB00;
+    border: 1px solid transparent;
+}
+
+button.destructive-action:hover {
+    background-color: #3D3100;
+    border-color: #C79E00;
+}
+
+/* AUSSCHALTEN - und die Maschine kommt nicht von allein wieder. */
+box > button.destructive-action:last-child {
+    color: #FF8A8A;
+}
+
+box > button.destructive-action:last-child:hover {
+    background-color: #3D1A1A;
+    border-color: #FF5C5C;
+}
+

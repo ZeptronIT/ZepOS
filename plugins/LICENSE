@@ -1,0 +1,79 @@
+Die Plugins unter plugins/ - Herkunft und Erlaubnis
+===================================================
+
+WAS HIER LIEGT
+
+  plugins/hyprlaunch/   von Jan Ohlmann (https://github.com/azzuriel),
+                        Stand 24e5c8b82f96f87ac25000353e36a8b17ced4b00
+                        https://github.com/azzuriel/hyprlaunch
+
+  plugins/hyprclipx/    von Jan Ohlmann (https://github.com/azzuriel),
+                        Stand 1eed6ee90a1c3e48ec76510377f8b05f27a4e650
+                        https://github.com/azzuriel/hyprclipx
+
+  Seit dem 12.08.2026 gehoeren dazu auch die beiden Python-Haelften von
+  hyprclipx, aus demselben Baum und unter derselben Erlaubnis:
+
+    plugins/hyprclipx/helpers/collector.py
+                          urspruenglich helpers/clipman-daemon.py
+    plugins/hyprclipx/helpers/caret-position.py
+                          urspruenglich helpers/get-caret-position.py
+
+  Sie sind nachgezogen, weil das Paket ohne sie ein Fenster ausliefert,
+  hinter dem nichts sammelt - der Kopf von collector.py fuehrt die
+  Messung. helpers/clipman-client.py ist ABSICHTLICH nicht dabei:
+  gemessen am selben Tag hatte das Feld, das darauf zeigte, zwei
+  Zuweisungen und null Leser.
+
+  Die Aenderungen von ZepOS an diesen Baeumen sind in den Dateikoepfen
+  einzeln genannt und stehen unter GPL-3.0-or-later wie der uebrige
+  Baum.
+
+DER BEFUND, GEMESSEN AM 11.08.2026
+
+  Beide Quellbaeume tragen KEINE Lizenzdatei und keinen
+  Copyright-Vermerk. Die GitHub-API meldet fuer beide - und fuer das
+  dritte Plugin hyprzones - "license": null.
+
+  Die Rezepte von ZepOS behaupteten bis zu diesem Tag license=('BSD-3-
+  Clause'). Diese Angabe war unbelegt. Sie stand vermutlich dort, weil
+  die Plugins des Hyprland-Projekts selbst unter BSD-3-Clause stehen und
+  die Zeile mitgewandert ist.
+
+  HIER STAND KURZZEITIG EIN VOLLSTAENDIGER BSD-3-CLAUSE-TEXT auf Jan
+  Ohlmanns Namen, angelegt beim Uebernehmen der Quellen. Er ist
+  entfernt. Eine Lizenz kann nur der Rechteinhaber erteilen; ein Text,
+  den ein Dritter in seinem Namen aufschreibt, erteilt nichts und
+  behauptet etwas Falsches ueber ihn. Das war der schwerere Fehler von
+  beiden.
+
+DIE ERLAUBNIS
+
+  Leon Marzoll (ZeptronIT) hat am 11.08.2026 erklaert, dass ZepOS diese
+  Quellen verwenden und veraendern darf, und am 12.08.2026 ergaenzt:
+
+      "ich habe selbst bei den projekten als contributor mitgeholfen
+       daher kann ich dir sagen das wir sein quellcode verwenden duerfen"
+
+  Das ist mehr als eine Zusage von aussen. Wer an einem Werk mitwirkt,
+  haelt an seinen eigenen Beitraegen das Urheberrecht - die Erlaubnis
+  steht damit nicht neben dem Werk, sondern zum Teil darin.
+
+  Diese Datei haelt das fest und ersetzt keine Lizenz. Der Unterschied
+  ist nicht formal: eine Erlaubnis gilt DEM, dem sie erteilt wurde. Wer
+  ZepOS installiert, bekommt diesen Code aus unserer Hand und erfaehrt
+  hier nicht, was ER damit darf - weitergeben, aendern, in ein eigenes
+  Projekt nehmen.
+
+  WAS DIESE LUECKE SCHLIESST, und nur das:
+
+    Eine Lizenzdatei in Jan Ohlmanns eigenen Repositorien. Ein Commit,
+    einmal, und die Frage stellt sich nie wieder - fuer uns nicht und
+    fuer niemanden nach uns. MIT oder BSD-3-Clause passen zu dem, was
+    die Plugins sind; beide erlauben, was ZepOS damit tut.
+
+  Solange das aussteht, gilt fuer die Rezepte license=('custom') mit
+  Verweis auf diese Datei, weil das die Lage beschreibt, statt eine
+  Lizenz zu behaupten, die es nicht gibt. Vor einer Veroeffentlichung
+  von ZepOS gehoert die Luecke geschlossen; siehe docs/specs/
+  2026-08-11-weg-zum-eigenen-os.md, Stufe 1.

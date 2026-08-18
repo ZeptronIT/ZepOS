@@ -1,0 +1,442 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Aktualisiert sich eine installierte Maschine SELBST?
+#
+# WAS DIESES SKRIPT MISST, UND WAS ES AUSDRUECKLICH NICHT MEHR TUT
+#     Die erste Fassung fuehrte `pacman -Sy`, `pacman -S` und
+#     `pacman -Syu` von Hand aus. Sie hat damit die Frage beantwortet, ob
+#     der KANAL traegt: ob das Repository erreichbar ist, ob seine
+#     Datenbank und seine Pakete Unterschriften tragen, die diese
+#     Maschine gegen den Schluessel aus zepos-keyring akzeptiert.
+#
+#     Die Frage von UP-1 ist eine andere: ob es passiert, ohne dass
+#     jemand etwas tut. Deshalb ruft dieses Skript pacman nur noch ein
+#     einziges Mal - fuer den Schritt, den eine Maschine, die VOR UP-1
+#     installiert wurde, nun einmal von aussen braucht: sie hat den
+#     Aktualisierer noch gar nicht. Alles danach macht die Maschine
+#     selbst, und dieses Skript SIEHT NUR ZU.
+#
+# DIE EINE STELLE, AN DER TROTZDEM ETWAS EINGESTELLT WIRD, UND WARUM
+#     `update.schedule.randomized_delay` wird auf 0 gesetzt. Ausgeliefert
+#     ist eine Stunde Streuung - damit nicht jede ZepOS-Maschine der Welt
+#     zur selben Sekunde denselben Server anspricht -, und eine Messung,
+#     die bis zu eine Stunde wartet, ist keine.
+#
+#     Das ist kein Herumreichen der Antwort, sondern die zweite Messung
+#     dieses Laufs: die Streuung wird ueber die AUSGELIEFERTE Schiene
+#     abgestellt (`zepos-settings set update.*`), und dass die Aenderung
+#     ankommt, wird an der erzeugten Ergaenzung nachgesehen. Der Zeitplan
+#     selbst - 15 Minuten nach dem Start - bleibt der ausgelieferte, und
+#     niemand startet den Dienst.
+#
+# WARUM ES POINTIERT AUF EINEN OERTLICHEN SERVER ZEIGT
+#     Weil zu ONLINE_REPO_URL nichts veroeffentlicht ist, und
+#     veroeffentlichen, um herauszufinden, ob Veroeffentlichen
+#     funktioniert, ist die falsche Reihenfolge. Der Wirt serviert den
+#     GESTAGTEN Baum - Byte fuer Byte die Ausgabe von
+#     packaging/publish.sh - ueber HTTP und reicht die Adresse auf einer
+#     Platte herein. Gemessen wird damit der Mechanismus und die Form,
+#     also alles an einer Veroeffentlichung ausser dem Rechnernamen.
+#
+# WAS ES DELIBERAT NICHT TUT
+#     Es importiert keinen Schluessel, es lockert kein SigLevel, und es
+#     fasst in [zepos] nur die eine `Server`-Zeile an - die es vor dem
+#     Ausschalten zurueckschreibt. Ein Lauf, der die Konfiguration
+#     schwaechen muesste, um zu gelingen, wuerde die Schwaechung messen.
+set -u
+
+SERIAL=/dev/ttyS0
+EVIDENCE=/run/zepos-update
+
+UPDATE_DISK=/dev/disk/by-id/virtio-zepos-update
+EVIDENCE_DISK=/dev/disk/by-id/virtio-zepos-evidence
+
+PACMAN_CONF=/etc/pacman.conf
+BACKUP="$EVIDENCE/pacman.conf.before"
+
+# Das Paket, das den Aktualisierer mitbringt: /usr/bin/zepos-update, die
+# beiden Units und den ALPM-Haken, der den Zeitgeber einschaltet.
+BOOTSTRAP_PACKAGE=zepos-config
+
+# Was die Maschine selbst ablegt, wenn sie gelaufen ist. Beides gehoert
+# src/update.py; hier stehen die Pfade, weil dieses Skript kein Python
+# ist und nichts importieren kann.
+STATE=/var/lib/zepos/update-state.json
+MARKER=/var/lib/zepos/regenerate-required
+DROPIN=/etc/systemd/system/zepos-update.timer.d/10-zepos.conf
+TIMER=zepos-update.timer
+SERVICE=zepos-update.service
+
+# Wie lange zugesehen wird. Der ausgelieferte Zeitplan ist OnBootSec=15min,
+# und diese Maschine ist beim Start dieses Skripts schon eine Minute wach -
+# 20 Minuten Geduld sind also gut zwei Fassungen des Zeitplans breit und
+# immer noch schmaler als die Frist des Messstands.
+DEADLINE=1200
+
+mkdir -p "$EVIDENCE"
+
+say() {
+    printf 'ZEPOS-SMOKE: %s\n' "$*"
+    printf 'ZEPOS-SMOKE: %s\n' "$*" >>"$EVIDENCE/progress.log"
+    printf 'ZEPOS-SMOKE: %s\n' "$*" >>"$SERIAL" 2>/dev/null || true
+}
+
+# --------------------------------------------------------------------
+# Ist das ueberhaupt ein Aktualisierungslauf?
+# --------------------------------------------------------------------
+# Das Medium wird ausdruecklich ausgeschlossen. Dieses Skript liegt auch
+# im airootfs der ISO; auf dem Livesystem wuerde es die pacman.conf
+# umschreiben, MIT der gerade eine Installation ausgefuehrt wird.
+if [[ -e /run/archiso ]]; then
+    say "live medium - the update probe belongs to the installed system"
+    exit 0
+fi
+
+waited=0
+while [[ ! -b "$UPDATE_DISK" && $waited -lt 15 ]]; do
+    sleep 1
+    waited=$(( waited + 1 ))
+done
+
+if [[ ! -b "$UPDATE_DISK" ]]; then
+    say "no disk at $UPDATE_DISK - this is an ordinary boot, nothing to update"
+    exit 0
+fi
+
+repo_url="$(head -c 4096 "$UPDATE_DISK" | tr -d '\0' | head -n1)"
+[[ -n "$repo_url" ]] || {
+    say "RESULT update=91 (the update disk carries no URL)"
+    say "DONE"
+    exit 1
+}
+
+say "BEGIN $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+say "repository $repo_url"
+say "uptime $(cut -d. -f1 /proc/uptime)s (der Zeitgeber zaehlt ab hier)"
+
+# --------------------------------------------------------------------
+# Worauf die Maschine zeigte, bevor irgendetwas angefasst wurde
+# --------------------------------------------------------------------
+# Der Beleg, dass dies eine ausgelieferte Konfiguration ist und keine,
+# die der Messstand gestellt hat: Spec 8.5b verlangt genau einen
+# [zepos]-Abschnitt, auf das oeffentliche Repository zeigend, und
+# nirgends eine file://-Quelle.
+cp "$PACMAN_CONF" "$BACKUP"
+before_sections="$(grep -c '^\[zepos\]' "$PACMAN_CONF" || true)"
+before_server="$(sed -n '/^\[zepos\]/,/^\[/{/^Server/p}' "$PACMAN_CONF" \
+    | sed 's/^Server *= *//' | paste -sd, - || true)"
+before_siglevel="$(sed -n '/^\[zepos\]/,/^\[/{/^SigLevel/p}' "$PACMAN_CONF" \
+    | sed 's/^SigLevel *= *//' | paste -sd, - || true)"
+: "${before_sections:=0}"
+say "before sections=$before_sections server=${before_server:-none} siglevel=${before_siglevel:-none}"
+
+trusted_file=/usr/share/pacman/keyrings/zepos-trusted
+fingerprint="$(cut -d: -f1 "$trusted_file" 2>/dev/null | head -n1)"
+say "keyring fingerprint=${fingerprint:-none} package=$(pacman -Q zepos-keyring 2>&1)"
+
+pacman -Q >"$EVIDENCE/packages-before.txt" 2>&1
+say "zepos-update vorher: $(command -v zepos-update || echo 'nicht vorhanden')"
+say "$TIMER vorher: $(systemctl is-enabled "$TIMER" 2>&1)"
+
+# --------------------------------------------------------------------
+# Auf den Server zeigen, und sonst nichts aendern
+# --------------------------------------------------------------------
+# Nur die Server-Zeile, und nur die innerhalb von [zepos]. SigLevel
+# bleibt `Required TrustedOnly` - das ist der ganze Punkt.
+sed -i "/^\[zepos\]/,/^\[/{s#^Server *=.*#Server = $repo_url#}" "$PACMAN_CONF"
+after_server="$(sed -n '/^\[zepos\]/,/^\[/{/^Server/p}' "$PACMAN_CONF" \
+    | sed 's/^Server *= *//' | paste -sd, - || true)"
+say "pointed at ${after_server:-none}"
+cp "$PACMAN_CONF" "$EVIDENCE/pacman.conf.pointed-at-local"
+
+# --------------------------------------------------------------------
+# Phase 1 - der einzige Handgriff: den Aktualisierer ueberhaupt bekommen
+# --------------------------------------------------------------------
+# Diese Platte wurde installiert, bevor es UP-1 gab. Sie hat kein
+# /usr/bin/zepos-update, keine Units und keinen Haken - der Zustand jeder
+# Maschine, die es heute schon gibt. In der Wirklichkeit kommt der
+# Aktualisierer als gewoehnliche Paketaktualisierung; hier ist das dieser
+# eine Aufruf.
+#
+# Der Cache wird vorher geleert, und das ist keine Ordnungsliebe:
+# pacstrap hat jedes installierte Paket nach /var/cache/pacman/pkg
+# kopiert, und ein `pacman -S zepos-config` faende die Datei oertlich,
+# installierte sie, ohne dass ein Byte ueber das Netz geht, und meldete
+# Erfolg fuer ein Repository, das nie angesprochen wurde.
+say "PHASE bootstrap"
+rm -f /var/cache/pacman/pkg/zepos-*.pkg.tar.zst*
+pacman -Sy --noconfirm >"$EVIDENCE/pacman-sy.log" 2>&1
+db_rc=$?
+say "pacman -Sy rc=$db_rc"
+tail -n 3 "$EVIDENCE/pacman-sy.log" | while read -r line; do say "  $line"; done
+
+pacman -S --noconfirm "$BOOTSTRAP_PACKAGE" >"$EVIDENCE/pacman-s-bootstrap.log" 2>&1
+bootstrap_rc=$?
+downloaded="$(find /var/cache/pacman/pkg \
+    -name "$BOOTSTRAP_PACKAGE-*.pkg.tar.zst" -type f 2>/dev/null | wc -l)"
+: "${downloaded:=0}"
+say "pacman -S $BOOTSTRAP_PACKAGE rc=$bootstrap_rc downloaded=$downloaded"
+tail -n 3 "$EVIDENCE/pacman-s-bootstrap.log" | while read -r line; do say "  $line"; done
+
+# --------------------------------------------------------------------
+# Phase 2 - hat sich der Aktualisierer selbst eingeschaltet?
+# --------------------------------------------------------------------
+# Ein Arch-Paket kann keinen Dienst aktivieren. Fuer NEUE Installationen
+# nennt der Installer den Zeitgeber in seiner services-Liste; fuer diese
+# Maschine muss der ALPM-Haken aus zepos-config es getan haben. Genau das
+# steht hier zur Messung, und es ist der Unterschied zwischen "das Paket
+# liefert einen Zeitgeber aus" und "die Maschine hat einen".
+say "PHASE self-enable"
+have_command=1
+command -v zepos-update >/dev/null 2>&1 && have_command=0
+timer_state="$(systemctl is-enabled "$TIMER" 2>&1)"
+timer_active="$(systemctl is-active "$TIMER" 2>&1)"
+say "zepos-update=$(command -v zepos-update || echo none) rc=$have_command"
+say "$TIMER is-enabled=$timer_state is-active=$timer_active"
+systemctl cat "$TIMER" >"$EVIDENCE/timer-unit.txt" 2>&1
+systemctl list-timers --all >"$EVIDENCE/timers-before.txt" 2>&1
+grep -E 'NEXT|zepos-update' "$EVIDENCE/timers-before.txt" \
+    | while read -r line; do say "  $line"; done
+
+# --------------------------------------------------------------------
+# Phase 3 - eine Einstellung aendern und nachsehen, ob sie ankommt
+# --------------------------------------------------------------------
+# Die Streuung weg, ueber die ausgelieferte Schiene. Zwei Dinge werden
+# damit gemessen: dass `zepos-settings set update.*` wirklich etwas
+# erzeugt, und dass der Lauf danach im Rahmen dieses Messstands stattfindet.
+# Der Zeitplan selbst bleibt der ausgelieferte.
+say "PHASE setting"
+zepos-settings set update.schedule.randomized_delay 0 \
+    >"$EVIDENCE/settings.log" 2>&1
+setting_rc=$?
+say "zepos-settings set update.schedule.randomized_delay 0 rc=$setting_rc"
+cp "$DROPIN" "$EVIDENCE/timer-dropin.conf" 2>/dev/null
+dropin_rc=1
+if grep -qx 'RandomizedDelaySec=0' "$DROPIN" 2>/dev/null; then
+    dropin_rc=0
+fi
+say "Ergaenzung $DROPIN: RandomizedDelaySec=0 rc=$dropin_rc"
+sed -n '1,40p' "$DROPIN" 2>/dev/null | grep -v '^#' \
+    | while read -r line; do say "  $line"; done
+cp /etc/zepos/update.json "$EVIDENCE/update.json" 2>/dev/null
+
+# Was die Maschine JETZT noch zu holen haette. Das ist die Erwartung, an
+# der der Lauf gleich gemessen wird - und sie wird gefragt und nicht
+# angenommen: laeuft dieser Messstand gegen ein Repository, das genauso
+# alt ist wie die Platte, gibt es nichts zu heben, und dann darf ein
+# "nichts gehoben" kein Fehlschlag sein.
+mapfile -t members < <(pacman -Slq zepos 2>/dev/null)
+pending=0
+: >"$EVIDENCE/pending.txt"
+while read -r name old arrow new; do
+    [[ "$arrow" == "->" ]] || continue
+    for member in "${members[@]}"; do
+        if [[ "$name" == "$member" ]]; then
+            printf '%s %s -> %s\n' "$name" "$old" "$new" >>"$EVIDENCE/pending.txt"
+            pending=$(( pending + 1 ))
+        fi
+    done
+done < <(pacman -Qu 2>/dev/null)
+say "offen aus [zepos]: $pending"
+cat "$EVIDENCE/pending.txt" | while read -r line; do say "  $line"; done
+
+# --------------------------------------------------------------------
+# Phase 4 - zusehen. Nichts anfassen.
+# --------------------------------------------------------------------
+# Ab hier ruft dieses Skript weder pacman noch zepos-update noch
+# systemctl start. Was jetzt passiert, passiert, weil ein Zeitgeber
+# ablaeuft.
+say "PHASE unattended"
+pacman -Q >"$EVIDENCE/packages-bootstrapped.txt" 2>&1
+began="$(date -u +%s)"
+elapsed=0
+while [[ ! -f "$STATE" && $elapsed -lt $DEADLINE ]]; do
+    sleep 10
+    elapsed=$(( $(date -u +%s) - began ))
+    if (( elapsed % 120 == 0 )); then
+        say "  warte seit ${elapsed}s (uptime $(cut -d. -f1 /proc/uptime)s, $TIMER $(systemctl is-active "$SERVICE" 2>&1))"
+    fi
+done
+
+unattended_rc=1
+if [[ -f "$STATE" ]]; then
+    unattended_rc=0
+    say "der Dienst ist von selbst gelaufen, nach ${elapsed}s Zusehen"
+else
+    say "nach ${DEADLINE}s ist nichts passiert - $STATE gibt es nicht"
+fi
+cp "$STATE" "$EVIDENCE/update-state.json" 2>/dev/null
+systemctl status "$SERVICE" >"$EVIDENCE/service-status.txt" 2>&1
+journalctl -u "$SERVICE" --no-pager >"$EVIDENCE/service-journal.txt" 2>&1
+tail -n 12 "$EVIDENCE/service-journal.txt" | while read -r line; do say "  $line"; done
+
+state_result="$(sed -n 's/.*"result": *"\([a-z]*\)".*/\1/p' "$STATE" 2>/dev/null | head -1)"
+say "Zustand: result=${state_result:-none}"
+
+# Was sich wirklich bewegt hat, aus der Paketdatenbank und nicht aus der
+# Prosa des Dienstes.
+#
+# Verglichen wird gegen die Aufnahme NACH dem Handgriff und nicht gegen
+# die vom Anfang: der Handgriff hat zepos-config selbst gehoben, und das
+# war der Messstand. Was hier gezaehlt wird, ist ausschliesslich das, was
+# die Maschine allein getan hat.
+pacman -Q >"$EVIDENCE/packages-after.txt" 2>&1
+moved="$(diff "$EVIDENCE/packages-bootstrapped.txt" "$EVIDENCE/packages-after.txt" \
+    | grep -c '^> ' || true)"
+: "${moved:=0}"
+diff "$EVIDENCE/packages-bootstrapped.txt" "$EVIDENCE/packages-after.txt" \
+    >"$EVIDENCE/packages.diff" 2>&1
+say "bewegte Pakete insgesamt: $moved (erwartet aus [zepos]: $pending)"
+grep '^> ' "$EVIDENCE/packages.diff" | while read -r line; do say "  $line"; done
+
+# Und die Gegenprobe zur Entscheidung "nur zepos-*": kein Paket, das
+# NICHT aus [zepos] kommt, darf sich bewegt haben.
+foreign=0
+while read -r marker name _rest; do
+    [[ "$marker" == ">" ]] || continue
+    known=1
+    for member in "${members[@]}"; do
+        [[ "$name" == "$member" ]] && known=0
+    done
+    if (( known )); then
+        foreign=$(( foreign + 1 ))
+        say "  FREMD bewegt: $name"
+    fi
+done <"$EVIDENCE/packages.diff"
+say "Pakete ausserhalb von [zepos] bewegt: $foreign"
+
+marker_rc=1
+[[ -e "$MARKER" ]] && marker_rc=0
+say "Marke fuer die naechste Anmeldung ($MARKER): rc=$marker_rc"
+
+# --------------------------------------------------------------------
+# Phase 5 - die Gegenprobe: ohne Schluessel muss es SCHEITERN und es SAGEN
+# --------------------------------------------------------------------
+# Alles bisher gelingt genauso auf einer Maschine, die nichts prueft.
+# Dies ist die Haelfte, die sagt, dass die Pruefung echt ist: den
+# Schluessel wegnehmen, den Aktualisierer noch einmal laufen lassen - und
+# er muss ablehnen und das hinterlassen.
+#
+# `pacman-key --populate zepos` danach ist keine Reparatur, sondern die
+# andere Haelfte der Messung: es ist das Einzige, was das Installations-
+# skript von zepos-keyring tut.
+say "PHASE negative-control"
+without_key_rc=0
+with_key_rc=0
+without_key_said=1
+if [[ -n "$fingerprint" ]]; then
+    pacman-key --delete "$fingerprint" >"$EVIDENCE/key-delete.log" 2>&1
+    say "pacman-key --delete $fingerprint rc=$?"
+
+    # Die abgelegte Datenbank weg, sonst misst die Gegenprobe nichts:
+    # `pacman -Sy` fragt mit If-Modified-Since und meldet "ist aktuell",
+    # wenn sich am Server nichts geaendert hat - ohne eine Unterschrift
+    # auch nur anzusehen. Ohne diese Zeile gaebe eine Maschine ohne
+    # Schluessel eine 0 zurueck, und die Gegenprobe waere die einzige
+    # Zusicherung dieses Laufs, die immer besteht.
+    rm -f /var/lib/pacman/sync/zepos.db /var/lib/pacman/sync/zepos.db.sig
+
+    zepos-update >"$EVIDENCE/update-without-key.log" 2>&1
+    without_key_rc=$?
+    say "ohne Schluessel: zepos-update rc=$without_key_rc (eine 0 waere hier der Fehler)"
+    tail -n 4 "$EVIDENCE/update-without-key.log" \
+        | while read -r line; do say "  $line"; done
+
+    # Und es muss es GESAGT haben: der Zustand traegt "failed" und den
+    # Wortlaut, den pacman abgegeben hat. Nicht nach Woertern gesucht -
+    # diese Maschine ist deutsch und pacman ist uebersetzt (siehe den
+    # Kopf von src/update.py); gemessen wird "result" und dass eine
+    # Meldung ueberhaupt da ist.
+    cp "$STATE" "$EVIDENCE/update-state-without-key.json" 2>/dev/null
+    failed_result="$(sed -n 's/.*"result": *"\([a-z]*\)".*/\1/p' "$STATE" 2>/dev/null | head -1)"
+    message_length="$(sed -n 's/.*"message": *"\(.*\)".*/\1/p' "$STATE" 2>/dev/null | head -1 | wc -c)"
+    say "Zustand danach: result=${failed_result:-none} message=${message_length} Zeichen"
+    if [[ "$failed_result" == "failed" ]] && (( message_length > 1 )); then
+        without_key_said=0
+    fi
+
+    pacman-key --populate zepos >"$EVIDENCE/key-populate.log" 2>&1
+    say "pacman-key --populate zepos rc=$?"
+
+    zepos-update >"$EVIDENCE/update-with-key.log" 2>&1
+    with_key_rc=$?
+    say "mit Schluessel wieder: zepos-update rc=$with_key_rc"
+    tail -n 3 "$EVIDENCE/update-with-key.log" \
+        | while read -r line; do say "  $line"; done
+else
+    say "kein Fingerabdruck in $trusted_file - die Gegenprobe faellt aus"
+    without_key_rc=90
+    with_key_rc=90
+    without_key_said=90
+fi
+
+# --------------------------------------------------------------------
+# Die Maschine so hinterlassen, wie sie ausgeliefert wurde
+# --------------------------------------------------------------------
+say "PHASE restore"
+cp "$BACKUP" "$PACMAN_CONF"
+restored_server="$(sed -n '/^\[zepos\]/,/^\[/{/^Server/p}' "$PACMAN_CONF" \
+    | sed 's/^Server *= *//' | paste -sd, - || true)"
+say "restored server=${restored_server:-none}"
+
+# --------------------------------------------------------------------
+# Einsammeln
+# --------------------------------------------------------------------
+say "PHASE collect"
+pacman-key -l >"$EVIDENCE/pacman-keys.txt" 2>&1
+cp "$PACMAN_CONF" "$EVIDENCE/pacman.conf.after" 2>/dev/null
+cp /etc/pacman.d/mirrorlist "$EVIDENCE/mirrorlist" 2>/dev/null
+ip -o addr >"$EVIDENCE/addresses.txt" 2>&1
+systemctl list-timers --all >"$EVIDENCE/timers-after.txt" 2>&1
+journalctl -b --no-pager >"$EVIDENCE/journal.txt" 2>&1
+
+# Der ganze Lauf in einer Zahl. Jede Ziffer ist eine Zusicherung, die
+# einzeln gebrochen werden kann - und die Gegenprobe besteht, indem sie
+# scheitert.
+update_rc=0
+(( db_rc == 0 ))            || update_rc=1
+(( bootstrap_rc == 0 ))     || update_rc=2
+(( downloaded >= 1 ))       || update_rc=3
+(( have_command == 0 ))     || update_rc=4
+[[ "$timer_state" == "enabled" ]] || update_rc=5
+(( setting_rc == 0 ))       || update_rc=6
+(( dropin_rc == 0 ))        || update_rc=7
+(( unattended_rc == 0 ))    || update_rc=8
+[[ "$state_result" == "ok" || "$state_result" == "nothing" ]] || update_rc=9
+(( moved == pending ))      || update_rc=10
+(( foreign == 0 ))          || update_rc=11
+# Die Marke gehoert zu einem Lauf, der wirklich etwas getauscht hat. Gab
+# es nichts zu tauschen, darf sie fehlen.
+if (( pending > 0 )); then
+    (( marker_rc == 0 ))    || update_rc=12
+fi
+(( without_key_rc != 0 ))   || update_rc=13
+(( without_key_said == 0 )) || update_rc=14
+(( with_key_rc == 0 ))      || update_rc=15
+[[ "$restored_server" == "${before_server}" ]] || update_rc=16
+
+say "RESULT update=$update_rc db=$db_rc bootstrap=$bootstrap_rc" \
+    "downloaded=$downloaded command=$have_command timer=$timer_state" \
+    "setting=$setting_rc dropin=$dropin_rc unattended=$unattended_rc" \
+    "wartete=${elapsed}s state=${state_result:-none} moved=$moved" \
+    "pending=$pending foreign=$foreign marker=$marker_rc" \
+    "nokey=$without_key_rc nokeysaid=$without_key_said withkey=$with_key_rc" \
+    "server=${before_server:-none} restored=${restored_server:-none}"
+
+# --------------------------------------------------------------------
+# Uebergeben, dann ausschalten
+# --------------------------------------------------------------------
+if [[ -b "$EVIDENCE_DISK" ]]; then
+    if tar cf "$EVIDENCE_DISK" -C "$EVIDENCE" . </dev/null 2>>"$EVIDENCE/collect.log"; then
+        say "evidence written to $EVIDENCE_DISK"
+    else
+        say "evidence FAILED to write to $EVIDENCE_DISK"
+    fi
+else
+    say "no evidence disk at $EVIDENCE_DISK - the run is only as good as the serial log"
+fi
+
+say "DONE"
+sync
+systemctl poweroff

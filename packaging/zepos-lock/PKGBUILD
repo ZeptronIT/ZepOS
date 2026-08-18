@@ -1,0 +1,155 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# zepos-lock - der Sperrbildschirm, den SUPER+L oeffnet.
+#
+# WAS HIER VORHER STAND
+#     Nichts - hyprlock kam aus dem Arch-Repositorium extra, und
+#     packaging/zepos-desktop/PKGBUILD nannte es in seiner depends-Zeile.
+#     Es ist kein GTK-Programm; gemessen am 12.08.2026 an der
+#     Installation dieser Maschine:
+#
+#         objdump -p /usr/bin/hyprlock | grep NEEDED
+#           NEEDED  libpam.so.0
+#           NEEDED  libEGL.so.1
+#           NEEDED  libGLESv2.so.2
+#           NEEDED  libcairo.so.2
+#           ... und keine Zeile mit gtk
+#
+#     Es zeichnet sich selbst mit GLES und Cairo, nimmt kein Stylesheet
+#     und trug seine Farben in einer eigenen Konfigurationssprache -
+#     zwoelf rgb()-Literale in Terminalgruen. Der Nutzer hat am
+#     11.08.2026 entschieden: "4 sollten wir selber machen also
+#     sperrbildschirm gtk4".
+#
+# WARUM DAS UEBERHAUPT GEHT
+#     Weil ext-session-lock-v1 aus GTK4 erreichbar ist, entgegen der
+#     Annahme, mit der diese Aenderung begonnen wurde. gtk4-layer-shell
+#     1.3.0 - dieselbe Bibliothek, an der zepos-logout schon haengt -
+#     installiert gtk4-session-lock.h und traegt die Symbole
+#     gtk_session_lock_instance_lock,
+#     gtk_session_lock_instance_assign_window_to_monitor und
+#     gtk_session_lock_is_supported. Der Kopf von lock/zepos-lock.c
+#     fuehrt die Messungen im verschachtelten Hyprland 0.55.4.
+#
+# WARUM DAS OBJEKT NACH DEM BAU DREIMAL BEFRAGT WIRD
+#     Die ersten zwei Fragen erbt dieses Rezept von
+#     packaging/zepos-logout/PKGBUILD, und die Begruendung dort gilt
+#     woertlich: readelf sagt, was DIESES Objekt angefordert hat, ldd
+#     sagt, was beim Start tatsaechlich geladen wird, und nur die zweite
+#     sieht ein libgtk-3, das eine Bibliothek dazwischen hereinzieht -
+#     `-Wl,--as-needed` aus /etc/makepkg.conf traegt fuer eine
+#     ungenutzte Bibliothek gar kein DT_NEEDED ein.
+#
+#     Die dritte Frage ist die, die es nur hier gibt: libpam. Ohne sie
+#     waere dieses Programm ein Bildschirm, der ein Passwortfeld ZEIGT.
+#     Eine Zusicherung im Bauskript koennte das nicht beantworten -
+#     lock/meson.build sucht die Bibliothek mit cc.find_library(), und
+#     ein Linker, der sie wegen --as-needed wieder fallen liesse, weil
+#     irgendeine Umstellung die letzte pam_-Funktion aus dem Objekt
+#     entfernt hat, ergaebe genau diesen Zustand ohne einen einzigen
+#     Fehler.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-lock
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="Der Sperrbildschirm von ZepOS: GTK4 auf ext-session-lock-v1, mit PAM"
+arch=('x86_64')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+# pam steht hier und nicht unter makedepends: das Programm ist zur
+# Laufzeit dagegen gelinkt. gtk4-layer-shell liefert die
+# Sperr-Schnittstelle mit; ein eigenes Paket dafuer gibt es nicht.
+depends=('gtk4' 'gtk4-layer-shell' 'glib2' 'glibc' 'pam')
+makedepends=('meson' 'ninja' 'pkgconf')
+
+# Ohne das Stylesheet sperrt der Bildschirm trotzdem - das ist der
+# Unterschied zu zepos-logout, das ohne sein Layout gar nichts zeigt und
+# deshalb dieselbe Zeile mit anderem Gewicht traegt. Eine Empfehlung
+# also, und aus demselben Grund keine Abhaengigkeit: zepos-config haengt
+# umgekehrt nicht an diesem Paket, und zwei Pakete, die einander nennen,
+# sind ein Zyklus.
+optdepends=('zepos-config: erzeugt style.css, ohne die der Bildschirm ungestylt sperrt')
+
+# hyprlock ist damit ueberfluessig, und zwar nicht nur "nicht mehr
+# installiert": conflicts sorgt dafuer, dass eine Maschine, auf der es
+# noch liegt, es beim Einspielen dieses Pakets loswird, statt zwei
+# Sperrbildschirme zu haben, von denen einer an SUPER+L haengt und der
+# andere nur Platz braucht.
+#
+# KEIN replaces, UND DAS IST ABSICHT: replaces liesse pacman hyprlock
+# ohne Rueckfrage durch dieses Paket ERSETZEN, auch auf einer Maschine,
+# die hyprlock von Hand installiert hat, weil sie es benutzen will.
+# conflicts fragt.
+conflicts=('hyprlock')
+
+source=("zepos-lock-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_src="zepos-lock-$pkgver"
+
+build() {
+    arch-meson "$srcdir/$_src/lock" "$srcdir/build"
+    meson compile -C "$srcdir/build"
+}
+
+package() {
+    meson install -C "$srcdir/build" --destdir "$pkgdir"
+
+    local binary="$pkgdir/usr/bin/zepos-lock"
+    test -x "$binary" || {
+        echo "zepos-lock liegt nicht in /usr/bin; SUPER+L waere eine tote Taste" >&2
+        return 1
+    }
+
+    # Die eigene PAM-Datei. Fehlt sie, faellt Linux-PAM auf
+    # /etc/pam.d/other zurueck - auf Arch viermal pam_deny.so, also
+    # zufaellig richtig herum, aber eben zufaellig: ein Sperrbildschirm,
+    # dessen Verhalten davon abhaengt, was ein anderes Paket in `other`
+    # geschrieben hat, ist keiner. Der Kopf von lock/zepos-lock.pam
+    # begruendet jede Zeile darin.
+    local pamfile="$pkgdir/etc/pam.d/zepos-lock"
+    test -f "$pamfile" || {
+        echo "/etc/pam.d/zepos-lock fehlt im Paket." >&2
+        echo "Ohne eigene PAM-Datei haengt die Pruefung des Passworts an" >&2
+        echo "/etc/pam.d/other, also an einem fremden Paket." >&2
+        return 1
+    }
+
+    local needed
+    needed="$(readelf -d "$binary")"
+
+    grep -q "libgtk-4" <<<"$needed" || {
+        echo "zepos-lock ist nicht gegen GTK4 gelinkt." >&2
+        echo "Die Entscheidung vom 11.08.2026 stellt die Oberflaeche" >&2
+        echo "durchgehend auf GTK4; dieses Paket ist der Grund, aus dem" >&2
+        echo "hyprlock sie verlassen hat." >&2
+        return 1
+    }
+    grep -q "gtk4-layer-shell" <<<"$needed" || {
+        echo "zepos-lock wurde ohne gtk4-layer-shell gebaut." >&2
+        echo "Dort steckt gtk4-session-lock.h, also der einzige Weg von" >&2
+        echo "GTK4 zu ext-session-lock-v1. Ohne das Protokoll gibt es" >&2
+        echo "keine Sperre, nur ein Fenster, das wie eine aussieht." >&2
+        return 1
+    }
+    grep -q "libpam" <<<"$needed" || {
+        echo "zepos-lock ist nicht gegen libpam gelinkt." >&2
+        echo "Dann zeigt es ein Passwortfeld und prueft nichts." >&2
+        return 1
+    }
+
+    local loaded
+    loaded="$(ldd "$binary")"
+    if grep -q "libgtk-3" <<<"$loaded"; then
+        echo "zepos-lock laedt libgtk-3:" >&2
+        grep "libgtk-3" <<<"$loaded" >&2
+        echo "Ein Programm, das beide Toolkits laedt, beantwortet die" >&2
+        echo "GTK4-Frage mit ja und zeigt trotzdem GTK3." >&2
+        return 1
+    fi
+
+    install -Dm644 "$srcdir/$_src/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,0 +1,78 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# zepos-apps-devel - die Werkzeuge, mit denen man Software baut.
+#
+# WARUM DAS NICHT IN zepos-apps STEHT
+#     Weil ein Schreibtisch, auf dem niemand uebersetzt, sie nie
+#     anfasst, und weil sie 510,3 MiB kosten (gemessen am angehefteten
+#     ALA-Schnappschuss 2026/08/04, gegen die Grundlinie aus
+#     archinstall-Basis plus zepos-desktop). Ein Haken auf der
+#     ZepOS-Seite des Installers, nicht mehr.
+#
+# WARUM HIER KEINE ENTWICKLUNGSUMGEBUNG STEHT
+#     Die naheliegende Wahl waere gnome-builder 50.0-1 gewesen: GTK4 +
+#     libadwaita, also auf der Marke, also nach der Regel erlaubt. Sie
+#     steht trotzdem nicht hier, und die Zahl ist der Grund - gemessen:
+#
+#         base-devel + git            +32 Pakete   +119,7 MiB   +510,3 MiB
+#         dieselben + gnome-builder  +121 Pakete   +317,7 MiB    +1,4 GiB
+#
+#     Die Umgebung allein kostet also mehr als das Dreifache des Rests
+#     und zieht dabei flatpak und ostree herein - eine zweite
+#     Paketverwaltung, zu der ZepOS nichts zu sagen hat und fuer die es
+#     keine Zeile Konfiguration erzeugt. Ein Paket, das ungefragt eine
+#     zweite Paketverwaltung mitbringt, hat eine Entscheidung getroffen,
+#     die ihm nicht zusteht.
+#
+#     Und es braucht sie niemand: zepos-apps liefert
+#     gnome-text-editor 50.1-1, GTK4 + libadwaita, mit gtksourceview5 und
+#     libspelling - also Syntaxhervorhebung. Welche Umgebung darueber
+#     hinaus jemand will, ist eine persoenliche Wahl wie die Schriftgroesse.
+#     Der Ursprung hatte darauf mit sublime-text-4 geantwortet, und das
+#     ist AUR (Spec §4.3), also nie eine Antwort gewesen, die ZepOS geben
+#     konnte.
+#
+# WAS AUS DEM URSPRUNG NICHT UEBERNOMMEN WURDE
+#     ~/.config/iconmanager/install-system.sh baute die Entwicklungsliste
+#     um den Icon Manager herum: python-pip, python-requests,
+#     python-pillow, cmake, boost, cpio, dart-sass, nodejs. Das ist die
+#     BAUZEIT dieses Projekts und gehoert in packaging/Dockerfile, nicht
+#     auf die Maschine eines Nutzers - der bekommt fertige Pakete.
+#     dart-sass ist die eine Ausnahme und steht laengst dort, wo sie
+#     hingehoert: als harte Abhaengigkeit von zepos-desktop, weil
+#     `ags run` es zur Laufzeit fuer das erzeugte style.scss aufruft.
+#
+#     Ebenso wenig uebernommen: die Virtualisierung. install-system.sh
+#     fuehrte virt-manager, qemu-desktop, libvirt und dnsmasq unter der
+#     Ueberschrift "for Intune VM workaround" - eine Umgehung eines
+#     OpenSSL-Fehlers fuer ein Verwaltungswerkzeug des frueheren
+#     Arbeitgebers. Das ist genau das, was aus diesem Baum heraus muss,
+#     bevor irgendetwas veroeffentlicht wird. Und selbst ohne diesen
+#     Grund gaebe es keinen: virt-manager 5.1.0-4 haengt ueber
+#     gtksourceview4 und vte3 an GTK3, gnome-boxes 50.0-1 nennt gtk3,
+#     libhandy und webkit2gtk-4.1 direkt. Eine GTK4-Oberflaeche fuer
+#     Virtualisierung gibt es im Schnappschuss nicht, also bietet ZepOS
+#     keine an.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-apps-devel
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="Optional: die Werkzeuge zum Uebersetzen, die der ZepOS-Installer anbietet"
+arch=('any')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+depends=(
+    # Die Gruppe, die makepkg voraussetzt, und das Versionsverwaltungs-
+    # system, ohne das man nichts holt, was man uebersetzen wollte.
+    # Beide haben keine Oberflaeche - die Toolkit-Regel hat hier nichts
+    # zu entscheiden.
+    'base-devel'
+    'git'
+)
+
+package() {
+    install -Dm644 "$_zepos_repo/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

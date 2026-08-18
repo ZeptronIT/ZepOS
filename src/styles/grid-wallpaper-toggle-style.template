@@ -1,0 +1,24 @@
+/* Grid Wallpaper Toggle Style Configuration */
+/* Diese Werte werden vom Bash-Script gelesen */
+
+.grid-wallpaper-config {
+  /* Grid Colors */
+  --grid-color: {{STYLE_COLOR_INACTIVE}};
+  --border-color: {{STYLE_COLOR_INACTIVE}};
+  --bg-color: {{STYLE_BG_COLOR}};
+  
+  /* Footprint Colors */
+  --footprint-color: {{STYLE_COLOR_SUCCESS_DIM}};
+  --footprint-bg: {{STYLE_MODULE_BG}};
+  --footprint-text-color: {{STYLE_COLOR_OFFLINE}};
+  
+  /* Dimensions */
+  --footprint-text-size: 14;
+  --footprint-border-width: 1;
+  --footprint-padding: 5;
+  
+  /* Grid Settings */
+  --grid-width: 3796;
+  --grid-height: 2066;
+  --hyprbars-height: 25;
+}

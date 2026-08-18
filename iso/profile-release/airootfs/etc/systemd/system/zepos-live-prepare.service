@@ -1,0 +1,36 @@
+# Everything the medium has to do to itself before it can install.
+# See /usr/local/bin/zepos-live-prepare for what and why.
+[Unit]
+Description=ZepOS-Installationsmedium vorbereiten
+Documentation=file:///usr/local/bin/zepos-live-prepare
+
+# Only on the live medium. The script writes /etc/pacman.d/mirrorlist and
+# initialises a pacman keyring, and both of those belong to an installed
+# system's owner rather than to a unit that was copied there by accident.
+ConditionPathExists=/run/archiso
+
+# Before the installer, not because the installer needs it to start, but
+# because the user must not be able to reach the point of no return
+# before the keyring the installation verifies against exists. Both steps
+# take seconds.
+Before=zepos-install.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/zepos-live-prepare
+
+# On the screen as well as in the journal: this is the one part of the
+# boot that takes noticeable time, and a medium that shows nothing while
+# it works looks like a medium that has hung.
+StandardOutput=journal+console
+StandardError=journal+console
+
+# pacman-key --populate imports every key in every shipped keyring and
+# generates a local signing key on a machine that has just booted and has
+# very little entropy. The default 90 seconds is not always enough, and
+# the failure mode is an installation that refuses every package.
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

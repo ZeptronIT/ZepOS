@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Der Befehl.
+
+ZWEI VERZEICHNISSE, WEIL DIESES PROGRAMM AUS ZWEI TEILEN BESTEHT
+
+    /usr/share/zepos-settings-gui   das Paket zepos_settings_gui
+    /usr/share/zepos                brand.py, sizes.py, settings.py,
+                                    update.py, paths.py
+
+    Das erste ist wie bei zepos-menu: das Modulverzeichnis liegt nicht in
+    site-packages, damit kein zweites Paket den Namen beansprucht, und
+    wird deshalb hier vor dem ersten Import eingehaengt.
+
+    Das zweite ist der Unterschied zu zepos-menu, und er ist der Punkt
+    dieser ganzen Anwendung. Sie schreibt KEINE eigene Einstellungsdatei
+    und kennt KEINE eigenen Vorgabefarben - sie liest und schreibt
+    durch dieselben Module wie `zepos-settings`, der Generator und der
+    Stil-Editor. Zwei Wege zu einer Einstellung, die verschiedene
+    Dateien anfassen, sind zwei Einstellungen. Also ist zepos-config
+    eine harte Abhaengigkeit, und ihr Verzeichnis liegt hier auf dem
+    Suchpfad - genauso, wie src/bin/zepos-settings es tut, und mit
+    derselben Reihenfolge: die Umgebungsvariable, dann der Arbeitsbaum,
+    dann die Installation.
+"""
+import os
+import sys
+from pathlib import Path
+
+CHECKOUT_ROOT = Path(__file__).resolve().parent.parent
+SYSTEM_ROOT = Path("/usr/share/zepos-settings-gui")
+
+for root in (CHECKOUT_ROOT, SYSTEM_ROOT):
+    if (root / "zepos_settings_gui" / "__init__.py").is_file():
+        sys.path.insert(0, str(root))
+        break
+else:
+    print("zepos-settings-gui: das Paket zepos_settings_gui ist weder neben "
+          f"diesem Befehl ({CHECKOUT_ROOT}) noch unter {SYSTEM_ROOT} zu "
+          "finden", file=sys.stderr)
+    raise SystemExit(1)
+
+# Der Arbeitsbaum hat src/ zwei Ebenen ueber diesem Befehl; die
+# Installation hat /usr/share/zepos. Gesucht wird nach settings.py, also
+# durch Hinsehen und nicht durch Raten, welcher der beiden Faelle
+# vorliegt - derselbe Weg, den src/cli.py in seinem Kopf beschreibt.
+_CHECKOUT_SRC = CHECKOUT_ROOT.parent / "src"
+ZEPOS_ROOT = Path(os.environ.get("ZEPOS_SYSTEM_ROOT") or (
+    _CHECKOUT_SRC if (_CHECKOUT_SRC / "settings.py").is_file()
+    else "/usr/share/zepos"))
+
+if not (ZEPOS_ROOT / "settings.py").is_file():
+    print(f"zepos-settings-gui: ZepOS ist in {ZEPOS_ROOT} nicht zu finden.\n"
+          "Dort liegen die Module, durch die diese Anwendung liest und "
+          "schreibt. Das Paket zepos-config neu installieren, oder "
+          "ZEPOS_SYSTEM_ROOT auf sein Verzeichnis setzen.", file=sys.stderr)
+    raise SystemExit(1)
+
+sys.path.insert(0, str(ZEPOS_ROOT))
+
+from zepos_settings_gui.main import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main())

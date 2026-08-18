@@ -1,0 +1,51 @@
+# Die Anmeldung von ZepOS - installiert nach /etc/greetd/zepos.toml
+#
+# WARUM DIESE DATEI NICHT config.toml HEISST
+#     Weil greetd diesen Namen selbst besitzt. Gemessen am Paket aus dem
+#     angehefteten ALA-Schnappschuss 2026/08/04:
+#
+#         tar --zstd -tf greetd-0.10.3-2-x86_64.pkg.tar.zst
+#         ...
+#         etc/greetd/config.toml
+#         etc/pam.d/greetd
+#         usr/lib/systemd/system/greetd.service
+#
+#     Zwei Pakete, die denselben Pfad besitzen, sind in pacman ein
+#     Dateikonflikt, und der bricht die Installation ab, statt sie nur
+#     zu verfaerben. Dieselbe Begruendung steht in
+#     packaging/zepos-desktop/PKGBUILD unter hyprland-qtutils.
+#
+#     Also liegt die ZepOS-Antwort daneben, und greetd wird darauf
+#     gezeigt: greetd(1) der ausgelieferten Handbuchseite kennt
+#     "-c, --config <config>", und src/login/greetd-service.conf ist das
+#     systemd-Drop-in, das den Aufruf entsprechend ersetzt. Ein Drop-in
+#     ist der einzige Weg, der eine fremde Unit aendert, ohne eine
+#     fremde Datei zu besitzen.
+#
+# KEIN AUTOLOGIN, UND DAS IST DIE ENTSCHEIDUNG UND NICHT DAS ERGEBNIS
+#     Das Rauchbild meldet sich ueber `agetty --autologin` selbst an
+#     (iso/profile/airootfs/etc/systemd/system/getty@tty1.service.d/
+#     autologin.conf). Das ist fuer einen Messlauf richtig und fuer ein
+#     installiertes System falsch: dort gehoert die Maschine jemandem.
+#     greetd fragt, immer.
+
+[terminal]
+# Dieselbe Konsole, auf der sonst der Login-Prompt stuende. greetd.service
+# traegt dafuer bereits "Conflicts=getty@tty1.service", sodass nicht zwei
+# Programme um tty1 streiten - nachgelesen in der ausgelieferten Unit.
+vt = 1
+
+[default_session]
+# Nicht "cage -- regreet" und nicht "tuigreet", sondern das Skript, das
+# beides der Reihe nach versucht. Spec 8.5 verlangt die Erkennung "ueber
+# den tatsaechlichen Startversuch, nicht ueber eine Hardware-Liste", und
+# genau das kann eine Zeile Konfiguration nicht: sie hat nur eine
+# Antwort. src/bin/zepos-greeter hat drei.
+command = "/usr/bin/zepos-greeter"
+
+# Der Benutzer, den greetd fuer die Anmeldemaske anlegt (usr/lib/
+# sysusers.d/greetd.conf des Pakets: "u greeter" und "m greeter video").
+# Die Mitgliedschaft in video ist es, was den Greeter ueberhaupt an
+# /dev/dri laesst - ohne sie kaeme cage nicht hoch und der Textgreeter
+# waere nicht der Rueckfall, sondern der Normalfall.
+user = "greeter"

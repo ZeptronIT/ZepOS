@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+"""Das Tastenmodul der Leiste - abgeleitet, nicht gepflegt.
+
+HIER STAND EINE LISTE, UND SIE HAT GELOGEN
+    146 Zeilen `shortcuts = { "Kategorie": [("SUPER + X", "Text"), ...] }`
+    neben einer Konfiguration, die dieselben Tasten schon kannte. Am
+    11.08.2026 stand darin "Browser (Epiphany)", waehrend die Bindung
+    firefox startet; davor an acht weiteren Stellen etwas anderes als
+    das, was die Taste tat. Beides wurde korrigiert - und die ZWEITE von
+    Hand gepflegte Liste, die Ueberlagerung in ags/widget/Shortcuts.tsx,
+    hat die Korrektur nie erreicht: sie schrieb am 12.08.2026 immer noch
+    "Epiphany".
+
+    GEMESSEN an einem vollstaendigen `--all`-Lauf am 12.08.2026: 86
+    gebundene Tastenkombinationen, 19 davon von keiner der beiden Listen
+    genannt, 26 Eintraege der Listen ohne Bindung im erzeugten Baum.
+
+    Deshalb steht hier keine Liste mehr. Die Beschreibungen stehen als
+    `# @Gruppe: Text` ueber den bind-Zeilen selbst, keybinds.py liest
+    sie, und dieses Modul zeigt, was dort steht. Eine Uebersicht, die aus
+    den Bindungen ABGELEITET wird, kann nicht mehr etwas anderes sagen
+    als sie.
+
+DIE MONITORZEILEN BLEIBEN, UND ZWAR AUS DEMSELBEN GRUND
+    Sie kommen aus monitors.py, also aus derselben Antwort, aus der auch
+    die Workspace-Regeln entstehen. Das war die erste Stelle dieses
+    Moduls, die abgeleitet statt aufgeschrieben wurde.
+"""
+import html
+import json
+import sys
+
+ZEPOS_SYSTEM_ROOT = "{{ZEPOS_SYSTEM_ROOT}}"
+
+# Wieviele Zeilen der Tooltip traegt.
+#
+# GEMESSEN, NICHT GEWAEHLT: die Grundschrift der Leiste ist bei der
+# ausgelieferten Groesse 24 px hoch, eine Tooltipzeile also gut 28 px
+# einschliesslich Zeilenabstand. Auf dem kleinsten Schirm, fuer den
+# src/sizes.py eine Aufloesungsklasse hat - 1920x1080 -, bleiben damit
+# rund 38 Zeilen, bevor der Tooltip oben und unten abgeschnitten wird.
+# 36 laesst zwei Zeilen Luft fuer Rahmen und Fusszeile.
+#
+# Was nicht mehr hineinpasst, wird NICHT weggelassen, sondern gezaehlt:
+# die Fusszeile nennt die Zahl der uebrigen Tasten und die Taste, mit der
+# man sie alle durchsucht. Hier stand vorher eine feste Auswahl von
+# sieben "primaeren" Kategorien - eine zweite Liste neben der zweiten
+# Liste, und die Tasten der uebrigen sechs Kategorien hat nie jemand
+# gesehen.
+ZEILEN_IM_TOOLTIP = 36
+
+# Die Taste, die alles durchsucht. Sie steht in
+# hyprland-universal-config.template und wird hier NUR fuer die
+# Fusszeile gebraucht - was der Klick tut, steht unten in "on-click" und
+# ist dasselbe Kommando.
+SUCHE = "zepos-menu --show all"
+SUCHTASTE = "SUPER + SHIFT + H"
+
+
+def bindungen():
+    """Die Tastenbelegung dieser Sitzung, nach Gruppen.
+
+    Ein Fehler kostet nur diesen Abschnitt: das hier ist ein
+    Leistenmodul, das bei jedem Intervall neu laeuft, und eine
+    Konfiguration, die sich gerade nicht lesen laesst, darf nicht die
+    ganze Leiste mitnehmen.
+    """
+    try:
+        if ZEPOS_SYSTEM_ROOT not in sys.path:
+            sys.path.insert(0, ZEPOS_SYSTEM_ROOT)
+        import keybinds
+
+        return keybinds.groups(keybinds.read())
+    except Exception:
+        return []
+
+
+def monitor_layout():
+    """Welcher Schirm welche Workspaces hat, von links nach rechts.
+
+    Diese Liste stand hier fest im Quelltext: zwei Anschlüsse, zwei
+    Fabrikate, eine Aufteilung - der Schreibtisch eines Einzelnen, und ab
+    dem ersten umgesteckten Kabel falsch. Sie kommt jetzt aus
+    monitors.py, also aus derselben Antwort, aus der auch die
+    Hyprland-Workspace-Regeln und die Workspace-Knöpfe der Bar entstehen.
+
+    Ein Fehler kostet nur diesen Abschnitt: das hier ist ein
+    Leistenmodul, das bei jedem Intervall neu läuft, und ein nicht
+    erreichbarer Compositor - in einer TTY der Normalfall - darf nicht die
+    gesamte Shortcut-Anzeige mitnehmen.
+    """
+    try:
+        if ZEPOS_SYSTEM_ROOT not in sys.path:
+            sys.path.insert(0, ZEPOS_SYSTEM_ROOT)
+        import monitors
+
+        rows = []
+        found = monitors.detect()
+        for monitor, workspaces in monitors.layout(found):
+            span = (f"Workspace {workspaces[0]}" if len(workspaces) == 1
+                    else f"Workspaces {workspaces[0]}-{workspaces[-1]}")
+            rows.append((monitor.name,
+                         f"{monitor.description or monitor.name} - {span}"))
+        return rows
+    except Exception:
+        return []
+
+
+def abschnitte():
+    """(Ueberschrift, Zeilen) in der Reihenfolge der Konfiguration.
+
+    Die Monitorzeilen haengen hinten an, weil sie keine Tasten sind: eine
+    Uebersicht ueber Tastenbefehle, die mit dem Bildschirmaufbau anfaengt,
+    beantwortet die Frage nicht, mit der jemand hinsieht.
+    """
+    gefunden = [(gruppe, [(bindung.chord, bindung.description)
+                          for bindung in mitglieder])
+                for gruppe, mitglieder in bindungen()]
+    zeilen = monitor_layout()
+    if zeilen:
+        # Nur eintragen, wenn es etwas zu zeigen gibt: eine Kategorie mit
+        # null Einträgen wäre eine Überschrift über nichts.
+        gefunden.append(("{{ICON_DASHBOARD}} Monitor-Layout", zeilen))
+    return gefunden
+
+
+def format_tooltip(gruppen, gezeigt):
+    """Die Gruppen, die ins Bild passen, als Kasten."""
+    content_lines = [""]
+
+    for ueberschrift, eintraege in gruppen[:gezeigt]:
+        content_lines.append(f"├─ {ueberschrift}")
+        content_lines.append("│")
+        breite = max(len(taste) for taste, _ in eintraege)
+        for taste, text in eintraege:
+            content_lines.append(f"│  {taste:<{breite}}  →  {text}")
+        content_lines.append("│")
+
+    uebrig = sum(len(eintraege) for _, eintraege in gruppen[gezeigt:])
+    info_lines = [f"  {{ICON_INFO}} {SUCHTASTE} → alles durchsuchen"]
+    if uebrig:
+        info_lines.append(
+            f"  {{ICON_INFO}} und {uebrig} weitere Tasten in "
+            f"{len(gruppen) - gezeigt} Gruppen")
+
+    all_lines = content_lines + info_lines
+    max_length = max(len(line.replace("│", "").replace("├─", "  "))
+                     for line in all_lines if line.strip())
+
+    header = "╭─── HYPRLAND SHORTCUTS " + "─" * (max_length - 23) + "╮"
+    footer = "╰" + "─" * (max_length) + "╯"
+
+    lines = [header]
+    lines.extend(content_lines)
+    lines.append(footer)
+    lines.append("")
+    lines.extend(info_lines)
+    return "\n".join(lines)
+
+
+def passende_gruppen(gruppen):
+    """Wieviele Gruppen in ZEILEN_IM_TOOLTIP passen - mindestens eine.
+
+    Mindestens eine, weil ein Kasten ohne Inhalt schlimmer ist als ein
+    abgeschnittener: er sieht aus wie ein Modul, das nichts weiss.
+    """
+    genutzt = 0
+    passend = 0
+    for _, eintraege in gruppen:
+        # Ueberschrift, Trennzeile, die Eintraege, Trennzeile.
+        braucht = len(eintraege) + 3
+        if passend and genutzt + braucht > ZEILEN_IM_TOOLTIP:
+            break
+        genutzt += braucht
+        passend += 1
+    return passend
+
+
+def main():
+    gruppen = abschnitte()
+    gesamt = sum(len(eintraege) for _, eintraege in gruppen)
+
+    output = {
+        # Die Zahl ist gezaehlt, nicht geschrieben. Sie stand frueher als
+        # "74 Keybinds" in einem Kommentar der Ueberlagerung, waehrend die
+        # Tabelle daneben 79 hielt.
+        "text": f"{{ICON_KEYBOARD}}  {gesamt}",
+        "tooltip": html.escape(
+            format_tooltip(gruppen, passende_gruppen(gruppen))),
+        "class": "custom-shortcuts",
+        # Der Klick oeffnet die Suche.
+        #
+        # Hier stand `kitty -e nano ~/.config/hypr/hyprland.conf` - ein
+        # Editor auf einer erzeugten Datei, die in ihrer ersten Zeile "DO
+        # NOT EDIT DIRECTLY" sagt und beim naechsten Lauf des Generators
+        # ueberschrieben wird. Wer dort etwas aenderte, verlor es
+        # spaetestens beim naechsten Anmelden, ohne dass jemand es ihm
+        # sagte.
+        "on-click": SUCHE,
+    }
+
+    print(json.dumps(output))
+
+
+if __name__ == "__main__":
+    main()

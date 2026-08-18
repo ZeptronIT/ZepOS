@@ -1,0 +1,133 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# The GPG key of the ZepOS repository (spec §4.2, §8.6).
+#
+# WHAT THIS PACKAGE IS FOR
+#     Every other package in packaging/out/ is signed, and every
+#     pacman.conf that names [zepos] says `SigLevel = Required`. Neither
+#     of those statements means anything on a machine whose pacman
+#     keyring has never been told about the key: pacman verifies a
+#     signature against a key it has been asked to trust, and rejects one
+#     from a key it merely has. That is the whole content of this
+#     package - the public half, plus the two files `pacman-key
+#     --populate` reads, plus the scriptlet that runs it.
+#
+#     Spec §8.6 is why it exists from the first ISO rather than from the
+#     first release that needs it: "Wird jedoch spaeter signiert, muss
+#     jedes bereits installierte System den Schluessel von Hand
+#     importieren."
+#
+# WHERE THE KEY COMES FROM
+#     packaging/build.sh exports the public half of the key it is about
+#     to sign with into this directory, before the build container
+#     starts. So the keyring package and the signatures always describe
+#     the same key: there is no second place to update, and no way to
+#     ship a keyring for a key that signed nothing.
+#
+#     The private half never comes near this - build.sh signs on the
+#     host after the container has exited, and packaging/keys/ is
+#     gitignored in full. The exported public file is gitignored too,
+#     because the key that is exported TODAY is the throwaway one
+#     packaging/make-test-key.sh makes: committing it would mean every
+#     clone builds a keyring package that trusts a key whose private half
+#     is in somebody's working tree. When there is a release key, its
+#     public half is a file to commit here and the `zepos-repo.pub`
+#     produced by the build is what checks it - not the other way round.
+#
+# WHAT `pacman-key --populate zepos` NEEDS, EXACTLY
+#     Read out of /usr/bin/pacman-key rather than guessed, because the
+#     interesting half is the second file:
+#
+#       /usr/share/pacman/keyrings/zepos.gpg      imported with `gpg --import`
+#       /usr/share/pacman/keyrings/zepos-trusted  every fingerprint in it
+#                                                 is LOCALLY SIGNED
+#
+#     Without the -trusted file the key is imported and pacman still
+#     refuses every signature made with it, because an imported key is
+#     not a trusted key. Its format is a gpg ownertrust dump:
+#     `<40 hex digits>:4:`, one per line - the same shape as
+#     /usr/share/pacman/keyrings/archlinux-trusted, which lists Arch's
+#     five master keys and nothing else.
+#
+#     The fingerprint is read out of the key file rather than written
+#     here. A fingerprint typed into a recipe next to the key it is
+#     supposed to describe is a fingerprint that can disagree with it.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+_here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+pkgname=zepos-keyring
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+arch=('any')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+# Deliberately empty, and it matches spec §4.2's table. The scriptlet
+# calls usr/bin/pacman-key, which comes from pacman - the program that
+# is running the scriptlet. archlinux-keyring declares nothing either,
+# for the same reason.
+depends=()
+
+source=('zepos-repo.pub')
+sha256sums=('SKIP')
+
+# The key, read where makepkg has not unpacked anything yet: this runs
+# while the file is being SOURCED, so $srcdir does not exist. $_here is
+# resolved from BASH_SOURCE so that makepkg run in this directory and
+# packaging/build.sh run from the repository root find the same file.
+_key_file="$_here/zepos-repo.pub"
+_key_fingerprint="$(gpg --with-colons --show-keys "$_key_file" 2>/dev/null \
+    | awk -F: '/^fpr:/ { print $10; exit }')"
+_key_uid="$(gpg --with-colons --show-keys "$_key_file" 2>/dev/null \
+    | awk -F: '/^uid:/ { print $10; exit }')"
+
+# A test key is still a private key, and a keyring built from one is a
+# keyring that must never be mistaken for the release one. It is not
+# refused - make-test-key.sh exists precisely so the signing path can be
+# executed - but it says so where `pacman -Qi zepos-keyring` shows it.
+if [[ "$_key_uid" == *"DO NOT TRUST"* ]]; then
+    pkgdesc="ZepOS repository key - TEST KEY, NOT A RELEASE KEY ($_key_uid)"
+else
+    pkgdesc="The GPG key the ZepOS package repository is signed with"
+fi
+
+install=zepos-keyring.install
+
+package() {
+    # Refused here rather than producing an empty keyring. A
+    # zepos-keyring that carries no key installs, runs its scriptlet,
+    # populates nothing, and leaves a machine that fails its next
+    # `pacman -Syu` with a signature error naming a key nobody can find.
+    [[ -s "$srcdir/zepos-repo.pub" ]] || {
+        echo "packaging/zepos-keyring/zepos-repo.pub is missing or empty." >&2
+        echo "packaging/build.sh exports it from the key it signs with;" >&2
+        echo "build with --key <id>, or with ./packaging/make-test-key.sh." >&2
+        return 1
+    }
+    [[ ${#_key_fingerprint} -eq 40 ]] || {
+        echo "no 40-digit fingerprint could be read out of zepos-repo.pub;" >&2
+        echo "read: '$_key_fingerprint'" >&2
+        return 1
+    }
+
+    install -Dm644 "$srcdir/zepos-repo.pub" \
+        "$pkgdir/usr/share/pacman/keyrings/zepos.gpg"
+
+    # The ownertrust dump. `4` is marginal trust, which is what
+    # archlinux-trusted carries for all five of its entries - and for
+    # pacman it is the local signature pacman-key makes from this list
+    # that decides, not the number.
+    printf '%s:4:\n' "$_key_fingerprint" \
+        > "$pkgdir/usr/share/pacman/keyrings/zepos-trusted"
+    chmod 0644 "$pkgdir/usr/share/pacman/keyrings/zepos-trusted"
+
+    # No zepos-revoked file. An empty one would claim a revocation list
+    # exists and is empty; there is no revocation to record, and
+    # pacman-key skips the file when it is absent.
+
+    install -Dm644 "$_zepos_repo/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    echo "zepos-keyring carries $_key_fingerprint"
+    echo "                      $_key_uid"
+}

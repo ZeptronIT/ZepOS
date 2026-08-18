@@ -1,0 +1,16 @@
+[Unit]
+Description=Network Watchdog - Überwacht und repariert VM-Internetverbindung
+After=default.target
+
+[Service]
+Type=simple
+# %E is systemd's own specifier for the user configuration directory,
+# which follows XDG_CONFIG_HOME. A unit file gets no shell, so the
+# environment variable the generated scripts use would arrive here
+# unexpanded, as literal characters.
+ExecStart=%E/zepos/helpers/network-watchdog.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

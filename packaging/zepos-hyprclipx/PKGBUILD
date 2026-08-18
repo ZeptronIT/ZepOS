@@ -1,0 +1,259 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# hyprclipx - der Zwischenablage-Verlauf auf SUPER+SHIFT+V (Spec §7.1).
+#
+# WAS SICH AM 11.08.2026 GEAENDERT HAT: DIE QUELLE LIEGT JETZT HIER
+#     packaging/zepos-hyprlaunch/PKGBUILD hat die Begruendung in voller
+#     Laenge; sie gilt fuer diesen Baum genauso, mit einer Zahl
+#     dazwischen. GEMESSEN am 11.08.2026 an der GitHub-API:
+#
+#         Sterne 1, Forks 0, Tags 0, Beitragende 1
+#         letzter Commit 2026-08-03, also acht Tage alt
+#         "license": null - keine LICENSE-Datei, kein Urhebervermerk
+#
+#     Acht Tage sind nicht sechs Monate; dieser Baum ist lebendiger als
+#     der des Starters. Das aendert am Ergebnis nichts, und zwar aus
+#     zwei Gruenden. Erstens ist die Verfuegbarkeit dieselbe: ein Konto
+#     einer Privatperson, null Forks, und der Zwischenablage-Verlauf ist
+#     eine Taste, die der Nutzer taeglich drueckt. Zweitens ist der
+#     eigentliche Auftrag die Anpassung - 37 Farbliterale in
+#     einundzwanzig Toenen aus dem uebersetzten Objekt herausholen -,
+#     und eine Anpassung, die nicht im eigenen Baum liegt, ist bei der
+#     naechsten Commit-Anhebung wieder weg.
+#
+# WAS AN DER UEBERNOMMENEN QUELLE GEAENDERT WURDE
+#     168 Zeilen CSS aus dem Objekt heraus in
+#     src/styles/hyprclipx-style.template; die Fenstermasse aus
+#     `static constexpr` in eine erzeugte Datei; die angenommene
+#     Zeilenhoehe von 28 Pixeln durch eine gemessene ersetzt, weil eine
+#     Annahme ueber die Zeilenhoehe falsch wird, sobald die Schrift dem
+#     Regler folgt. Die Koepfe der geaenderten Dateien fuehren die
+#     Messungen einzeln.
+#
+# DIE LIZENZ
+#     BSD-3-Clause, und der Urhebervermerk kommt als Datei mit -
+#     plugins/LICENSE, dort steht auch, warum er dort zum ersten Mal
+#     ausgeschrieben ist.
+#
+# WARUM ZWEI DATEIEN
+#     Dieselbe Teilung wie beim Starter, aus demselben Grund und mit
+#     derselben Folge: das Plugin enthaelt kein GTK und startet das
+#     Fenster als eigenen Prozess mit
+#
+#         execlp("hyprclipx-ui", "hyprclipx-ui", arg, nullptr)   Globals.cpp
+#
+#     also muss /usr/bin/hyprclipx-ui existieren, sonst ist die Taste
+#     tot.
+#
+# WAS DIESES PAKET SEIT DEM 12.08.2026 AUSLIEFERT: DEN SAMMLER
+#     Hier stand bis dahin, warum es ihn NICHT ausliefern kann, und der
+#     Abschnitt endete mit "sie ist am 11.08.2026 weiterhin offen: das
+#     Plugin laedt, sein Fenster oeffnet, und der Sammler dahinter
+#     laeuft nicht". Das ist erledigt, und zwar an allen vier Stellen,
+#     an denen es offen war.
+#
+#     DIE QUELLE  Upstreams helpers/ lag nicht in diesem Baum.
+#         plugins/hyprclipx/helpers/collector.py und
+#         caret-position.py liegen jetzt darin - dieselbe Uebernahme
+#         wie beim C++ daneben, mit demselben Vermerk in
+#         plugins/LICENSE.
+#
+#     DER PFAD  Globals.cpp suchte fest verdrahtet unter
+#         $HOME/.local/bin, wo ein pacman-Paket nichts besitzen darf
+#         (der Kopf von src/paths.py hat das Argument). Jetzt liegen
+#         beide unter /usr/lib/hyprclipx/, gelegt von CMake, und der
+#         Pfad steht in ~/.config/hyprclipx/config.
+#
+#     DER START  hyprland-universal-config.template startete
+#         `wl-paste --watch cliphist store` und hielt das fuer den
+#         Sammler dieses Plugins. Es ist ein anderer: cliphist macht
+#         keinen Unix-Socket auf, und das Fenster fragt
+#         /tmp/clipman.sock. Beide Zeilen stehen jetzt da, weil es
+#         zwei Verlaeufe sind - cliphist fuellt den auf SUPER+ALT+V.
+#
+#     DER RUECKFALL  src/plugins.py sah nur nach dem OBJEKT, und das
+#         Objekt war da. Es sieht jetzt auch nach dem Sammler; fehlt
+#         er, wird der zepos-plugin-missing-Block geschrieben und
+#         SUPER+SHIFT+V geht auf cliphist-menu.sh. Ein Verlauf mit
+#         fremdem Aussehen schlaegt einen leeren im eigenen.
+#
+#     clipman-client.py kommt NICHT mit, und das ist kein Versehen:
+#     GEMESSEN am 12.08.2026 hatte das Feld, das darauf zeigte, zwei
+#     Zuweisungen und null Leser - die C++-Haelfte spricht den Socket
+#     in ClipboardManager::sendCommand() selbst an. Das Feld ist
+#     geloescht.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-hyprclipx
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="Der Zwischenablage-Verlauf von ZepOS: ein GTK4-Layer-Shell-Fenster und sein Hyprland-Plugin"
+arch=('x86_64')
+url="https://github.com/ZeptronIT/ZepOS"
+# Gemessen am 11.08.2026: der Quellbaum traegt KEINE Lizenzdatei und
+# keinen Copyright-Vermerk, die GitHub-API meldet "license": null. Hier
+# stand trotzdem BSD-3-Clause - vermutlich mitgewandert von den Plugins
+# des Hyprland-Projekts, die wirklich so lizenziert sind.
+#
+# 'custom' beschreibt die Lage, statt eine Lizenz zu behaupten: Leon
+# Marzoll hat am 11.08.2026 erklaert, dass ZepOS die Quellen verwenden
+# und veraendern darf. Eine Erlaubnis gilt dem, dem sie erteilt wurde -
+# was ein NUTZER von ZepOS mit diesem Code darf, steht damit nirgends.
+# plugins/LICENSE haelt das fest und nennt das eine, was die Luecke
+# schliesst: eine Lizenzdatei im Repositorium des Urhebers.
+license=('custom')
+
+# Das ABI-Kuerzel, das zepos-hyprland veroeffentlicht, aus der Datei
+# gelesen, die jenes Paket installiert. packaging/zepos-hyprzones/
+# PKGBUILD hat die Gruende vollstaendig.
+_abi_file="/usr/lib/hyprland/plugin-abi"
+_abi="$(cat "$_abi_file" 2>/dev/null || true)"
+: "${_abi:=zepos.hyprland.absent}"
+
+# python, wl-clipboard und sqlite kommen seit dem 12.08.2026 dazu, weil
+# das Paket seit dem den Sammler mitliefert:
+#
+#   python          collector.py und caret-position.py sind Python 3
+#   wl-clipboard    der Sammler liest mit `wl-paste` und schreibt beim
+#                   Einfuegen mit `wl-copy` zurueck. Ohne die beiden
+#                   sammelt er nichts und der Verlauf bleibt leer -
+#                   also genau der Zustand, gegen den er da ist.
+#
+# sqlite steht NICHT dabei: das sqlite3-Modul ist Teil von python
+# selbst, und `pacman -Qi python` fuehrt sqlite als dessen Abhaengigkeit.
+# Sie hier zu wiederholen hiesse, eine fremde Abhaengigkeitskette
+# nachzubauen, die sich unabhaengig von uns aendert.
+depends=('zepos-hyprland>=0.56.1' 'zepos-hyprland<0.57.0'
+         "hyprland-plugin-abi=$_abi"
+         'gtk4' 'gtk4-layer-shell' 'pango' 'cairo' 'glib2' 'glibc'
+         'libgcc' 'libstdc++'
+         'python' 'wl-clipboard'
+         'ttf-fira-code' 'ttf-jetbrains-mono-nerd')
+makedepends=('cmake' 'ninja' 'zepos-hyprland')
+
+optdepends=('zepos-config: erzeugt config und style.css, ohne die das Fenster ungestylt bleibt')
+
+source=("zepos-hyprclipx-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_src="zepos-hyprclipx-$pkgver"
+_plugin_dir="usr/lib/hyprland/plugins"
+
+build() {
+    cd "$srcdir/$_src"
+    cmake -S . -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_SKIP_RPATH=ON
+    cmake --build build --config Release
+}
+
+package() {
+    cd "$srcdir/$_src"
+    DESTDIR="$pkgdir" cmake --install build
+
+    test -f "$pkgdir/$_plugin_dir/hyprclipx.so" || {
+        echo "das Plugin-Objekt liegt nicht unter /$_plugin_dir/hyprclipx.so;" >&2
+        echo "src/plugins.py wuerde dieses Plugin wortlos fallen lassen" >&2
+        return 1
+    }
+
+    local ui="$pkgdir/usr/bin/hyprclipx-ui"
+    test -x "$ui" || {
+        echo "hyprclipx-ui liegt nicht in /usr/bin; das execlp des" >&2
+        echo "Plugins faende nichts und SUPER+SHIFT+V waere eine tote Taste" >&2
+        return 1
+    }
+
+    # DIE DRITTE UND VIERTE DATEI, SEIT DEM 12.08.2026
+    #
+    # Der Sammler ist die Haelfte, ohne die das Fenster leer aufgeht -
+    # der Kopf dieses Rezepts fuehrt aus, warum er bis dahin fehlte.
+    # Geprueft, weil sein Versagen NICHT auffaellt: es gibt keine
+    # Fehlermeldung, keine Zeile im Protokoll, nur eine leere Liste,
+    # die aussieht wie "du hast nichts kopiert".
+    #
+    # Der Pfad ist derselbe, den src/plugins.py prueft, um zu
+    # entscheiden, ob hyprclipx ueberhaupt geladen wird. Legte dieses
+    # Rezept ihn woandershin, gaebe es ein Paket, das alles mitbringt
+    # und dessen Plugin trotzdem auf jeder Maschine als fehlend gilt.
+    local collector="$pkgdir/usr/lib/hyprclipx/collector.py"
+    test -x "$collector" || {
+        echo "der Sammler liegt nicht unter /usr/lib/hyprclipx/collector.py." >&2
+        echo "src/plugins.py wuerde hyprclipx daraufhin gar nicht laden," >&2
+        echo "und SUPER+SHIFT+V fiele auf cliphist-menu.sh zurueck." >&2
+        return 1
+    }
+    test -x "$pkgdir/usr/lib/hyprclipx/caret-position.py" || {
+        echo "der Schreibmarken-Helfer fehlt. Die zweite von drei" >&2
+        echo "Strategien faellt dann lautlos aus - popen() auf eine" >&2
+        echo "Datei, die es nicht gibt, meldet nichts -, und der" >&2
+        echo "Verlauf geht am Mauszeiger auf statt an der Schreibmarke." >&2
+        return 1
+    }
+
+    # Und beide muessen uebersetzbar sein. Ein Syntaxfehler im Sammler
+    # ist ein Prozess, der beim Anmelden sofort stirbt, und die Sitzung
+    # sagt darueber nichts: er startet aus einem exec-once mit
+    # umgelenkter Ausgabe.
+    python -m py_compile "$collector" \
+        "$pkgdir/usr/lib/hyprclipx/caret-position.py" || {
+        echo "eine der beiden Python-Haelften laesst sich nicht" >&2
+        echo "uebersetzen - sie wuerde beim Anmelden wortlos sterben" >&2
+        return 1
+    }
+    # py_compile legt __pycache__ neben die Datei; das gehoert nicht ins
+    # Paket. Ein .pyc in /usr/lib waere eine Datei, die pacman besitzt
+    # und die beim naechsten Python-Wechsel still veraltet.
+    rm -rf "$pkgdir/usr/lib/hyprclipx/__pycache__"
+
+    # Zwei Werkzeuge fuer zwei Fragen - die Begruendung steht in
+    # packaging/zepos-logout/PKGBUILD und wortgleich in
+    # packaging/zepos-hyprlaunch/PKGBUILD.
+    #
+    # GEMESSEN am 11.08.2026 an genau diesem Objekt, lokal gebaut:
+    #     objdump -p hyprclipx-ui | grep NEEDED | grep gtk
+    #       NEEDED  libgtk-4.so.1
+    #       NEEDED  libgtk4-layer-shell.so.0
+    #     ldd hyprclipx-ui | grep -c libgtk-3   ->  0
+    local needed
+    needed="$(readelf -d "$ui")"
+
+    grep -q "libgtk-4" <<<"$needed" || {
+        echo "hyprclipx-ui ist nicht gegen GTK4 gelinkt." >&2
+        return 1
+    }
+    grep -q "gtk4-layer-shell" <<<"$needed" || {
+        echo "hyprclipx-ui wurde ohne gtk4-layer-shell gebaut." >&2
+        echo "Das Fenster setzt sich an die Schreibmarke des zuletzt" >&2
+        echo "fokussierten Fensters; ohne Layer-Shell platziert der" >&2
+        echo "Compositor es irgendwohin." >&2
+        return 1
+    }
+
+    local loaded
+    loaded="$(ldd "$ui")"
+    if grep -q "libgtk-3" <<<"$loaded"; then
+        echo "hyprclipx-ui laedt libgtk-3:" >&2
+        grep "libgtk-3" <<<"$loaded" >&2
+        return 1
+    fi
+
+    if readelf -d "$pkgdir/$_plugin_dir/hyprclipx.so" | grep -q "libgtk"; then
+        echo "das Plugin-Objekt linkt gegen GTK. Es wird IN den" >&2
+        echo "Compositor geladen; die Teilung in Plugin und" >&2
+        echo "Fensterprozess ist genau dafuer da." >&2
+        return 1
+    fi
+
+    [[ -f "$_abi_file" && "$(<"$_abi_file")" == "$_abi" ]] || {
+        echo "das ABI des Compositors ist nicht das, das dieser Bau" >&2
+        echo "angemeldet hat:" >&2
+        echo "  angemeldet: $_abi" >&2
+        echo "  installiert: $(cat "$_abi_file" 2>/dev/null || echo '<kein zepos-hyprland>')" >&2
+        return 1
+    }
+
+    install -Dm644 "$srcdir/$_src/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

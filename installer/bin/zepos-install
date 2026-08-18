@@ -1,0 +1,248 @@
+#!/usr/bin/env python
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Entry point. Picks the graphical surface when one can actually run.
+
+Detection has two layers, matching Spec 8.5 ("Startet die grafische Sitzung
+nicht, uebernimmt die TUI. Erkennung ueber den tatsaechlichen Startversuch,
+nicht ueber eine Hardware-Liste."):
+
+  * choose_surface() is a cheap, pure pre-check: is a display environment
+    variable set, and does the gi/Gtk4/Adw import work at all? It rules
+    out the surface before spending any time on it, but it cannot prove
+    the graphical session actually works - a stale DISPLAY value or a
+    broken compositor still passes it.
+
+  * main() then makes the real attempt and watches how it actually goes,
+    which is the only trustworthy signal. That distinction matters more
+    than it looks: measured on this machine, with GTK4/libadwaita
+    installed but no display attached, Adw.Application.run() does NOT
+    raise when a widget cannot be constructed. GLib invokes do_activate()
+    as a signal callback; a Python exception raised inside it cannot
+    cross back over the C call stack that invoked it, so PyGObject prints
+    it via sys.excepthook and lets the (now empty) application fall out
+    of its event loop normally - run() returns 0, the same code as a
+    real, successful install. A bare "try: gui_main() / except Exception"
+    around the call, as first sketched for this task, would therefore
+    never fire: there is nothing to catch, and the exit code claims
+    success. _attempt_surface() below watches sys.excepthook for the
+    duration of the call to catch this case too.
+
+Falling back after the user has already typed real answers into the GUI
+is deliberately NOT attempted: installer.gui.app.PageState and
+installer.tui.app.collect() are two independent ways of building the same
+InstallConfig, and neither can currently read the other's half-finished
+state - building that bridge is a change to both surfaces, out of scope
+for an entry point. What IS guaranteed here is that the one failure this
+module exists to catch (Spec 8.5: the graphical session does not start at
+all) always happens before any window is shown, inside do_activate(),
+before InstallerWindow.present() - GTK either has a display connection or
+it does not, checked on the first widget it tries to realize; there is no
+partially-working state to preserve. A crash reached well into a running
+session behaves differently on this same machine (verified the same way):
+GLib logs it and keeps the window open, since nothing here forces the
+loop to quit over one failed callback, so gui_main() simply keeps running
+and this module is never asked to make a fallback decision in the middle
+of one.
+
+A KeyboardInterrupt must never be turned into a silent fallback: Ctrl-C
+means stop, not "try the other interface". Every except clause below
+names Exception, never BaseException, so SystemExit and KeyboardInterrupt
+always keep propagating - including the sys.excepthook path, which
+explicitly does not record either of them as a failure to fall back on.
+"""
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+from typing import Callable, Mapping, Sequence
+
+# WHERE THE MODULES ARE, AND WHY THIS HAS TO BE HERE
+#     The package splits the command from the code it runs, exactly as
+#     src/cli.py describes for zepos-generate:
+#
+#         /usr/bin/zepos-install                  the command
+#         /usr/share/zepos-installer/installer/   everything it imports
+#
+#     so the command cannot find its modules by looking next to itself -
+#     one directory up from /usr/bin is /usr. In a checkout the opposite
+#     holds: installer/bin/zepos-install has the repository root two
+#     directories above it and there is no installed package at all.
+#
+#     Checked by looking rather than by guessing which of the two
+#     situations this is. Nothing can be imported until it has run, which
+#     is why it sits above the first import instead of in a module.
+#
+#     /usr/share/zepos-installer and not site-packages: `installer` is a
+#     top-level name python-installer (the PEP 517 tool) already owns
+#     there, and two packages claiming
+#     /usr/lib/python3.X/site-packages/installer/__init__.py is a pacman
+#     file conflict rather than a shadowing problem.
+_HERE = Path(__file__).resolve().parent
+_ROOT = (_HERE.parents[1]
+         if (_HERE.parents[1] / "installer" / "core" / "i18n.py").is_file()
+         else Path("/usr/share/zepos-installer"))
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+try:
+    from installer.core.i18n import SUPPORTED_LANGUAGES, _, activate
+except ImportError as exc:
+    # Named directory, not module. A half-installed package must not
+    # greet the user with ModuleNotFoundError: that names `installer`,
+    # which tells them nothing about which package is missing or where
+    # it should have put its files.
+    raise SystemExit(
+        f"The ZepOS installer could not be found in {_ROOT}: {exc}\n"
+        "That directory holds the installer modules this command imports. "
+        "Reinstall the zepos-installer package."
+    ) from exc
+
+
+def environment_language(env: Mapping[str, str]) -> str:
+    """The catalogue for the messages printed before any surface exists.
+
+    This module speaks before the user has been asked anything, and its
+    two messages are the ones a failing graphical start produces - the
+    moment where being told what happened matters most. Without this they
+    were the only user-visible strings in the installer that stayed
+    English no matter what.
+
+    The live environment's own locale is the only signal available at
+    that point; an unsupported or absent one falls back to English rather
+    than guessing.
+    """
+    for name in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        value = env.get(name, "")
+        if not value:
+            continue
+        code = value.split(".")[0].split("_")[0].lower()
+        if code in SUPPORTED_LANGUAGES:
+            return code
+    return "en"
+
+
+def gtk_importable() -> bool:
+    """Cheap pre-check: can Gtk4/Adw be imported at all. Does not prove a
+    display is reachable - see the module docstring for why the real
+    attempt in main() is the only trustworthy signal."""
+    try:
+        import gi
+
+        gi.require_version("Gtk", "4.0")
+        gi.require_version("Adw", "1")
+        from gi.repository import Adw, Gtk  # noqa: F401
+    except (ImportError, ValueError):
+        return False
+    return True
+
+
+def choose_surface(env: Mapping[str, str], gui_available: bool) -> str:
+    """Pick a surface from environment and import availability alone -
+    no hardware list, so an unknown GPU degrades to the text interface
+    rather than leaving the ISO without any installer at all."""
+    requested = env.get("ZEPOS_INSTALLER_SURFACE")
+    if requested in {"gui", "tui"}:
+        return requested
+    has_display = bool(env.get("WAYLAND_DISPLAY") or env.get("DISPLAY"))
+    return "gui" if has_display and gui_available else "tui"
+
+
+def _attempt_surface(
+    run_surface: Callable[[Sequence[str], Callable[[], None]], int],
+    argv: Sequence[str],
+) -> tuple[int, BaseException | None]:
+    """Call a surface's main() and report what actually happened, even if
+    the call itself claims success.
+
+    Two channels are watched, because a broken display can fail through
+    either one (see the module docstring for the measured evidence):
+
+      * run_surface(...) raises directly - covers failures reached
+        before the surface's own event loop starts, e.g. the GTK/Adw
+        import itself failing, or the Application object's constructor
+        raising.
+      * an exception reaches sys.excepthook while run_surface(...) is
+        executing but the call still returns normally - covers a broken
+        display discovered once GLib's main loop is already running,
+        which PyGObject cannot turn back into a raised Python exception.
+
+    run_surface is called as run_surface(argv, stop_watching). Calling
+    stop_watching() ends the second channel, and the surface must call it
+    the moment it knows the display works - i.e. once its window is on
+    screen. Watching sys.excepthook for the whole run would otherwise
+    turn ANY later exception into "the graphical interface could not
+    start", and main() would restart the text interface from the first
+    question underneath a perfectly working window. After a successful
+    installation that means being walked back to a second erase of a
+    disk that already carries a system.
+
+    Only Exception instances are treated as a reason to report failure.
+    A KeyboardInterrupt or SystemExit reaching either channel is passed
+    through to whatever handler was previously installed and otherwise
+    ignored here - it must end the program, not select the other
+    surface.
+    """
+    caught: list[Exception] = []
+    watching = True
+    previous_hook = sys.excepthook
+
+    def _capture(exc_type, exc_value, exc_tb) -> None:
+        if watching and isinstance(exc_value, Exception):
+            caught.append(exc_value)
+        previous_hook(exc_type, exc_value, exc_tb)
+
+    def _stop_watching() -> None:
+        nonlocal watching
+        watching = False
+
+    sys.excepthook = _capture
+    try:
+        code = run_surface(argv, _stop_watching)
+    except Exception as exc:
+        return 1, exc
+    finally:
+        sys.excepthook = previous_hook
+
+    return code, (caught[0] if caught else None)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    argv = list(argv if argv is not None else sys.argv[1:])
+    # Before anything is printed: both messages below are user-visible,
+    # and both appear before either surface has had a chance to ask which
+    # language the user wants.
+    activate(environment_language(os.environ))
+    surface = choose_surface(os.environ, gtk_importable())
+
+    if surface == "gui":
+        def _run_gui(gui_argv: Sequence[str], stop_watching: Callable[[], None]) -> int:
+            # Imported here, not at module scope: on a machine without
+            # gi/Gtk4/Adw this raises ModuleNotFoundError, which must be
+            # caught by _attempt_surface() below like any other startup
+            # failure, not crash the whole installer.
+            from installer.gui.app import main as gui_main
+
+            # The graphical surface calls stop_watching() once its window
+            # is on screen - from then on, a failure is a failure of the
+            # installation, not of the display.
+            return gui_main(gui_argv, on_window_shown=stop_watching)
+
+        code, error = _attempt_surface(_run_gui, argv)
+        if error is None:
+            return code
+        print(
+            _("The graphical interface could not start ({reason}).").format(
+                reason=error
+            ),
+            file=sys.stderr,
+        )
+        print(_("Falling back to the text interface."), file=sys.stderr)
+
+    from installer.tui.app import main as tui_main
+
+    return tui_main(argv)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

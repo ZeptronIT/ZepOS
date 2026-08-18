@@ -1,0 +1,344 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# Hyprland 0.56.1, as ZepOS's own package.
+#
+# WHY ZepOS BUILDS ITS OWN COMPOSITOR
+#     Spec §4.3: Hyprland stood in the list of packages usable straight
+#     out of extra, and the revision to §7 took it back out. The five
+#     plugins in §7.1 are ABI-coupled to the compositor, and a compositor
+#     that arrives on a `pacman -Syu` schedule nobody controls is a
+#     compositor that can move under five packages built against it. It
+#     is `zepos-hyprland` so that a plugin can name a version range and
+#     have pacman hold it (§7.3); a dependency on `hyprland` would name
+#     the package Arch moves.
+#
+#     This is not a fork. It is upstream's own release tarball at the
+#     version §4.3 pins, built against the same Arch snapshot as
+#     everything else in packaging/out/ - which is the whole point, see
+#     the ABI note below.
+#
+# WHY THE ABI IS MORE THAN A VERSION NUMBER, AND WHAT THIS PACKAGE DOES
+# ABOUT IT
+#     Hyprland's own load-time check is worth reading before trusting it.
+#     src/plugins/PluginSystem.cpp calls the plugin's pluginAPIVersion()
+#     and compares it against HYPRLAND_API_VERSION - and that macro, in
+#     src/plugins/PluginAPI.hpp, is the literal string "0.1". Every
+#     plugin ever compiled against any 0.x Hyprland passes it. There is
+#     no second check: the compositor dlopens the object, asks for "0.1",
+#     and calls pluginInit.
+#
+#     What actually has to match is the header set. A plugin is C++
+#     compiled against Hyprland's own headers - CCompositor, CWindow,
+#     CMonitor and roughly two hundred more - so it carries their struct
+#     layouts, vtable orders and inline bodies inside itself. Rebuild
+#     Hyprland against a different aquamarine and CMonitor changes shape;
+#     the plugin still says "0.1", still loads, and then reads the wrong
+#     offsets. That failure has no error message anywhere.
+#
+#     Upstream does compute a string that describes this - the abiHash of
+#     `hyprctl version -j`, produced by __hyprland_api_get_hash() as
+#
+#         <commit>_aq_<major.minor>_hu_<...>_hg_<...>_hc_<...>_hlg_<...>
+#
+#     but it is consumed only by hyprpm, which spec §7.2 rejects. So the
+#     packages have to carry it. This recipe assembles exactly that
+#     string, publishes it as
+#
+#         provides=("hyprland-plugin-abi=<that string>")
+#
+#     and writes it to /usr/lib/hyprland/plugin-abi next to the directory
+#     the objects live in. Every zepos-<plugin> package depends on that
+#     exact token, so pacman refuses a plugin and a compositor that were
+#     not built against one another - which the version range of §7.3
+#     cannot do on its own, because 0.56.1 rebuilt against a new
+#     aquamarine is still 0.56.1.
+#
+#     It is assembled at the top of this file rather than in package(),
+#     and that is makepkg's rule and not a preference: lint_provides
+#     reads the provides array out of package() as well and evaluates it
+#     with nothing set, so a token computed there is linted as an empty
+#     version and the build stops with "pkgver in provides is not
+#     allowed to be empty". Measured. What package() does instead is
+#     CHECK it - against the version.h that was shipped, which is the
+#     file the compiler actually read.
+#
+# WHY hyprpm IS COMPILED OUT
+#     -DNO_HYPRPM=true. Spec §7.2 decided against per-user plugin
+#     compilation, and shipping the tool anyway would leave a machine
+#     with two plugin directories - /usr/lib/hyprland/plugins from
+#     packages and ~/.local/share/hyprpm from hyprpm - of which
+#     src/plugins.py can name only the first. It also drops cmake, cpio,
+#     glaze and hyprland-protocols from the runtime dependencies, since
+#     hyprpm is the only reason a compositor needs a build toolchain
+#     installed next to it.
+pkgname=zepos-hyprland
+pkgver=0.56.1
+pkgrel=1
+pkgdesc="Hyprland 0.56.1, the compositor ZepOS's five plugins are built against"
+arch=('x86_64')
+url="https://github.com/hyprwm/Hyprland"
+license=('BSD-3-Clause')
+
+# The commit the release tarball was cut from. It is not looked up: it is
+# baked into src/version.h.in in the tarball itself, which is what makes
+# a build from the release produce the same GIT_COMMIT_HASH - and
+# therefore the same plugin ABI - as upstream's own. Written here so that
+# the token below exists before anything is unpacked; package() compares
+# it against the header that ships and stops if the two disagree.
+_commit=5c9377c15f85c50648f35ca5a213754f95b93ca0
+
+# One component of the ABI token: a library's version with the patch
+# level dropped, exactly as upstream's stripPatch() does it. Read from
+# pkg-config because that is where CMake reads it from too
+# (aquamarine_dep_VERSION and its four siblings), so this is the same
+# number that will end up in version.h.
+#
+# "unknown" rather than an empty string when a library is not there:
+# an empty version fails makepkg's provides lint with a message about
+# arrays, and an ABI token nothing can satisfy fails the plugin builds
+# with a message about the compositor. The second is the true one.
+_abi_part() {
+    local version
+    version="$(pkg-config --modversion "$1" 2>/dev/null)"
+    [[ "$version" == *.* ]] && version="${version%.*}"
+    printf '%s' "${version:-unknown}"
+}
+
+_abi="${_commit}_aq_$(_abi_part aquamarine)_hu_$(_abi_part hyprutils)"
+_abi+="_hg_$(_abi_part hyprgraphics)_hc_$(_abi_part hyprcursor)"
+_abi+="_hlg_$(_abi_part hyprlang)"
+
+# `hyprland` rather than nothing, because xdg-desktop-portal-hyprland and
+# every other package in extra that wants a compositor depends on that
+# name. conflicts, because two Hyprlands would fight over /usr/bin/Hyprland
+# and over which one's headers are in /usr/include/hyprland - and the
+# second of those is the one that would produce plugins for the compositor
+# that is not running.
+provides=("hyprland=$pkgver" 'wayland-compositor' "hyprland-plugin-abi=$_abi")
+conflicts=('hyprland')
+
+# Upstream's dependency set, as Arch's own hyprland package resolves it
+# against this snapshot.
+#
+# WHY SIX OF THEM ARE NAMED TWICE, ONCE AS A SONAME
+#     A package name is satisfied by any version of that package. The
+#     six libraries below are the ones whose ABI Hyprland is compiled
+#     against, and five of them are literally the five in the plugin ABI
+#     token - so an `aquamarine` that bumps its soname under an installed
+#     compositor is exactly the drift `doctor.check_plugin_abi` was
+#     written to report from inside a running session. A soname
+#     dependency is the same statement made to pacman, which can refuse
+#     the upgrade instead of reporting it afterwards.
+#
+#     The numbers are not invented: they are what
+#     `pacman -Si aquamarine` and its five siblings provide at the Arch
+#     snapshot this container is pinned to, and what Arch's own
+#     hyprland-0.56.1-3 records. When one of them moves, this recipe has
+#     to be rebuilt anyway - the ABI token changes with it, and every
+#     plugin package with it.
+#
+#     The rest stay package names. They are the ordinary sort of
+#     dependency, they carry their own soname discipline, and a list of
+#     forty sonames is forty things to keep true for one that matters.
+depends=('aquamarine' 'libaquamarine.so=13-64'
+         'hyprcursor' 'libhyprcursor.so=0-64'
+         'hyprgraphics' 'libhyprgraphics.so=4-64'
+         'hyprlang' 'libhyprlang.so=2-64'
+         'hyprutils' 'libhyprutils.so=13-64'
+         'hyprwire' 'libhyprwire.so=3-64'
+         'cairo'
+         'glib2'
+         'glibc'
+         'glslang'
+         'hyprland-guiutils'
+         'lcms2'
+         'libdrm'
+         'libgcc'
+         'libglvnd'
+         'libinput'
+         'libstdc++'
+         'libx11'
+         'libxcb'
+         'libxcomposite'
+         'libxcursor'
+         'libxfixes'
+         'libxkbcommon'
+         'libxrender'
+         'lua'
+         'mesa'
+         'muparser'
+         'opengl-driver'
+         'pango'
+         'pixman'
+         're2'
+         'tomlplusplus'
+         'util-linux-libs'
+         'wayland'
+         'xcb-util'
+         'xcb-util-errors'
+         'xcb-util-image'
+         'xcb-util-keysyms'
+         'xcb-util-renderutil'
+         'xcb-util-wm'
+         'xorg-xwayland')
+makedepends=('cmake'
+             'glaze'
+             'hyprland-protocols'
+             'hyprwayland-scanner'
+             'ninja'
+             'python'
+             'wayland-protocols'
+             'xcb-proto'
+             'xorgproto')
+
+# The release tarball, not the git tree. It unpacks to hyprland-source/
+# and carries a version.h.in with the commit already substituted, which
+# is why a build from it produces the same GIT_COMMIT_HASH - and
+# therefore the same plugin ABI token - as upstream's own.
+_archive="hyprland-source"
+source=("hyprland-$pkgver.tar.gz::$url/releases/download/v$pkgver/source-v$pkgver.tar.gz")
+sha256sums=('c5b26eb377360358d01839a1de43fdc004a33e56d6a5d442fdad69b9f3a10549')
+
+# The file the compositor and every plugin have to agree on, and where a
+# plugin recipe reads it from. Next to the objects rather than in
+# /usr/share, because the two facts belong together: this is the ABI of
+# the compositor that will load whatever is in ../plugins.
+_abi_file="usr/lib/hyprland/plugin-abi"
+
+# The same token, assembled the other way round: out of the header that
+# is about to be shipped rather than out of pkg-config and the pin.
+#
+# The arithmetic is __hyprland_api_get_hash() in
+# src/plugins/PluginAPI.cpp - commit, then each library at major.minor
+# with the patch level dropped, because upstream drops it too and a
+# difference at patch level would fire on a machine where every plugin
+# loads.
+#
+# The point of computing it twice is that the two have to agree. The one
+# at the top of the file is a claim made before the build; this one is
+# what the compiler read. If a library was upgraded between sourcing this
+# file and configuring cmake, or if upstream changes version.h, the two
+# differ and package() stops - rather than shipping a compositor whose
+# published ABI is not its own.
+_abi_from_header() {
+    local header="$1"
+    local define value out
+
+    _define() {
+        sed -n "s/^#define[ \t]\+$1[ \t]\+\"\([^\"]*\)\".*/\1/p" "$header" | head -1
+    }
+
+    out="$(_define GIT_COMMIT_HASH)"
+    [[ -n "$out" ]] || { echo "no GIT_COMMIT_HASH in $header" >&2; return 1; }
+
+    for define in AQUAMARINE_VERSION:_aq_ HYPRUTILS_VERSION:_hu_ \
+                  HYPRGRAPHICS_VERSION:_hg_ HYPRCURSOR_VERSION:_hc_ \
+                  HYPRLANG_VERSION:_hlg_; do
+        value="$(_define "${define%%:*}")"
+        [[ -n "$value" ]] || { echo "no ${define%%:*} in $header" >&2; return 1; }
+        [[ "$value" == *.* ]] && value="${value%.*}"
+        out+="${define##*:}$value"
+    done
+
+    printf '%s\n' "$out"
+}
+
+build() {
+    cd "$srcdir/$_archive"
+
+    # cmake by hand rather than `make release`, which is what upstream's
+    # Makefile wraps: three of the four options below are not reachable
+    # through it. Arch's own recipe seds -DCMAKE_SKIP_RPATH=ON into that
+    # Makefile for the same reason.
+    #
+    # CMAKE_SKIP_RPATH   or the binary carries a search path into the
+    #                    build tree, which exists on no installed machine.
+    # NO_HYPRPM          spec §7.2, see the header.
+    # Release            what upstream tests and what Arch ships; CMake
+    #                    appends its -O3 to makepkg's CXXFLAGS rather
+    #                    than replacing them, so the hardening flags and
+    #                    _GLIBCXX_ASSERTIONS survive - and those are part
+    #                    of the ABI a plugin has to be compiled with too.
+    cmake -S . -B build -G Ninja \
+        --no-warn-unused-cli \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_SKIP_RPATH=ON \
+        -DNO_HYPRPM=true
+    cmake --build build --config Release
+}
+
+package() {
+    cd "$srcdir/$_archive"
+    DESTDIR="$pkgdir" cmake --install build
+
+    # version.h.in ships next to the generated version.h and would be
+    # picked up by a plugin build's -I; it has @AQUAMARINE_VERSION@ where
+    # the number belongs. Arch removes it too.
+    rm -f "$pkgdir/usr/include/hyprland/src/version.h.in"
+
+    # ------------------------------------------------------------------
+    # Die zwei Sitzungseintraege von upstream
+    # ------------------------------------------------------------------
+    # `cmake --install` legt /usr/share/wayland-sessions/hyprland.desktop
+    # und hyprland-uwsm.desktop ab. Beide starten den Compositor DIREKT,
+    # und genau das darf auf einem ZepOS nicht passieren: die
+    # Konfiguration entsteht unmittelbar VOR dem Compositor, weil
+    # Hyprland die plugin=-Zeilen schon beim Parsen liest. src/plugins.py
+    # benennt "ein Login ueber einen Display-Manager an start-hyprland
+    # vorbei" als die Luecke, die der Generator nicht schliessen kann.
+    # Auf einer frisch installierten Maschine ist das Ergebnis dieses
+    # Weges kein halbes ZepOS, sondern gar keins: ~/.config/hypr gibt es
+    # dort noch nicht, weil zepos-generate nie gelaufen ist.
+    #
+    # WARUM DAS NICHT DER GREETER REGELT
+    #     Weil der die Reihenfolge nicht kennt. Gemessen an ReGreet
+    #     0.5.0: die Sitzungen liegen in einer
+    #     HashMap<String, SessionInfo> (src/sysutil.rs), und
+    #     vorausgewaehlt wird der erste Schluessel beim Iterieren. Rusts
+    #     HashMap wuerfelt ihre Reihenfolge pro Prozess neu - die
+    #     vorausgewaehlte Sitzung waere bei jedem Start eine andere und
+    #     bei zwei von drei Eintraegen die falsche.
+    #
+    #     Von aussen ausblenden geht auch nicht: ReGreet respektiert
+    #     Hidden und NoDisplay, aber diese zwei Dateien gehoeren keinem
+    #     Paket, das sie schreiben duerfte, und XDG_DATA_DIRS zu verengen
+    #     kostet GTK4 die GSettings-Schemata unter /usr/share - dann
+    #     startet der Greeter gar nicht mehr. Die Liste gehoert dorthin,
+    #     wo die Eintraege herkommen, und hier kommen sie her.
+    #
+    # Der Compositor bleibt vollstaendig: /usr/bin/Hyprland und
+    # /usr/bin/start-hyprland sind da, und wer sie von einer Konsole aus
+    # startet, kann das weiterhin. Was wegfaellt, ist der Knopf im
+    # Anmeldebildschirm, der auf einer frischen Installation ins Leere
+    # fuehrt. Welche Sitzungen eine Distribution anbietet, entscheidet
+    # die Distribution.
+    rm -f "$pkgdir/usr/share/wayland-sessions/hyprland.desktop" \
+          "$pkgdir/usr/share/wayland-sessions/hyprland-uwsm.desktop"
+    rmdir --ignore-fail-on-non-empty "$pkgdir/usr/share/wayland-sessions" || true
+
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # ------------------------------------------------------------------
+    # The ABI token
+    # ------------------------------------------------------------------
+    # Read out of the header that is being SHIPPED - the one plugin
+    # packages will compile against - and compared against the token this
+    # package already promises in its provides. A mismatch means the
+    # promise is wrong, and a compositor whose published ABI is not its
+    # own is worse than one with no ABI published at all: every plugin
+    # would install cleanly and none of them would be built for it.
+    local built
+    built="$(_abi_from_header "$pkgdir/usr/include/hyprland/src/version.h")" || return 1
+
+    if [[ "$built" != "$_abi" ]]; then
+        echo "the ABI this build produced is not the one this package" >&2
+        echo "promises in its provides:" >&2
+        echo "  provides:  $_abi" >&2
+        echo "  version.h: $built" >&2
+        return 1
+    fi
+
+    install -Dm644 /dev/stdin "$pkgdir/$_abi_file" <<< "$built"
+    echo "plugin ABI: $built"
+}

@@ -1,0 +1,136 @@
+#!/bin/bash
+# Steht eine Aktualisierung an? - die Oberflaeche zu src/update.py
+# Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+# Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-updates-scripts.template kopieren
+#
+# WOFUER ES DAS GIBT
+#     src/update.py ist fertig: es holt die Datenbank, stellt auf, was
+#     aus [zepos] kommt, spielt genau das ein, zaehlt die
+#     Arch-Aktualisierungen MIT und laesst sie stehen, schreibt einen
+#     Zustand nach /var/lib/zepos/update-state.json und setzt eine Marke,
+#     wenn danach neu erzeugt werden muss. Es hatte am 12.08.2026 KEINE
+#     einzige Oberflaeche - `zepos-update --status` in einem Terminal war
+#     der ganze Weg. Der Nutzer erfuhr nie, dass etwas ansteht.
+#
+# WAS ES NICHT IST
+#     Kein zweites Aktualisierungssystem. Dieses Skript aktualisiert
+#     nichts, holt keine Datenbank und ruft kein pacman. Es LIEST, was
+#     der letzte Lauf hinterlassen hat, und beantwortet genau eine Frage:
+#     muss der Mensch das jetzt sehen?
+#
+# DIE ZWEI QUELLEN, UND WARUM ES ZWEI SIND
+#     update-state.json      fuer die ENTSCHEIDUNG. Ein Feld gegen eine
+#                            Zahl zu halten ist etwas, das ein Skript
+#                            richtig kann.
+#     zepos-update --status  fuer den SATZ. Das ist describe() aus
+#                            src/update.py, im Wortlaut des Moduls. Ihn
+#                            hier nachzubauen hiesse, dieselbe Auskunft
+#                            ein zweites Mal zu formulieren - und beim
+#                            naechsten Feld in update.py haette der
+#                            Nutzer zwei Saetze, die einander
+#                            widersprechen.
+#
+#     Beide lesen dieselbe Datei im selben Augenblick. `--status`
+#     braucht keine Rechte: state_path() ist 0644 (write_state() setzt
+#     das ausdruecklich) und config_path() liegt unter /etc/zepos.
+#
+# WANN ES SCHWEIGT
+#     Immer, ausser es ist etwas zu tun. Vier Zustaende sind etwas:
+#
+#       fehlgeschlagen  Der letzte Lauf ist an pacman gescheitert. Das
+#                       ist der einzige Fall, in dem NICHTS anderes es
+#                       je erfahren wuerde - ein Zeitgeber, der still
+#                       scheitert, scheitert weiter.
+#       Basis liegt an  Arch-Aktualisierungen, die update.scope "zepos"
+#                       mit Absicht nicht anfasst. update.py sagt selbst,
+#                       wozu es sie mitzaehlt: "dass der Nutzer den
+#                       vollen Schritt bewusst tun kann". Bewusst tun
+#                       kann er nur, was er weiss.
+#       neu erzeugen    Die Marke aus mark_regeneration(). Die Vorlagen
+#                       sind neu, die erzeugte Konfiguration ist alt.
+#       abgeschaltet    Der Zeitgeber hat gefeuert und perform() hat
+#                       "disabled" zurueckgegeben - also LAEUFT die
+#                       Einheit, und update.enabled steht trotzdem auf
+#                       false. Genau diesen Widerspruch schreibt
+#                       update.py ausdruecklich in den Zustand, statt zu
+#                       schweigen ("Wer den Zeitgeber von Hand
+#                       einschaltet, obwohl die Einstellung false sagt,
+#                       soll im Journal lesen koennen, warum nichts
+#                       passiert ist"). Ein Journal liest niemand.
+#
+#     Alles andere - nie gelaufen, nichts zu tun, alles eingespielt -
+#     ist kein Modul. Die Leiste traegt achtzehn Module und laeuft auf
+#     1366x768 ueber; was nur manchmal wahr ist, erscheint auch nur dann.
+set -uo pipefail
+
+ICON_UPDATE="{{ICON_UPDATE}}"
+ICON_RELOAD="{{ICON_RELOAD}}"
+ICON_WARNING="{{ICON_WARNING}}"
+
+# Wo der letzte Lauf liegt. Dieselbe Wurzel wie paths.state_root(), mit
+# derselben Umlenkung (ZEPOS_STATE_ROOT), damit ein Test einen Zustand
+# hinlegen kann, ohne /var/lib/zepos zu beschreiben - was er ohne
+# Rechteschritt ohnehin nicht koennte.
+STATE_ROOT="${ZEPOS_STATE_ROOT:-/var/lib/zepos}"
+STATE_FILE="$STATE_ROOT/update-state.json"
+MARKER="$STATE_ROOT/regenerate-required"
+
+# Ein Feld aus dem Zustand, oder leer.
+field() {
+    [ -r "$STATE_FILE" ] || return 0
+    jq -r "$1 // empty" "$STATE_FILE" 2>/dev/null
+}
+
+result=$(field '.result')
+base=$(field '.base_available | length')
+message=$(field '.message')
+[ -n "$base" ] || base=0
+
+text=""
+class=""
+short=""
+
+if [ "$result" = failed ]; then
+    text="$ICON_WARNING"
+    class="updates updates-failed"
+    short="Die letzte Aktualisierung ist gescheitert."
+elif [ -e "$MARKER" ]; then
+    # VOR der Basis geprueft: eine veraltete Konfiguration ist der
+    # Zustand, in dem der Nutzer gerade auf etwas sieht, das nicht mehr
+    # stimmt. Die Arch-Pakete liegen dagegen nur bereit.
+    text="$ICON_RELOAD"
+    class="updates updates-regenerate"
+    short="Neue Vorlagen sind eingespielt - die Konfiguration ist noch die alte."
+elif [ "$base" -gt 0 ]; then
+    text="$ICON_UPDATE $base"
+    class="updates updates-base"
+    short="$base Arch-Aktualisierungen liegen bereit."
+elif [ "$result" = disabled ]; then
+    text="$ICON_UPDATE"
+    class="updates updates-disabled"
+    short="Die Selbstaktualisierung ist abgeschaltet (update.enabled)."
+fi
+
+# Der Satz des Moduls selbst - nur geholt, wenn es etwas zu sagen gibt.
+# Ein Prozessstart je Takt fuer einen Satz, den niemand sieht, waere der
+# Preis dafuer, ihn nicht zu brauchen.
+detail=""
+if [ -n "$text" ] && command -v zepos-update >/dev/null 2>&1; then
+    detail=$(zepos-update --status 2>/dev/null)
+fi
+[ -n "$detail" ] || detail="$short"
+
+tooltip="$short"
+if [ -n "$message" ] && [ "$result" = failed ]; then
+    tooltip="$short
+$message"
+fi
+
+jq -n -c \
+    --arg text "$text" \
+    --arg tooltip "$tooltip" \
+    --arg class "$class" \
+    --arg short "$short" \
+    --arg detail "$detail" \
+    '{text: $text, tooltip: $tooltip, class: $class,
+      short: $short, detail: $detail}'

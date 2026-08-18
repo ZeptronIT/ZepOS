@@ -1,0 +1,712 @@
+// Die Meldungen (AGS v3, GTK4) - der Einblendstapel UND das Zentrum
+// Von ZepOS erzeugt - NICHT DIREKT BEARBEITEN!
+// Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-notifications.template kopieren
+//
+// ZWEI FLAECHEN IN EINER DATEI, UND WARUM SIE ZUSAMMENGEHOEREN
+//     Der EINBLENDSTAPEL oben rechts: was gerade hereinkommt, fuenf
+//     Sekunden lang. Das ist der Ersatz fuer mako und war bis zum
+//     12.08.2026 alles, was es gab.
+//
+//     Das ZENTRUM: der Verlauf und "Nicht stoeren". Es ist neu, und der
+//     Befund dahinter ist einfach: was man verpasst, war weg. Ein
+//     Stapel, der nach fuenf Sekunden verschwindet, ist die einzige
+//     Stelle, an der dieses System eine Auskunft ENDGUELTIG wegwirft -
+//     wer beim Tippen nicht hinsieht, erfaehrt nie, dass etwas da war.
+//     macOS hat dafuer die Mitteilungszentrale hinter der Uhr; hier ist
+//     es dieselbe Uhr, und das kostet keinen Platz auf der Leiste.
+//
+//     Beide leben hier, weil sie dieselben Daten haben. Der Verlauf
+//     entsteht in dem Augenblick, in dem der Stapel eine Karte baut -
+//     eine zweite Datei muesste ihn sich schicken lassen, und dann
+//     gaebe es zwei Listen von Meldungen, die auseinanderlaufen
+//     koennen.
+//
+// WARUM DER STAPEL SEIN FENSTER SELBST BAUT UND NICHT AUS DER FABRIK
+// KOMMT
+//     createOverlayWindow() in utils/overlay.ts baut AUFKLAPPFENSTER:
+//     ein Kopf mit Titel und Schliesskreuz, Keymode ON_DEMAND, Lage am
+//     ZEIGER, ESC schliesst, Inhalt in einer Bildlaufleiste. Jedes
+//     dieser fuenf Merkmale ist an einer Einblendung falsch, und drei
+//     davon sind schaedlich:
+//
+//       Keymode ON_DEMAND   nimmt den TASTATURFOKUS. Eine Meldung, die
+//                           waehrend des Tippens hereinkommt, nimmt dem
+//                           Nutzer damit die Tastatur weg. Der Stapel
+//                           steht auf Keymode.NONE, und das ist der
+//                           Unterschied zwischen einer Meldung und
+//                           einer Unterbrechung.
+//       Lage am Zeiger      Eine Einblendung gehoert an eine feste
+//                           Ecke. Am Zeiger erschiene sie unter der
+//                           Hand, mitten in der Arbeit.
+//       Kopf mit Titel      Eine Karte, die fuenf Sekunden steht,
+//                           traegt keine Fensterleiste mit
+//                           Schliesskreuz - sie IST das, was
+//                           geschlossen wird.
+//
+//     Das ZENTRUM dagegen kommt vollstaendig aus der Fabrik: es ist ein
+//     Aufklappfenster wie der Kalender, und jedes der fuenf Merkmale
+//     ist dort richtig. Die Datei geht damit durch die Fabrik, ohne
+//     dass eine Einblendung zu einem Modal wird.
+//
+// "NICHT STOEREN" MUSS DIESE DATEI SELBST ACHTEN
+//     GEMESSEN am 12.08.2026 in /usr/share/gir-1.0/AstalNotifd-0.1.gir,
+//     an der Eigenschaft dont-disturb: "Tells frontends not to show
+//     popups to the user. This property does not have any effect on its
+//     own; it is merely a value shared between the daemon process and
+//     proxies."
+//
+//     Der Schalter im Zentrum setzt sie also nur; wirksam wird sie
+//     unten in onNotified(), das bei gesetztem Wert keine Karte baut
+//     und keinen Ton spielt. Der Verlauf wird trotzdem geschrieben -
+//     "nicht stoeren" heisst "unterbrich mich nicht" und nicht "wirf es
+//     weg".
+//
+//     Sie ueberlebt einen Neustart der Oberflaeche, weil der Dienst sie
+//     haelt: /usr/share/glib-2.0/schemas/io.astal.notifd.gschema.xml
+//     fuehrt dont-disturb als eigenen Schluessel.
+//
+// WAS DER VERLAUF NICHT IST
+//     Er liegt im Speicher und nicht auf der Platte. Ein Neustart der
+//     Oberflaeche leert ihn.
+//
+//     Das ist eine Entscheidung und kein fehlendes Stueck: eine Datei
+//     mit jeder Meldung, die dieser Rechner je gezeigt hat, ist eine
+//     Mitschrift der Gespraeche, Termine und Fehlermeldungen des
+//     Nutzers - auf der Platte, unverschluesselt, ohne dass jemand
+//     danach gefragt hat. Der Gewinn waere, den Verlauf ueber ein
+//     Abmelden hinweg zu behalten; der Preis ist eine Datei, die man
+//     nicht mehr los wird. AstalNotifd.Notifd.notifications hilft dabei
+//     ausdruecklich nicht - die gir sagt "List of currently UNRESOLVED
+//     notifications", das ist der Stapel und nicht der Verlauf.
+//
+// HIER STAND APP_COLORS, ELF HEXWERTE, UND KEINER WURDE JE GELESEN
+//
+// Die Tabelle wurde ausschliesslich als `if (APP_COLORS[appName])`
+// benutzt - also als Mitgliedschaftsprobe. Der WERT ging nie irgendwo
+// hin; die Farben, die auf dem Schirm ankamen, standen als zweite Kopie
+// in ags-style.template unter `.notif-app-*`.
+//
+// Beide Haelften sind am 12.08.2026 gegangen, und der Grund ist nicht
+// die Doppelung, sondern was sie tat: `.notif-app-*` setzte
+// border-left-color, dieselbe Eigenschaft, mit der die Dringlichkeit
+// geschrieben wird, bei gleicher Spezifitaet und weiter unten im Blatt.
+// Eine kritische Meldung aus Firefox trug damit Orange statt Rot. Die
+// ganze Messung steht dort, wo der Block stand.
+
+import Astal from "gi://Astal?version=4.0"
+import { Gtk } from "ags/gtk4"
+import { execAsync } from "ags/process"
+import AstalNotifd from "gi://AstalNotifd?version=0.1"
+import GLib from "gi://GLib"
+import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
+import { _ } from "../utils/i18n"
+
+const MAX_VISIBLE = 5
+const TIMEOUT_LOW = 5000
+const TIMEOUT_NORMAL = 5000
+const SOUND_FILE = "/usr/share/sounds/freedesktop/stereo/message.oga"
+
+// Wie viele Meldungen der Verlauf haelt.
+//
+// Eine Grenze und keine unbegrenzte Liste, weil sie im Speicher eines
+// Prozesses liegt, der wochenlang laeuft: ein Programm mit einer
+// hakeligen Verbindung schickt hundert Meldungen am Tag, und eine Liste
+// ohne Grenze waere ein Leck mit gutem Grund.
+//
+// FUENFZIG, weil das die Anzahl ist, ueber die hinaus niemand mehr
+// zurueckblaettert - der Verlauf beantwortet "was habe ich eben
+// verpasst" und nicht "was war letzten Dienstag". Fuenfzig Karten sind
+// im Zentrum ein Bildlauf von rund sechs Fensterhoehen.
+const HISTORY_MAX = 50
+
+// Die Glocke MIT Punkt fuehrt ags-bar.template selbst - sie gehoert zu
+// seinem Modul, nicht zu diesem Fenster.
+const ICONS = {
+  bell: "{{ICON_BELL}}",
+  bellOff: "{{ICON_BELL_SLASH}}",
+  close: "{{ICON_CLOSE}}",
+  clear: "{{ICON_TRASH}}",
+}
+
+const URGENCY_CLASS: Record<number, string> = {
+  [AstalNotifd.Urgency.LOW]: "notif-low",
+  [AstalNotifd.Urgency.NORMAL]: "notif-normal",
+  [AstalNotifd.Urgency.CRITICAL]: "notif-critical",
+}
+
+// Der Dienst, beim ersten Gebrauch geholt und nicht beim Laden des
+// Moduls.
+//
+// Bar.tsx importiert diese Datei seit dem 12.08.2026 (fuer das
+// Glockenmodul). Ein AstalNotifd.Notifd.get_default() auf Modulebene
+// liefe damit beim IMPORT der Leiste, also ausserhalb des try/catch, in
+// dem app.ts jedes Widget einzeln baut - eine fehlende Typelib kostete
+// dann die Leiste und nicht die Meldungen.
+let daemon: AstalNotifd.Notifd | null = null
+function notifd(): AstalNotifd.Notifd {
+  if (!daemon) {
+    daemon = AstalNotifd.Notifd.get_default()
+    daemon.ignore_timeout = true
+  }
+  return daemon
+}
+
+// ============================================================================
+// DER VERLAUF - die eine Liste, die beide Flaechen lesen
+// ============================================================================
+
+interface HistoryEntry {
+  id: number
+  app: string
+  summary: string
+  body: string
+  urgencyClass: string
+  time: string
+}
+
+const history: HistoryEntry[] = []
+
+// Wie viele Meldungen gekommen sind, seit das Zentrum zuletzt offen war.
+//
+// Ein eigener Zaehler und nicht history.length: der Verlauf bleibt
+// stehen, wenn man ihn gelesen hat, und "es liegt etwas Neues an" ist
+// eine andere Frage als "es liegt etwas an".
+let unseen = 0
+
+const listeners: Array<() => void> = []
+
+function announce(): void {
+  for (const listener of listeners) listener()
+}
+
+function formatTime(): string {
+  const now = new Date()
+  return `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`
+}
+
+/** Eine Meldung in den Verlauf schreiben.
+ *
+ * `replaced` ist der ZWEITE Parameter des "notified"-Signals, und diese
+ * Datei hat ihn bis zum 12.08.2026 nicht gelesen - der Handler nahm nur
+ * `(_source, id)`. GEMESSEN in
+ * /usr/share/gir-1.0/AstalNotifd-0.1.gir: das Signal traegt
+ * `<parameter name="replaced" ...><type name="gboolean"/>`.
+ *
+ * Ohne ihn haette der Verlauf bei einem Kopiervorgang, der seinen
+ * Fortschritt in EINE Meldung schreibt, hundert Eintraege mit demselben
+ * Text und der Zaehler stuende auf hundert. Eine ersetzte Meldung ist
+ * dieselbe Meldung: der Eintrag wird ueberschrieben, er wandert nicht
+ * nach oben, und er zaehlt nicht noch einmal als ungesehen.
+ */
+function remember(id: number, notification: AstalNotifd.Notification,
+                  replaced: boolean): void {
+  const entry: HistoryEntry = {
+    id,
+    app: notification.app_name || "Meldung",
+    summary: notification.summary || "",
+    body: notification.body || "",
+    urgencyClass: URGENCY_CLASS[notification.urgency] || "notif-normal",
+    time: formatTime(),
+  }
+
+  const existing = replaced ? history.findIndex(old => old.id === id) : -1
+  if (existing >= 0) {
+    history[existing] = entry
+    announce()
+    return
+  }
+
+  history.unshift(entry)
+  // Nur das aelteste geht, und nur eins je Meldung: die Liste kann
+  // hoechstens um einen Eintrag zu lang sein, weil genau hier
+  // zugefuegt wird.
+  while (history.length > HISTORY_MAX) history.pop()
+  unseen++
+  announce()
+}
+
+/** Was die Leiste von den Meldungen wissen muss.
+ *
+ * Bar.tsx baut daraus sein Glockenmodul. Es bekommt Funktionen und
+ * nicht die Liste selbst - ein Modul, das `history` in der Hand haelt,
+ * koennte sie aendern, und dann gaebe es zwei Stellen, an denen der
+ * Verlauf entsteht.
+ */
+export const notificationHub = {
+  /** Ist "Nicht stoeren" an? */
+  dnd: (): boolean => notifd().dont_disturb,
+  /** Wie viele Meldungen seit dem letzten Blick ins Zentrum. */
+  unseen: (): number => unseen,
+  /** Wird gerufen, sobald sich eines von beidem geaendert hat. */
+  onChange: (listener: () => void): void => { listeners.push(listener) },
+}
+
+// ============================================================================
+// DER EINBLENDSTAPEL
+// ============================================================================
+
+const activeNotifs = new Map<number, {
+  widget: Gtk.Widget
+  timeout: number | null
+}>()
+
+let notifContainer: Gtk.Box | null = null
+let notifWindow: Astal.Window | null = null
+
+function updateWindowVisibility(): void {
+  if (!notifWindow) return
+  if (activeNotifs.size > 0) {
+    if (!notifWindow.visible) {
+      notifWindow.visible = true
+      // Set marginTop AFTER visible — layer-shell surface must exist first
+      notifWindow.marginTop = 10
+      console.log("Notification window shown")
+    }
+  } else {
+    if (notifWindow.visible) {
+      notifWindow.visible = false
+      console.log("Notification window hidden")
+    }
+  }
+}
+
+function removeNotification(id: number): void {
+  const entry = activeNotifs.get(id)
+  if (!entry) return
+  console.log(`Removing notification id=${id}`)
+  if (entry.timeout !== null) {
+    GLib.source_remove(entry.timeout)
+  }
+  if (notifContainer && entry.widget.get_parent() === notifContainer) {
+    notifContainer.remove(entry.widget)
+  }
+  activeNotifs.delete(id)
+  updateWindowVisibility()
+}
+
+/** Kopf, Ueberschrift und Rumpf einer Meldung - fuer beide Flaechen.
+ *
+ * Der Stapel haengt einen Schliesser daran und faerbt die Kante nach
+ * der Dringlichkeit, das Zentrum tut dasselbe mit einem anderen
+ * Schliesser. Was gleich ist, ist der INHALT, und der stand bis zum
+ * 12.08.2026 einmal da, weil es nur eine Flaeche gab. Zweimal
+ * geschrieben waeren es zwei Meldungen, die verschieden aussehen.
+ */
+function notificationCard(app: string, time: string, summary: string,
+                          body: string, urgencyClass: string,
+                          dismiss: () => void): Gtk.Box {
+  const content = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 4,
+  })
+
+  const header = new Gtk.Box({ spacing: 8 })
+  header.add_css_class("notif-header")
+
+  const appLabel = new Gtk.Label({ label: app, xalign: 0, hexpand: false })
+  appLabel.add_css_class("notif-app-name")
+
+  const spacer = new Gtk.Box({ hexpand: true })
+
+  const timeLabel = new Gtk.Label({ label: time, xalign: 1 })
+  timeLabel.add_css_class("notif-time")
+
+  // X close as separate Gtk.Button (native click handling)
+  const closeBtn = new Gtk.Button({ can_focus: false })
+  closeBtn.add_css_class("notif-close-btn")
+  closeBtn.set_child(new Gtk.Label({ label: ICONS.close }))
+  closeBtn.connect("clicked", dismiss)
+
+  header.append(appLabel)
+  header.append(spacer)
+  header.append(timeLabel)
+  header.append(closeBtn)
+
+  const summaryLabel = new Gtk.Label({
+    label: summary,
+    xalign: 0,
+    wrap: true,
+    max_width_chars: {{STYLE_MEASURE_LINE}},
+  })
+  summaryLabel.add_css_class("notif-summary")
+
+  content.append(header)
+  content.append(summaryLabel)
+
+  if (body) {
+    const bodyWidget = new Gtk.Label({
+      label: body,
+      xalign: 0,
+      wrap: true,
+      max_width_chars: {{STYLE_MEASURE_LINE}},
+    })
+    bodyWidget.add_css_class("notif-body")
+    content.append(bodyWidget)
+  }
+
+  const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+  card.add_css_class("notif-card")
+  card.add_css_class(urgencyClass)
+  card.append(content)
+  return card
+}
+
+function createNotificationWidget(
+  id: number,
+  notification: AstalNotifd.Notification,
+): Gtk.Widget {
+  const urgency = notification.urgency
+  const urgencyClass = URGENCY_CLASS[urgency] || "notif-normal"
+
+  const card = notificationCard(
+    notification.app_name || "Notification",
+    formatTime(),
+    notification.summary || "",
+    notification.body || "",
+    urgencyClass,
+    () => {
+      console.log(`X-button dismiss id=${id}`)
+      removeNotification(id)
+    })
+
+  // Right-click on card: dismiss this notification
+  const rightClick = new Gtk.GestureClick()
+  rightClick.set_button(3)
+  rightClick.connect("pressed", () => {
+    console.log(`Right-click dismiss id=${id}`)
+    removeNotification(id)
+  })
+  card.add_controller(rightClick)
+
+  // Left-click on card body: dismiss this (won't conflict with X button)
+  const leftClick = new Gtk.GestureClick()
+  leftClick.set_button(1)
+  leftClick.connect("pressed", () => {
+    console.log(`Left-click dismiss id=${id}`)
+    removeNotification(id)
+  })
+  card.add_controller(leftClick)
+
+  // Auto-dismiss timeout (not for critical)
+  let timeoutId: number | null = null
+  if (urgency !== AstalNotifd.Urgency.CRITICAL) {
+    const delay = urgency === AstalNotifd.Urgency.LOW ? TIMEOUT_LOW : TIMEOUT_NORMAL
+    timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
+      removeNotification(id)
+      return GLib.SOURCE_REMOVE
+    })
+  }
+
+  activeNotifs.set(id, { widget: card, timeout: timeoutId })
+  return card
+}
+
+export default function Notifications(): Astal.Window {
+  const daemonRef = notifd()
+
+  const container = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 6,
+    halign: Gtk.Align.FILL,
+    valign: Gtk.Align.START,
+  })
+  container.add_css_class("notif-container")
+  notifContainer = container
+
+  // Window starts hidden, shown only when notifications exist
+  const win = new Astal.Window({
+    namespace: "notifications",
+    name: "notifications",
+    layer: Astal.Layer.OVERLAY,
+    anchor: Astal.WindowAnchor.TOP | Astal.WindowAnchor.RIGHT,
+    keymode: Astal.Keymode.NONE,
+    visible: false,
+  })
+  win.add_css_class("notif-window")
+  win.set_child(container)
+  notifWindow = win
+
+  console.log("Notification daemon registered, waiting for notifications...")
+  daemonRef.connect("notified", (_source: AstalNotifd.Notifd, id: number,
+                                 replaced: boolean) => {
+    console.log(`Incoming notification id=${id} replaced=${replaced}`)
+
+    const notification = daemonRef.get_notification(id)
+    if (!notification) {
+      console.log(`Notification id=${id} not found`)
+      return
+    }
+
+    console.log(
+      `Notification: "${notification.summary}" urgency=${notification.urgency}`
+    )
+
+    // Der Verlauf zuerst, und er wird auch bei "Nicht stoeren"
+    // geschrieben: der Schalter unterdrueckt die UNTERBRECHUNG, nicht
+    // die Auskunft. Genau dafuer gibt es das Zentrum - sonst waere
+    // "Nicht stoeren" ein Loeschknopf mit einem freundlichen Namen.
+    remember(id, notification, replaced)
+
+    if (daemonRef.dont_disturb) {
+      console.log(`dont-disturb: keine Einblendung fuer id=${id}`)
+      return
+    }
+
+    // FIX: If this ID already exists, remove old widget first (replace support)
+    if (activeNotifs.has(id)) {
+      console.log(`Replacing existing notification id=${id}`)
+      removeNotification(id)
+    }
+
+    // Limit max visible notifications
+    if (activeNotifs.size >= MAX_VISIBLE) {
+      const entries = Array.from(activeNotifs.entries())
+
+      for (const [oldId] of entries) {
+        const oldNotif = daemonRef.get_notification(oldId)
+
+        // Never remove critical notifications automatically
+        if (!oldNotif || oldNotif.urgency !== AstalNotifd.Urgency.CRITICAL) {
+          console.log(`Removing oldest notification id=${oldId}`)
+          removeNotification(oldId)
+          break
+        }
+      }
+    }
+
+    // Create new widget
+    const card = createNotificationWidget(id, notification)
+
+    // Add to container (newest on top)
+    container.prepend(card)
+
+    // Show window if hidden
+    updateWindowVisibility()
+
+    // Play sound (non-blocking)
+    execAsync(`mpv --no-video ${SOUND_FILE}`).catch(() => {})
+  })
+
+  daemonRef.connect("resolved", (_source: AstalNotifd.Notifd, id: number) => {
+    if (activeNotifs.has(id)) {
+      removeNotification(id)
+    }
+  })
+
+  return win
+}
+
+// ============================================================================
+// DAS ZENTRUM
+// ============================================================================
+
+// Die Masse, die dieses Fenster sich wuenscht. utils/overlay.ts deckelt
+// sie gegen den Schirm - sie sind eine Obergrenze und keine Zusage.
+//
+// 420 ist die Breite des Kalenders, und das ist kein Zufall: beide
+// haengen an derselben Uhr, und zwei Fenster hinter einem Modul, die
+// verschieden breit aufgehen, sehen aus wie zwei Programme.
+//
+// DIE HOEHE IST GEMESSEN UND NICHT GESCHAETZT, am 12.08.2026 im
+// verschachtelten Compositor auf einem 2160 Zeilen hohen Schirm - so
+// hoch, damit der Deckel aus MEASURE_MODAL_SHARE (dort 1080) erst spaet
+// greift. Zehn echte Meldungen ueber den Sitzungsbus geschickt, dann
+// `hyprctl layers` gelesen:
+//
+//     Karten   Hoehe
+//          0     360     der leere Rahmen: Kopf, Schalterzeile,
+//                        Trenner, "Nichts verpasst." und der
+//                        Loeschknopf
+//          1     510     +150 (die erste Karte ersetzt die Zeile
+//                        "Nichts verpasst.")
+//          2     654     +144
+//          3     798     +144
+//          4     942     +144
+//          5    1080     der Deckel greift
+//
+// Eine Karte ist also 144 Punkte hoch. Ein VOLLER Verlauf - HISTORY_MAX
+// Karten - braucht damit 360 + 150 + 49 * 144 = 7566.
+//
+// DAS IST EIN WUNSCH UND KEINE ZUSAGE, genau wie beim Kontrollzentrum:
+// auf jedem Schirm unter 15132 Zeilen entscheidet der Deckel aus
+// MEASURE_MODAL_SHARE, und der Rest steht unter der Bildlaufleiste, die
+// die Fabrik ohnehin um jeden Inhalt haengt. Eine kleinere Zahl waere
+// hier nicht ehrlicher, sondern eine zweite, unbegruendete Grenze neben
+// der des Entwurfssystems.
+const CENTER_WIDTH = 420
+const CENTER_HEIGHT = 7566
+
+/** Der Verlauf, "Nicht stoeren" und ein Loeschknopf.
+ *
+ * Aus der Fabrik, vollstaendig - siehe den Kopf dieser Datei.
+ */
+export function NotificationCenter(): OverlayWidget {
+  let list: Gtk.Box
+  let emptyLabel: Gtk.Label
+  let dndButton: Gtk.Button
+  let dndLabel: Gtk.Label
+
+  const applyDndLook = () => {
+    const on = notifd().dont_disturb
+    dndLabel.set_label(on ? ICONS.bellOff : ICONS.bell)
+    if (on) dndButton.add_css_class("connected")
+    else dndButton.remove_css_class("connected")
+    dndButton.set_tooltip_text(on
+      ? _("Do not disturb is on - nothing is shown, everything is recorded")
+      : _("Turn on do not disturb"))
+  }
+
+  // Die Liste neu bauen.
+  //
+  // Vollstaendig neu und nicht fortgeschrieben: das Zentrum wird
+  // gebaut, wenn es aufgeht, und dazwischen kann alles passiert sein -
+  // neue Meldungen, geloeschte, verdraengte. Eine Fortschreibung
+  // muesste jeden dieser Faelle einzeln kennen, um dasselbe Ergebnis zu
+  // erreichen. Fuenfzig Karten zu bauen kostet weniger als der
+  // Bildaufbau, den das Fenster ohnehin braucht.
+  const rebuild = () => {
+    let child = list.get_first_child()
+    while (child) {
+      const next = child.get_next_sibling()
+      list.remove(child)
+      child = next
+    }
+
+    for (const entry of history) {
+      const card = notificationCard(
+        entry.app, entry.time, entry.summary, entry.body, entry.urgencyClass,
+        () => {
+          const index = history.indexOf(entry)
+          if (index >= 0) history.splice(index, 1)
+          rebuild()
+          announce()
+        })
+      list.append(card)
+    }
+
+    // Ein leeres Fenster mit nichts darin sagt nicht, ob es leer ist
+    // oder kaputt.
+    emptyLabel.set_visible(history.length === 0)
+    list.set_visible(history.length > 0)
+  }
+
+  return createOverlayWindow({
+    name: "notification-center",
+    width: CENTER_WIDTH,
+    height: CENTER_HEIGHT,
+    cssClass: "NotificationCenter",
+    headerIcon: ICONS.bell,
+    headerTitle: _("Notifications"),
+    // KEIN accentCssClass, und das ist kein Vergessen: die zehn
+    // vorhandenen ($calendar-accent bis $vpn-accent) stehen in
+    // src/templates/ags-style.template, und eine elfte Farbe dort
+    // braeuchte eine elfte Farbrolle im Stilsystem. Ohne die Angabe
+    // traegt der Kopf $accent - die allgemeine Akzentfarbe der
+    // Ueberlagerungen, die die Fabrik ohnehin setzt.
+    // NUR DER ZAEHLER UND DER SCHALTER - die Liste steht schon.
+    //
+    // GEMESSEN am 12.08.2026 im verschachtelten Compositor: der Verlauf
+    // wurde hier gebaut, und das Fenster stand mit drei Karten darin
+    // trotzdem 360 Punkte hoch da - der Hoehe des LEEREN Fensters. Die
+    // Reihenfolge in createOverlayWindow().show() sagt warum:
+    //
+    //     outerBox.measure(...)          <- misst den Inhalt
+    //     win.set_default_size(...)      <- legt die Hoehe fest
+    //     win.visible = true
+    //     config.onShow?.()              <- ERST HIER
+    //
+    // Was onShow baut, kommt eine Messung zu spaet. Die Liste haengt
+    // deshalb an announce() und ist fertig, bevor jemand misst - siehe
+    // buildContent unten.
+    onShow: () => {
+      unseen = 0
+      announce()
+      applyDndLook()
+    },
+    buildContent: (_win, _closeWindow) => {
+      const mainBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 8,
+      })
+      mainBox.add_css_class("cc-container")
+
+      // ===== NICHT STOEREN =====
+      const dndRow = new Gtk.Box({ spacing: 10 })
+      dndRow.add_css_class("cc-row")
+
+      const dndIcon = new Gtk.Label({ label: ICONS.bellOff })
+      dndIcon.add_css_class("cc-icon")
+
+      const dndText = new Gtk.Label({
+        label: _("Do not disturb"), hexpand: true, xalign: 0,
+      })
+      dndText.add_css_class("cc-label")
+
+      dndLabel = new Gtk.Label({ label: ICONS.bell })
+      dndButton = new Gtk.Button({ can_focus: false })
+      dndButton.add_css_class("cc-toggle")
+      dndButton.set_child(dndLabel)
+      dndButton.connect("clicked", () => {
+        notifd().dont_disturb = !notifd().dont_disturb
+        applyDndLook()
+        announce()
+      })
+
+      dndRow.append(dndIcon)
+      dndRow.append(dndText)
+      dndRow.append(dndButton)
+
+      const divider = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL })
+      divider.add_css_class("cc-divider")
+
+      // ===== DER VERLAUF =====
+      list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
+      list.add_css_class("notif-container")
+
+      emptyLabel = new Gtk.Label({ label: _("Nothing missed.") })
+      emptyLabel.add_css_class("cc-sublabel")
+
+      // ===== ALLES LOESCHEN =====
+      const clearButton = new Gtk.Button({ can_focus: false })
+      clearButton.add_css_class("cc-action-btn")
+      clearButton.set_tooltip_text(_("Clear the whole history"))
+      const clearBox = new Gtk.Box({ spacing: 8, halign: Gtk.Align.CENTER })
+      const clearIcon = new Gtk.Label({ label: ICONS.clear })
+      clearIcon.add_css_class("cc-icon")
+      const clearText = new Gtk.Label({ label: _("Clear all") })
+      clearText.add_css_class("cc-label")
+      clearBox.append(clearIcon)
+      clearBox.append(clearText)
+      clearButton.set_child(clearBox)
+      clearButton.connect("clicked", () => {
+        history.length = 0
+        unseen = 0
+        rebuild()
+        announce()
+      })
+
+      mainBox.append(dndRow)
+      mainBox.append(divider)
+      mainBox.append(emptyLabel)
+      mainBox.append(list)
+      mainBox.append(clearButton)
+
+      applyDndLook()
+      rebuild()
+
+      // Die Liste folgt dem Verlauf und nicht dem Aufgehen des
+      // Fensters. Der Grund steht bei onShow oben und ist gemessen: was
+      // dort gebaut wird, kommt eine Messung zu spaet, und das Fenster
+      // steht dann in der Hoehe des LEEREN Verlaufs da.
+      //
+      // Was es kostet: bei jeder eintreffenden Meldung werden bis zu
+      // HISTORY_MAX Karten neu gebaut, auch bei geschlossenem Fenster.
+      // Das ist der Preis dafuer, dass die Hoehe stimmt, und er ist
+      // klein - eine Meldung kommt ein paarmal in der Stunde, ein
+      // Gtk.Box ist Mikrosekunden.
+      listeners.push(rebuild)
+
+      return mainBox
+    },
+  })
+}

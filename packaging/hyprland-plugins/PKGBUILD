@@ -1,0 +1,138 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# hyprbars and borders-plus-plus, from hyprwm's own plugin tree.
+#
+# WHY ONE RECIPE AND TWO PACKAGES
+#     Spec §4.3 corrected itself on exactly this point. `hyprland-plugins`
+#     had been listed as a third missing component, "the collection repo
+#     of the first two" - which is a hyprpm sentence: hyprpm adds a repo
+#     and enables plugins out of it. Without hyprpm (§7.2) it is one
+#     upstream tree that two packages are built from, and there is no
+#     third thing to install. So: pkgbase hyprland-plugins, two pkgnames,
+#     one download, one checksum.
+#
+#     Unlike packaging/astal, the two do not depend on each other and
+#     need no staging in build(). They are two independent meson projects
+#     in two subdirectories of one tarball.
+#
+# WHY THE TAG AND NOT main
+#     Upstream tags this tree in step with Hyprland - v0.55.0, v0.56.0 -
+#     and §7.1 records why that matters here: these are the two plugins
+#     ZepOS does not control, released alongside the compositor. v0.56.0
+#     is the release for the 0.56 series that §4.3 pins Hyprland to;
+#     `main` moves with the next compositor and would pin nothing.
+#     Pinned by the commit the tag resolves to rather than by the tag
+#     name, because a tag can be moved and a commit cannot.
+#
+# WHY THE OBJECT IS INSTALLED BY HAND
+#     meson's shared_module() puts the result in $libdir under the
+#     platform's library naming - /usr/lib/libhyprbars.so - and Hyprland
+#     loads a plugin by the path in `plugin =`, which src/plugins.py
+#     builds as /usr/lib/hyprland/plugins/<name>.so and spec §4.2 fixes.
+#     `meson install` would therefore put the file where nothing looks
+#     for it, under a name nothing asks for. So the module is copied to
+#     the one path this project has, and package() fails if it is not
+#     there afterwards.
+_commit=7644cecdb947060682891a0db2a0cdc5c0b9e704
+
+pkgbase=hyprland-plugins
+pkgname=('zepos-hyprbars' 'zepos-borders-plus-plus')
+pkgver=0.56.0
+pkgrel=1
+arch=('x86_64')
+url="https://github.com/hyprwm/hyprland-plugins"
+license=('BSD-3-Clause')
+makedepends=('meson' 'ninja' 'pkgconf' 'zepos-hyprland'
+             'pixman' 'libdrm' 'libinput' 'systemd-libs' 'wayland'
+             'libxkbcommon' 'pango' 'cairo')
+source=("hyprland-plugins-$_commit.tar.gz::$url/archive/$_commit.tar.gz")
+sha256sums=('46b76d4c9f020273c50dba1bb816387e38e8e3b64d8fa33baa971d009b9de89f')
+
+_src="$pkgbase-$_commit"
+_plugin_dir="usr/lib/hyprland/plugins"
+
+# The ABI token zepos-hyprland published, read from the file that package
+# installs. packaging/zepos-hyprzones/PKGBUILD has the reasons in full:
+# it has to be read here rather than in a package function, because
+# makepkg evaluates these arrays out of those too and with nothing set,
+# and the fallback is a string no package provides so that a build
+# without zepos-hyprland stops instead of guessing.
+_abi_file="/usr/lib/hyprland/plugin-abi"
+_abi="$(cat "$_abi_file" 2>/dev/null || true)"
+: "${_abi:=zepos.hyprland.absent}"
+
+build() {
+    # arch-meson rather than plain meson: it sets the prefix, the
+    # buildtype and the hardening options makepkg's flags expect, so the
+    # two objects are built with the same flags as the compositor that
+    # loads them. That is not cosmetic - _GLIBCXX_ASSERTIONS is in
+    # CXXFLAGS and changes what libstdc++ inline code does.
+    local plugin
+    for plugin in hyprbars borders-plus-plus; do
+        arch-meson "$srcdir/$_src/$plugin" "$srcdir/build-$plugin"
+        meson compile -C "$srcdir/build-$plugin"
+    done
+}
+
+# The module meson produced, whatever it decided to call it.
+#
+# shared_module() takes the platform's default name prefix, so the file
+# is libhyprbars.so and not hyprbars.so - but that is a meson default and
+# not a promise. Globbing and insisting on exactly one match is what
+# turns "upstream renamed the output" from a package with a missing file
+# into a build that stops.
+_module() {
+    local built=("$srcdir/build-$1"/*"$1".so)
+    (( ${#built[@]} == 1 )) || {
+        echo "expected one built module for $1, found ${#built[@]}:" >&2
+        printf '  %s\n' "${built[@]}" >&2
+        return 1
+    }
+    printf '%s\n' "${built[0]}"
+}
+
+_package_plugin() {
+    local plugin="$1"
+
+    # Read again, after the compile: a `pacman -Syu` between sourcing
+    # this file and now would leave objects compiled against one header
+    # set carrying a dependency on another.
+    [[ -f "$_abi_file" && "$(<"$_abi_file")" == "$_abi" ]] || {
+        echo "the compositor's ABI is not the one this build declared:" >&2
+        echo "  declared:  $_abi" >&2
+        echo "  installed: $(cat "$_abi_file" 2>/dev/null || echo '<no zepos-hyprland>')" >&2
+        return 1
+    }
+
+    install -Dm755 "$(_module "$plugin")" "$pkgdir/$_plugin_dir/$plugin.so"
+    install -Dm644 "$srcdir/$_src/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    test -f "$pkgdir/$_plugin_dir/$plugin.so" || {
+        echo "the plugin object is not at /$_plugin_dir/$plugin.so;" >&2
+        echo "src/plugins.py would drop this plugin silently" >&2
+        return 1
+    }
+}
+
+# Both packages carry the same dependencies on the compositor and for the
+# same reasons; packaging/zepos-hyprzones/PKGBUILD has them written out.
+package_zepos-hyprbars() {
+    pkgdesc="Window title bars for Hyprland, the plugin ZepOS configures with its own icons and colours"
+    depends=('zepos-hyprland>=0.56.1' 'zepos-hyprland<0.57.0'
+             "hyprland-plugin-abi=$_abi"
+             'pango' 'cairo' 'pixman' 'libdrm' 'libinput' 'libxkbcommon'
+             'wayland' 'systemd-libs' 'glibc' 'libgcc' 'libstdc++')
+
+    _package_plugin hyprbars
+}
+
+package_zepos-borders-plus-plus() {
+    pkgdesc="Additional window borders for Hyprland, loaded by ZepOS without settings of its own"
+    depends=('zepos-hyprland>=0.56.1' 'zepos-hyprland<0.57.0'
+             "hyprland-plugin-abi=$_abi"
+             'pango' 'cairo' 'pixman' 'libdrm' 'libinput' 'libxkbcommon'
+             'wayland' 'systemd-libs' 'glibc' 'libgcc' 'libstdc++')
+
+    _package_plugin borders-plus-plus
+}

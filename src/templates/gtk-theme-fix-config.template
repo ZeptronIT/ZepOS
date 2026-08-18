@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# Hole das aktuelle Theme von den GTK settings
+CURRENT_THEME=$(grep "gtk-theme-name" ~/.config/gtk-3.0/settings.ini | cut -d'=' -f2)
+IS_DARK=$(grep "gtk-application-prefer-dark-theme" ~/.config/gtk-3.0/settings.ini | cut -d'=' -f2)
+
+# Setze gsettings für alte GNOME apps
+gsettings set org.gnome.desktop.interface gtk-theme "$CURRENT_THEME"
+
+# Setze color-scheme für moderne GNOME/libhandy apps
+if [ "$IS_DARK" = "1" ] || [[ "$CURRENT_THEME" == *"dark"* ]] || [[ "$CURRENT_THEME" == *"Dark"* ]]; then
+    gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+else
+    gsettings set org.gnome.desktop.interface color-scheme 'default'
+fi
+
+# Exportiere GTK_THEME für Session
+export GTK_THEME="$CURRENT_THEME"
+
+# Update dbus environment
+dbus-update-activation-environment --systemd GTK_THEME

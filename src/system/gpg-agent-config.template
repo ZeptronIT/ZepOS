@@ -1,0 +1,66 @@
+# gpg-agent - erzeugt von ZepOS, NICHT DIREKT BEARBEITEN!
+# Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/system/gpg-agent-config.template kopieren
+#
+# WOZU DIESE DATEI UEBERHAUPT DA IST: EINE ZEILE
+#     pinentry-program. Ohne sie waehlt /usr/bin/pinentry - ein
+#     Bash-Skript aus dem Arch-Paket - den Dialog selbst aus, und auf
+#     ZepOS waehlt es den einzigen, den die Entscheidung vom 11.08.2026
+#     ausschliesst.
+#
+#     GEMESSEN, nicht vermutet. In einem Container auf dem angehefteten
+#     Schnappschuss 2026/08/04, mit genau dem, was die ZepOS-Huelle
+#     enthaelt (gnupg, gtk3, kein gcr), ergibt der ldd-Test, den das
+#     Wrapper-Skript selbst durchfuehrt:
+#
+#         gnome3   UEBERSPRUNGEN  libgcr-base-3.so.1 => not found
+#         gtk      WAEHLBAR
+#         qt       UEBERSPRUNGEN  libQt6Core.so.6 => not found (u.a.)
+#         curses   WAEHLBAR
+#         tty      WAEHLBAR
+#
+#     Das Skript nimmt den ersten waehlbaren seiner Liste (gnome3, gtk,
+#     qt, curses, tty), also pinentry-gtk. Und:
+#
+#         objdump -p /usr/bin/pinentry-gtk | grep NEEDED | grep gtk
+#           NEEDED  libgtk-3.so.0
+#
+#     Ein GTK3-Fenster mitten in einer Oberflaeche, die keins mehr haben
+#     soll. Es ist auch kein Nebenschauplatz: pinentry kommt nicht als
+#     Ausstattung mit, sondern ueber pacman -> gnupg -> pinentry, also
+#     auf jeder Installation.
+#
+# WARUM pinentry-bemenu UND NICHT DIE GTK4-VARIANTE
+#     Weil es keine gibt. Gemessen am Ursprung, HEAD 15b7e8a vom
+#     03.07.2026: `git grep -i "gtk4\|gtk-4\|gtk+-4"` findet im ganzen
+#     pinentry-Baum keine Zeile. Die Backends sind curses, tty, emacs,
+#     gtk+-2, gnome3, qt, qt4, qt5, tqt, fltk, efl und w32 - und Arch
+#     baut "pinentry-gtk" aus dem gtk+-2-Backend gegen gtk2-compat, was
+#     das PKGBUILD in einem Kommentar auch sagt.
+#
+#     Die zweite Hoffnung war gcr-4, das einen GTK4-Prompter mitbringen
+#     sollte, den pinentry-gnome3 dann ansprechen koennte. Gemessen an
+#     der Dateiliste von gcr-4 4.4.0.1-1: es bringt gcr-viewer-gtk4,
+#     gcr-ssh-agent, gcr4-ssh-askpass und die Bibliotheken - und keinen
+#     Prompter. /usr/lib/gcr-prompter gibt es nur im Paket gcr (3.x),
+#     und das steht auf libgtk-3.so.0.
+#
+#     Bleibt, was ueberhaupt kein GTK laedt. pinentry-bemenu haengt an
+#     bemenu, libassuan, libgpg-error und popt; bemenu-wayland zeichnet
+#     mit cairo und pango direkt auf Wayland. curses und tty scheiden
+#     aus, weil gpg-agent in einer grafischen Sitzung kein Terminal hat,
+#     an dem es fragen koennte; qt hiesse, ein GTK3-Toolkit gegen ein
+#     zweites zu tauschen.
+#
+#     Das ist ausdruecklich NICHT "GTK4 fuer alles". Es ist "kein GTK3",
+#     und mehr laesst sich mit vorhandenen Paketen nicht erreichen. Ein
+#     eigenes zepos-pinentry in GTK4 waere die vollstaendige Antwort und
+#     ist eine eigene Entscheidung: es geht um Passphrasen, und
+#     pinentrys Kern legt sie mit secmem_malloc in gesperrten Speicher.
+
+# WARUM HIER GENAU EINE ZEILE STEHT
+#     Weil ZepOS zu gpg-agent genau eine Meinung hat. Zwischenspeicher-
+#     zeiten, Schluesselauswahl und SSH-Unterstuetzung sind Entscheidungen
+#     des Nutzers ueber seine eigenen Schluessel; sie hier zu setzen
+#     hiesse, GnuPGs Vorgaben durch ZepOS' Vorgaben zu ersetzen, ohne
+#     einen Grund zu haben, der besser waere als "man kann".
+pinentry-program /usr/bin/pinentry-bemenu

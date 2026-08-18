@@ -1,0 +1,478 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# The meta package. `packages: ["zepos-desktop"]` is the entire package
+# list installer/core/translate.py hands to archinstall, so this file is
+# where the shape of an installed ZepOS is decided - not in the
+# installer, not in the ISO profile, and not in a list somebody types on
+# the day they install.
+#
+# THE RULE THIS LIST FOLLOWS
+#     A dependency is a program the GENERATED CONFIGURATION starts by
+#     itself, or one a default keybinding needs in order to do what the
+#     key says. Everything else is an optdepend or is absent.
+#
+#     That rule comes from §7.4 rather than from taste. The failsafe
+#     there exists because a key that silently does nothing is the worst
+#     outcome ZepOS can produce - worse than a missing feature, because
+#     nothing reports it. src/plugins.py can drop a plugin block when the
+#     object is absent; nothing does the equivalent for
+#     `bind = $mainMod, M, exec, zepos-logout`. So every program named
+#     in a bind this project ships is named here.
+#
+#     Applied the other way it is just as sharp: blueman appears in the
+#     templates too - a bar module's on-click - but ZepOS did not put it
+#     on the screen and does not stop working without it. It is an
+#     optdepend, which is what optdepends is for.
+#
+#     Hier standen bis zum 11.08.2026 thunar und firefox daneben, mit dem
+#     Satz: "A meta package that installs a browser has decided which
+#     browser the distribution has, and no line of the spec does that."
+#     Der Satz war richtig und ist es nicht mehr - es gibt jetzt eine
+#     solche Zeile, und der Nutzer hat sie gesprochen: "ausserdem wurden
+#     alle install.sh pakete die dort aufgelistet wurden nicht
+#     installiert wie firefox browser usw."
+#
+#     Was daran gemessen wurde: optdepends installiert pacman nicht. Ein
+#     Browser unter optdepends ist kein zurueckhaltend angebotener
+#     Browser, sondern gar keiner - und SUPER+E zeigte auf thunars
+#     D-Bus-Namen, ein Programm, das aus demselben Grund nie da war.
+#     Welche Anwendungen ZepOS auswaehlt und warum, steht seither in
+#     packaging/zepos-apps/PKGBUILD; die Kante dorthin steht unten unter
+#     depends.
+#
+# WHAT IS DELIBERATELY ABSENT
+#   the three installer packages
+#       Spec §4.2: "Die drei Installer-Pakete liegen nur in der ISO,
+#       nicht im installierten System." An installed ZepOS has no use for
+#       a program that erases disks, and it would drag archinstall and
+#       iwd along behind it. tests/packaging/test_recipes.py fails if one
+#       of them ever appears below.
+#
+#   linux, linux-firmware, base, the bootloader, mkinitcpio
+#       archinstall installs those, and it is the component that knows
+#       which kernel and which firmware this machine needs. A desktop
+#       package that owns the kernel is a desktop package that cannot be
+#       installed next to linux-lts.
+#
+#   mesa and anything else GPU-shaped
+#       Hardware, decided per machine. zepos-hyprland depends on mesa in
+#       any case, so naming it here would only be a second place for it
+#       to be wrong.
+#
+#   hyprland-qtutils
+#       Spec §4.3 lists it among the components that are only in the AUR.
+#       That is no longer true and packaging it would now be actively
+#       wrong: upstream renamed the project hyprland-guiutils, Arch
+#       carries it in extra (0.2.2 at the pinned snapshot) with
+#       `replaces=hyprland-qtutils`, it ships the same
+#       /usr/bin/hyprland-dialog, and zepos-hyprland already depends on
+#       it because Hyprland 0.56.1 does. A second package installing that
+#       path would be a file conflict with the one that is already there.
+#       packaging/README.md has the measurement.
+#
+#   ein Autologin
+#       Hier stand bis zu dieser Aenderung "a display manager: There is
+#       none. A session starts through start-hyprland from a tty." Das
+#       stimmte fuer das Rauchbild, das sich per `agetty --autologin`
+#       selbst anmeldet, und es stimmte fuer das installierte System
+#       nicht: dort meldete sich niemand an, weil niemand da war, der es
+#       tut. Gemessen mit iso/test-boot.py --scenario release-installed -
+#       "Reached target Graphical Interface" und danach nichts.
+#
+#       Was NICHT nachgeruestet wurde, ist der Weg des Rauchbilds. Ein
+#       Autologin ist auf einem Messlaeufer richtig und auf einer
+#       Maschine, die jemandem gehoert, falsch. ZepOS fragt, immer -
+#       siehe greetd unten.
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-desktop
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="The ZepOS desktop: everything the generated configuration starts, in one package"
+arch=('any')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+depends=(
+    # --- ZepOS itself ------------------------------------------------
+    # zepos-config carries the templates, the generator and the three
+    # commands; without it there is no configuration to start anything
+    # with.
+    'zepos-config'
+
+    # The keyring, and this is the entry that is easiest to leave out and
+    # worst to leave out. An installed system keeps a [zepos] section
+    # with SigLevel = Required (installer/core/source.py writes it); on a
+    # machine that never imported the key, the first `pacman -Syu` fails
+    # on a signature from a key it does not have, and the fix is a manual
+    # import the user has no way to know about. Spec §8.6 is about
+    # exactly this moment.
+    'zepos-keyring'
+
+    # Die Anwendungsauswahl. Sie ist ein eigenes Paket, weil die Regel,
+    # die sie fuellt, eine andere ist als die dieser Liste - dort steht
+    # sie, samt jeder Begruendung und jeder Messung.
+    #
+    # Die KANTE gehoert aber hierher, und zwar wegen §7.4, nicht wegen
+    # Bequemlichkeit: nach dieser Aenderung zeigt SUPER+E auf nautilus,
+    # SUPER+T auf gnome-text-editor, der Knopf im Datentraeger-Widget auf
+    # nautilus und die Druckerzeile der Kontrollzentrale auf `lpstat` aus
+    # cups. Das sind Programme, die die erzeugte Konfiguration namentlich
+    # nennt, und damit faellt jedes von ihnen unter die Regel ganz oben.
+    # Ohne diese Zeile waere eine Installation moeglich, bei der vier
+    # Bedienelemente stumm sind - der Fehler, den §7.4 fuer den
+    # schlimmsten haelt, weil ihn nichts meldet.
+    'zepos-apps'
+
+    # The compositor, and the five plugins of §7.1. Named individually
+    # rather than left to the user, because src/plugins.py decides
+    # whether to write a plugin block by looking for the object at
+    # generation time: a desktop installed without them comes up, looks
+    # finished, and has no title bars, no zones and a launcher that fell
+    # back to wofi.
+    'zepos-hyprland'
+    'zepos-hyprbars'
+    'zepos-borders-plus-plus'
+    'zepos-hyprlaunch'
+    'zepos-hyprclipx'
+    'zepos-hyprzones'
+
+    # --- the shell on the screen -------------------------------------
+    # AGS runs the widget templates, the bar and the dock.
+    # libastal-notifd is named although AGS only suggests it:
+    # ags-notifications.template imports AstalNotifd and app.ts imports
+    # that widget at the top level, so a missing typelib costs every
+    # widget rather than the notifications. dart-sass is what `ags run`
+    # shells out to for the generated style.scss.
+    #
+    # waybar und nwg-dock-hyprland standen hier und sind am 11.08.2026
+    # entfallen. Beide waren GTK3 - waybar auf gtkmm-3, nwg-dock ohne
+    # jede GTK4-Fassung -, und §81 verlangt GTK4 ueberall. Leiste und
+    # Dock sind seither ags/widget/Bar.tsx und ags/widget/Dock.tsx im
+    # selben Prozess wie die elf Ueberlagerungen: ein Prozess statt drei,
+    # und ein Klick auf ein Leistenmodul startet keinen `ags request`
+    # mehr, sondern ruft eine Funktion auf.
+    'aylurs-gtk-shell'
+    'libastal-notifd'
+    'dart-sass'
+
+    'kitty'                   # the terminal every terminal bind opens
+    'swaybg'                  # what wallpaper-manager sets a wallpaper with
+    'wl-clipboard'            # exec-once: wl-paste --watch cliphist store
+    'cliphist'                # the same line, and SUPER+SHIFT+V
+    'xsettingsd'              # exec-once
+    'numlockx'                # exec-once: numlockx on
+    'polkit-gnome'            # exec-once: the authentication agent
+
+    # zepos-menu is not a preference. It is the failsafe §7.4 names for
+    # the two binds whose loss hurts most: without hyprlaunch,
+    # SUPER+SPACE becomes `zepos-menu --show drun`, and without
+    # hyprclipx SUPER+SHIFT+V becomes cliphist-menu.sh. Both are written
+    # into plugins.conf by src/plugins.py when the plugin object is not
+    # there - which is precisely the situation in which nothing else can
+    # be relied on.
+    #
+    # It is also the only thing five generated helper scripts have to
+    # choose with: the network menu, the printer dialog, the clipboard
+    # history with its favourites, and the two floating-layout dialogs
+    # all pipe their lines into `zepos-menu --dmenu`. wofi did that job
+    # until 11.08.2026 and was GTK3 (measured: NEEDED libgtk-3.so.0),
+    # which the pinned snapshot had no GTK4 replacement for - so ZepOS
+    # builds its own. packaging/zepos-menu/PKGBUILD has the measurement.
+    'zepos-menu'
+
+    # DIE EINSTELLUNGS-ANWENDUNG, und sie steht hier aus einer Regel,
+    # die diese Datei sonst nirgends braucht.
+    #
+    # Die Regel ganz oben lautet: hier steht, was die ERZEUGTE
+    # Konfiguration selbst startet oder was eine Standardbindung
+    # braucht. zepos-settings-gui erfuellt keins von beidem - kein
+    # exec-once nennt sie, keine Taste ruft sie auf, und das ist
+    # Absicht: sie wird angeklickt und nicht gebunden.
+    #
+    # Sie steht trotzdem hier, weil dieselbe BEGRUENDUNG greift. Eine
+    # Taste, die nichts tut, ist die schlimmste Folge, die ZepOS
+    # erzeugen kann, weil niemand sie meldet - und ein Schreibtisch, auf
+    # dem die Schriftgroesse nur mit einem Terminalbefehl zu aendern ist,
+    # ist derselbe Fehler eine Etage hoeher. Der Nutzer hat am
+    # 11.08.2026 genau das verlangt ("zusaetzlich zu den keybings"), und
+    # ohne diese Zeile installierte ZepOS die Antwort darauf nicht.
+    #
+    # Die Kante kostet nichts Fremdes: das Paket besteht aus vier
+    # Python-Dateien, einem Befehl und einem Starter-Eintrag, und seine
+    # einzige nicht schon vorhandene Abhaengigkeit ist libadwaita, das
+    # ueber nautilus ohnehin auf jeder Installation liegt.
+    'zepos-settings-gui'
+
+    # --- what the default binds need ---------------------------------
+    'zepos-logout'            # SUPER+M
+    'zepos-lock'              # SUPER+L, and lock-style generates its stylesheet
+    # playerctl: die sechs XF86Audio- und drei SUPER+F-Tasten, UND seit
+    # dem 12.08.2026 das Leistenmodul "custom/media" samt der
+    # Wiedergabezeile des Kontrollzentrums (ags-media-scripts.template).
+    # Die Zeile aendert sich dadurch nicht - sie steht schon hier -, und
+    # genau das war der Grund, playerctl statt AstalMpris zu nehmen:
+    # GEMESSEN am 12.08.2026 baut packaging/astal/PKGBUILD drei
+    # Teilpakete ('libastal-io' 'libastal-4' 'libastal-notifd') und
+    # lib/mpris ist keines davon; /usr/share/gir-1.0/ kennt kein
+    # AstalMpris. Eine vierte Bibliothek fuer eine Auskunft, die ein
+    # bereits installiertes Programm gibt, waeren zwei Wege zu einer
+    # Antwort.
+    'playerctl'
+    'pamixer'                 # volume, from the bar and from the keys
+
+    # DER TON DER MELDUNGEN, und beide Haelften stehen hier, weil beide
+    # gefehlt haben.
+    #
+    # ags-notifications.template ruft bei jeder Meldung
+    # `mpv --no-video /usr/share/sounds/freedesktop/stereo/message.oga`,
+    # und der Aufruf traegt ein `.catch(() => {})` - er scheitert also
+    # STILL. GEMESSEN am 12.08.2026 auf einer Maschine, auf der beides
+    # zufaellig liegt:
+    #
+    #   pacman -Qo .../message.oga   -> sound-theme-freedesktop 0.8-6
+    #   pactree -r sound-theme-freedesktop
+    #                                -> nur ueber libcanberra, und
+    #                                   dessen Umkehrbaum nennt gdm,
+    #                                   gnome-shell, knotifications und
+    #                                   mutter. ZepOS installiert keines
+    #                                   davon.
+    #
+    # Auf einer frischen Installation gab es die Datei also nicht, und
+    # kein Ton hat je gespielt, ohne dass irgendetwas es gemeldet
+    # haette - genau der Fehler, den §7.4 fuer den schlimmsten haelt.
+    #
+    # mpv steht daneben, obwohl es ueber celluloid aus zepos-apps
+    # mitkaeme. "Kommt ohnehin mit" ist keine Kante im
+    # Abhaengigkeitsgraphen, sondern eine Beobachtung ueber die
+    # Paketauswahl von heute - dieselbe Begruendung, aus der libpulse,
+    # libnotify und glib2 weiter unten namentlich stehen.
+    'mpv'
+    'sound-theme-freedesktop'
+
+    # DIE DREI, DIE DIE ABNAHME AM 11.08.2026 GEFUNDEN HAT.
+    #
+    # Alle drei standen bisher nirgends, und alle drei werden von der
+    # erzeugten Konfiguration NAMENTLICH aufgerufen - also faellt jeder
+    # unter die Regel ganz oben in dieser Datei, dieselbe, aus der cups
+    # hier steht.
+    #
+    # Sie waren bis heute unsichtbar, weil sie zufaellig mitkommen:
+    # libpulse ueber pamixer, libnotify ueber mehrere GTK-Pakete, glib2
+    # ueber alles, was GTK4 anfasst. "Kommt ohnehin mit" ist aber keine
+    # Kante im Abhaengigkeitsgraphen - es ist eine Beobachtung ueber die
+    # Paketversionen von heute. Faellt eine davon weg, sind neun Tasten
+    # still.
+    #
+    #   libpulse   pactl. Zehn Bindungen: XF86AudioRaiseVolume,
+    #              -Lower-, -Mute, -MicMute und SUPER+F10 bis F12.
+    #   libnotify  notify-send. Vier Zeilen in
+    #              hyprland-failsafe.conf - also genau in der Datei, die
+    #              geladen wird, wenn schon etwas kaputt ist, und in der
+    #              eine stumme Taste am teuersten ist.
+    #   glib2      gsettings. Drei exec-once-Zeilen, die das GTK-Thema,
+    #              die Symbole und die Schrift der Sitzung setzen. Ohne
+    #              sie sieht der Schreibtisch aus wie Adwaita-Vorgabe,
+    #              und nichts sagt warum.
+    'libpulse'
+    'libnotify'
+    'glib2'
+
+    'brightnessctl'           # the brightness keys
+    'grim' 'slurp' 'satty'    # SUPER+S pipes grim through slurp into satty
+    'wf-recorder'             # SUPER+ALT+S
+
+    # nwg-displays stand hier und ist am 12.08.2026 entfallen.
+    #
+    # Es war das LETZTE GTK3-Programm dieses Systems - gemessen:
+    # main.py:26 `gi.require_version("Gtk", "3.0")`, tools.py:12 Gdk 3.0,
+    # main.py:28 GtkLayerShell 0.1. Die Monitoranordnung, die es
+    # geschrieben hat, schreibt jetzt die Seite "Bildschirme" von
+    # zepos-settings-gui (schon weiter oben in dieser Liste), in dieselbe
+    # Datei und im selben Format.
+    #
+    # Der Ersatz kann etwas, was die Vorlage nicht kann, und das ist der
+    # eigentliche Grund fuer den Tausch: sein Rueckfall laeuft in einem
+    # eigenen Prozess (zepos-displays-guard aus zepos-config) und greift
+    # deshalb auch dann, wenn die Oberflaeche zwischen "angewandt" und
+    # "bestaetigt" abstuerzt. nwg-displays fragt zwar nach, aber sein
+    # Zeitgeber haengt an der eigenen Hauptschleife (main.py:986).
+
+    # --- die Passphrasen-Abfrage -------------------------------------
+    # Dieselbe Regel wie oben: die erzeugte Konfiguration nennt das
+    # Programm namentlich. ~/.gnupg/gpg-agent.conf traegt
+    # `pinentry-program /usr/bin/pinentry-bemenu`, und ein
+    # pinentry-program, das nicht existiert, ist ein gpg-agent, der bei
+    # jeder Passphrase mit "No pinentry" abbricht - also schlimmer als
+    # der GTK3-Dialog, den es ersetzt.
+    #
+    # Warum nicht die GTK4-Variante: es gibt keine. pinentrys Ursprung
+    # (HEAD 15b7e8a, 03.07.2026) nennt GTK4 im ganzen Baum nicht, und
+    # gcr-4 4.4.0.1-1 bringt entgegen der Erwartung keinen Prompter mit -
+    # nur gcr-viewer-gtk4, gcr-ssh-agent und gcr4-ssh-askpass.
+    # src/system/gpg-agent-config.template fuehrt beide Messungen.
+    'pinentry-bemenu'
+    # Und der Renderer namentlich, nicht dem Paketmanager ueberlassen.
+    # pinentry-bemenu haengt an `bemenu`, bemenu haengt an dem virtuellen
+    # `bemenu-renderer`, und den erfuellen bemenu-wayland und bemenu-x11
+    # gleichermassen. Welchen pacman nimmt, entschiede pacman - und auf
+    # einer Wayland-Sitzung ohne Xwayland-Fenster waere bemenu-x11 eine
+    # Passphrasen-Abfrage, die nicht erscheint. Dieselbe Begruendung, aus
+    # der `cage` unten namentlich steht.
+    'bemenu-wayland'
+
+    # --- die Anmeldung -----------------------------------------------
+    # Die vier hier sind der Grund, aus dem ein installiertes ZepOS
+    # ueberhaupt eine Oberflaeche zeigt. Sie stehen unter derselben Regel
+    # wie alles andere in dieser Liste: die erzeugte Konfiguration
+    # startet sie selbst. /etc/greetd/zepos.toml nennt zepos-greeter,
+    # zepos-greeter nennt cage, regreet und tuigreet - jedes fehlende
+    # Stueck ist ein Anmeldebildschirm, der nicht kommt.
+    'greetd'                  # der Dienst; translate.py aktiviert ihn
+    'greetd-regreet'          # die GTK4/libadwaita-Maske, Versuch 1 und 2
+    'greetd-tuigreet'         # der Textgreeter, Versuch 3
+    # cage traegt Versuch 1 und 2. regreet haengt zwar auf das virtuelle
+    # `wayland-compositor` und wuerde sich IRGENDEINEN Compositor holen -
+    # aber welchen, entschiede dann pacman, und zepos-greeter ruft
+    # namentlich `cage` auf. Ein Paket, das einen Aufruf hat und die
+    # Auswahl des Aufgerufenen dem Paketmanager ueberlaesst, hat den
+    # Aufruf nicht abgesichert. Dasselbe cage, aus demselben Grund, das
+    # iso/profile-release/packages.x86_64 fuer den Installer waehlt: 27
+    # KiB, keine Konfigurationsdatei, alles im Vollbild.
+    'cage'
+
+    # --- the session around it ---------------------------------------
+    'xdg-desktop-portal-hyprland'   # screen sharing, screencopy
+    'xdg-desktop-portal-gtk'        # file chooser for GTK applications
+    'networkmanager'                # nmcli, in the status scripts and the VPN helpers
+    'pipewire' 'pipewire-pulse' 'wireplumber'   # pamixer talks to the PulseAudio API
+    # bluez und bluez-utils: die Leiste fragt `bluetoothctl show` und
+    # `bluetoothctl devices Connected` - siehe bar-status-config.template.
+    # Dieselbe Regel wie ueberall in dieser Liste: die erzeugte
+    # Konfiguration nennt das Programm, also installiert das Paket es.
+    # Waybar hatte dafuer ein eingebautes Modul und brauchte kein
+    # Werkzeug; das ist der Preis dafuer, dass die Leiste jetzt unsere
+    # ist.
+    'bluez' 'bluez-utils'
+    # Die Standardordner des Heimatverzeichnisses - Downloads,
+    # Dokumente, Bilder.
+    #
+    # GEMELDET am 13.08.2026 nach einer Installation: "wenn der user
+    # eingerichtet ist fehlen die standard ordner strukturen wie
+    # download dokumente bilder usw. das fehlt alles warum ?"
+    #
+    # GEMESSEN an der Zielplatte desselben Laufs: das Paket WAR da -
+    # xdg-user-dirs-0.20-1, als harte Abhaengigkeit von nautilus - und
+    # /home/tester enthielt trotzdem nur Punktdateien. Das Paket liefert
+    # naemlich nur das Programm; die Ordner legt `xdg-user-dirs-update`
+    # an, und das startet ueberall sonst ueber /etc/xdg/autostart/ -
+    # eine Mechanik, die Hyprland nicht abarbeitet. src/bin/zepos-session
+    # ruft es jetzt selbst, vor dem Compositor.
+    #
+    # Und weil die Sitzung es damit NENNT, steht es hier: die Regel
+    # dieses Rezepts ist "was die erzeugte Konfiguration nennt,
+    # installiert das Paket". Ueber nautilus kam es bisher nur zufaellig
+    # mit - ein Tausch des Dateimanagers haette die Ordner still
+    # mitgenommen.
+    'xdg-user-dirs'
+    # blueman stand bis zum 12.08.2026 unter optdepends, mit der
+    # Begruendung, es sei GTK3 und ein GTK4-Ersatz fehle im
+    # angehefteten Schnappschuss. Beides stimmt weiterhin - und es war
+    # trotzdem der falsche Platz, aus zwei Gruenden, die beide in diesem
+    # Baum stehen:
+    #
+    #   Die REGEL dieses Rezepts ist "was die erzeugte Konfiguration
+    #   nennt, installiert das Paket". ags-bar.template ruft
+    #   `blueman-manager` beim Klick auf das Bluetooth-Feld und
+    #   ags-control-center.template ein zweites Mal. optdepends
+    #   installiert pacman nicht - auf jeder ZepOS-Installation waren
+    #   das also zwei Bedienelemente, hinter denen nichts passiert, und
+    #   das ist Spec §7.4, der Fehler, den niemand meldet.
+    #
+    #   Die GTK4-Regel gilt hier nicht. Der Nutzer hat sie am 11.08.2026
+    #   praezisiert - "was externe dienste und pakete angeht koennen wir
+    #   das nicht verhindern daher darf dort gtk3 verwendet werden" -,
+    #   und packaging/zepos-apps/PKGBUILD wendet genau diesen Satz auf
+    #   firefox an. Ein fremdes Programm, das es nur in GTK3 gibt, ist
+    #   kein Grund, das Bedienelement stehenzulassen und das Programm
+    #   wegzulassen.
+    #
+    # Der Preis steht hier, weil er sichtbar sein wird: das Fenster von
+    # blueman nimmt die libadwaita-Farben aus
+    # gtk4-colors-config.template nicht an, genauso wenig wie firefox.
+    'blueman'
+    'sudo'                          # the generated sudoers drop-in, and the VPN helper that installs it
+
+    # --- interpreters the generated artefacts are written in ---------
+    # python and bash arrive with zepos-config. jq is an optdepend
+    # there - a generator does not need it to WRITE a status script -
+    # and a hard dependency here, because a desktop runs them.
+    'jq'
+    'zsh'                     # zshrc-config generates ~/.zshrc
+
+    # --- die Eingabezeile --------------------------------------------
+    # Vier Pakete, und sie stehen hier aus derselben Regel wie alles
+    # andere: die ERZEUGTE Konfiguration nennt jede dieser Dateien
+    # namentlich. ~/.zshrc sourct
+    # /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme und die
+    # zwei Plugin-Dateien unter /usr/share/zsh/plugins/, und ~/.p10k.zsh
+    # konfiguriert das Theme.
+    #
+    # WAS OHNE SIE PASSIERT, ist gemessen und nicht befuerchtet. Bis zum
+    # 12.08.2026 stand keins davon in irgendeiner Liste, waehrend
+    # ~/.zshrc `ZSH_THEME="powerlevel10k/powerlevel10k"` setzte und
+    # oh-my-zsh sourcte. Eine erste Anmeldung bekam, mit `zsh -i` in
+    # einem leeren Heimatverzeichnis nachgemessen:
+    #
+    #   ~/.zshrc:90: no such file or directory: ~/.oh-my-zsh/oh-my-zsh.sh
+    #   PROMPT=[%m%# ]
+    #
+    # Eine Fehlermeldung bei jeder Anmeldung und der nackte
+    # Standardprompt - also genau der Fehler, den §7.4 fuer den
+    # schlimmsten haelt, weil ihn nichts meldet ausser dem Nutzer.
+    #
+    # oh-my-zsh steht bewusst NICHT hier: es gibt es im angehefteten
+    # Schnappschuss nicht (nur in der AUR, als -git-Paket ohne Stichtag),
+    # es aktualisiert sich selbst per git in $HOME, und die drei Aufgaben,
+    # die es hatte, erledigt ~/.zshrc jetzt mit drei source-Zeilen.
+    # zsh-theme-powerlevel10k baut ZepOS selbst, weil es im Schnappschuss
+    # ebenfalls fehlt - packaging/zsh-theme-powerlevel10k/PKGBUILD traegt
+    # die Messung.
+    'zsh-theme-powerlevel10k'
+    'zsh-autosuggestions'
+    'zsh-syntax-highlighting'
+    'zsh-completions'
+
+    # --- fonts and icons ---------------------------------------------
+    # ZeptronIT's two families, and they are a dependency rather than a
+    # suggestion: src/brand.py names both at the front of every font list
+    # the generator writes, and fontconfig answers a missing family by
+    # substituting whatever it likes. That does not fail, it just quietly
+    # renders the whole desktop in something else - which is the failure
+    # mode a brand cannot detect from inside.
+    'ttf-fira-code'           # brand.FONT_CODE - the bar, the terminal, AGS
+    'ttf-roboto'              # brand.FONT_TEXT - window titles, the launcher
+    # The icon SSOT is Nerd Font glyphs, and Fira Code carries not one of
+    # them. It stays SECOND in every font list rather than first, so
+    # fontconfig takes Fira Code for the text and this for the icons, per
+    # glyph. Without it the bar is a row of replacement boxes, which
+    # looks like a broken bar and is not one.
+    'ttf-jetbrains-mono-nerd'
+    'ttf-dejavu'
+    'noto-fonts'
+    'noto-fonts-emoji'
+    'papirus-icon-theme'      # exec-once sets icon-theme 'Papirus-Dark'
+    'adwaita-icon-theme'      # gtk-theme 'Adwaita-dark', and GTK's fallback icons
+)
+
+optdepends=(
+    'hypridle: idle handling; ZepOS generates no configuration for it'
+)
+
+package() {
+    # A meta package owns one file, and it is not decoration: a package
+    # that owns nothing at all is invisible to `pacman -Qo` and to
+    # anybody trying to find out what put this machine together.
+    install -Dm644 "$_zepos_repo/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

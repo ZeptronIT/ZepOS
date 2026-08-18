@@ -1,0 +1,1208 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Wie sich ein installiertes ZepOS selbst aktualisiert (Aufgabe UP-1).
+
+Der Kanal war fertig, bevor dieses Modul geschrieben wurde:
+installer/core/source.py legt in jedes installierte System einen
+`[zepos]`-Abschnitt mit `SigLevel = Required`, und
+`iso/test-boot.py --scenario update` hat gemessen, dass eine installierte
+Maschine daraus Pakete holen, pruefen und einspielen kann. Was fehlte,
+war der Teil, den niemand anstoesst.
+
+DIE DREI ENTSCHEIDUNGEN, UND WARUM SIE SO GETROFFEN SIND
+    Wann?  Ein taeglicher Zeitgeber, verzoegert nach dem Start und
+           zusaetzlich zufaellig gestreut. Die Verzoegerung, weil die
+           ersten Minuten nach dem Einschalten dem Nutzer gehoeren und
+           nicht pacman; die Streuung, weil sonst jede ZepOS-Maschine der
+           Welt zur selben Sekunde denselben Server anspricht -
+           GitHub Pages haelt das aus, ein spaeterer eigener Wirt
+           vielleicht nicht, und ein Nutzer, dessen Aktualisierung an
+           einer ueberlasteten Gegenstelle scheitert, sieht einen Fehler,
+           den er nicht verursacht hat.
+
+    Was?   Nur, was aus dem [zepos]-Abschnitt kommt. Die Arch-Basis wird
+           GEZAEHLT und gemeldet, nicht angefasst. Ein unbeaufsichtigtes
+           `pacman -Syu` auf einem Rolling Release ist ein Rechner, der
+           eines Morgens nicht mehr startet - und der Nutzer sitzt dann
+           vor einem System, das er nicht selbst kaputtgemacht hat. Wer
+           es anders will, setzt `update.scope` auf "all"; dann laeuft
+           genau dieses `-Syu`, und zwar weil jemand es entschieden hat.
+
+    Sagen?  Ueber die Benachrichtigung, die ohnehin laeuft
+           (libastal-notifd). Kein Zwang, kein Neustart von selbst, kein
+           Fenster, das den Vordergrund nimmt.
+
+    Alle drei stehen in einer Datei, die `zepos-settings set update.*`
+    schreibt, und jede Aenderung daran veraendert erzeugte Bytes - die
+    Zeitgeber-Ergaenzung, die Befehlszeile an pacman oder die Frage, ob
+    ueberhaupt jemand benachrichtigt wird.
+
+WARUM DIE EINSTELLUNG DER MASCHINE GEHOERT UND NICHT DEM BENUTZER
+    user-settings.json liegt in einem Heimatverzeichnis, ist 0600 und
+    gehoert einem Konto. Dieser Dienst laeuft als root, moeglicherweise
+    bevor sich jemand angemeldet hat, und auf einer Maschine mit zwei
+    Konten gaebe es zwei Antworten auf eine Frage, die ein Zeitgeber nur
+    einmal beantworten kann. Die Datei liegt deshalb unter
+    paths.machine_root(); zepos-settings leitet `update.*` dorthin um und
+    sagt, wenn dafuer root fehlt - siehe cli.settings_command.
+
+WAS PASSIERT, WENN SICH zepos-config AENDERT, WAEHREND DER SCHREIBTISCH
+LAEUFT
+    Das ist die Frage, an der eine Selbstaktualisierung einen Arbeitstag
+    kosten kann, und die Antwort steht hier und in perform():
+
+      * Dieses Modul erzeugt NICHTS neu und startet NICHTS neu. Kein
+        `zepos-generate`, kein `systemctl restart`, kein `pkill waybar`,
+        kein `ags quit`. FORBIDDEN_PROGRAMS haelt das fest, und ein Test
+        misst es an den Befehlen, die ein vollstaendiger Lauf wirklich
+        abgesetzt hat. Der Grund ist gemessen worden, und zwar am
+        11.08.2026 an der Maschine des Entwicklers: ein Generatorlauf im
+        Hintergrund beendet Waybar und AGS des Nutzers, mitten in seiner
+        Sitzung, ohne dass er etwas angefasst hat.
+      * Die laufende Sitzung behaelt darum ihre erzeugte Konfiguration in
+        ~/.config. Ein ausgetauschtes /usr/share/zepos aendert an einem
+        bereits laufenden Compositor nichts: der haelt seine geoeffneten
+        Dateien, und die Vorlagen liest nur der Generator.
+      * Damit die neue Fassung trotzdem irgendwann ankommt, hinterlaesst
+        ein Lauf, der Pakete getauscht hat, eine Marke (REGENERATE_MARKER).
+        src/bin/zepos-session sieht bei der naechsten Anmeldung nach, ob
+        sie neuer ist als das, was dieser Benutzer zuletzt erzeugt hat,
+        und erzeugt dann neu - vor dem Compositor, also an der einzigen
+        Stelle, an der das keine laufende Sitzung trifft.
+      * Die Benachrichtigung sagt genau das: es ist eingespielt, sichtbar
+        wird es nach der naechsten Anmeldung.
+
+WAS EIN FEHLSCHLAG TUN MUSS
+    Reden. `SigLevel = Required` heisst, dass eine Datenbank oder ein
+    Paket ohne gueltige Unterschrift abgelehnt wird; pacman endet dann
+    mit einem Rueckgabewert ungleich 0. Ein Dienst, der das schluckt,
+    verwandelt einen Angriff oder einen kaputten Schluessel in ein
+    System, das eben "schon eine Weile keine Aktualisierung hatte". Ein
+    Fehlschlag landet deshalb an vier Stellen: im Rueckgabewert, im
+    Journal, in der Zustandsdatei - und als Benachrichtigung, sobald
+    jemand angemeldet ist, auch dann, wenn `update.notify` sonst nur bei
+    Aenderungen meldet. Nur "never" schweigt auf dem Schreibtisch, und
+    zepos-doctor meldet es trotzdem.
+
+    Nicht durchsucht wird pacmans Prosa. Ein installiertes ZepOS ist ein
+    deutsches System (Spec 3), pacman ist uebersetzt, und ein
+    `grep 'signature'` gegen die Ausgabe eines uebersetzten Programms
+    ist eine Pruefung, die nur auf der Maschine des Entwicklers
+    anschlaegt - iso/profile/airootfs/usr/local/bin/zepos-smoke-update
+    hat genau das einmal gekostet. Gemessen wird der Rueckgabewert;
+    berichtet werden die letzten Zeilen im Wortlaut.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Iterable, Sequence
+
+# Relativ zuerst, aus demselben Grund wie in settings.py: dieses Modul
+# wird als `src.update` aus der Testsuite und als flaches `update` aus
+# /usr/share/zepos geladen, und beide Wege muessen dieselbe paths.py
+# sehen.
+try:
+    from .paths import machine_root, state_root
+except ImportError:
+    from paths import machine_root, state_root
+
+Runner = Callable[..., "subprocess.CompletedProcess"]
+
+SCHEMA_VERSION = 1
+CONFIG_FILE = "update.json"
+STATE_FILE = "update-state.json"
+
+# Die Marke, die eine Anmeldung liest. Eine leere Datei; ihre
+# Aenderungszeit IST die Aussage, und deshalb steht nichts darin, was mit
+# ihr in Widerspruch geraten koennte.
+REGENERATE_MARKER = "regenerate-required"
+
+# Die Einheit, die den Lauf ausloest, und die Ergaenzung, mit der die
+# Einstellungen sie umstellen.
+#
+# WARUM EINE ERGAENZUNG UND NICHT DIE UNIT SELBST
+#     /usr/lib/systemd/system/zepos-update.timer gehoert dem Paket.
+#     Wer sie beschreibt, verliert die Aenderung beim naechsten
+#     `pacman -Syu` - und pacman legt daneben eine .pacnew, die niemand
+#     liest. Eine Ergaenzung unter /etc gehoert dem Administrator, und
+#     systemd liest sie nach der Unit.
+TIMER_UNIT = "zepos-update.timer"
+SERVICE_UNIT = "zepos-update.service"
+DROPIN_DIRECTORY = Path("systemd/system") / f"{TIMER_UNIT}.d"
+DROPIN_FILE = "10-zepos.conf"
+
+# Wohin die Ergaenzung geht. Unterhalb von /etc, aber NICHT unterhalb von
+# machine_root(): /etc/systemd/system ist systemds Verzeichnis und keins
+# von ZepOS. Der Pfad ist umlenkbar, damit ein Test ihn in ein
+# temporaeres Verzeichnis legen kann.
+SYSTEMD_ETC = Path("/etc")
+SYSTEMD_ETC_ENV = "ZEPOS_SYSTEMD_ETC"
+
+SCOPE_ZEPOS = "zepos"
+SCOPE_ALL = "all"
+SCOPES = (SCOPE_ZEPOS, SCOPE_ALL)
+
+NOTIFY_CHANGES = "changes"
+NOTIFY_FAILURES = "failures"
+NOTIFY_NEVER = "never"
+NOTIFY_MODES = (NOTIFY_CHANGES, NOTIFY_FAILURES, NOTIFY_NEVER)
+
+# Der Name, unter dem pacman das Repository kennt. Dieselbe Zeichenkette
+# wie installer/core/source.py REPO_NAME; sie steht hier ein zweites Mal,
+# weil das installierte System den Installer nicht mitbringt (Spec 4.2) -
+# eine Umbenennung faellt in tests/src/test_update.py auf, das beide
+# Stellen vergleicht.
+REPOSITORY = "zepos"
+
+# Was ein unbeaufsichtigter Lauf niemals tun darf, mit dem Programmnamen
+# als Schluessel. Die Liste ist keine Dekoration: sie wird gegen die
+# Befehle geprueft, die ein vollstaendiger Lauf wirklich abgesetzt hat.
+#
+# generate_config.sh beendet an seinem Ende `waybar` und `ags`, damit die
+# neue Konfiguration greift. Das ist richtig, wenn ein Mensch den
+# Generator ruft, und falsch, wenn ein Zeitgeber es tut: der Nutzer sieht
+# seine Leiste verschwinden, ohne etwas getan zu haben.
+FORBIDDEN_PROGRAMS = (
+    "zepos-generate", "generate_config.sh",
+    "pkill", "killall", "kill",
+    "waybar", "ags", "hyprctl", "Hyprland",
+    "reboot", "shutdown", "systemd-run-reboot",
+)
+
+# Argumente, die aus einer gezielten Aktualisierung eine vollstaendige
+# machen. `-u` gehoert zu `-Syu`; wer sie im Bereich "zepos" faende,
+# haette eine Maschine, die sich nachts das ganze Rolling Release holt.
+FULL_UPGRADE_FLAGS = ("-u", "--sysupgrade")
+
+# Ein systemd-Zeitspannenwert, so eng gefasst, wie systemd ihn liest, und
+# so weit, wie ein Mensch ihn schreibt: "15min", "1d", "90s", "0".
+#
+# WARUM DAS GEPRUEFT WIRD
+#     systemd weist eine Unit mit einer unlesbaren Zeitspanne ab
+#     ("Failed to parse timer value"). Die Unit ist dann nicht kaputt -
+#     sie ist WEG, und ein Zeitgeber, den es nicht gibt, feuert nie und
+#     beschwert sich nie. Ein Tippfehler in einer Einstellung wuerde eine
+#     Maschine also still von der Aktualisierung abschneiden. Genau die
+#     Art Fehler, gegen die es zepos-doctor gibt.
+TIMESPAN = re.compile(
+    r"^\d+(us|ms|s|sec|secs|second|seconds|m|min|mins|minute|minutes"
+    r"|h|hr|hour|hours|d|day|days|w|week|weeks)?$"
+)
+
+# Die Kalenderworte, die systemd selbst definiert (systemd.time(7),
+# "Calendar Events"). `update.schedule.interval` nimmt entweder eins
+# davon oder eine Zeitspanne, und das ist der Unterschied zwischen zwei
+# Arten, "taeglich" zu meinen:
+#
+#   daily   um Mitternacht, gestreut, und NACHGEHOLT, wenn die Maschine
+#           da gerade aus war. Das ist der Vorgabefall.
+#   24h     24 Stunden nach dem letzten Lauf, solange die Maschine
+#           laeuft. Ein Rechner, der jeden Abend ausgeht, kommt so nie an
+#           die 24 Stunden heran - deshalb ist das nicht die Vorgabe.
+#
+# Eine beliebige Kalenderangabe ("Mon *-*-* 04:00:00") wird NICHT
+# angenommen. Nur systemd selbst kann sie pruefen (systemd-analyze
+# calendar), und eine, die es ablehnt, macht die Unit ungueltig: der
+# Zeitgeber ist dann nicht falsch eingestellt, sondern weg. Lieber ein
+# Wort weniger als eine Maschine, die still nichts mehr holt.
+CALENDAR_WORDS = ("hourly", "daily", "weekly", "monthly", "quarterly",
+                  "semiannually", "yearly")
+
+
+def _timespan(value: Any) -> str | None:
+    """Der Wert als systemd-Zeitspanne, oder None.
+
+    EINE ZAHL IST AUCH EINE ZEITSPANNE, UND DAS IST GEMESSEN
+        `zepos-settings set update.schedule.randomized_delay 0` liest
+        seinen Wert wie jede andere Einstellung: was als JSON durchgeht,
+        IST JSON - und "0" geht als JSON durch, als Zahl 0. Eine Pruefung,
+        die nur Zeichenketten annimmt, lehnt damit genau die Schreibweise
+        ab, die ein Mensch tippt, und verlangt '"0"' mit
+        Anfuehrungszeichen. cli.py nennt so etwas eine Falle, die niemand
+        erwartet, und hat recht damit.
+
+        systemd liest eine blanke Zahl als Sekunden (systemd.time(7)),
+        also ist die Zahl nicht nur bequem, sondern richtig. `True` wird
+        trotzdem abgelehnt - bool ist in Python ein int, und
+        `randomized_delay: true` waere eine Sekunde Streuung, die niemand
+        gemeint hat.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return str(value) if value >= 0 else None
+    if isinstance(value, str) and TIMESPAN.match(value):
+        return value
+    return None
+
+
+class UnusableConfig(ValueError):
+    """Die Aktualisierungseinstellungen sind da und nicht benutzbar.
+
+    Wie settings.UnusableSettings, und aus demselben Grund ein
+    ValueError: eine Datei, die nicht da ist, ist der Normalfall einer
+    frischen Installation und beantwortet sich aus den Vorgaben. Eine
+    Datei, die da ist und Unsinn enthaelt, darf NICHT stillschweigend
+    durch die Vorgaben ersetzt werden - sonst aktualisiert sich eine
+    Maschine, auf der jemand `enabled: false` schreiben wollte und sich
+    vertippt hat, weiter, als haette er nichts gesagt.
+    """
+
+
+@dataclass(frozen=True)
+class Change:
+    """Ein Paket, das sich bewegt: Name, Fassung vorher, Fassung nachher."""
+
+    name: str
+    old: str
+    new: str
+
+    def __str__(self) -> str:
+        return f"{self.name} {self.old} -> {self.new}"
+
+
+@dataclass(frozen=True)
+class Session:
+    """Eine angemeldete Sitzung an einem Sitzplatz, mit ihrer uid."""
+
+    uid: int
+    user: str
+    seat: str
+
+
+@dataclass(frozen=True)
+class Notification:
+    summary: str
+    body: str
+    urgent: bool = False
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """Was ein Lauf getan hat, in der Form, in der er es hinterlaesst."""
+
+    result: str
+    upgraded: tuple[Change, ...] = ()
+    base_available: tuple[Change, ...] = ()
+    returncode: int = 0
+    message: str = ""
+    sessions: tuple[Session, ...] = ()
+    started: str = ""
+    finished: str = ""
+
+    # Die Ausgaenge. "nothing" ist ausdruecklich kein Fehler: eine
+    # Maschine, die auf dem Stand ist, hat die Frage beantwortet.
+    # "pending" kann nur aus --check kommen und wird nie abgelegt - es
+    # ist die Antwort auf "was WUERDE passieren".
+    OK = "ok"
+    NOTHING = "nothing"
+    PENDING = "pending"
+    DISABLED = "disabled"
+    FAILED = "failed"
+
+    @property
+    def failed(self) -> bool:
+        return self.result == self.FAILED
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.upgraded)
+
+
+# --------------------------------------------------------------------
+# Die Einstellungen
+# --------------------------------------------------------------------
+
+def defaults() -> dict[str, Any]:
+    """Was eine Maschine glaubt, an der niemand etwas eingestellt hat.
+
+    Die Zahlen sind die Empfehlung aus docs/specs/
+    2026-08-11-weg-zum-eigenen-os.md, in systemds eigener Schreibweise,
+    damit die Ergaenzung unten kein Umrechnen braucht - eine Umrechnung
+    waere die Stelle, an der aus "1h" spaeter einmal 3600 Sekunden
+    wuerden und aus "1min" 60 Stunden.
+    """
+    return {
+        "schema_version": SCHEMA_VERSION,
+        # Der eine Schalter. Er steht vor allen anderen, weil er der
+        # einzige ist, der auch den Zeitgeber selbst abschaltet: false
+        # heisst, dass systemd die Einheit gar nicht erst haelt, und
+        # nicht, dass sie taeglich aufwacht, um nichts zu tun.
+        "enabled": True,
+        "scope": SCOPE_ZEPOS,
+        # Melden, was die Arch-Basis anbietet, ohne es anzufassen. Wer
+        # das nicht sehen will, setzt es auf false; die Zaehlung
+        # unterbleibt dann samt dem `pacman -Qu`, das sie kostet.
+        "report_base": True,
+        "notify": NOTIFY_CHANGES,
+        "schedule": {
+            # Nach dem Start, nicht beim Start. Die erste Viertelstunde
+            # gehoert dem Nutzer.
+            "on_boot": "15min",
+            # Ein Kalenderwort und keine Zeitspanne, damit "persistent"
+            # weiter unten ueberhaupt etwas bedeuten kann - siehe
+            # CALENDAR_WORDS.
+            "interval": "daily",
+            # Bis zu einer Stunde spaeter, gleichverteilt. Siehe den Kopf
+            # dieser Datei.
+            "randomized_delay": "1h",
+            # Nachholen, was verpasst wurde. Ein Rechner, der jeden Abend
+            # ausgeschaltet wird, holt sonst nie etwas: OnUnitActiveSec
+            # zaehlt nur, waehrend die Maschine laeuft.
+            "persistent": True,
+        },
+    }
+
+
+def config_path() -> Path:
+    return machine_root() / CONFIG_FILE
+
+
+def state_path() -> Path:
+    return state_root() / STATE_FILE
+
+
+def marker_path() -> Path:
+    return state_root() / REGENERATE_MARKER
+
+
+def systemd_etc() -> Path:
+    override = os.environ.get(SYSTEMD_ETC_ENV)
+    return Path(override) if override else SYSTEMD_ETC
+
+
+def dropin_path() -> Path:
+    return systemd_etc() / DROPIN_DIRECTORY / DROPIN_FILE
+
+
+def load(path: Path | None = None) -> dict[str, Any]:
+    """Die Einstellungen, mit den Vorgaben aufgefuellt und geprueft.
+
+    Aufgefuellt, damit eine Datei aus einer aelteren Fassung von ZepOS
+    keinen Schluessel vermissen laesst, den dieses Modul liest - und
+    geprueft, damit ein Wert, den systemd oder pacman nicht versteht,
+    hier auffaellt und nicht als stiller Ausfall des Zeitgebers.
+    """
+    target = path if path is not None else config_path()
+    if not target.is_file():
+        return defaults()
+
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise UnusableConfig(f"{target} ist kein JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise UnusableConfig(f"{target} ist kein JSON-Objekt")
+
+    version = data.get("schema_version", SCHEMA_VERSION)
+    if version != SCHEMA_VERSION:
+        raise UnusableConfig(
+            f"{target}: schema_version {version}, erwartet {SCHEMA_VERSION}")
+
+    merged = defaults()
+    for key, value in data.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+    return validate(merged)
+
+
+def validate(config: dict[str, Any]) -> dict[str, Any]:
+    """Jeder Wert, der spaeter in eine Unit oder an pacman geht.
+
+    Namentlich, mit dem Schluessel im Fehlertext: wer eine Einstellung
+    von Hand setzt, hat den Namen vor Augen und nicht die Zeilennummer
+    dieses Moduls.
+    """
+    for key in ("enabled", "report_base"):
+        if not isinstance(config.get(key), bool):
+            raise UnusableConfig(
+                f"update.{key} muss true oder false sein, nicht "
+                f"{json.dumps(config.get(key))}")
+
+    if config.get("scope") not in SCOPES:
+        raise UnusableConfig(
+            f"update.scope muss eins von {', '.join(SCOPES)} sein, nicht "
+            f"{json.dumps(config.get('scope'))}")
+
+    if config.get("notify") not in NOTIFY_MODES:
+        raise UnusableConfig(
+            f"update.notify muss eins von {', '.join(NOTIFY_MODES)} sein, "
+            f"nicht {json.dumps(config.get('notify'))}")
+
+    schedule = config.get("schedule")
+    if not isinstance(schedule, dict):
+        raise UnusableConfig("update.schedule muss ein Objekt sein")
+    if not isinstance(schedule.get("persistent"), bool):
+        raise UnusableConfig(
+            "update.schedule.persistent muss true oder false sein, nicht "
+            f"{json.dumps(schedule.get('persistent'))}")
+    for key in ("on_boot", "randomized_delay"):
+        if _timespan(schedule.get(key)) is None:
+            raise UnusableConfig(
+                f"update.schedule.{key} muss eine systemd-Zeitspanne sein "
+                f"(15min, 1d, 90s, 0), nicht "
+                f"{json.dumps(schedule.get(key))}")
+
+    interval = schedule.get("interval")
+    if interval not in CALENDAR_WORDS and _timespan(interval) is None:
+        raise UnusableConfig(
+            f"update.schedule.interval muss eins von "
+            f"{', '.join(CALENDAR_WORDS)} oder eine Zeitspanne (6h, 2d) "
+            f"sein, nicht {json.dumps(interval)}")
+    return config
+
+
+def save(config: dict[str, Any], path: Path | None = None) -> Path:
+    """Geprueft, atomar und 0644 geschrieben.
+
+    0644 und nicht 0600 wie user-settings.json: hier steht kein
+    Geheimnis, und `zepos-settings get update.enabled` soll jeder lesen
+    koennen, ohne root zu sein - sonst kann ein Nutzer nicht einmal
+    nachsehen, ob seine Maschine sich aktualisiert.
+
+    Atomar aus demselben Grund wie settings.save(): der Dienst kann die
+    Datei genau in dem Moment lesen, in dem sie geschrieben wird, und ein
+    halb geschriebenes JSON waere fuer ihn eine unbenutzbare Einstellung.
+    """
+    validate(config)
+    target = path if path is not None else config_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    handle, temporary_name = tempfile.mkstemp(
+        dir=target.parent, prefix=f".{target.name}.", suffix=".new")
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(config, indent=2) + "\n")
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, target)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+    return target
+
+
+def set_value(key: str, raw: str, path: Path | None = None) -> dict[str, Any]:
+    """Einen gepunkteten Schluessel unterhalb von `update.` setzen.
+
+    Dieselbe Lesart wie cli._set: was als JSON durchgeht, ist JSON
+    (false, 3, "1h" mit Anfuehrungszeichen), alles andere ist Text. Ein
+    unbekannter Schluessel wird abgelehnt statt angelegt - eine
+    Einstellung, die niemand liest, ist die leiseste Art, eine Maschine
+    nicht zu aktualisieren.
+    """
+    config = load(path)
+    parts = key.split(".")
+    section: Any = config
+    for part in parts[:-1]:
+        if not isinstance(section, dict) or not isinstance(section.get(part), dict):
+            raise UnusableConfig(f"keine solche Einstellung: update.{key}")
+        section = section[part]
+    if not isinstance(section, dict) or parts[-1] not in section:
+        raise UnusableConfig(f"keine solche Einstellung: update.{key}")
+
+    try:
+        value: Any = json.loads(raw)
+    except json.JSONDecodeError:
+        value = raw
+    section[parts[-1]] = value
+
+    validate(config)
+    save(config, path)
+    return config
+
+
+def known_keys() -> list[str]:
+    """Jeder gepunktete Name, den set_value annimmt - fuer die Hilfe."""
+    names: list[str] = []
+    for key, value in defaults().items():
+        if key == "schema_version":
+            continue
+        if isinstance(value, dict):
+            names += [f"{key}.{inner}" for inner in value]
+        else:
+            names.append(key)
+    return sorted(names)
+
+
+# --------------------------------------------------------------------
+# Der Zeitgeber
+# --------------------------------------------------------------------
+
+# Die drei Schluessel im Abschnitt [Timer], die LISTEN sind. Eine zweite
+# Zuweisung legt bei ihnen einen zweiten Zeitpunkt an, statt den ersten
+# zu ersetzen (systemd.timer(5)) - deshalb muss eine Ergaenzung sie erst
+# leeren. Ohne das ergaebe `interval: 6h` einen Zeitgeber, der um
+# Mitternacht UND alle sechs Stunden feuert, und die Einstellung saehe
+# aus, als haette sie gewirkt.
+TIMER_LISTS = ("OnBootSec", "OnCalendar", "OnUnitActiveSec")
+
+
+def timer_settings(config: dict[str, Any]) -> list[tuple[str, str]]:
+    """Der Abschnitt [Timer] als Paare, in der Reihenfolge der Datei.
+
+    Die Fallunterscheidung ist die zwischen den zwei Bedeutungen von
+    "taeglich", die CALENDAR_WORDS beschreibt. Persistent= steht nur im
+    Kalenderfall in der Datei, und das ist kein Vergessen: systemd wertet
+    es ausschliesslich fuer OnCalendar aus. Eine Zeile, die nichts tut,
+    waere schlimmer als keine - jemand liest sie und glaubt, verpasste
+    Laeufe wuerden nachgeholt.
+    """
+    schedule = config["schedule"]
+    values = [("OnBootSec", _timespan(schedule["on_boot"]))]
+    if schedule["interval"] in CALENDAR_WORDS:
+        values.append(("OnCalendar", schedule["interval"]))
+        values.append(("Persistent",
+                       "true" if schedule["persistent"] else "false"))
+    else:
+        values.append(("OnUnitActiveSec", _timespan(schedule["interval"])))
+    values.append(("RandomizedDelaySec",
+                   _timespan(schedule["randomized_delay"])))
+    return values
+
+
+def _persistent_note(config: dict[str, Any]) -> list[str]:
+    if config["schedule"]["interval"] in CALENDAR_WORDS:
+        return []
+    return ["# update.schedule.persistent steht hier nicht: systemd wertet",
+            "# Persistent= nur zusammen mit OnCalendar= aus, und interval",
+            "# ist eine Zeitspanne. Verpasstes holt hier OnBootSec nach."]
+
+
+def timer_unit(config: dict[str, Any]) -> str:
+    """Die ausgelieferte Einheit, aus derselben Tabelle wie die Ergaenzung.
+
+    src/system/zepos-update.timer IST das Ergebnis dieser Funktion auf
+    defaults(), und ein Test vergleicht die zwei Byte fuer Byte. Damit
+    kann die ausgelieferte Voreinstellung nicht von der abweichen, die
+    dieses Modul fuer die Voreinstellung haelt - ein Auseinanderlaufen,
+    das sonst niemandem auffiele, weil beide Seiten fuer sich richtig
+    aussehen.
+    """
+    lines = [
+        "# Erzeugt aus src/update.py timer_unit(defaults()).",
+        "# Nicht von Hand aendern: `zepos-settings set update.schedule.*`",
+        "# schreibt eine Ergaenzung unter /etc, die diese Werte ueberstimmt,",
+        "# und tests/src/test_update.py vergleicht diese Datei mit dem, was",
+        "# das Modul aus seinen Vorgaben baut.",
+        "[Unit]",
+        "Description=ZepOS-Aktualisierung (taeglich, verzoegert)",
+        # Auf die Datei, die die Entscheidung traegt, und nicht auf eine
+        # Handbuchseite, die es nicht gibt: `systemctl show` zeigt diese
+        # Zeile, und ein Verweis ins Leere ist schlimmer als keiner.
+        "Documentation=file:///usr/share/zepos/update.py",
+        "",
+        "[Timer]",
+        f"Unit={SERVICE_UNIT}",
+    ]
+    lines += _persistent_note(config)
+    lines += [f"{name}={value}" for name, value in timer_settings(config)]
+    lines += [
+        "",
+        "[Install]",
+        "WantedBy=timers.target",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def timer_dropin(config: dict[str, Any]) -> str:
+    """Die Ergaenzung, die eine geaenderte Einstellung wirksam macht.
+
+    WARUM ALLE DREI LISTEN GELEERT WERDEN, AUCH DIE UNBENUTZTEN
+        OnBootSec, OnCalendar und OnUnitActiveSec sind LISTEN
+        (systemd.timer(5)): eine zweite Zuweisung legt einen zweiten
+        Zeitpunkt an, sie ersetzt den ersten nicht. Eine Ergaenzung mit
+        nur `OnBootSec=2min` ergaebe also einen Zeitgeber, der nach 2
+        Minuten UND nach 15 Minuten feuert.
+
+        Und es reicht nicht, die zu leeren, die diese Einstellung
+        besetzt. Die ausgelieferte Unit traegt OnCalendar=daily; wer auf
+        `interval: 6h` umstellt, bekaeme sonst OnUnitActiveSec=6h NEBEN
+        dem taeglichen Kalender - eine Umstellung, die nichts abstellt.
+        Deshalb werden erst alle drei geleert und dann die gesetzt, die
+        gelten sollen.
+
+        RandomizedDelaySec und Persistent sind einfache Werte, bei denen
+        die letzte Zuweisung gilt. Sie brauchen die Ruecksetzung nicht.
+    """
+    lines = [
+        "# Erzeugt von zepos-update --apply aus den Einstellungen unter",
+        f"# {config_path()}. Nicht von Hand aendern - der naechste",
+        "# `zepos-settings set update.schedule.*` schreibt sie neu.",
+        "[Timer]",
+    ]
+    lines += _persistent_note(config)
+    lines += [f"{name}=" for name in TIMER_LISTS]
+    lines += [f"{name}={value}" for name, value in timer_settings(config)]
+    lines.append("")
+    return "\n".join(lines)
+
+
+def systemd_actions(config: dict[str, Any]) -> list[list[str]]:
+    """Was systemd gesagt werden muss, damit es zur Einstellung passt.
+
+    Als Liste von Argumentlisten statt als Aufrufe, damit die
+    Entscheidung ohne systemd geprueft werden kann - und damit sie im
+    Testbericht als das erscheint, was sie ist: drei Befehle, nicht drei
+    Behauptungen.
+
+    Einschalten UND starten, in zwei Befehlen statt als `enable --now`.
+    Der Grund ist das pacstrap-Chroot, in dem der ALPM-Haken laeuft: dort
+    gibt es keinen laufenden systemd, `start` scheitert - und bei
+    `enable --now` waere danach nicht mehr zu unterscheiden, ob auch das
+    Einschalten gescheitert ist. Getrennt scheitert nur die Haelfte, die
+    dort ohnehin nicht gehen kann, und der Symlink, auf den es ankommt,
+    liegt.
+
+    Umgekehrt wird beim Abschalten auch gestoppt, sonst feuerte der
+    abgeschaltete Zeitgeber noch bis zum naechsten Herunterfahren weiter.
+    """
+    actions = [["systemctl", "daemon-reload"]]
+    if config["enabled"]:
+        actions.append(["systemctl", "enable", TIMER_UNIT])
+        actions.append(["systemctl", "start", TIMER_UNIT])
+    else:
+        actions.append(["systemctl", "disable", TIMER_UNIT])
+        actions.append(["systemctl", "stop", TIMER_UNIT])
+    return actions
+
+
+def apply(config: dict[str, Any], *, runner: Runner | None = None,
+          write: bool = True) -> list[list[str]]:
+    """Die Ergaenzung schreiben und systemd davon erzaehlen.
+
+    Gerufen von genau zwei Stellen, und beide sind der Grund, dass eine
+    Einstellung ueberhaupt etwas bewirkt:
+
+      * `zepos-settings set update.*`, unmittelbar nach dem Schreiben;
+      * dem ALPM-Haken, wenn das Paket den Zeitgeber neu ablegt. Ein
+        Paket kann unter Arch keinen Dienst einschalten (siehe
+        installer/core/translate.py), ein Haken kann es - und eine
+        Maschine, die den Aktualisierer per Paketaktualisierung bekommt,
+        hat sonst alles ausser dem Symlink, der ihn ausloest.
+
+    Fehler von systemctl beenden das Programm NICHT. Im pacstrap-Chroot
+    gibt es keinen laufenden systemd; `enable` legt dort trotzdem den
+    Symlink an, `--now` scheitert, und eine Installation abzubrechen,
+    weil ein Zeitgeber nicht sofort startet, waere die falsche Reaktion
+    auf einen Zustand, der sich beim naechsten Start von selbst aufloest.
+    """
+    runner = runner or subprocess.run
+    target = dropin_path()
+    if write:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(timer_dropin(config), encoding="utf-8")
+
+    performed: list[list[str]] = []
+    for argv in systemd_actions(config):
+        performed.append(argv)
+        try:
+            runner(argv, capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.SubprocessError):
+            # Kein systemd erreichbar. Die Ergaenzung liegt trotzdem, und
+            # der naechste Start liest sie.
+            continue
+    return performed
+
+
+# --------------------------------------------------------------------
+# Was pacman sagt
+# --------------------------------------------------------------------
+
+def _run(runner: Runner, argv: Sequence[str], *, timeout: float = 3600
+         ) -> subprocess.CompletedProcess:
+    return runner(list(argv), capture_output=True, text=True, timeout=timeout)
+
+
+def refresh_command() -> list[str]:
+    """Die Datenbank holen.
+
+    `-Sy` und nicht `-Syy`: die zweite Form laedt jede Datenbank neu,
+    auch die unveraenderten der Arch-Basis, und das ist auf einer
+    Verbindung, die jemand bezahlt, taeglich unhoeflich.
+
+    Dass ein `-Sy` ohne folgendes `-u` die Maschine in den Zustand
+    bringt, vor dem Arch warnt (teilweise Aktualisierung), ist der Preis
+    der Entscheidung "nur zepos-*". Er wird hier bewusst gezahlt und
+    nicht verschwiegen: das Gegenstueck waere ein unbeaufsichtigtes
+    `-Syu`, und was das kostet, steht im Kopf dieser Datei. Die
+    Aufstellung der Basis, die jeder Lauf mitfuehrt, ist genau dafuer da,
+    dass der Nutzer den vollen Schritt bewusst tun kann.
+    """
+    return ["pacman", "-Sy", "--noconfirm"]
+
+
+def upgradable_command() -> list[str]:
+    return ["pacman", "-Qu"]
+
+
+def repository_command() -> list[str]:
+    """Welche Pakete das [zepos]-Repository ueberhaupt anbietet.
+
+    Gefragt statt aus dem Namen geraten. `zepos-*` waere die naechst-
+    liegende Regel und sie ist falsch: aylurs-gtk-shell, libastal-4,
+    libastal-io, libastal-notifd und wlogout kommen aus demselben
+    Repository und heissen nicht so. Ein Praefixfilter haette genau die
+    Pakete stehen gelassen, die den Schreibtisch ausmachen.
+    """
+    return ["pacman", "-Slq", REPOSITORY]
+
+
+def upgrade_command(config: dict[str, Any], names: Sequence[str]) -> list[str]:
+    """Der eine Befehl, der etwas veraendert.
+
+    Im Bereich "zepos" nennt er jedes Paket beim Namen; `-u` kommt darin
+    nicht vor, und ein Test misst das. `--needed` laesst aus, was schon
+    aktuell ist - zwischen der Aufstellung und diesem Aufruf koennen
+    Minuten liegen, wenn das Netz langsam ist.
+    """
+    if config["scope"] == SCOPE_ALL:
+        return ["pacman", "-Syu", "--noconfirm"]
+    return ["pacman", "-S", "--needed", "--noconfirm", *names]
+
+
+def parse_upgradable(text: str) -> list[Change]:
+    """`pacman -Qu` in Zeilen der Form `name alt -> neu`.
+
+    Zeilen, die anders aussehen, werden uebergangen statt geraten:
+    `pacman -Qu` haengt bei ignorierten Paketen ein "[ignoriert]" an, und
+    das ist uebersetzt.
+    """
+    changes = []
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and parts[2] == "->":
+            changes.append(Change(parts[0], parts[1], parts[3]))
+    return changes
+
+
+def parse_repository(text: str) -> set[str]:
+    return {line.strip() for line in text.splitlines() if line.strip()}
+
+
+def split(changes: Iterable[Change], members: set[str]
+          ) -> tuple[list[Change], list[Change]]:
+    """Was uns gehoert, und was der Arch-Basis gehoert."""
+    ours, base = [], []
+    for change in changes:
+        (ours if change.name in members else base).append(change)
+    return ours, base
+
+
+# --------------------------------------------------------------------
+# Wer angemeldet ist
+# --------------------------------------------------------------------
+
+def sessions_command() -> list[str]:
+    return ["loginctl", "list-sessions", "--output=json"]
+
+
+def parse_sessions(text: str) -> list[Session]:
+    """Angemeldete Sitzungen an einem Sitzplatz.
+
+    Ohne Sitzplatz ist es keine Sitzung an diesem Bildschirm - eine
+    SSH-Anmeldung hat keinen, und eine Benachrichtigung an sie geht ins
+    Leere. Die Felder heissen bei systemd 254 `uid`, `user` und `seat`;
+    fehlt eins, wird die Zeile uebergangen statt mit einer Vorgabe
+    aufgefuellt, denn eine erfundene uid ist ein Befehl an das falsche
+    Konto.
+    """
+    try:
+        entries = json.loads(text or "[]")
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(entries, list):
+        return []
+
+    found = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        uid, user, seat = entry.get("uid"), entry.get("user"), entry.get("seat")
+        if not isinstance(uid, int) or not user or not seat:
+            continue
+        found.append(Session(uid, str(user), str(seat)))
+    return found
+
+
+def graphical_sessions(*, runner: Runner | None = None) -> list[Session]:
+    runner = runner or subprocess.run
+    try:
+        result = _run(runner, sessions_command(), timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    return parse_sessions(result.stdout or "")
+
+
+def notification(outcome: Outcome, config: dict[str, Any]) -> Notification | None:
+    """Was dem Nutzer gesagt wird - oder nichts.
+
+    Drei Faelle und drei Einstellungen:
+
+      changes   ein Fehlschlag und eine Aenderung werden gemeldet
+      failures  nur der Fehlschlag
+      never     nichts auf dem Schreibtisch. zepos-doctor meldet einen
+                Fehlschlag trotzdem, denn "still" heisst "nicht stoeren"
+                und nicht "verheimlichen".
+
+    Ein Lauf ohne Aenderung meldet nie. Eine taegliche Nachricht
+    "nichts zu tun" ist die zuverlaessigste Art, dafuer zu sorgen, dass
+    die eine Nachricht, auf die es ankommt, weggeklickt wird, ohne
+    gelesen worden zu sein.
+    """
+    mode = config["notify"]
+    if mode == NOTIFY_NEVER:
+        return None
+
+    if outcome.failed:
+        return Notification(
+            summary="ZepOS-Aktualisierung fehlgeschlagen",
+            body=(f"pacman endete mit {outcome.returncode}. "
+                  f"Einzelheiten: journalctl -u {SERVICE_UNIT}, "
+                  f"oder zepos-update --status."),
+            urgent=True,
+        )
+
+    if mode == NOTIFY_FAILURES or not outcome.changed:
+        return None
+
+    names = ", ".join(change.name for change in outcome.upgraded)
+    body = f"{names}."
+    if outcome.sessions:
+        # Die Antwort auf "was passiert mit meinem laufenden
+        # Schreibtisch": nichts, bis zur naechsten Anmeldung.
+        body += (" Die laufende Sitzung bleibt, wie sie ist; die neue "
+                 "Fassung erscheint nach der naechsten Anmeldung.")
+    if outcome.base_available:
+        body += (f" Ausserdem warten {len(outcome.base_available)} "
+                 f"Arch-Aktualisierungen; ZepOS fasst sie nicht an "
+                 f"(sudo pacman -Syu).")
+    return Notification(
+        summary=f"ZepOS aktualisiert ({len(outcome.upgraded)})",
+        body=body,
+    )
+
+
+def notify_commands(sessions: Iterable[Session], note: Notification
+                    ) -> list[list[str]]:
+    """Ein `notify-send` je angemeldeter Sitzung, als root abgesetzt.
+
+    WARUM ueber systemd-run UND NICHT ueber su
+        Dieser Dienst laeuft als root und muss in den Sitzungsbus eines
+        Benutzers sprechen. `su -c` dafuer heisst: eine PAM-Sitzung
+        oeffnen, um eine Zeile Text zuzustellen. systemd-run --uid setzt
+        die Einheit direkt in den Bereich des Benutzers, ohne
+        Anmeldevorgang, ohne Shell und ohne Zeichenkette, die von einer
+        Shell noch einmal gelesen wird - der Text der Nachricht kommt
+        aus pacman und darf nirgends interpretiert werden.
+
+    Schlaegt es fehl, weil niemand einen Benachrichtigungsdienst laufen
+    hat, ist das kein Fehler des Laufs. Die Aktualisierung ist dann
+    trotzdem passiert, und die Zustandsdatei weiss davon.
+    """
+    commands = []
+    for session in sessions:
+        commands.append([
+            "systemd-run", "--quiet", "--collect", f"--uid={session.uid}",
+            f"--setenv=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/"
+            f"{session.uid}/bus",
+            "--", "notify-send", "--app-name=ZepOS",
+            "--icon=system-software-update",
+            f"--urgency={'critical' if note.urgent else 'normal'}",
+            note.summary, note.body,
+        ])
+    return commands
+
+
+# --------------------------------------------------------------------
+# Der Zustand, den zepos-doctor liest
+# --------------------------------------------------------------------
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def state_document(outcome: Outcome, config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "result": outcome.result,
+        "started": outcome.started,
+        "finished": outcome.finished,
+        "scope": config["scope"],
+        "returncode": outcome.returncode,
+        "upgraded": [{"name": c.name, "from": c.old, "to": c.new}
+                     for c in outcome.upgraded],
+        "base_available": [{"name": c.name, "from": c.old, "to": c.new}
+                           for c in outcome.base_available],
+        "sessions": [session.user for session in outcome.sessions],
+        # Die letzten Zeilen von pacman, im Wortlaut und in der Sprache
+        # der Maschine. Sie sind das Einzige, was einem Menschen sagt,
+        # WARUM ein Rueckgabewert 1 war.
+        "message": outcome.message,
+    }
+
+
+def write_state(outcome: Outcome, config: dict[str, Any],
+                path: Path | None = None) -> Path:
+    target = path if path is not None else state_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(state_document(outcome, config), indent=2) + "\n",
+        encoding="utf-8")
+    os.chmod(target, 0o644)
+    return target
+
+
+def read_state(path: Path | None = None) -> dict[str, Any] | None:
+    """Der letzte Lauf, oder None, wenn es keinen gab.
+
+    None und nicht ein leeres Dokument: "hat noch nie gelaufen" ist eine
+    eigene Aussage, und zepos-doctor macht daraus eine andere Meldung als
+    aus "ist zuletzt gescheitert".
+    """
+    target = path if path is not None else state_path()
+    if not target.is_file():
+        return None
+    try:
+        document = json.loads(target.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return document if isinstance(document, dict) else None
+
+
+def describe(state: dict[str, Any] | None) -> str:
+    """Ein Satz fuer einen Menschen: wann war das letzte Mal, was war."""
+    if not state:
+        return ("Diese Maschine hat sich noch nie selbst aktualisiert "
+                "(kein Lauf verzeichnet).")
+
+    when = state.get("finished") or state.get("started") or "unbekannt"
+    result = state.get("result")
+    upgraded = state.get("upgraded") or []
+    base = state.get("base_available") or []
+
+    if result == Outcome.FAILED:
+        head = (f"Letzter Versuch {when}: FEHLGESCHLAGEN "
+                f"(pacman {state.get('returncode')}).")
+        message = (state.get("message") or "").strip()
+        return f"{head}\n{message}" if message else head
+    if result == Outcome.DISABLED:
+        return (f"Zuletzt nachgesehen {when}: abgeschaltet "
+                f"(update.enabled ist false).")
+    if upgraded:
+        names = ", ".join(f"{entry['name']} {entry['from']} -> {entry['to']}"
+                          for entry in upgraded)
+        head = f"Letzte Aktualisierung {when}: {names}."
+    else:
+        head = f"Zuletzt nachgesehen {when}: nichts zu tun."
+    if base:
+        head += (f" {len(base)} Arch-Aktualisierungen liegen bereit und "
+                 f"werden nicht angefasst.")
+    return head
+
+
+def mark_regeneration(path: Path | None = None) -> Path:
+    """Die Marke, die die naechste Anmeldung neu erzeugen laesst.
+
+    Nur nach einem Lauf, der wirklich Pakete getauscht hat. Eine Marke
+    nach jedem Lauf hiesse: jede Anmeldung erzeugt alles neu, taeglich,
+    fuer nichts - und `zepos-generate --all` dauert auf einer frisch
+    installierten Maschine rund 30 Sekunden, in denen der Nutzer einen
+    schwarzen Bildschirm sieht (Spec, Stufe 4, "Erstinbetriebnahme").
+    """
+    target = path if path is not None else marker_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("", encoding="utf-8")
+    os.chmod(target, 0o644)
+    return target
+
+
+# --------------------------------------------------------------------
+# Der Lauf
+# --------------------------------------------------------------------
+
+def _tail(result: subprocess.CompletedProcess, lines: int = 8) -> str:
+    text = ((result.stdout or "") + (result.stderr or "")).strip()
+    return "\n".join(text.splitlines()[-lines:])
+
+
+def perform(config: dict[str, Any], *, runner: Runner | None = None,
+            check_only: bool = False) -> Outcome:
+    """Ein vollstaendiger Lauf: nachsehen, einspielen, berichten.
+
+    Die Reihenfolge ist keine Geschmacksfrage. Erst die Datenbank, dann
+    die Aufstellung, dann die eine veraendernde Handlung, dann die
+    Sitzungen - so ist alles, was berichtet wird, gemessen worden,
+    bevor es berichtet wird, und ein Abbruch in der Mitte hinterlaesst
+    einen Zustand, der sagt, wie weit es kam.
+    """
+    runner = runner or subprocess.run
+    started = _now()
+
+    if not config["enabled"]:
+        # Nicht stillschweigend. Wer den Zeitgeber von Hand einschaltet,
+        # obwohl die Einstellung false sagt, soll im Journal lesen
+        # koennen, warum nichts passiert ist.
+        return Outcome(result=Outcome.DISABLED, started=started,
+                       finished=_now(),
+                       message="update.enabled ist false - nichts getan.")
+
+    # Wer angemeldet ist, wird VOR der ersten Handlung gefragt und nicht
+    # danach. Gemessen an der eigenen Testsuite: stand die Frage hinter
+    # dem `pacman -Sy`, kam ein Lauf, der schon an der Datenbank
+    # scheiterte, ohne Sitzungsliste heraus - und die Benachrichtigung
+    # ueber den Fehlschlag ging an niemanden. Ausgerechnet der Fall, den
+    # SigLevel = Required erzeugt, waere der einzige stille gewesen.
+    sessions = graphical_sessions(runner=runner)
+
+    refreshed = _run(runner, refresh_command())
+    if refreshed.returncode != 0:
+        return Outcome(result=Outcome.FAILED, returncode=refreshed.returncode,
+                       message=_tail(refreshed), sessions=tuple(sessions),
+                       started=started, finished=_now())
+
+    # `pacman -Qu` endet mit 1, wenn nichts zu tun ist. Das ist kein
+    # Fehler, und ein Lauf, der es dafuer haelt, meldet auf einer
+    # aktuellen Maschine taeglich einen Fehlschlag.
+    listed = _run(runner, upgradable_command(), timeout=120)
+    changes = parse_upgradable(listed.stdout or "")
+
+    members = set()
+    if changes:
+        offered = _run(runner, repository_command(), timeout=120)
+        members = parse_repository(offered.stdout or "")
+    ours, base = split(changes, members)
+    if not config["report_base"]:
+        base = []
+
+    if config["scope"] == SCOPE_ALL:
+        # Der ausdruecklich gewaehlte Weg: alles, was da ist. Dann gibt
+        # es keine "Basis, die nur gemeldet wird" - sie wird eingespielt.
+        ours, base = ours + base, []
+
+    if not ours:
+        return Outcome(result=Outcome.NOTHING, base_available=tuple(base),
+                       sessions=tuple(sessions), started=started,
+                       finished=_now())
+
+    if check_only:
+        # Was passieren WUERDE. upgraded ist besetzt und das Ergebnis
+        # heisst trotzdem nicht "ok": ein --check, der als erfolgreiche
+        # Aktualisierung abgelegt wuerde, waere eine Maschine, die
+        # behauptet, aktuell zu sein, weil jemand nachgesehen hat.
+        return Outcome(result=Outcome.PENDING, upgraded=tuple(ours),
+                       base_available=tuple(base),
+                       sessions=tuple(sessions), started=started,
+                       finished=_now())
+
+    upgraded = _run(runner, upgrade_command(config,
+                                            [change.name for change in ours]))
+    if upgraded.returncode != 0:
+        return Outcome(result=Outcome.FAILED, returncode=upgraded.returncode,
+                       message=_tail(upgraded), base_available=tuple(base),
+                       sessions=tuple(sessions), started=started,
+                       finished=_now())
+
+    return Outcome(result=Outcome.OK, upgraded=tuple(ours),
+                   base_available=tuple(base), sessions=tuple(sessions),
+                   message=_tail(upgraded), started=started, finished=_now())
+
+
+def announce(outcome: Outcome, config: dict[str, Any], *,
+             runner: Runner | None = None) -> list[list[str]]:
+    """Die Benachrichtigung absetzen, wenn es eine gibt."""
+    note = notification(outcome, config)
+    if note is None:
+        return []
+    runner = runner or subprocess.run
+    commands = notify_commands(outcome.sessions, note)
+    for argv in commands:
+        try:
+            runner(argv, capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return commands
+
+
+# --------------------------------------------------------------------
+# Befehlszeile
+# --------------------------------------------------------------------
+
+USAGE = """usage: zepos-update            aktualisieren, was aus [zepos] kommt
+       zepos-update --check    nur nachsehen und berichten
+       zepos-update --status   was der letzte Lauf getan hat
+       zepos-update --apply    systemd auf die Einstellungen bringen
+
+Was, wann und ob ueberhaupt entscheidet {config}; geschrieben wird das
+mit `zepos-settings set update.<name> <wert>`:
+
+{keys}
+
+Die Arch-Basis wird gezaehlt und gemeldet, nicht angefasst - ausser
+update.scope steht auf "all"."""
+
+
+def usage_text() -> str:
+    return USAGE.format(
+        config=config_path(),
+        keys="\n".join(f"    update.{name}" for name in known_keys()))
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv in (["-h"], ["--help"]):
+        print(usage_text())
+        return 0
+    if len(argv) > 1 or (argv and argv[0] not in
+                         ("--check", "--status", "--apply")):
+        print(usage_text(), file=sys.stderr)
+        return 2
+
+    try:
+        config = load()
+    except (UnusableConfig, OSError) as exc:
+        print(f"{exc}\nNichts getan.", file=sys.stderr)
+        return 1
+
+    if argv == ["--status"]:
+        print(describe(read_state()))
+        return 0
+
+    if argv == ["--apply"]:
+        for command in apply(config):
+            print(" ".join(command))
+        return 0
+
+    outcome = perform(config, check_only=argv == ["--check"])
+    print(f"zepos-update: {outcome.result}")
+    for change in outcome.upgraded:
+        print(f"  {change}")
+    if outcome.base_available:
+        print(f"  {len(outcome.base_available)} Arch-Aktualisierungen "
+              f"bereit, nicht angefasst")
+    if outcome.message:
+        print(outcome.message)
+
+    if argv == ["--check"]:
+        return 0
+
+    write_state(outcome, config)
+    if outcome.changed:
+        mark_regeneration()
+    announce(outcome, config)
+    return 1 if outcome.failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

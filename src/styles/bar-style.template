@@ -1,0 +1,868 @@
+/* Der Stil der Leiste und des Docks
+ * Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+ * Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/styles/bar-style.template kopieren
+ *
+ * WARUM EINE DATEI UND NICHT FUENFZEHN
+ *     Die Waybar-Fassung hatte style.css mit fuenfzehn @import und
+ *     fuenfzehn Erzeugungsrouten dahinter. Das war kein Aufbau, sondern
+ *     eine Datei je Modul - und die Reihenfolge der Importe entschied
+ *     mit, welche Regel gewinnt, ohne dass irgendwo stand, warum
+ *     misc.css nach network.css kommt.
+ *
+ *     Hier steht alles einmal, in der Reihenfolge, in der die Module auf
+ *     der Leiste stehen. Der Preis ist eine laengere Datei; der Gewinn
+ *     ist, dass "welche Regel trifft dieses Modul" durch Lesen
+ *     beantwortbar ist.
+ *
+ * WARUM CSS UND NICHT SCSS
+ *     ags/style.scss wird von `ags run` durch dart-sass geschickt. Diese
+ *     Datei wird stattdessen von app.ts ueber app.apply_css() nachgeladen
+ *     - GTK4 liest sie also unveraendert. Damit haengt die Leiste nicht
+ *     daran, dass dart-sass installiert ist, und ein Tippfehler hier
+ *     kostet eine Regel statt der ganzen Oberflaeche.
+ *
+ * GTK4 IST NICHT GTK3
+ *     Zwei Eigenschaften der Vorgaengerdateien gibt es in GTK4 nicht
+ *     mehr und sie standen hier drin:
+ *       -gtk-icon-effect: dim|highlight   (entfernt in GTK4)
+ *       -gtk-icon-style:  symbolic        (entfernt in GTK4)
+ *     Beide sind unten durch das ersetzt, was sie bewirken sollten -
+ *     opacity fuer "abgeblendet", eine Hintergrundfarbe fuer "will
+ *     Aufmerksamkeit". Eine unbekannte Eigenschaft ist in GTK4 kein
+ *     Fehler, sondern eine Warnung auf stderr und eine Regel, die nichts
+ *     tut: genau die Art Fehler, die niemand bemerkt.
+ */
+
+/* =====================================================================
+ * Grundlage
+ * ===================================================================*/
+
+/* Die Flaeche selbst zeichnet NICHTS. Sie ist so gross wie der
+ * reservierte Streifen; was man sieht, ist #bar darin, und der haelt
+ * seinen Abstand zum Schirmrand. Ein Hintergrund hier waere ein
+ * randloser Balken hinter einer abgerundeten Platte. */
+window.bar-window {
+  background: {{STYLE_BG_TRANSPARENT}};
+  color: {{STYLE_COLOR_BAR_TEXT}};
+  font-family: {{STYLE_FONT_FAMILY}};
+  font-weight: {{STYLE_FONT_WEIGHT}};
+  font-size: {{STYLE_FONT_BODY}};
+}
+
+window.bar-window * {
+  border: none;
+  border-radius: {{STYLE_RADIUS_CONTROL}};
+  min-height: 0;
+}
+
+/* Die Platte - das, was man von der Kopfleiste wirklich sieht.
+ *
+ * DER ABSTAND ZUM RAND, UND WARUM ER LINKS, RECHTS UND OBEN STEHT UND
+ * UNTEN NICHT
+ *     Das ist die Antwort auf "die fenster auch den selben abstand zum
+ *     rand nutzen", und sie ist eine Rechnung und keine Wahl. Sei G der
+ *     eine Abstand (STYLE_GAPS_OUT, Sprosse 16):
+ *
+ *       Platte zum oberen Schirmrand      G   dieser Rand hier
+ *       Fenster zu jedem freien Rand      G   Hyprlands gaps_out
+ *       Fenster zu Fenster              2*G/2 Hyprlands gaps_in, also G
+ *       Platte zum ersten Fenster         ?
+ *
+ *     Das Fenstergebiet beginnt am Ende des reservierten Streifens, also
+ *     bei BAR_THICKNESS, und dann kommt noch gaps_out dazu. Damit die
+ *     letzte Zeile ebenfalls G ergibt, muss die Platte bei
+ *     BAR_THICKNESS aufhoeren - sie darf UNTEN also keinen Rand haben.
+ *     Das G, das man dort sieht, ist der Aussenabstand des FENSTERS.
+ *
+ *     Mit einem Rand auch unten stuenden dort 2*G, und die eine Fuge,
+ *     die der Nutzer am haeufigsten ansieht, waere als einzige doppelt
+ *     so breit wie alle anderen.
+ *
+ *     Bis zum 11.08.2026 lag die Leiste links, und dieselbe Rechnung
+ *     liess damals den Rand RECHTS weg. Gedreht hat sich die Kante, an
+ *     der das Fenstergebiet anschliesst, und sonst nichts.
+ *
+ * DAS GLAS
+ *     Halbdurchsichtig hier, unscharf durch die layerrule in
+ *     hyprland-universal-config.template. Beides zusammen ist der
+ *     Effekt; eines allein ist entweder ein Loch in der Oberflaeche
+ *     oder gar nichts.
+ *
+ *     Auf dieser Platte steht KEIN Text - er steht auf den Kacheln
+ *     darauf. Deshalb darf sie die duennere der beiden Schichten sein,
+ *     und deshalb ist der Effekt hier ueberhaupt leistbar. Die Rechnung
+ *     dazu steht in src/brand.py unter GLASS.
+ *
+ * EINE SCHICHT UND NICHT ZWEI, UND WARUM DAS DIE DECKKRAFT AENDERT
+ *     GEMELDET am 12.08.2026, nachdem der Nutzer die Bilder gesehen
+ *     hatte: "die icon sollen im header nicht nochmal ein element haben
+ *     weil ich die icons seperat von dem hintergrund der waybar
+ *     erkennen kann".
+ *
+ *     Damit faellt die Kachel unter jedem Modul weg (siehe
+ *     .bar-module), und die Leiste ist von zwei Schichten auf eine
+ *     gegangen. Der Text steht jetzt DIREKT auf dieser Platte - und
+ *     genau dafuer rechnet src/brand.py glass_solo_alpha() aus: eine
+ *     einzelne Schicht muss so viel Material tragen wie zwei
+ *     gestapelte, 0.70 + 0.30*0.55 = 0.865, weil derselbe Text darauf
+ *     gelesen werden muss.
+ *
+ *     STYLE_GLASS_SOLO ist genau dieser Wert, und es ist dieselbe
+ *     Platte, die jede Ueberlagerung dieses Projekts schon malt. Der
+ *     Schreibtisch hat damit EIN Glas und nicht drei.
+ *
+ *     GEMESSEN am 12.08.2026, Text auf der Platte ueber der hellsten
+ *     und der dunkelsten denkbaren Tapete, ZeptronIT:
+ *
+ *         Platte                             bar_text (weiss/schwarz)
+ *         Kachel 0.70 auf Platte 0.55        6.33 / 10.62   bis heute
+ *         SHADE_1  @ 0.86                    5.14 /  8.87
+ *         background @ 0.86                  6.53 / 11.12
+ *         overlay_bg @ 0.86  (diese hier)    8.64 / 14.06
+ *
+ *     Die Leiste hat also mit EINER Schicht mehr Kontrast als vorher
+ *     mit zweien - die Farbe traegt das, nicht die Anzahl der Schichten.
+ *     SHADE_1 waere ausserdem an einer zweiten Stelle falsch: es ist
+ *     die Farbe des Zeigereffekts, und ein Hervorheben, das dieselbe
+ *     Farbe hat wie sein Grund, ist keines (1.04:1 gemessen, gegen
+ *     1.69:1 hier).
+ *
+ * KEINE ABGESETZTE KANTE MEHR
+ *     Hier stand `border-bottom: STYLE_BAR_SHELF px solid
+ *     STYLE_BAR_SHELF_COLOR` - ein 6 px hohes Brett aus INK unter der
+ *     Platte, und dasselbe noch einmal unter JEDEM Modul. Zwei
+ *     gestapelte Bretter, und der Nutzer am 12.08.2026: "entferne bitte
+ *     diese 3d aussehen von hier sodass sie matched mit dem footer".
+ *
+ *     Der Fuss hatte nie eines, und er ist der Massstab. Was das Brett
+ *     an Fenstern tut - Hyprlands `shadow` mit range 0 und offset
+ *     0 STYLE_BAR_SHELF - bleibt unberuehrt: dort ist es die Kante
+ *     eines FENSTERS und nicht eine zweite Ebene in einer Leiste. */
+#bar {
+  background: {{STYLE_GLASS_SOLO}};
+  margin-left: {{STYLE_GAPS_OUT}}px;
+  margin-right: {{STYLE_GAPS_OUT}}px;
+  margin-top: {{STYLE_GAPS_OUT}}px;
+  border-radius: {{STYLE_RADIUS_PANEL}};
+}
+
+/* Der gemeinsame Kasten jedes Moduls - und seit dem 12.08.2026 ist er
+ * KEINE Kachel mehr, sondern nur noch Platz.
+ *
+ * GEMELDET, woertlich: "die icon sollen im header nicht nochmal ein
+ * element haben weil ich die icons seperat von dem hintergrund der
+ * waybar erkennen kann verstehst du was ich meine ?"
+ *
+ * WAS HIER STAND UND WAS DAVON GEHT
+ *     background   die zweite Glasschicht. Sie ist der Grund, warum der
+ *                  Nutzer achtzehn Rechtecke gesehen hat statt einer
+ *                  Leiste. Sie ist fort, und die Platte darunter traegt
+ *                  dafuer die volle Deckkraft - siehe #bar.
+ *     border       `STYLE_BORDER_WIDTH solid STYLE_BORDER_COLOR`, und
+ *                  die Breite war 0px. Ein Rahmen, der nichts malt, in
+ *                  genau der Regel, ueber die sich der Nutzer beschwert
+ *                  hat. Die drei Namen sind mit ihr geloescht - sie
+ *                  hatten keinen anderen Leser.
+ *     border-bottom   das 6 px hohe Brett aus INK. "entferne bitte
+ *                  diese 3d aussehen von hier sodass sie matched mit dem
+ *                  footer" - und der Fuss hat keines.
+ *
+ * WAS BLEIBT, UND WARUM GENAU DAS
+ *     padding      Es ist jetzt kein Innenabstand einer Kachel mehr,
+ *                  sondern die FLAECHE, die der Zeigereffekt bemalt.
+ *                  Ohne sie klebte das Hervorheben am Text; ein
+ *                  Bedienelement, dessen Ruecklauf ein enger Kasten um
+ *                  fuenf Zeichen ist, sieht aus wie ein Fehler.
+ *     margin       der Abstand zwischen zwei Modulen. Er ist seit
+ *                  heute das EINZIGE, was sie trennt, und deshalb
+ *                  traegt er die ganze Gliederung: was frueher die
+ *                  Kachelkante geleistet hat, leistet jetzt der
+ *                  Rhythmus. Wo eine GRUPPE endet, steht daneben
+ *                  zusaetzlich ein margin-right.
+ *     border-radius  fuer den Zeigereffekt, aus demselben Grund wie das
+ *                  padding: die Flaeche, die er malt, soll dieselbe
+ *                  Form haben wie alles andere in diesem Baukasten.
+ *
+ *     Die Groesse hiess bis zum 12.08.2026 STYLE_MARGIN_TOP, weil die
+ *     Leiste senkrecht lief und der Abstand zwischen zwei Kacheln dort
+ *     oben lag. Ein Name, der eine Himmelsrichtung nennt, ist beim
+ *     naechsten Drehen falsch; dieser nennt die Sache.
+ *
+ * WARUM HIER KEIN `opacity` STEHT
+ *     Hier stand `opacity: 0.8` (STYLE_BG_OPACITY), und das war ein
+ *     Fehler mit Folgen: opacity in GTK4 blendet das ganze Widget ab,
+ *     SAMT SEINER SCHRIFT. Die 0.8 haben also nicht den Hintergrund
+ *     durchsichtig gemacht, sondern zusaetzlich den Text - und damit
+ *     genau den Kontrast weggenommen, den brand.py fuer diesen Text
+ *     ausgerechnet hat. */
+.bar-module {
+  padding: {{STYLE_PADDING_MODULE}};
+  margin: {{STYLE_MARGIN_VERTICAL}};
+  margin-left: {{STYLE_CHIP_GAP}};
+  border-radius: {{STYLE_RADIUS_CARD}};
+}
+
+/* Ein Modul, dessen Skript kein JSON geschrieben hat. Es zeigt dann die
+ * Zeile, die stattdessen kam - und faellt auf, damit sie jemand liest. */
+.bar-module.broken {
+  color: {{STYLE_COLOR_CRITICAL}};
+}
+
+tooltip {
+  background: {{STYLE_TOOLTIP_BG}};
+  border-radius: {{STYLE_RADIUS_CARD}};
+  border-width: {{STYLE_TOOLTIP_BORDER_WIDTH}};
+  border-style: {{STYLE_TOOLTIP_BORDER_STYLE}};
+  border-color: {{STYLE_TOOLTIP_BORDER_COLOR}};
+}
+
+tooltip label {
+  color: {{STYLE_COLOR_BAR_TEXT}};
+  font-family: {{STYLE_FONT_FAMILY}};
+  font-size: {{STYLE_FONT_CAPTION}};
+  padding: {{STYLE_PADDING_BUTTON}};
+}
+
+/* =====================================================================
+ * WARUM HIER SO WENIG FARBE STEHT
+ * ===================================================================*/
+/* GEMELDET am 12.08.2026: "die icons im header sollen auch nicht alle
+ * zepdesk farben tragen weil es sonst voll monoton aussieht".
+ *
+ * GEMESSEN am selben Tag, ueber die neunzehn Farbnamen, die diese Datei
+ * benutzte - nicht die Namen, sondern die Farben, die daraus wurden,
+ * in Farbton und Saettigung:
+ *
+ *     #DCEEF4  H=195.0   BAR_TEXT, WEATHER, WORKSPACE
+ *     #33C9EE  H=191.9   NETWORK, HARDWARE, AUDIO
+ *     #7FDCF2  H=191.5   BLUETOOTH
+ *     #A9C6CF  H=194.2   MICROPHONE
+ *     #8FB0BA  H=194.0   OFFLINE, INACTIVE
+ *     #FFCB00  H= 47.8   DATE, CLOCKS, WORKSPACE_VISIBLE,
+ *                        FLOATING_LAYOUTS, WARNING
+ *     #57D9A3  H=155.1   BATTERY, SUCCESS
+ *     #FF8A8A  H=  0.0   CRITICAL, WORKSPACE_URGENT
+ *
+ * ZEHN der neunzehn lagen in einem Fenster von dreieinhalb Grad
+ * Farbton. Der Nutzer hat also nicht "zu viele Farben" gesehen,
+ * sondern EINE Farbe in zehn Abstufungen - und das ist genau, was
+ * monoton heisst.
+ *
+ * UND DER SCHWERERE BEFUND, DER IN DERSELBEN TABELLE STEHT
+ *     Die Zustandsfarben waren von den Ruhefarben NICHT ZU
+ *     UNTERSCHEIDEN, weil die Ruhefarben sie schon benutzten:
+ *     STYLE_COLOR_WARNING war Byte fuer Byte dasselbe #FFCB00 wie das
+ *     Datum, die Uhren und die Fensteranordnung; STYLE_COLOR_SUCCESS
+ *     dasselbe #57D9A3 wie der volle Akku. Ein schwacher Akku sah aus
+ *     wie die Uhrzeit. Wenn alles gefaerbt ist, faellt nichts auf.
+ *
+ * DIE REGEL SEITHER, UND SIE MACHT DIE LEISTE RUHIGER MIT WENIGER FARBE
+ *     Ruhezustand  = die Textfarbe der Leiste. Ein Modul, das nichts zu
+ *                    melden hat, wird gelesen und nicht angesehen. Es
+ *                    steht deshalb KEIN `color` mehr in seiner Regel -
+ *                    es erbt aus `window.bar-window`, und das ist eine
+ *                    Zeile weniger statt einer Zeile mit derselben
+ *                    Farbe darin.
+ *     Zustand      = Farbe. Akku schwach, Ton stumm, Netz getrennt,
+ *                    Bereich dringend: dafuer sind die Zustandsfarben
+ *                    aus brand.py da, dieselben, die die
+ *                    Benachrichtigungen und die Abmeldemaske benutzen.
+ *
+ *     Damit entsteht Kontrast durch WENIGER Farbe. Acht Regeln haben
+ *     ihre Farbe verloren, keine hat eine bekommen. */
+
+/* =====================================================================
+ * Links: Datum, Uhren, Wetter, Tastenuebersicht, Arbeitsbereiche
+ * ===================================================================*/
+
+/* Kein margin-left: das erste Modul faengt an der Kante der Platte an.
+ * Hier stand STYLE_BAR_EDGE_SPACING, also 31 px bei
+ * Vorgabegroesse - ZUSAETZLICH zu den 25, die die Platte selbst zum
+ * Schirmrand haelt. GEMELDET am 12.08.2026: "der header mit den icon
+ * kann rechts und links mehr platz benutzen damit es mit dem terminal
+ * gleich aufliegt". Die Platte lag laengst gleich auf; die Symbole
+ * nicht. Siehe src/sizes.py, wo die Groesse geloescht ist. */
+/* DIE TASTATURBELEGUNG, seit dem 17.08.2026 und ganz aussen links.
+ *
+ * BESTELLT: "die tastatur icon fehlt auch noch links neben dem datum".
+ * Woertlich genommen: LINKS NEBEN dem Datum, also davor - und
+ * custom/hardware rechts daneben, weil derselbe Nutzer im selben Atemzug
+ * "hardware monitor icon soll nach links recht neben die zeit anzeige"
+ * gesagt hat. Beide Ansagen gehen nur so zugleich auf.
+ *
+ * DER ZEIGERGRUND HAENGT AN EINER KLASSE, UND DAS IST KEINE ZIERDE
+ *     Ein Klick schaltet die Belegung um - aber nur, wenn mehr als eine
+ *     eingerichtet ist. GEMESSEN am 17.08.2026: ZepOS liefert
+ *     `kb_layout = de` aus (hyprland-universal-config.template), also
+ *     genau eine. Das Modul ist dann eine ANZEIGE, und eine Anzeige
+ *     bekommt keinen Zeigergrund: ein Kasten, der auf den Zeiger
+ *     antwortet und auf den Klick nicht, sieht kaputt aus.
+ *
+ *     `keyboard-switchable` haengt deshalb an der gemessenen Liste und
+ *     nicht am Bauplan - siehe keyboardModule() in ags-bar.template. Fuer
+ *     den Ruhefall gibt es KEINE Gegenklasse: eine Klasse ohne Regel
+ *     waere ein Name, den kein Stylesheet liest. */
+#custom-keyboard {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+#custom-keyboard.keyboard-switchable:hover {
+  background: {{STYLE_HOVER_BG}};
+  color: {{STYLE_HOVER_COLOR}};
+}
+
+#custom-date {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+#custom-date:hover {
+  background: {{STYLE_HOVER_BG}};
+  color: {{STYLE_HOVER_COLOR}};
+}
+
+/* Ein Modul fuer alle Zusatzuhren, nicht eines je Land. Eine Farbe fuer
+ * alle Zonen: zwei Vorgaenger hatten je eine, was nur so lange eine
+ * Unterscheidung ist, wie es genau diese zwei sind. */
+#custom-clocks {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+/* Eine Zone, die die Zeitzonendatenbank dieses Rechners nicht kennt,
+ * wird abgeblendet statt still als UTC angezeigt. */
+#custom-clocks.clocks-unknown-zone,
+#custom-clocks.clocks-unconfigured {
+  color: {{STYLE_COLOR_INACTIVE}};
+}
+
+#custom-weather {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+/* Kein Netz, eine Sperre des Dienstes oder eine unlesbare Antwort sind
+ * keine Fehler - sie bedeuten, dass der angezeigte Wert von vorhin ist. */
+#custom-weather.weather-offline,
+#custom-weather.weather-throttled,
+#custom-weather.weather-error,
+#custom-weather.weather-unknown-location,
+#custom-weather.weather-unconfigured {
+  color: {{STYLE_COLOR_INACTIVE}};
+}
+
+#custom-hypr-shortcuts {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+#custom-hypr-shortcuts:hover {
+  background: {{STYLE_HOVER_BG}};
+  color: {{STYLE_HOVER_COLOR}};
+}
+
+#workspaces {
+  margin-right: {{STYLE_GROUP_INTERNAL}};
+  padding-right: 0px;
+  padding-left: {{STYLE_PADDING_BUTTON}};
+}
+
+#workspaces button {
+  padding: {{STYLE_PADDING_BUTTON}};
+  margin-right: {{STYLE_PADDING_BUTTON}};
+  background: transparent;
+  opacity: {{STYLE_OPACITY_FULL}};
+}
+
+/* Leer heisst: es gibt den Bereich, aber kein Fenster darin. */
+#workspaces button.empty {
+  opacity: {{STYLE_OPACITY_DISABLED}};
+}
+
+/* Sichtbar auf einem anderen Schirm. */
+#workspaces button.visible {
+  color: {{STYLE_COLOR_WORKSPACE_VISIBLE}};
+  opacity: {{STYLE_OPACITY_FULL}};
+}
+
+/* Der Bereich mit dem Fokus. */
+#workspaces button.active {
+  color: {{STYLE_COLOR_WORKSPACE_VISIBLE}};
+  text-decoration: underline;
+  opacity: {{STYLE_OPACITY_FULL}};
+}
+
+#workspaces button.urgent {
+  color: {{STYLE_COLOR_WORKSPACE_URGENT}};
+  opacity: {{STYLE_OPACITY_FULL}};
+}
+
+#workspaces button:hover {
+  background: {{STYLE_HOVER_BG}};
+  opacity: {{STYLE_OPACITY_FULL}};
+}
+
+/* =====================================================================
+ * Mitte: der Fenstertitel
+ * Rechts: Layouts, Helfer, Netz, Bluetooth, Hardware, Ton, Mikrofon,
+ *         Akku, Ablage, Platte, Bild, Einstellungen
+ * ===================================================================*/
+
+#custom-floating-layouts {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+#custom-floating-layouts:hover {
+  background: {{STYLE_HOVER_BG}};
+  color: {{STYLE_HOVER_COLOR}};
+}
+
+#custom-floating-layouts.no-layouts {
+  color: {{STYLE_COLOR_OFFLINE}};
+  opacity: {{STYLE_OPACITY_DISABLED}};
+}
+
+/* Eine gespeicherte Anordnung ist der Ruhezustand dieses Moduls und
+ * kein Zustand, ueber den etwas zu sagen waere. Hier stand
+ * STYLE_COLOR_BLUETOOTH - die Farbe eines ANDEREN Moduls, an einer
+ * Stelle, die mit Bluetooth nichts zu tun hat; genau der Riss zwischen
+ * Namen und Sache, den dieses Projekt sonst nicht duldet. */
+#custom-floating-layouts.single-layout {
+}
+
+#custom-floating-layouts.multiple-layouts {
+  color: {{STYLE_COLOR_SUCCESS}};
+  font-weight: bold;
+}
+
+#custom-helpers {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+#custom-helpers:hover {
+  background: {{STYLE_HOVER_BG}};
+  color: {{STYLE_HOVER_COLOR}};
+}
+
+#custom-helpers.no-scripts {
+  color: {{STYLE_COLOR_OFFLINE}};
+  opacity: {{STYLE_OPACITY_DISABLED}};
+}
+
+#custom-helpers.running {
+  color: {{STYLE_COLOR_WARNING}};
+}
+
+/* Der Knopf fuer das, was auf diesem Schirm nicht mehr hinpasst. Er
+ * steht am inneren Ende des rechten Kastens - dort, wo die
+ * eingeklappten Module gestanden haetten - und ist unsichtbar, solange
+ * nichts eingeklappt ist. Warum ueberhaupt eingeklappt wird, steht im
+ * Kopf des Abschnitts "Was die Leiste tut, wenn der Platz nicht reicht"
+ * in ags-bar.template. */
+/* DIE EINE AUSNAHME VON "RUHEZUSTAND IST NEUTRAL", UND SIE IST KEINE.
+ *
+ * Der Einklapper ist ueberhaupt nur sichtbar, wenn etwas nicht auf die
+ * Leiste passt - er IST ein Zustand und kein Ruhezustand. Genau das
+ * soll auffallen: dahinter stehen Module, die der Nutzer gerade nicht
+ * sieht, und am 12.08.2026 waren es sechs, ohne dass irgendetwas es
+ * gesagt haette ("akku anzeige fehlt ... mikrofon und lautstaerke
+ * fehlt"). Er traegt deshalb den Akzent der Marke. */
+#bar-overflow {
+  color: {{STYLE_COLOR_HARDWARE}};
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+/* DER EINE KASTEN, DEN DIE LEISTE NICHT SELBST GEMALT HAT (12.08.2026)
+ *
+ * GTK4 baut einen Gtk.MenuButton als `menubutton > button`, und dieser
+ * INNERE Knopf bringt den Grund von Adwaita mit. Solange jedes Modul
+ * seine eigene Kachel hatte, fiel das nicht auf - der Einklapp-Knopf sah
+ * aus wie seine Nachbarn. Seit die Kacheln fort sind, ist er der
+ * einzige Kasten auf der Platte, und auf out/render/leiste-1366.png
+ * steht er als heller Block zwischen den Arbeitsbereichen und dem Akku.
+ *
+ * Der Wahlausdruck muss deshalb den inneren Knopf treffen und nicht nur
+ * #bar-overflow: eine Regel auf dem MenuButton allein malt hinter den
+ * Adwaita-Grund und nicht darueber. */
+#bar-overflow,
+#bar-overflow > button {
+  background: transparent;
+  box-shadow: none;
+}
+
+#bar-overflow:hover,
+#bar-overflow > button:hover {
+  background: {{STYLE_HOVER_BG}};
+  color: {{STYLE_HOVER_COLOR}};
+}
+
+#network {
+  margin-right: {{STYLE_GROUP_INTERNAL}};
+}
+
+#network.network-disconnected {
+  color: {{STYLE_COLOR_OFFLINE}};
+}
+
+#bluetooth {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+/* Adapter da, aber aus. Dieselbe Abblendung wie beim stummen Ton
+ * darunter, und aus demselben Grund: das Geraet ist vorhanden und sagt
+ * gerade nichts - das ist ein Zustand und keine Abwesenheit. Bis zum
+ * 13.08.2026 verschwand das Modul dabei ganz und war damit von einer
+ * Maschine ohne Bluetooth nicht zu unterscheiden. */
+#bluetooth.bluetooth-off {
+  color: {{STYLE_COLOR_INACTIVE}};
+}
+
+#custom-hardware {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+/* Die drei Zustaende des Hardwaremoduls - und seit dem 13.08.2026 in
+ * derselben Bauart wie jeder andere Zustand dieser Datei: eine FARBE und
+ * kein Kasten.
+ *
+ * WAS HIER STAND, UND WARUM ES WEG IST
+ *     `background: STYLE_HARDWARE_WARNING_BG` und zweimal dasselbe
+ *     darunter. Die drei Farben sind deckende Hexwerte (#3D3100,
+ *     #3D1A1A, #16323A aus src/brand.py) und lagen damit als
+ *     undurchsichtige Rechtecke auf der einen Glasplatte - genau das
+ *     Aussehen, das der Nutzer am 12.08.2026 abgelehnt hat ("die icon
+ *     sollen im header nicht nochmal ein element haben"). Ein
+ *     Warnzustand, der als Kasten erscheint, macht aus der Leiste
+ *     wieder eine Reihe von Kacheln, und zwar ausgerechnet in dem
+ *     Moment, in dem man hinsehen soll.
+ *
+ *     Der Abschnittskopf oben schreibt die Regel schon aus: "Zustand =
+ *     Farbe". Akku, Ton, Mikrofon und Netz halten sie; dieses Modul war
+ *     das einzige, das sie brach.
+ *
+ * UND WARUM DIE NAMEN JETZT DIE ALLGEMEINEN SIND
+ *     GEMESSEN am 13.08.2026: STYLE_HARDWARE_WARNING_COLOR war Byte fuer
+ *     Byte #FFCB00, also STYLE_COLOR_WARNING; _CRITICAL_COLOR war
+ *     #FF8A8A, also STYLE_COLOR_CRITICAL; _OFFLINE_COLOR war #8FB0BA,
+ *     also STYLE_COLOR_INACTIVE. Drei Namen fuer drei Farben, die es
+ *     schon gab - der Katalog, gegen den src/sizes.py bei der Schrift
+ *     argumentiert, nur in Farbe. Alle sieben STYLE_HARDWARE_*-Namen
+ *     sind mit dieser Aenderung aus src/style_definition.py geloescht. */
+#custom-hardware.hardware-warning {
+  color: {{STYLE_COLOR_WARNING}};
+}
+
+#custom-hardware.hardware-critical {
+  color: {{STYLE_COLOR_CRITICAL}};
+}
+
+#custom-hardware.hardware-offline {
+  color: {{STYLE_COLOR_INACTIVE}};
+}
+
+#pulseaudio {
+  margin-right: {{STYLE_GROUP_INTERNAL}};
+}
+
+#pulseaudio.audio-muted {
+  color: {{STYLE_COLOR_INACTIVE}};
+}
+
+/* Der Name kommt aus "pulseaudio#microphone": die Leiste ersetzt nur den
+ * Schraegstrich, das Doppelkreuz bleibt Teil des Namens. */
+#pulseaudio\#microphone {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+#pulseaudio\#microphone.microphone-muted {
+  color: {{STYLE_COLOR_INACTIVE}};
+}
+
+#battery {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+#battery.battery-warning {
+  color: {{STYLE_COLOR_WARNING}};
+}
+
+#battery.battery-critical {
+  color: {{STYLE_COLOR_CRITICAL}};
+}
+
+#battery:hover {
+  background: {{STYLE_HOVER_BG}};
+  color: {{STYLE_HOVER_COLOR}};
+}
+
+/* Die Ablage.
+ *
+ * DER KLOTZ IN DER LEISTE, UND ER STAND DA, WENN NICHTS DA WAR
+ *     Hier stand `background: STYLE_COLOR_BAR_TRAY` - ein
+ *     sechsstelliges Hex ohne Alphakanal, und damit die EINE Stelle der
+ *     Leiste, durch die nichts hindurchkam.
+ *
+ *     GEMESSEN auf out/render/schreibtisch-1920.png (12.08.2026,
+ *     frische Sitzung, kein Programm mit Ablagesymbol): ein
+ *     volldeckender Block (33, 79, 89) von 30x47 Bildpunkten bei
+ *     x=1707..1736, zwischen "87%" und den drei Symbolknoepfen rechts.
+ *     Eine LEERE Ablage - der Normalfall direkt nach dem Anmelden -
+ *     malte also einen Klotz in eine durchscheinende Leiste.
+ *
+ *     Sie malt jetzt gar keinen Grund mehr, wie jedes andere Modul auch,
+ *     und die Box macht sich zusaetzlich unsichtbar, solange kein
+ *     Programm ein Symbol angemeldet hat - siehe Tray() in
+ *     ags-tray.template. Eine leere Ablage soll nichts zeigen, auch
+ *     kein Glas. */
+#tray {
+  margin-right: {{STYLE_MODULE_SPACING}};
+}
+
+#tray button.tray-item {
+  background: transparent;
+  padding: 0px {{STYLE_PADDING_BUTTON}};
+}
+
+/* Der Zeigereffekt der Ablagesymbole - bis zum 12.08.2026 gab es keinen.
+ *
+ * Aufgefallen ist das erst, als der Klotz hinter der Ablage weg war:
+ * jedes andere Bedienelement der Leiste hebt sich unter dem Zeiger
+ * hervor, und ausgerechnet die Symbole, die DREI Klicks kennen
+ * (Activate, SecondaryActivate, ContextMenu), sahen unter dem Zeiger
+ * genauso aus wie daneben.
+ *
+ * Eigene Farbrolle und nicht STYLE_HOVER_BG, obwohl der Vorgabewert
+ * derselbe ist: die Ablage ist die einzige Stelle der Leiste, an der
+ * FREMDE Symbole liegen, deren Farben dieses Projekt nicht kennt. Wer
+ * ein Programm mit einem hellen Symbol laufen hat, soll diesen einen
+ * Grund verstellen koennen, ohne den der ganzen Leiste anzufassen. */
+#tray button.tray-item:hover {
+  background: {{STYLE_COLOR_BAR_TRAY}};
+}
+
+/* Frueher `-gtk-icon-effect: dim`, das GTK4 nicht mehr kennt. */
+#tray button.tray-item.passive {
+  opacity: {{STYLE_OPACITY_DISABLED}};
+}
+
+/* Frueher `-gtk-icon-effect: highlight` und eine Hintergrundfarbe. Der
+ * Effekt ist weg, die Farbe reicht. */
+#tray button.tray-item.needs-attention {
+  background: {{STYLE_COLOR_CRITICAL}};
+}
+
+/* Die Symbolknoepfe am rechten Ende stehen als ein Block zusammen: kein
+ * Abstand zwischen ihnen, ein gemeinsamer Rand nach aussen. Sie sind das
+ * Ende der Leiste, so wie das Datum ihr Anfang ist.
+ *
+ * VIER STATT DREI SEIT DEM 17.08.2026: #custom-theme ist dazugekommen.
+ * Der Nutzer hat das Zeichen fuer das Aussehen mehrfach vermisst
+ * ("theme manager icon im header fehlt immernoch"); es steht jetzt
+ * direkt neben dem Zahnrad, also stehen die beiden Einstellungsknoepfe
+ * in demselben Block wie die uebrigen zeichenfoermigen.
+ *
+ * GEMESSEN am selben Tag mit tests/src/test_bar_headless.py: der Knopf
+ * kostet die Leiste 48 Punkte - genau seine Zeichenbreite und keinen
+ * Rand, weil dieser Block `margin-left: 0; margin-right: 0` traegt.
+ * Also 1558 statt 1510. In der Reihe davor waeren es 63 gewesen. */
+#custom-disk,
+#custom-wallpaper,
+#custom-theme,
+#custom-system {
+  border-radius: {{STYLE_RADIUS_CONTROL}};
+  margin-left: 0;
+  margin-right: 0;
+  padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_12}};
+}
+
+#custom-wallpaper {
+  color: {{STYLE_WALLPAPER_COLOR_LANDSCAPE}};
+}
+
+#custom-disk:hover,
+#custom-wallpaper:hover,
+#custom-theme:hover,
+#custom-system:hover {
+  background: {{STYLE_HOVER_BG}};
+  color: {{STYLE_HOVER_COLOR}};
+}
+
+/* =====================================================================
+ * Das Dock - dieselbe Leiste noch einmal, an der unteren Kante
+ * ===================================================================*/
+
+window.dock-window {
+  background: transparent;
+}
+
+/* Die Platte des Fusses - dieselbe wie die des Kopfes.
+ *
+ * DAS LOCH, UND WARUM ES EINS WAR (12.08.2026)
+ *     Hier stand `background: STYLE_DOCK_BG_COLOR`, und dahinter
+ *     `rgba(background, GLASS_SOLO_ALPHA)` - also die Farbe "background"
+ *     mit 0.86. Die Deckkraft war richtig, die FARBE nicht: GEMESSEN an
+ *     der ausgelieferten Tapete (jeder zweite Bildpunkt, 518400 Proben)
+ *     sind 95.42 % ihrer Flaeche (13, 61, 71), und das IST "background",
+ *     Byte fuer Byte. Aus derselben Farbe kommt bei jeder Deckkraft
+ *     dieselbe Farbe heraus; der Fuss malte also exakt den Grund, auf
+ *     dem er liegt.
+ *
+ *     Auf out/render/dock-1366.png ist das zu sehen: draussen das
+ *     Liniennetz der Tapete, drinnen eine flache Flaeche.
+ *
+ *     STYLE_GLASS_SOLO ist derselbe Platzhalter, den jetzt auch #bar
+ *     liest, und darin steckt overlay_bg statt background: ueber der
+ *     Tapete (9, 41, 48) statt (13, 61, 71). Zwei Streifen, die gleich
+ *     aussehen sollen, lesen dieselbe Zeile - "sodass sie matched mit
+ *     dem footer" ist damit woertlich erfuellt und nicht nur ungefaehr.
+ *
+ * DER HAARSTRICH BLEIBT, UND ER IST KEINE ZWEITE EBENE
+ *     1 px in overlay_border. Er trennt die Platte von der Tapete an
+ *     den drei Kanten, die nicht am Schirmrand liegen - der Kopf
+ *     braucht das nicht, weil seine Kanten am Rand sitzen. Und er ist
+ *     der Posten, den src/sizes.py als DOCK_BORDERS zaehlt: ohne ihn
+ *     waere der Fuss zwei Bildpunkte niedriger als seine eigene
+ *     Ableitung. */
+#dock {
+  background: {{STYLE_GLASS_SOLO}};
+  border: 1px solid {{STYLE_DOCK_BORDER_COLOR}};
+  border-radius: {{STYLE_RADIUS_PANEL}};
+  padding: {{STYLE_DOCK_PADDING}}px;
+}
+
+/* Der Knopf unter jedem Symbol - Platz und keine Kachel, genau wie
+ * .bar-module oben.
+ *
+ * WAS DAMIT NICHT GELOEST IST, UND DAS IST EINE MESSUNG UND KEIN
+ * VERSAEUMNIS
+ *     GEMELDET am 11.08.2026: "die symbole sollten wir gratis symbole
+ *     nutzen die jeder zur verfuegung hat" - also KEIN eigener
+ *     Symbolsatz. Damit ist die ZEICHNUNG nicht zu vereinheitlichen:
+ *     GEMESSEN am 12.08.2026 mit gjs gegen Papirus-Dark, ueber die
+ *     sechs angehefteten Anwendungen, die auf dieser Maschine
+ *     installiert sind, kommen ein Markenlogo, ein grauer
+ *     Karteikasten, eine gruene Zip-Kiste, ein Tortendiagramm, ein
+ *     rotes "B" und ein Drucker heraus. Sechs Motive, und kein
+ *     Symbolthema der Welt aendert daran etwas.
+ *
+ *     Ein Versuch, das ueber eine gemeinsame Kachel unter jedem Symbol
+ *     zu gliedern, stand hier fuer eine Stunde und ist wieder
+ *     gegangen: der Nutzer hat am selben Tag genau das fuer die Leiste
+ *     abgelehnt ("die icon sollen im header nicht nochmal ein element
+ *     haben"), und was fuer den Kopf gilt, gilt fuer den Fuss. Was die
+ *     Symbole hier gliedert, ist ihre gleiche GROESSE - min-width und
+ *     min-height sind dieselbe Zahl, also sitzt jedes in einem
+ *     gleichen Quadrat - und ihr gleicher Abstand.
+ *
+ * DER ZUSTANDSSTRICH IST IMMER DA, UND SEINE BREITE IST GEMESSEN
+ *     `border-bottom: 2px` stand bis zum 12.08.2026 NUR unter .running
+ *     und .active. Ein Rahmen vergroessert in GTK4 den Knopf, also war
+ *     der Fuss hoeher, sobald irgendeine angeheftete Anwendung lief -
+ *     und weil der Fuss eine EXKLUSIVE Zone hat, ruecken dabei alle
+ *     Fenster des Schirms mit. Ein Dock, das beim Starten eines
+ *     Programms die Fenster verschiebt.
+ *
+ *     Der Strich ist deshalb immer da und im Ruhezustand durchsichtig.
+ *     Nur die FARBE wechselt weiter unten.
+ *
+ *     1 px, und das ist keine Gestaltungslaune, sondern die Zahl, die
+ *     die Ableitung in src/sizes.py verlangt. GEMESSEN am 12.08.2026,
+ *     kopflos unter gtk4-broadwayd, an genau dieser Regel:
+ *
+ *         Rahmen   Hoehe des Fusses   STYLE_BAR_THICKNESS
+ *          0 px          82                   83
+ *          1 px          83                   83   <- passt
+ *          2 px          84                   83
+ *          3 px          85                   83
+ *
+ *     `border-bottom` ist EINE Seite, kostet also seine Breite einfach
+ *     und nicht doppelt - dock_chrome() zaehlt mit DOCK_BORDERS = 3 die
+ *     zwei Punkte des Kastens (oben und unten) und einen fuer diesen
+ *     Strich. Zwei Punkte Strich waeren einer zu viel und schoeben jedes
+ *     Fenster des Schirms um einen Punkt nach oben.
+ *
+ * UND WAS DAMIT INZWISCHEN STIMMT
+ *     Hier stand, der Fuss bemale 83 px und der Kopf 59 - die Ableitung
+ *     habe den BEMALTEN Fuss mit dem RESERVIERTEN Streifen des Kopfes
+ *     verglichen. Behoben ist das seit dem 12.08.2026 auf der Seite des
+ *     Kopfes: seine Flaeche ist BAR_THICKNESS + EDGE_GAP hoch und bemalt
+ *     davon BAR_THICKNESS (ags-bar.template, set_default_size).
+ *
+ *     NACHGEMESSEN am 13.08.2026 an Bildpunkten, verschachtelter
+ *     Compositor, und zwar ueber vier Faelle statt ueber einen:
+ *
+ *         Schirm/Faktor          Kopf bemalt   Fuss bemalt   Tabelle
+ *          1920x1080 Vorgabe      y=24..83      y=996..1055     60
+ *          1366x768  Vorgabe      y=24..83      y=684..743      60
+ *          1920x1080 Faktor 1.0   y=16..62      y=1017..1063    47
+ *          1920x1080 Faktor 2.5   y=40..137     y=942..1039     98
+ *
+ *     Gleich, und jedes Paar gleich seiner Tabellenzeile. Die
+ *     Tabellenzahl ist seit dem 13.08.2026 die BESTELLTE - "header und
+ *     footer auf 60 setzen" -, weshalb hier keine 83 mehr steht; die
+ *     Ableitung dahinter steht bei STYLE_BAR_THICKNESS in src/sizes.py.
+ *
+ *     Die Zeilen mit dem Rahmen darueber sind davon nicht beruehrt: sie
+ *     messen den Unterschied, den EIN Punkt Strich macht, und der ist
+ *     bei jeder Dicke derselbe.
+ *
+ *     Gehalten wird das von tests/render/test_geometry.py, das seit
+ *     demselben Tag ueber mehrere Schirme und mehrere Faktoren misst -
+ *     und nicht mehr nur ueber einen. */
+#dock button.dock-button {
+  background: transparent;
+  border-radius: {{STYLE_RADIUS_CARD}};
+  border-bottom: 1px solid transparent;
+  padding: {{STYLE_DOCK_PADDING}}px;
+  margin: {{STYLE_SPACE_2}};
+  color: {{STYLE_DOCK_ICON_COLOR}};
+  min-width: {{STYLE_DOCK_ICON_SIZE}}px;
+  min-height: {{STYLE_DOCK_ICON_SIZE}}px;
+}
+
+/* Derselbe Hervorhebungsgrund wie unter jedem Modul der Leiste. Hier
+ * stand STYLE_DOCK_HOVER_BG, und das war `rgba(33, 79, 89, 0.9)` -
+ * ausgeschriebene Kanaele von SHADE_1 mit einer erfundenen Deckkraft,
+ * an keinem Thema und an keinem Regler. */
+#dock button.dock-button:hover {
+  background: {{STYLE_HOVER_BG}};
+}
+
+/* Das Ersatzzeichen fuer ein Fenster, dessen Anwendung sich nicht
+ * ermitteln liess - siehe iconFor() in ags-dock.template.
+ *
+ * Es ist SCHRIFT und kein Bild (ein Nerd-Font-Zeichen), also braucht es
+ * eine Schriftgroesse statt einer pixel_size. Dieselbe Zahl wie die
+ * Symbole daneben, damit der Knopf gleich gross bleibt und die Reihe
+ * nicht an einer Stelle einen Absatz bekommt. */
+#dock button.dock-button label.dock-unknown {
+  font-size: {{STYLE_DOCK_ICON_SIZE}}px;
+  color: {{STYLE_DOCK_ICON_COLOR}};
+}
+
+/* Eine angeheftete Anwendung, die LAEUFT.
+ *
+ * Der duenne Strich darunter ist derselbe Hinweis, den macOS unter ein
+ * laufendes Programm setzt, und er ist absichtlich schwaecher als der
+ * von .active: "laeuft" und "ist gerade vorn" sind zwei verschiedene
+ * Aussagen, und ein Dock, das beide gleich zeichnet, sagt keine von
+ * beiden. Die Regel steht VOR .active, damit die staerkere gewinnt,
+ * wenn ein Knopf beide Klassen traegt - beide haben dieselbe
+ * Spezifitaet, also entscheidet die Reihenfolge.
+ *
+ * Nur die FARBE, nicht die Breite: die steht oben und gilt immer, sonst
+ * waechst der Fuss beim Starten eines Programms.
+ */
+#dock button.dock-button.running {
+  border-bottom-color: {{STYLE_DOCK_ICON_COLOR}};
+}
+
+/* Der Knopf des Fensters, das gerade vorn ist. */
+#dock button.dock-button.active {
+  background: {{STYLE_HOVER_BG}};
+  border-bottom-color: {{STYLE_DOCK_ICON_ACTIVE_COLOR}};
+  color: {{STYLE_DOCK_ICON_ACTIVE_COLOR}};
+}
+
+/* Der Trenner zwischen den angehefteten Anwendungen und den Fenstern,
+ * die zu keiner davon gehoeren. */
+#dock separator.dock-separator {
+  background: {{STYLE_DOCK_BORDER_COLOR}};
+  margin: {{STYLE_DOCK_PADDING}}px 4px;
+}

@@ -1,0 +1,1416 @@
+// Das Kontrollzentrum (AGS v3, GTK4) - ein Aufklappfenster der Leiste
+// Von ZepOS erzeugt
+
+import { Gtk } from "ags/gtk4"
+import { execAsync } from "ags/process"
+import { interval } from "ags/time"
+import GLib from "gi://GLib"
+// Fuer JEDE Beschriftung, deren Text aus einem Skript kommt.
+//
+// Hier stand "nur fuer den EINEN Titel, der beliebig lang werden kann"
+// - gemeint war die Wiedergabezeile. Der Satz war richtig und die Liste
+// zu kurz: ein Druckerstatus, ein WLAN-Name, eine Datenschutzzeile mit
+// drei Programmnamen kommen genauso aus einem fremden Programm.
+//
+// GEMESSEN am 17.08.2026 im verschachtelten Compositor mit den Zeilen
+// einer laufenden Maschine: measure(HORIZONTAL) meldete 930 statt 495
+// Punkten, mit laengeren (aber noch echten) Zeilen 1386. Das Fenster
+// wurde so breit - und gestellt wurde es fuer 495. Die Fabrik deckelt
+// das seit demselben Tag (siehe ags-overlay-utils.template), aber ein
+// Deckel schneidet nur ab; damit KEINE Zeile abgeschnitten werden muss,
+// endet sie hier bei {{STYLE_MEASURE_LINE}} Zeichen mit drei Punkten.
+import Pango from "gi://Pango"
+import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
+import { _, format } from "../utils/i18n"
+
+const HOME = GLib.get_home_dir()
+// Das Widget laeuft eigenstaendig unter AGS und kann paths.py nicht
+// importieren, deshalb wird die Nutzerwurzel hier aufgeloest.
+// GLib.getenv gibt null zurueck, wenn nichts gesetzt ist; das || macht
+// daraus die dokumentierte Vorgabe.
+const CONFIG_HOME = GLib.getenv("XDG_CONFIG_HOME") || `${HOME}/.config`
+const ZEPOS_USER_ROOT = GLib.getenv("ZEPOS_USER_ROOT") || `${CONFIG_HOME}/zepos`
+const WINDOW_NAME = "control-center"
+const UPDATE_INTERVAL = 3000
+
+// Die Skripte
+//
+// Die drei letzten sind DIESELBEN, die die Leiste ruft. Das ist der
+// Grund, aus dem sie mehr Felder ausgeben als ein Leistenmodul liest:
+// die Leiste zeigt, DASS etwas ist, dieses Fenster zeigt, WAS. Zwei
+// Skripte fuer dieselbe Frage waeren zwei Messzeitpunkte und damit zwei
+// Antworten, die einander auf demselben Bildschirm widersprechen
+// koennen.
+const SCRIPTS = {
+  network: `${HOME}/.local/bin/ags-network-scripts`,
+  vpnControl: `${HOME}/.config/ags/scripts/vpn-control.sh`,
+  helpersLauncher: `hyprctl hyprlaunch:helpers`,
+  privacy: `${CONFIG_HOME}/ags/scripts/privacy.sh`,
+  media: `${CONFIG_HOME}/ags/scripts/media.sh`,
+  updates: `${CONFIG_HOME}/ags/scripts/updates.sh`,
+  // Die zwei aus dem Abschnitt SCHREIBTISCH, die einen TEXT zeigen und
+  // nicht nur ein Fenster oeffnen. Wieder DIESELBEN Skripte, die auch
+  // die Leiste ruft, wenn man sie dort zuschaltet - aus demselben
+  // Grund wie oben: zwei Skripte fuer eine Frage waeren zwei
+  // Messzeitpunkte und zwei Antworten.
+  weather: `${CONFIG_HOME}/ags/scripts/weather.sh`,
+  clocks: `${CONFIG_HOME}/ags/scripts/clocks.sh`,
+  hardware: `${CONFIG_HOME}/ags/scripts/hardware-monitor.py`,
+  floating: `${HOME}/.local/bin/floating-window-manager load-layout`,
+  btop: "kitty -e btop",
+}
+
+// Die Zeichen
+//
+// FUENF SIND AM 17.08.2026 GEGANGEN: wifi, wifiOff, bluetooth, network
+// und palette.
+//
+//     Die ersten drei mit den Zeilen, die sie trugen - Netz und
+//     Bluetooth werden seit heute OBEN bedient (siehe den Kopf des
+//     Abschnitts NETZ & VERBINDUNGEN unten). palette mit der Zeile
+//     "Style Editor", die aus demselben Grund gegangen ist.
+//
+//     `network` war schon vorher tot: die Tabelle nannte es, und keine
+//     Zeile dieser Datei hat es je gelesen. Gezaehlt am 17.08.2026,
+//     `grep -c "ICONS\.network\b"` gab 0.
+const ICONS = {
+  settings: "{{ICON_SETTINGS}}",
+  // Die vier, die am 17.08.2026 hier gestrichen waren und am selben Tag
+  // zurueckgekommen sind - siehe den Abschnitt NETZ & VERBINDUNGEN.
+  wifi: "{{ICON_WIFI}}",
+  wifiOff: "{{ICON_WIFI_OFF}}",
+  bluetooth: "{{ICON_BLUETOOTH}}",
+  palette: "{{ICON_PALETTE}}",
+  volume: "{{ICON_VOLUME_HIGH}}",
+  volumeMute: "{{ICON_VOLUME_MUTE}}",
+  mic: "{{ICON_MIC}}",
+  micMute: "{{ICON_MIC_MUTE}}",
+  brightness: "{{ICON_BRIGHTNESS_HIGH}}",
+  vpn: "{{ICON_VPN_CONNECTED}}",
+  vpnOff: "{{ICON_VPN_DISCONNECTED}}",
+  ip: "{{ICON_IP}}",
+  shutdown: "{{ICON_SHUTDOWN}}",
+  reboot: "{{ICON_REBOOT}}",
+  suspend: "{{ICON_SUSPEND}}",
+  lock: "{{ICON_LOCK}}",
+  logout: "{{ICON_LOGOUT}}",
+  printer: "{{ICON_PRINTER}}",
+  watchdog: "{{ICON_WATCHDOG}}",
+  helpers: "{{ICON_HELPERS}}",
+  launch: "{{ICON_LAUNCH}}",
+  power: "{{ICON_POWER}}",
+  recording: "{{ICON_RECORDING}}",
+  webcam: "{{ICON_WEBCAM}}",
+  music: "{{ICON_MUSIC}}",
+  play: "{{ICON_PLAY}}",
+  pause: "{{ICON_PAUSE}}",
+  next: "{{ICON_MEDIA_NEXT}}",
+  previous: "{{ICON_MEDIA_PREV}}",
+  displays: "{{ICON_MONITOR_MULTIPLE}}",
+  update: "{{ICON_UPDATE}}",
+  // Die sieben aus dem Abschnitt SCHREIBTISCH - siehe dort, warum es
+  // ihn seit dem 12.08.2026 gibt.
+  clock: "{{ICON_CLOCK}}",
+  weather: "{{ICON_WEATHER_PARTLY_CLOUDY}}",
+  keyboard: "{{ICON_KEYBOARD}}",
+  floating: "{{ICON_WINDOW_FLOATING}}",
+  wallpaper: "{{ICON_WALLPAPER}}",
+  disk: "{{ICON_DISK}}",
+  hardware: "{{ICON_MOTHERBOARD}}",
+}
+
+// Eine JSON-Zeile aus einem der drei gemeinsamen Skripte.
+//
+// Ein leeres Objekt bei jedem Fehler und kein Wurf: die drei Zeilen,
+// die daraus entstehen, blenden sich bei leerem Inhalt ohnehin aus -
+// ein fehlendes Skript sieht damit genauso aus wie "nichts zu melden",
+// und das ist hier richtig. Der Erzeuger schreibt alle drei, und wenn
+// er es nicht getan hat, ist das kein Zustand, den DIESES Fenster
+// erklaeren kann.
+async function readJson(command: string): Promise<Record<string, any>> {
+  try {
+    const output = await execAsync(["bash", "-c", command])
+    const line = output.trim()
+    if (!line) return {}
+    return JSON.parse(line) as Record<string, any>
+  } catch {
+    return {}
+  }
+}
+
+// Eine Liste von Programmnamen als ein Satzstueck.
+function joined(value: unknown): string {
+  return Array.isArray(value) ? value.join(", ") : ""
+}
+
+// Ein Skript rufen
+async function runScript(action: string): Promise<string> {
+  try {
+    const output = await execAsync([SCRIPTS.network, action])
+    return output.trim()
+  } catch {
+    return ""
+  }
+}
+
+// Was das Netz meldet
+async function getNetworkStatus(): Promise<string> {
+  return await runScript("info") || "Nicht verbunden"
+}
+
+// Das Zeichen dazu
+async function getNetworkIcon(): Promise<string> {
+  return await runScript("icon") || ICONS.wifiOff
+}
+
+// Der Zustand von Bluetooth
+async function getBluetoothStatus(): Promise<string> {
+  return await runScript("bluetooth") || "Aus"
+}
+
+// Die IP-Adresse - oder nichts.
+//
+// GEMESSEN am 12.08.2026 auf einem Bildschirmabzug: ohne Verbindung
+// stand hier ein Gedankenstrich, und die Zeile nahm ihre volle Hoehe
+// ein - ein Symbol, ein Strich, sonst nichts. Ein Ersatzzeichen
+// behauptet, es gaebe etwas zu lesen. Die Zeile blendet sich jetzt aus,
+// solange es keine Adresse gibt, und dafuer muss sie die Leere sehen
+// koennen: der Strich stand dem im Weg.
+async function getIpAddress(): Promise<string> {
+  return await runScript("ip")
+}
+
+// Was das VPN meldet
+async function getVpnInfo(): Promise<string> {
+  return await runScript("vpn") || "Aus"
+}
+
+// Laeuft eine VPN-Verbindung?
+async function isVpnConnected(): Promise<boolean> {
+  try {
+    const output = await execAsync("pgrep -f charon")
+    return output.trim().length > 0
+  } catch {
+    return false
+  }
+}
+
+// Der Zustand des Druckers
+async function getPrinterStatus(): Promise<string> {
+  return await runScript("printer") || "Kein Drucker"
+}
+
+// Der Zustand des Netz-Watchdogs
+async function getWatchdogStatus(): Promise<string> {
+  return await runScript("watchdog") || "Inaktiv"
+}
+
+// Seine Klasse (aktiv/inaktiv)
+async function getWatchdogClass(): Promise<string> {
+  return await runScript("watchdog-class") || ""
+}
+
+// Die Lautstaerke
+async function getVolumeStatus(): Promise<{ level: number; muted: boolean }> {
+  try {
+    const vol = await execAsync("pamixer --get-volume")
+    const muted = await execAsync("pamixer --get-mute")
+    return {
+      level: parseInt(vol.trim()) || 0,
+      muted: muted.trim() === "true"
+    }
+  } catch {
+    return { level: 0, muted: false }
+  }
+}
+
+// Das Mikrofon
+async function getMicStatus(): Promise<{ level: number; muted: boolean }> {
+  try {
+    const vol = await execAsync("pamixer --default-source --get-volume")
+    const muted = await execAsync("pamixer --default-source --get-mute")
+    return {
+      level: parseInt(vol.trim()) || 0,
+      muted: muted.trim() === "true"
+    }
+  } catch {
+    return { level: 0, muted: false }
+  }
+}
+
+// Die Helligkeit
+async function getBrightness(): Promise<number> {
+  try {
+    const output = await execAsync("brightnessctl -m")
+    const parts = output.split(",")
+    return parseInt(parts[3]?.replace("%", "")) || 100
+  } catch {
+    return 100
+  }
+}
+
+// Wie viele Hilfsskripte es gibt
+//
+// ZEPOS_USER_ROOT und nicht ~/.local/bin: der Generator schreibt die
+// Hilfsskripte nach $ZEPOS_USER_ROOT/helpers, und ~/.local/bin/helpers
+// legt in diesem Projekt niemand an. Die Zeile las deshalb, solange es
+// sie gibt, "Helper Scripts (0)" auf Maschinen mit sieben davon -
+// dasselbe Verzeichnis, das der Waybar-Baustein falsch hatte, im
+// zweiten Leser.
+async function getHelpersCount(): Promise<number> {
+  try {
+    const output = await execAsync(`bash -c "ls -1 ${ZEPOS_USER_ROOT}/helpers 2>/dev/null | grep -v backup | wc -l"`)
+    return parseInt(output.trim()) || 0
+  } catch {
+    return 0
+  }
+}
+
+// Der Weg, dieses Fenster zu schliessen - buildContent setzt ihn
+let closeFn: (() => void) | null = null
+
+/** Das Kontrollzentrum.
+ *
+ * `toggle` oeffnet ein anderes Aufklappfenster DIESES Prozesses - genau
+ * die Funktion, die auch die Leiste bekommt (toggleByName in
+ * ags-config.template). Sie wird hereingereicht und nicht importiert,
+ * aus demselben Grund wie dort: die Fenster entstehen in app.ts, und
+ * ein Widget, das seine Geschwister selbst nachschlaegt, braucht eine
+ * zweite Liste davon, welche es gibt.
+ *
+ * Sie kam am 12.08.2026 dazu, mit dem Abschnitt SCHREIBTISCH: drei
+ * seiner Zeilen oeffnen ein Fenster, das es laengst gibt und zu dem von
+ * der Leiste kein Weg mehr fuehrt.
+ */
+export default function ControlCenter(
+    toggle: (name: string) => void = () => {}): OverlayWidget {
+  // Die Bausteine, die sich aendern
+  let networkIcon: Gtk.Label
+  let networkLabel: Gtk.Label
+  let btLabel: Gtk.Label
+  let ipRow: Gtk.Box
+  let ipLabel: Gtk.Label
+  let vpnIcon: Gtk.Label
+  let vpnLabel: Gtk.Label
+  let volumeSlider: Gtk.Scale
+  let volumeIcon: Gtk.Label
+  let volumeLabel: Gtk.Label
+  let micSlider: Gtk.Scale
+  let micIcon: Gtk.Label
+  let micLabel: Gtk.Label
+  let brightnessSlider: Gtk.Scale
+  let brightnessLabel: Gtk.Label
+  let printerLabel: Gtk.Label
+  let watchdogLabel: Gtk.Label
+  let watchdogIcon: Gtk.Label
+  let helpersLabel: Gtk.Label
+  let privacyBox: Gtk.Box
+  let privacyMicRow: Gtk.Box
+  let privacyMicLabel: Gtk.Label
+  let privacyCamRow: Gtk.Box
+  let privacyCamLabel: Gtk.Label
+  let mediaRow: Gtk.Box
+  let mediaIcon: Gtk.Label
+  let mediaLabel: Gtk.Label
+  let mediaPlayLabel: Gtk.Label
+  let updateRow: Gtk.Box
+  let updateLabel: Gtk.Label
+  let updateBtn: Gtk.Button
+  let weatherRow: Gtk.Box
+  let weatherLabel: Gtk.Label
+  let clocksRow: Gtk.Box
+  let clocksLabel: Gtk.Label
+  let hardwareLabel: Gtk.Label
+
+  // Der Takt, solange das Fenster offen ist. Siehe onShow/onHide unten.
+  let ticker: ReturnType<typeof interval> | null = null
+
+  // Was der Knopf der Aktualisierungszeile gerade tut.
+  //
+  // Er haengt am ZUSTAND und nicht am Thema, und das ist der ganze
+  // Unterschied zwischen einem Knopf und einem Bedienelement: "es steht
+  // etwas an" hat vier Auspraegungen, und drei von ihnen brauchen
+  // verschiedene Befehle. Ein Knopf, der immer `zepos-update` ruft,
+  // taete in zwei von vier Faellen nachweislich das Falsche - bei einer
+  // veralteten Konfiguration hilft nur neu erzeugen, und die
+  // Arch-Aktualisierungen fasst update.scope "zepos" mit Absicht nicht
+  // an.
+  let updateAction = ""
+
+  // Alles neu einlesen
+  const updateDisplay = async () => {
+    // Netz
+    networkIcon.set_text(await getNetworkIcon())
+    networkLabel.set_text(await getNetworkStatus())
+
+    // Die Adresse
+    const ip = await getIpAddress()
+    ipLabel.set_text(ip)
+    ipRow.set_visible(ip.length > 0)
+
+    // Bluetooth
+    btLabel.set_text(await getBluetoothStatus())
+
+    // VPN
+    const vpnInfo = await getVpnInfo()
+    const vpnConnected = await isVpnConnected()
+    vpnLabel.set_text(format(_("VPN: {status}"), { status: vpnInfo }))
+    vpnIcon.set_text(vpnConnected ? ICONS.vpn : ICONS.vpnOff)
+    if (vpnConnected) {
+      vpnIcon.add_css_class("connected")
+      vpnIcon.remove_css_class("disconnected")
+    } else {
+      vpnIcon.remove_css_class("connected")
+      vpnIcon.add_css_class("disconnected")
+    }
+
+    // Ton
+    const vol = await getVolumeStatus()
+    volumeSlider.set_value(vol.level)
+    volumeIcon.set_text(vol.muted ? ICONS.volumeMute : ICONS.volume)
+    volumeLabel.set_text(`${vol.level}%`)
+
+    // Mikrofon
+    const mic = await getMicStatus()
+    micSlider.set_value(mic.level)
+    micIcon.set_text(mic.muted ? ICONS.micMute : ICONS.mic)
+    micLabel.set_text(`${mic.level}%`)
+
+    // Helligkeit
+    const brightness = await getBrightness()
+    brightnessSlider.set_value(brightness)
+    brightnessLabel.set_text(`${brightness}%`)
+
+    // Systemdienste
+    printerLabel.set_text(await getPrinterStatus())
+    watchdogLabel.set_text(format(_("Network watchdog: {status}"),
+                                  { status: await getWatchdogStatus() }))
+    const wdClass = await getWatchdogClass()
+    if (wdClass.includes("active")) {
+      watchdogIcon.add_css_class("active")
+    } else {
+      watchdogIcon.remove_css_class("active")
+    }
+    helpersLabel.set_text(format(_("Helper scripts ({count})"),
+                                 { count: await getHelpersCount() }))
+
+    // ===== DATENSCHUTZ =====
+    // Der Abschnitt zeigt sich nur, wenn er etwas zu sagen hat - und
+    // jede der beiden Zeilen einzeln. Ein Abschnitt "Datenschutz" mit
+    // zwei Zeilen "niemand" waere die Behauptung, hier werde dauernd
+    // etwas ueberwacht.
+    const privacy = await readJson(SCRIPTS.privacy)
+    const listening = joined(privacy.mic)
+    const watching = joined(privacy.cam)
+    privacyMicLabel.set_text(listening)
+    privacyCamLabel.set_text(watching)
+    privacyMicRow.set_visible(listening !== "")
+    privacyCamRow.set_visible(watching !== "")
+    privacyBox.set_visible(listening !== "" || watching !== "")
+
+    // ===== WIEDERGABE =====
+    const media = await readJson(SCRIPTS.media)
+    const status = typeof media.status === "string" ? media.status : ""
+    const artist = typeof media.artist === "string" ? media.artist : ""
+    const title = typeof media.title === "string" ? media.title : ""
+    const player = typeof media.player === "string" ? media.player : ""
+    const heading = title || player
+    mediaLabel.set_text(artist ? `${artist} – ${heading}` : heading)
+    mediaIcon.set_text(status === "Playing" ? ICONS.play : ICONS.pause)
+    // Der Knopf zeigt die HANDLUNG und die Zeile den ZUSTAND: was
+    // laeuft, steht links, und rechts steht, was ein Klick daraus
+    // macht. Beide dasselbe Zeichen tragen zu lassen hiesse, dass eines
+    // von beiden luegt.
+    mediaPlayLabel.set_text(status === "Playing" ? ICONS.pause : ICONS.play)
+    mediaRow.set_visible(status !== "")
+
+    // ===== AKTUALISIERUNG =====
+    const updates = await readJson(SCRIPTS.updates)
+    const pending = typeof updates.text === "string" ? updates.text : ""
+    const detail = typeof updates.detail === "string" ? updates.detail : ""
+    const kind = typeof updates.class === "string" ? updates.class : ""
+    updateLabel.set_text(detail)
+    updateRow.set_visible(pending !== "")
+
+    // Ein Zustand, ein Befehl. Jeder von ihnen ist ein Programm, das
+    // packaging/zepos-desktop hart mitbringt: zepos-generate und
+    // zepos-update aus zepos-config, zepos-settings-gui als eigenes
+    // Paket, sudo und pacman als Bedingung dafuer, dass diese Maschine
+    // ueberhaupt existiert.
+    if (kind.includes("updates-regenerate")) {
+      updateAction = "zepos-generate --all"
+      updateBtn.set_tooltip_text(_("Regenerate the configuration"))
+    } else if (kind.includes("updates-failed")) {
+      updateAction = "sudo zepos-update"
+      updateBtn.set_tooltip_text(_("Try the update again"))
+    } else if (kind.includes("updates-base")) {
+      // Der volle Schritt, und er steht hier, weil update.py ihn
+      // ausdruecklich dem Menschen ueberlaesst: "Die Aufstellung der
+      // Basis, die jeder Lauf mitfuehrt, ist genau dafuer da, dass der
+      // Nutzer den vollen Schritt bewusst tun kann." Bewusst tun kann
+      // er ihn nur, wenn es einen Weg dorthin gibt.
+      updateAction = "sudo pacman -Syu"
+      updateBtn.set_tooltip_text(
+        _("Update the Arch base - in the terminal, with a prompt"))
+    } else if (kind.includes("updates-disabled")) {
+      updateAction = "zepos-settings-gui --page aktualisierung"
+      updateBtn.set_tooltip_text(_("Configure the self-update"))
+    } else {
+      updateAction = ""
+    }
+
+    // ===== SCHREIBTISCH =====
+    // Die drei Zeilen mit einem TEXT. Sie lesen dieselben Skripte, die
+    // die Leiste ruft, wenn man die Module dort zuschaltet - siehe den
+    // Kopf von SCRIPTS.
+    //
+    // Wetter und Zeitzonen blenden sich aus, wenn ihr Skript nichts
+    // sagt: ohne eingestellten Ort gibt weather.sh einen leeren Text
+    // aus, ohne eingestellte Zusatzuhr clocks.sh ebenso. Eine Zeile
+    // "Wetter: -" waere die Behauptung, hier stehe etwas.
+    const weather = await readJson(SCRIPTS.weather)
+    const weatherText = typeof weather.text === "string" ? weather.text : ""
+    weatherLabel.set_text(weatherText)
+    weatherRow.set_visible(weatherText !== "")
+
+    const clocks = await readJson(SCRIPTS.clocks)
+    const clocksText = typeof clocks.text === "string" ? clocks.text : ""
+    clocksLabel.set_text(clocksText)
+    clocksRow.set_visible(clocksText !== "")
+
+    // Die Hardwarezeile bleibt IMMER stehen, auch wenn das Skript
+    // "No HW" sagt: dass dieser Rechner keine Sensoren meldet, ist
+    // selbst die Auskunft, und der Knopf daneben oeffnet btop, der es
+    // besser weiss.
+    const hardware = await readJson(SCRIPTS.hardware)
+    const hardwareText = typeof hardware.text === "string" ? hardware.text : ""
+    hardwareLabel.set_text(hardwareText || _("Hardware"))
+  }
+
+  return createOverlayWindow({
+    name: "control",
+    // GEMESSEN am 12.08.2026 im verschachtelten Compositor, auf einem
+    // Schirm, auf dem der Deckel nicht greift: dieses Fenster braucht
+    // fuer seinen ganzen Inhalt 495x1682 Punkte. Hier standen 400x580,
+    // und beides war Zierrat - utils/overlay.ts hat die Zahlen nie
+    // angewendet, und das Fenster stand als 545x1622 auf einem Schirm
+    // mit 1080 Zeilen.
+    //
+    // 1682 ist keine Zusage, sondern der Wunsch: auf jedem Schirm unter
+    // 3364 Zeilen entscheidet der Deckel aus MODAL_SHARE, und der Rest
+    // steht unter der Bildlaufleiste. Fuenf Abschnitte passen nicht auf
+    // eine halbe Bildschirmhoehe, und das ist auch nicht noetig - was
+    // zaehlt, ist, dass nichts mehr UNTER dem Bildrand liegt, wo es
+    // niemand erreichen kann.
+    //
+    // 495 ist die Mindestbreite des Inhalts; GTK geht ohnehin nicht
+    // darunter. Sie ist seit heute 50 Punkte kleiner als vorher: die
+    // fuenf Schalter stehen in drei Spalten statt in fuenf.
+    //
+    // 1790 STATT 1682, am selben Tag, nachgemessen auf einem 4000 Zeilen
+    // hohen Schirm (dort deckelt MODAL_SHARE erst bei 2000, die Zahl
+    // hier bindet also wirklich). Der Zuwachs sind die Bildschirmzeile
+    // und der Platz, den die drei bedingten Zeilen als leere Kaesten
+    // brauchen.
+    //
+    // UND 2098 STATT 1790, am 17.08.2026 - OBWOHL an diesem Tag DREI
+    // ZEILEN GEGANGEN SIND (Netz, Bluetooth, Style Editor).
+    //
+    //     Das ist kein Widerspruch, sondern der Befund, dass die 1790
+    //     nie gemessen waren. Ein 4000 Zeilen hoher Schirm deckelt bei
+    //     2000, und die Fabrik setzt `Math.min(naturalHeight,
+    //     pos.height)`: ein Fenster, dessen Inhalt HOEHER ist als sein
+    //     eigener Wunsch, steht dort als genau dieser Wunsch da. Die
+    //     Messung hat damals also die eingetragene Zahl
+    //     zurueckgespiegelt.
+    //
+    //     NACHGEMESSEN am 17.08.2026 auf 1920x7200 - dort deckelt
+    //     MODAL_SHARE erst bei 3600 - und mit einem probeweise auf 3400
+    //     gesetzten Wunsch, damit nicht wieder er die Antwort gibt:
+    //
+    //         Wunsch 3400   Fenster 495x2098
+    //
+    //     2098 ist damit die WIRKLICHE natuerliche Hoehe dieses
+    //     Aufbaus, und sie steht jetzt hier. Praktisch aendert das
+    //     nichts: unter 4196 Zeilen entscheidet ohnehin MODAL_SHARE,
+    //     auf dem Schirm des Nutzers (1920x1200) sind das 600.
+    //
+    // UND 2470 STATT 2098, am Nachmittag desselben Tages: die drei
+    // Zeilen von oben sind zurueck (Netz, Bluetooth, Style Editor).
+    // GEMESSEN im verschachtelten Compositor an der senkrechten
+    // Verstellung des Inhalts: 2067 vor den drei Zeilen, 2391 mit ihnen -
+    // 324 Punkte fuer drei `.cc-row`, also 108 je Zeile. Dazu der Kopf
+    // (77) und der Rand der Platte (2), macht 2470.
+    //
+    // WAS IN DER ZAHL NICHT DRINSTECKT, und das ist kein Versehen:
+    // Datenschutz, Wiedergabe und Aktualisierung sind bei der Messung
+    // UNSICHTBAR - sie gehen erst auf, wenn updateDisplay() geantwortet
+    // hat, und das ist ein asynchroner Aufruf, der nach dem Messen
+    // zurueckkommt. createOverlayWindow() misst in show() VOR onShow.
+    // Sie tragen deshalb zur angemeldeten Hoehe nichts bei und stehen,
+    // wenn sie aufgehen, unter der Bildlaufleiste. Auf jedem Schirm
+    // unter 3580 Zeilen ist das ohne Folgen, weil dort ohnehin der
+    // Deckel entscheidet.
+    //
+    // UND 520 STATT 495, am Nachmittag des 17.08.2026 - DIE BREITE WAR
+    // UM DIE BILDLAUFLEISTE ZU KLEIN, UND ZWAR SEIT ES SIE GIBT
+    //
+    //     GEMESSEN im verschachtelten Compositor, Schirm 1920x1200, mit
+    //     einem Messfuehler in der erzeugten utils/overlay.ts, der die
+    //     Verstellwerte der Bildlaufleiste mitschreibt:
+    //
+    //         Fenster 495, Sichtfenster 469, Inhalt 493
+    //         hadj oben 493 / Seitenbreite 469  ->  24 Punkte verdeckt
+    //
+    //     Vierundzwanzig, und das ist genau die Breite der SENKRECHTEN
+    //     Bildlaufleiste. Sie liegt neben dem Inhalt
+    //     (overlay_scrolling: false), und dieses Fenster hat sie IMMER -
+    //     sein Inhalt ist mehr als viermal so hoch wie der Deckel. Ein
+    //     Wunsch, der genau die Mindestbreite des Inhalts nennt, laesst
+    //     also keinen Platz mehr fuer sie, und GTK antwortet mit der
+    //     einzigen Moeglichkeit, die ihm bleibt: einer WAAGERECHTEN
+    //     Bildlaufleiste. Der Nutzer hat sie gemeldet ("man muss nach
+    //     rechts ... scrollen").
+    //
+    //     Die 493 sind hart und nicht kuerzbar: sie kommen aus
+    //     `.cc-power-grid` (gemessen min = nat = 457) plus dem
+    //     Innenabstand der Platte. Fuenf Schalter nebeneinander lassen
+    //     sich nicht ellipsieren, anders als jede Beschriftung darueber -
+    //     die tragen alle ccLabel und melden 13 Punkte Mindestbreite.
+    //
+    //     493 + 2 (Rand der Platte) + 24 (Leiste) = 519. 520 ist die
+    //     naechste Zehnerstufe darueber und bleibt weit unter
+    //     MODAL_SHARE (960 auf 1920).
+    width: 520,
+    height: 2470,
+    cssClass: "ControlCenter",
+    headerIcon: ICONS.settings,
+    headerTitle: _("Control center"),
+    accentCssClass: "control-accent",
+    // DER TAKT LAEUFT NUR, SOLANGE DAS FENSTER OFFEN IST.
+    //
+    // Hier stand `interval(UPDATE_INTERVAL, updateDisplay)` in
+    // buildContent, also EIN Takt, der beim Start der Oberflaeche
+    // beginnt und nie endet. GEMESSEN am 12.08.2026 an updateDisplay():
+    // fuenfzehn Aufrufe fremder Programme je Durchlauf (neun ueber
+    // ags-network-scripts, pgrep, zweimal pamixer-Paar, brightnessctl,
+    // ein ls) - alle drei Sekunden, rund um die Uhr, fuer ein Fenster,
+    // das geschlossen ist. Das sind 300 Prozessstarts je Minute fuer
+    // Zahlen, die niemand ansieht.
+    //
+    // Die drei Zeilen, die heute dazugekommen sind, haetten daraus 360
+    // gemacht. Also geht der Takt an, wenn das Fenster aufgeht, und
+    // wieder aus, wenn es zugeht - `interval()` gibt einen Timer
+    // zurueck, der `cancel()` kennt (nachgelesen in
+    // /usr/share/ags/js/lib/time.ts, `static interval(...)`).
+    //
+    // Der erste Durchlauf kostet nichts extra: Timer.interval() feuert
+    // sofort und danach im Takt.
+    onShow: () => {
+      ticker?.cancel()
+      ticker = interval(UPDATE_INTERVAL, updateDisplay)
+    },
+    onHide: () => {
+      ticker?.cancel()
+      ticker = null
+    },
+    buildContent: (_win, closeWindow) => {
+      closeFn = closeWindow
+
+      // Die Oberflaeche bauen
+      const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+      mainBox.add_css_class("cc-container")
+
+      /** Die Beschriftung einer Zeile - die, die den Text traegt.
+       *
+       * Vier Eigenschaften, die zusammengehoeren: sie nimmt den freien
+       * Platz (hexpand), sie steht links (xalign) und sie hoert nach
+       * {{STYLE_MEASURE_LINE}} Zeichen mit drei Punkten auf, statt das
+       * Fenster zu verbreitern.
+       *
+       * AUSGESCHRIEBEN STANDEN SIE NEUNMAL DA, UND ZWEIMAL VOLLSTAENDIG
+       *     Die Wiedergabezeile und die Zeilen des Abschnitts
+       *     SCHREIBTISCH hatten alle vier; Netz, VPN, Bluetooth,
+       *     Drucker, Watchdog, Hilfsskripte, Style Editor und die
+       *     beiden Datenschutzzeilen hatten die letzten beiden nicht.
+       *     Sieben Beschriftungen mit fremdem Text ohne Grenze - und
+       *     das Fenster war am 17.08.2026 gemessene 930 statt 495
+       *     Punkte breit.
+       *
+       *     Eine Vorsichtsmassnahme, an die sich jede neue Zeile erst
+       *     erinnern muss, ist keine.
+       */
+      const ccLabel = (text: string): Gtk.Label => {
+        const label = new Gtk.Label({
+          label: text, hexpand: true, xalign: 0,
+          ellipsize: Pango.EllipsizeMode.END,
+          max_width_chars: {{STYLE_MEASURE_LINE}},
+        })
+        label.add_css_class("cc-label")
+        return label
+      }
+
+      // Ein Aufklappfenster dieses Prozesses. Das Kontrollzentrum geht
+      // dabei ZU: zwei Aufklappfenster uebereinander sind zwei Deckel
+      // auf demselben Schirm, und das zweite laege ueber dem Knopf, der
+      // es geoeffnet hat.
+      //
+      // SEIT DEM 17.08.2026 GEHEN AUCH NETZ, VPN UND STIL DIESEN WEG
+      //     Drei Knoepfe riefen bis dahin `ags request network`, `ags
+      //     request vpn-manager` und `ags request style` ueber
+      //     execAsync - also einen zweiten AGS-Prozess, der die Anfrage
+      //     ueber den Astal-Socket an genau DIESEN Prozess schickte,
+      //     damit er toggleWidget aufruft. Das ist derselbe Umweg, den
+      //     die Leiste am 12.08.2026 losgeworden ist (siehe
+      //     toggleByName in ags-config.template), und er stand hier
+      //     noch, weil die beiden Aufrufer Modulfunktionen waren und
+      //     `toggle` nicht sehen konnten.
+      //
+      //     Sie stehen jetzt hier drin, wo `toggle` sichtbar ist. Ein
+      //     Prozessstart, um im eigenen Prozess eine Funktion zu rufen,
+      //     ist keine Entkopplung, sondern ein Umweg mit Wartezeit.
+      const opens = (widget: string) => () => { toggle(widget); closeFn?.() }
+      // Ein Befehl. Wortgleich zu dem, was das Leistenmodul tat.
+      const runs = (command: string) => () => {
+        execAsync(["bash", "-c", command])
+        closeFn?.()
+      }
+
+      // ===== DATENSCHUTZ =====
+      //
+      // GANZ OBEN, und das ist keine Geschmacksfrage: es ist die
+      // einzige Auskunft dieses Fensters, die etwas kostet, das man
+      // nicht zurueckbekommt. Sie steht ueber dem Netz, weil sie
+      // dringender ist als jede Adresse.
+      //
+      // UNSICHTBAR, SOLANGE NICHTS LAEUFT - der ganze Abschnitt,
+      // Ueberschrift und Trenner eingeschlossen. Ein Abschnitt
+      // "Datenschutz", der immer dasteht und meist "niemand" sagt, ist
+      // nach einer Woche ein Absatz, den niemand mehr liest, und dann
+      // faellt auch der Tag nicht mehr auf, an dem er etwas sagt.
+      privacyBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 8, visible: false,
+      })
+
+      const privacyTitle = new Gtk.Label({ label: _("PRIVACY"), xalign: 0 })
+      privacyTitle.add_css_class("cc-section-title")
+
+      // Die Mikrofonzeile, MIT Knopf.
+      //
+      // Der Knopf schaltet die Quelle stumm - `pamixer --default-source
+      // -m`, dieselbe Quelle, die die Lautstaerkezeile weiter unten
+      // regelt. Das ist die einzige Handlung, die es hier wirklich
+      // gibt: einen fremden Aufnahmestrom kann man nicht zurueckziehen,
+      // aber man kann dafuer sorgen, dass nichts mehr durch ihn kommt.
+      //
+      // Die KAMERAZEILE hat deshalb keinen Knopf. Ein v4l2-Zugriff
+      // laesst sich vom Nutzerkonto aus nicht widerrufen, und ein
+      // Knopf, der so aussieht, als koenne er es, waere schlimmer als
+      // keiner - Spec §7.4.
+      privacyMicRow = new Gtk.Box({ spacing: 10, visible: false })
+      privacyMicRow.add_css_class("cc-row")
+      const privacyMicIcon = new Gtk.Label({ label: ICONS.recording })
+      privacyMicIcon.add_css_class("cc-icon")
+      privacyMicIcon.add_css_class("mic-icon")
+      const privacyMicText = new Gtk.Label({ label: _("Microphone:") })
+      privacyMicText.add_css_class("cc-label")
+      privacyMicLabel = ccLabel("")
+      const privacyMicBtn = new Gtk.Button({ can_focus: false })
+      privacyMicBtn.add_css_class("cc-button")
+      privacyMicBtn.set_child(new Gtk.Label({ label: ICONS.micMute }))
+      privacyMicBtn.set_tooltip_text(_("Mute the microphone"))
+      privacyMicBtn.connect("clicked", async () => {
+        await execAsync("pamixer --default-source -m")
+        updateDisplay()
+      })
+      privacyMicRow.append(privacyMicIcon)
+      privacyMicRow.append(privacyMicText)
+      privacyMicRow.append(privacyMicLabel)
+      privacyMicRow.append(privacyMicBtn)
+
+      privacyCamRow = new Gtk.Box({ spacing: 10, visible: false })
+      privacyCamRow.add_css_class("cc-row")
+      const privacyCamIcon = new Gtk.Label({ label: ICONS.webcam })
+      privacyCamIcon.add_css_class("cc-icon")
+      const privacyCamText = new Gtk.Label({ label: _("Camera:") })
+      privacyCamText.add_css_class("cc-label")
+      privacyCamLabel = ccLabel("")
+      privacyCamRow.append(privacyCamIcon)
+      privacyCamRow.append(privacyCamText)
+      privacyCamRow.append(privacyCamLabel)
+
+      const privacyDivider = new Gtk.Separator({
+        orientation: Gtk.Orientation.HORIZONTAL,
+      })
+      privacyDivider.add_css_class("cc-divider")
+
+      privacyBox.append(privacyTitle)
+      privacyBox.append(privacyMicRow)
+      privacyBox.append(privacyCamRow)
+      privacyBox.append(privacyDivider)
+
+      // ===== NETZ =====
+      //
+      // ZWEI ZEILEN WAREN AM 17.08.2026 EINEN HALBEN TAG LANG FORT, UND
+      // DAS WAR EIN FEHLER
+      //     Vormittags hiess die Regel "eine Hauptfunktion hat genau
+      //     einen Platz": Netz und Bluetooth waren auf die Leiste
+      //     gezogen und HIER geloescht. Nachmittags, woertlich vom
+      //     Nutzer: "im control panel soll alles wie vorher sein alle
+      //     funktionen auch im control panel aber auch ausserhalb".
+      //
+      //     Die Sorge hinter der Regel war richtig, die Antwort nicht.
+      //     Was an zwei Wegen zu einer Handlung schadet, ist nicht ihre
+      //     ZAHL, sondern dass sie AUSEINANDERLAUFEN - genau das hat
+      //     dieses Fenster am 12.08.2026 gekostet, als sein Netzknopf
+      //     einen `nm-connection-editor` rief, den ZepOS nicht
+      //     ausliefert, waehrend das Leistenmodul etwas anderes oeffnete.
+      //     Zwei Knoepfe, zwei Programme, ein Fehler.
+      //
+      //     Die Antwort ist deshalb, dass beide Wege AUF DIESELBE
+      //     FUNKTION zeigen und nicht, dass einer verschwindet:
+      //
+      //       netRow    opens("network")    -> widgets.network
+      //       btRow     opens("bluetooth")  -> widgets.bluetooth
+      //       Leiste    toggles: "network" / "bluetooth"
+      //
+      //     `opens()` ruft `toggle`, und `toggle` ist toggleByName aus
+      //     ags-config.template - DIESELBE Funktion, die die Leiste
+      //     bekommt, auf DASSELBE Objekt aus der `widgets`-Tabelle. Es
+      //     entsteht keine zweite Fassung, die auseinanderlaufen
+      //     koennte; es gibt nur zwei Klingelknoepfe an einer Tuer.
+      //
+      //     Der btRow-Knopf startete bis dahin `blueman-manager`, einen
+      //     GTK3-Prozess neben der Sitzung. GENAU DAS kommt nicht
+      //     zurueck: er oeffnet jetzt das eigene Fenster, und blueman
+      //     steht darin als Knopf fuer die Nebenfunktionen (Koppeln mit
+      //     PIN, Dateien senden). Das ist der Unterschied zwischen
+      //     "wieder da" und "wie es war".
+      //
+      // Dazu die Adresse zum Nachlesen und das VPN. Ein VPN ist eine
+      // EINGERICHTETE Verbindung, die man an- und ausschaltet, und keine
+      // Auswahl aus einer Liste - es hat oben nichts zu suchen.
+      const netTitle = new Gtk.Label({
+        label: _("NETWORK & CONNECTIONS"), xalign: 0,
+      })
+      netTitle.add_css_class("cc-section-title")
+
+      // Zeile: das Netz
+      const netRow = new Gtk.Box({ spacing: 10 })
+      netRow.add_css_class("cc-row")
+      networkIcon = new Gtk.Label({ label: ICONS.wifi })
+      networkIcon.add_css_class("cc-icon")
+      networkLabel = ccLabel(_("Loading …"))
+      const netBtn = new Gtk.Button({ can_focus: false })
+      netBtn.add_css_class("cc-button")
+      netBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
+      netBtn.set_tooltip_text(_("Wi-Fi networks - the same window as above"))
+      netBtn.connect("clicked", opens("network"))
+      netRow.append(networkIcon)
+      netRow.append(networkLabel)
+      netRow.append(netBtn)
+
+      // Zeile: die IP-Adresse
+      // Unsichtbar, bis updateDisplay() eine Adresse gefunden hat -
+      // sichtbar aufzugehen und dann zu verschwinden waere ein Zucken.
+      ipRow = new Gtk.Box({ spacing: 8, visible: false })
+      ipRow.add_css_class("cc-ip-row")
+      const ipIcon = new Gtk.Label({ label: ICONS.ip })
+      ipIcon.add_css_class("cc-ip-icon")
+      // Die einzige Zeile mit fremdem Text, die NICHT ccLabel benutzt:
+      // sie traegt eine eigene Klasse und nimmt den freien Platz nicht.
+      // Die Grenze braucht sie trotzdem - `ip` kann mehrere Adressen
+      // nebeneinander melden.
+      ipLabel = new Gtk.Label({
+        label: "",
+        ellipsize: Pango.EllipsizeMode.END,
+        max_width_chars: {{STYLE_MEASURE_LINE}},
+      })
+      ipLabel.add_css_class("cc-ip-label")
+      ipRow.append(ipIcon)
+      ipRow.append(ipLabel)
+
+      // Zeile: das VPN
+      const vpnRow = new Gtk.Box({ spacing: 10 })
+      vpnRow.add_css_class("cc-row")
+      vpnIcon = new Gtk.Label({ label: ICONS.vpnOff })
+      vpnIcon.add_css_class("cc-icon")
+      vpnLabel = ccLabel(_("VPN: off"))
+      const vpnBtn = new Gtk.Button({ can_focus: false })
+      vpnBtn.add_css_class("cc-button")
+      vpnBtn.set_child(new Gtk.Label({ label: ICONS.power }))
+      vpnBtn.connect("clicked", opens("vpn"))
+      vpnRow.append(vpnIcon)
+      vpnRow.append(vpnLabel)
+      vpnRow.append(vpnBtn)
+
+      // Zeile: Bluetooth
+      const btRow = new Gtk.Box({ spacing: 10 })
+      btRow.add_css_class("cc-row")
+      const btIcon = new Gtk.Label({ label: ICONS.bluetooth })
+      btIcon.add_css_class("cc-icon")
+      btLabel = ccLabel(_("Bluetooth"))
+      const btBtn = new Gtk.Button({ can_focus: false })
+      btBtn.add_css_class("cc-button")
+      btBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
+      btBtn.set_tooltip_text(_("Bluetooth devices - the same window as above"))
+      btBtn.connect("clicked", opens("bluetooth"))
+      btRow.append(btIcon)
+      btRow.append(btLabel)
+      btRow.append(btBtn)
+
+      const div1 = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL })
+      div1.add_css_class("cc-divider")
+
+      // ===== TON UND BILD =====
+      const audioTitle = new Gtk.Label({ label: _("SOUND & DISPLAY"), xalign: 0 })
+      audioTitle.add_css_class("cc-section-title")
+
+      // Zeile: die Lautstaerke
+      const volRow = new Gtk.Box({ spacing: 8 })
+      volRow.add_css_class("cc-row")
+      volumeIcon = new Gtk.Label({ label: ICONS.volume })
+      volumeIcon.add_css_class("cc-icon")
+      volumeIcon.add_css_class("volume-icon")
+      const volBtn = new Gtk.Button({ can_focus: false })
+      volBtn.add_css_class("cc-icon-btn")
+      volBtn.set_child(volumeIcon)
+      volBtn.connect("clicked", async () => {
+        await execAsync("pamixer -t")
+        updateDisplay()
+      })
+      volumeSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
+      volumeSlider.set_range(0, 100)
+      volumeSlider.add_css_class("cc-slider")
+      volumeSlider.connect("value-changed", () => {
+        const val = Math.round(volumeSlider.get_value())
+        volumeLabel.set_text(`${val}%`)
+        execAsync(`pamixer --set-volume ${val}`)
+      })
+      volumeLabel = new Gtk.Label({ label: "0%" })
+      volumeLabel.add_css_class("cc-value")
+      volRow.append(volBtn)
+      volRow.append(volumeSlider)
+      volRow.append(volumeLabel)
+
+      // Zeile: das Mikrofon
+      const micRow = new Gtk.Box({ spacing: 8 })
+      micRow.add_css_class("cc-row")
+      micIcon = new Gtk.Label({ label: ICONS.mic })
+      micIcon.add_css_class("cc-icon")
+      micIcon.add_css_class("mic-icon")
+      const micBtn = new Gtk.Button({ can_focus: false })
+      micBtn.add_css_class("cc-icon-btn")
+      micBtn.set_child(micIcon)
+      micBtn.connect("clicked", async () => {
+        await execAsync("pamixer --default-source -t")
+        updateDisplay()
+      })
+      micSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
+      micSlider.set_range(0, 100)
+      micSlider.add_css_class("cc-slider")
+      micSlider.connect("value-changed", () => {
+        const val = Math.round(micSlider.get_value())
+        micLabel.set_text(`${val}%`)
+        execAsync(`pamixer --default-source --set-volume ${val}`)
+      })
+      micLabel = new Gtk.Label({ label: "0%" })
+      micLabel.add_css_class("cc-value")
+      micRow.append(micBtn)
+      micRow.append(micSlider)
+      micRow.append(micLabel)
+
+      // Zeile: die Helligkeit
+      const brightRow = new Gtk.Box({ spacing: 8 })
+      brightRow.add_css_class("cc-row")
+      const brightIcon = new Gtk.Label({ label: ICONS.brightness })
+      brightIcon.add_css_class("cc-icon")
+      brightIcon.add_css_class("brightness-icon")
+      const brightBtn = new Gtk.Button({ can_focus: false })
+      brightBtn.add_css_class("cc-icon-btn")
+      brightBtn.set_child(brightIcon)
+      brightnessSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
+      brightnessSlider.set_range(5, 100)
+      brightnessSlider.add_css_class("cc-slider")
+      brightnessSlider.connect("value-changed", () => {
+        const val = Math.round(brightnessSlider.get_value())
+        brightnessLabel.set_text(`${val}%`)
+        execAsync(`brightnessctl set ${val}%`)
+      })
+      brightnessLabel = new Gtk.Label({ label: "100%" })
+      brightnessLabel.add_css_class("cc-value")
+      brightRow.append(brightBtn)
+      brightRow.append(brightnessSlider)
+      brightRow.append(brightnessLabel)
+
+      // Zeile: die Wiedergabe
+      //
+      // SIE STEHT UNTER TON & BILD, weil sie dorthin gehoert: darueber
+      // die Lautstaerke, hier das, was durch sie hindurchgeht. Und sie
+      // ist die einzige Zeile dieses Abschnitts, die sich ausblendet -
+      // Lautstaerke, Mikrofon und Helligkeit gibt es immer, einen
+      // Spieler nicht.
+      //
+      // DREI KNOEPFE UND KEIN REGLER: playerctl kann zurueck, anhalten
+      // und weiter, und alle drei sind dieselben Befehle, die die
+      // Medientasten der Tastatur schicken. Ein vierter Knopf fuer
+      // etwas, das playerctl nicht kann, waere Spec §7.4.
+      // ZWEI ZEILEN UND NICHT EINE, und das ist gemessen.
+      //
+      // Zuerst standen Zeichen, Titel und die drei Knoepfe nebeneinander.
+      // GEMESSEN am 12.08.2026 auf einem Bildschirmabzug: das Fenster
+      // ist 495 Punkte breit, Zeichen und Knoepfe nehmen davon rund 250,
+      // und vom Titel "Die Band – Das Lied" blieb "Die Band – D…". Ein
+      // Bedienelement, das gegen seine eigene Beschriftung um den Platz
+      // kaempft, gewinnt immer - und die Beschriftung war das, was
+      // gefehlt hat.
+      //
+      // Untereinander kostet die Zeile rund 50 Punkte mehr und der Titel
+      // bekommt die ganze Breite.
+      mediaRow = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 4, visible: false,
+      })
+      mediaRow.add_css_class("cc-row")
+
+      const mediaTitleRow = new Gtk.Box({ spacing: 8 })
+      mediaIcon = new Gtk.Label({ label: ICONS.music })
+      mediaIcon.add_css_class("cc-icon")
+      mediaLabel = ccLabel("")
+      mediaTitleRow.append(mediaIcon)
+      mediaTitleRow.append(mediaLabel)
+
+      const mediaButtons = new Gtk.Box({
+        spacing: 8, halign: Gtk.Align.CENTER, homogeneous: true,
+      })
+
+      const mediaButton = (icon: string, tooltip: string,
+                           command: string): Gtk.Button => {
+        const button = new Gtk.Button({ can_focus: false })
+        button.add_css_class("cc-button")
+        button.set_child(new Gtk.Label({ label: icon }))
+        button.set_tooltip_text(tooltip)
+        button.connect("clicked", async () => {
+          await execAsync(["bash", "-c", command])
+          updateDisplay()
+        })
+        return button
+      }
+
+      const mediaPrevBtn = mediaButton(
+        ICONS.previous, _("Previous track"), "playerctl previous")
+      // Der mittlere Knopf traegt sein Zeichen als eigene Beschriftung,
+      // weil es sich mit dem Zustand aendert - die anderen beiden nicht.
+      mediaPlayLabel = new Gtk.Label({ label: ICONS.play })
+      const mediaPlayBtn = new Gtk.Button({ can_focus: false })
+      mediaPlayBtn.add_css_class("cc-button")
+      mediaPlayBtn.set_child(mediaPlayLabel)
+      mediaPlayBtn.set_tooltip_text(_("Pause / resume"))
+      mediaPlayBtn.connect("clicked", async () => {
+        await execAsync(["bash", "-c", "playerctl play-pause"])
+        updateDisplay()
+      })
+      const mediaNextBtn = mediaButton(
+        ICONS.next, _("Next track"), "playerctl next")
+
+      mediaButtons.append(mediaPrevBtn)
+      mediaButtons.append(mediaPlayBtn)
+      mediaButtons.append(mediaNextBtn)
+
+      mediaRow.append(mediaTitleRow)
+      mediaRow.append(mediaButtons)
+
+      // Zeile: die Bildschirme
+      //
+      // GEMELDET am 12.08.2026 auf echter Hardware: "ich finde den
+      // display manager nicht". Die Anwendung dafuer gibt es - die
+      // Seite "Bildschirme" von zepos-settings-gui, die am selben Tag
+      // nwg-displays abgeloest hat -, und vom Kontrollzentrum fuehrte
+      // kein Weg dorthin. Eine Anwendung, die man nur findet, wenn man
+      // ihren Namen schon kennt, ist fuer den, der sie sucht, nicht da.
+      //
+      // `--page bildschirme` und nicht nur der Programmname: der
+      // Schalter existiert genau dafuer (siehe page_of() in
+      // settings/zepos_settings_gui/main.py, "damit zepos-menu die
+      // BILDSCHIRME findet und nicht nur die Anwendung, in der sie
+      // liegen"). Er wird hier zum zweiten Mal benutzt, aus demselben
+      // Grund.
+      //
+      // IMMER SICHTBAR, im Unterschied zu den vier bedingten Zeilen
+      // dieses Fensters: einen Bildschirm hat dieser Rechner immer.
+      const displayRow = new Gtk.Box({ spacing: 10 })
+      displayRow.add_css_class("cc-row")
+      const displayIcon = new Gtk.Label({ label: ICONS.displays })
+      displayIcon.add_css_class("cc-icon")
+      const displayLabel = ccLabel(_("Displays"))
+      const displayBtn = new Gtk.Button({ can_focus: false })
+      displayBtn.add_css_class("cc-button")
+      displayBtn.set_child(new Gtk.Label({ label: ICONS.launch }))
+      displayBtn.set_tooltip_text(
+        _("Set arrangement, resolution and refresh rate"))
+      displayBtn.connect("clicked", () => {
+        execAsync(["zepos-settings-gui", "--page", "bildschirme"])
+        closeFn?.()
+      })
+      displayRow.append(displayIcon)
+      displayRow.append(displayLabel)
+      displayRow.append(displayBtn)
+
+      const div2 = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL })
+      div2.add_css_class("cc-divider")
+
+      // ===== SCHREIBTISCH =====
+      //
+      // WOHER DIESER ABSCHNITT KOMMT (12.08.2026, Aufgabe #96)
+      //     BESTELLT wurde eine Leiste mit "in der mitte die
+      //     arbeitsbereiche links die uhrzeit und datum den rest kennst
+      //     du". Sieben Module, die vorher auf der Leiste standen,
+      //     gehoeren nicht in diesen Rest - sie sind aber auch nicht
+      //     geloescht worden, sondern UMGEZOGEN, und das ist dieser
+      //     Abschnitt.
+      //
+      //     Ein Modul, das ersatzlos verschwindet, ist eine Funktion,
+      //     die der Nutzer verliert. Er kann jedes davon in den
+      //     Einstellungen wieder auf die Leiste stellen (Seite
+      //     "Leiste"); dieser Abschnitt ist der Weg fuer den, der die
+      //     Einstellungen gar nicht erst suchen soll.
+      //
+      // WARUM HIER UND NICHT IM STARTMENUE
+      //     Es sind Anzeigen und Aufklappfenster dieses Prozesses,
+      //     keine Anwendungen. Drei der sieben Knoepfe rufen
+      //     toggle() - eine Funktion IM SELBEN PROZESS -, und ein
+      //     Startmenue kann das nicht: es startet Programme.
+      const deskTitle = new Gtk.Label({ label: _("DESKTOP"), xalign: 0 })
+      deskTitle.add_css_class("cc-section-title")
+
+      /** Eine Zeile aus Zeichen, Text und einem Knopf, der etwas tut.
+       *
+       * Sieben Zeilen sahen ausgeschrieben siebenmal gleich aus - das
+       * sind 21 Widgets, deren einziger Unterschied drei Zeichenketten
+       * und ein Rueckruf sind. Der Kasten oben (mediaButton) macht es
+       * fuer die Wiedergabetasten schon genauso.
+       */
+      // `action` darf null sein, und das ist keine Bequemlichkeit: eine
+      // Zeile ohne Ziel bekommt dann KEINEN Knopf. Ein Knopf, hinter
+      // dem nichts passiert, ist nach Spec §7.4 der schlimmste Fehler,
+      // den ZepOS erzeugen kann - und genau daran ist am 12.08.2026
+      // das Zahnrad im Fuss aufgefallen.
+      const deskRow = (icon: string, text: string, tooltip: string,
+                       action: (() => void) | null): [Gtk.Box, Gtk.Label] => {
+        const row = new Gtk.Box({ spacing: 10 })
+        row.add_css_class("cc-row")
+        const iconLabel = new Gtk.Label({ label: icon })
+        iconLabel.add_css_class("cc-icon")
+        const label = ccLabel(text)
+        row.append(iconLabel)
+        row.append(label)
+        if (action) {
+          const button = new Gtk.Button({ can_focus: false })
+          button.add_css_class("cc-button")
+          button.set_child(new Gtk.Label({ label: ICONS.launch }))
+          button.set_tooltip_text(tooltip)
+          button.connect("clicked", action)
+          row.append(button)
+        }
+        return [row, label]
+      }
+
+      const [weatherBox, weatherText] = deskRow(
+        ICONS.weather, "", _("Set the location for the weather"),
+        runs("zepos-settings-gui --page wetter"))
+      weatherRow = weatherBox
+      weatherLabel = weatherText
+      weatherRow.set_visible(false)
+
+      // OHNE Knopf, im Unterschied zu allen anderen Zeilen hier: die
+      // Zusatzuhren stehen unter "clocks.zones" in user-settings.json,
+      // und das Einstellungsfenster hat dafuer KEINE Seite. Ein Knopf,
+      // der stattdessen irgendeine andere Seite aufmacht, taete etwas
+      // anderes, als er sagt.
+      const [clocksBox, clocksText] = deskRow(
+        ICONS.clock, "", "", null)
+      clocksRow = clocksBox
+      clocksLabel = clocksText
+      clocksRow.set_visible(false)
+
+      const [hardwareBox, hardwareText] = deskRow(
+        ICONS.hardware, _("Hardware"), _("Open btop"), runs(SCRIPTS.btop))
+      hardwareLabel = hardwareText
+
+      const [shortcutsBox] = deskRow(
+        ICONS.keyboard, _("Keyboard shortcuts"),
+        _("Show all keyboard shortcuts"),
+        opens("shortcuts"))
+      const [floatingBox] = deskRow(
+        ICONS.floating, _("Floating windows"),
+        _("Restore the saved arrangement"),
+        runs(SCRIPTS.floating))
+      const [wallpaperBox] = deskRow(
+        ICONS.wallpaper, _("Wallpaper"), _("Choose another image"),
+        opens("wallpaper"))
+      const [diskBox] = deskRow(
+        ICONS.disk, _("Disk space"), _("Show how the drives are filled"),
+        opens("disk"))
+
+      const div2b = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL })
+      div2b.add_css_class("cc-divider")
+
+      // ===== SYSTEMDIENSTE =====
+      const sysTitle = new Gtk.Label({ label: _("SYSTEM SERVICES"), xalign: 0 })
+      sysTitle.add_css_class("cc-section-title")
+
+      // Zeile: der Drucker
+      const printerRow = new Gtk.Box({ spacing: 10 })
+      printerRow.add_css_class("cc-row")
+      const printerIcon = new Gtk.Label({ label: ICONS.printer })
+      printerIcon.add_css_class("cc-icon")
+      printerIcon.add_css_class("printer-icon")
+      printerLabel = ccLabel(_("Printer"))
+      const printerBtn = new Gtk.Button({ can_focus: false })
+      printerBtn.add_css_class("cc-button")
+      printerBtn.set_child(new Gtk.Label({ label: ICONS.settings }))
+      // GEMESSEN am 12.08.2026: hier stand `system-config-printer`, und
+      // packaging/zepos-apps/PKGBUILD nennt genau diesen Namen in der
+      // Liste dessen, was ABSICHTLICH fehlt ("GTK3, alle gemessen").
+      // Der Knopf war also auf jeder Installation ein Knopf, hinter dem
+      // nichts passiert - Spec §7.4, und der Fehler, den niemand meldet.
+      //
+      // Das Werkzeug fuer dieselbe Aufgabe liefert ZepOS selbst aus:
+      // printer-manager-config.template erzeugt ~/.local/bin/printer-
+      // manager, das ueber lpstat/lpinfo/lpadmin geht und sein Menue mit
+      // zepos-menu zeichnet. Es ist der Grund, aus dem cups ueberhaupt
+      // in der Auswahl steht.
+      printerBtn.connect("clicked", () => {
+        execAsync(`${HOME}/.local/bin/printer-manager`)
+        closeFn?.()
+      })
+      printerRow.append(printerIcon)
+      printerRow.append(printerLabel)
+      printerRow.append(printerBtn)
+
+      // Zeile: der Netz-Watchdog
+      const watchdogRow = new Gtk.Box({ spacing: 10 })
+      watchdogRow.add_css_class("cc-row")
+      watchdogIcon = new Gtk.Label({ label: ICONS.watchdog })
+      watchdogIcon.add_css_class("cc-icon")
+      watchdogLabel = ccLabel(_("Network watchdog"))
+      const watchdogBtn = new Gtk.Button({ can_focus: false })
+      watchdogBtn.add_css_class("cc-button")
+      watchdogBtn.set_child(new Gtk.Label({ label: ICONS.launch }))
+      watchdogBtn.connect("clicked", () => {
+        // OHNE das kaufmaennische Und, das hier bis zum 12.08.2026
+        // stand. execAsync startet KEINE Shell - es zerlegt die
+        // Zeichenkette mit GLib.shell_parse_argv und startet argv
+        // direkt (die Messung dazu steht im Kopf von
+        // tests/src/test_ags_exec.py). Das "&" war damit kein
+        // Hintergrundzeichen, sondern ein ARGUMENT, das
+        // network-watchdog.sh hinter "--once" zugestellt bekam.
+        // Gebraucht wurde es ohnehin nicht: execAsync ist asynchron.
+        execAsync(`kitty --class floating-center -e ${ZEPOS_USER_ROOT}/helpers/network-watchdog.sh --once`)
+        closeFn?.()
+      })
+      watchdogRow.append(watchdogIcon)
+      watchdogRow.append(watchdogLabel)
+      watchdogRow.append(watchdogBtn)
+
+      // Zeile: die Hilfsskripte
+      const helpersRow = new Gtk.Box({ spacing: 10 })
+      helpersRow.add_css_class("cc-row")
+      const helpersIcon = new Gtk.Label({ label: ICONS.helpers })
+      helpersIcon.add_css_class("cc-icon")
+      helpersIcon.add_css_class("helpers-icon")
+      helpersLabel = ccLabel(_("Helper scripts"))
+      const helpersBtn = new Gtk.Button({ can_focus: false })
+      helpersBtn.add_css_class("cc-button")
+      helpersBtn.set_child(new Gtk.Label({ label: ICONS.launch }))
+      helpersBtn.connect("clicked", () => {
+        execAsync(SCRIPTS.helpersLauncher)
+        closeFn?.()
+      })
+      helpersRow.append(helpersIcon)
+      helpersRow.append(helpersLabel)
+      helpersRow.append(helpersBtn)
+
+      // Zeile: der Style Editor
+      //
+      // SIE WAR AM 17.08.2026 EINEN HALBEN TAG LANG FORT, aus derselben
+      // Regel wie die Netz- und die Bluetooth-Zeile und mit demselben
+      // Ergebnis: "im control panel soll alles wie vorher sein alle
+      // funktionen auch im control panel aber auch ausserhalb".
+      //
+      // Der Befund, der zur Loeschung gefuehrt hat, bleibt richtig:
+      // unter einer Ueberschrift "Systemdienste" sucht niemand das
+      // Aussehen, und deshalb traegt die Leiste seit demselben Tag ein
+      // eigenes Modul dafuer (custom/theme, {{ICON_PALETTE}} - dasselbe
+      // Zeichen wie hier). Der Fehler war nur die Folgerung. Beide
+      // Knoepfe rufen `opens("style")`, also DASSELBE widgets.style;
+      // eine zweite Fassung gibt es nicht.
+      //
+      // "Style Editor" bleibt englisch, und das ist Absicht: es ist der
+      // NAME des Fensters, das dieser Knopf oeffnet
+      // (ags-style-editor.template traegt ihn als headerTitle). Eine
+      // Zeile, die anders heisst als das, was sie aufmacht, waere ein
+      // zweiter Name fuer eine Sache.
+      const styleRow = new Gtk.Box({ spacing: 10 })
+      styleRow.add_css_class("cc-row")
+      const styleIcon = new Gtk.Label({ label: ICONS.palette })
+      styleIcon.add_css_class("cc-icon")
+      const styleLabel = ccLabel(_("Style editor"))
+      const styleBtn = new Gtk.Button({ can_focus: false })
+      styleBtn.add_css_class("cc-button")
+      styleBtn.set_child(new Gtk.Label({ label: ICONS.launch }))
+      styleBtn.set_tooltip_text(
+        _("Appearance and colors - the same window as above"))
+      styleBtn.connect("clicked", opens("style"))
+      styleRow.append(styleIcon)
+      styleRow.append(styleLabel)
+      styleRow.append(styleBtn)
+
+      // Zeile: was ansteht
+      //
+      // src/update.py ist seit dem 12.08.2026 vollstaendig - und hatte
+      // KEINE Oberflaeche. `zepos-update --status` in einem Terminal
+      // war der ganze Weg, und der Nutzer erfuhr nie, dass etwas
+      // ansteht.
+      //
+      // WAS HIER STEHT, IST DER SATZ DES MODULS SELBST. updates.sh legt
+      // `zepos-update --status` in das Feld "detail" - also describe()
+      // aus update.py, im Wortlaut. Ihn hier nachzubauen hiesse,
+      // dieselbe Auskunft ein zweites Mal zu formulieren, und beim
+      // naechsten Feld in update.py haette der Nutzer zwei Saetze, die
+      // einander widersprechen.
+      //
+      // WAS DER KNOPF TUT, entscheidet der ZUSTAND - siehe updateAction
+      // oben. Vier Zustaende, vier Befehle, und keiner von ihnen ist
+      // eine zweite Aktualisierungslogik: es sind die vier Programme,
+      // die es fuer diese vier Faelle ohnehin schon gibt.
+      updateRow = new Gtk.Box({ spacing: 10, visible: false })
+      updateRow.add_css_class("cc-row")
+      const updateIcon = new Gtk.Label({ label: ICONS.update })
+      updateIcon.add_css_class("cc-icon")
+      updateLabel = new Gtk.Label({
+        label: "", hexpand: true, xalign: 0, wrap: true,
+        max_width_chars: {{STYLE_MEASURE_LINE}},
+      })
+      updateLabel.add_css_class("cc-label")
+      updateBtn = new Gtk.Button({ can_focus: false })
+      updateBtn.add_css_class("cc-button")
+      updateBtn.set_child(new Gtk.Label({ label: ICONS.launch }))
+      updateBtn.connect("clicked", () => {
+        if (!updateAction) return
+        // Im Terminal und nicht im Hintergrund: drei der vier Befehle
+        // fragen nach etwas - sudo nach dem Passwort, pacman nach der
+        // Bestaetigung -, und eine Rueckfrage, die niemand sieht, ist
+        // ein Befehl, der nicht laeuft. `floating-center` ist die
+        // Fensterklasse, die die Zeile darueber schon benutzt.
+        execAsync(["kitty", "--class", "floating-center",
+                   "-e", "bash", "-c",
+                   `${updateAction}; echo; read -rp "[Eingabetaste]"`])
+        closeFn?.()
+      })
+      updateRow.append(updateIcon)
+      updateRow.append(updateLabel)
+      updateRow.append(updateBtn)
+
+      const div3 = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL })
+      div3.add_css_class("cc-divider")
+
+      // ===== DIE FUENF SCHALTER =====
+      // FUENF KNOEPFE IN ZWEI REIHEN, und die Reihen sind eine
+      // Breitenentscheidung.
+      //
+      // GEMESSEN am 12.08.2026: in einer Reihe ist der Kasten so breit
+      // wie sein laengstes Wort mal fuenf. "Herunterfahren" sind bei
+      // {{STYLE_FONT_MICRO}} vierzehn Zeichen, mit dem Rand des Knopfes
+      // rund 150 Punkte - fuenfmal das plus Abstand haetten das Fenster
+      // von gemessenen 545 auf ueber 800 Punkte verbreitert, nur weil
+      // die Beschriftungen jetzt deutsch sind. Ein Fenster, das breiter
+      // wird, weil es die Sprache wechselt, hat das falsche Layout.
+      //
+      // Drei Spalten, also zwei Reihen und unten rechts ein leeres Feld.
+      // Die Lesereihenfolge bleibt die alte.
+      const powerGrid = new Gtk.Grid({
+        column_homogeneous: true,
+        column_spacing: 8,
+        row_spacing: 8,
+        halign: Gtk.Align.CENTER,
+      })
+      powerGrid.add_css_class("cc-power-grid")
+
+      const createPowerBtn = (icon: string, label: string, cssClass: string, cmd: string): Gtk.Button => {
+        const btn = new Gtk.Button({ can_focus: false })
+        btn.add_css_class("cc-power-btn")
+        btn.add_css_class(cssClass)
+        const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+        const iconLbl = new Gtk.Label({ label: icon })
+        iconLbl.add_css_class("cc-power-icon")
+        const textLbl = new Gtk.Label({ label })
+        textLbl.add_css_class("cc-power-label")
+        box.append(iconLbl)
+        box.append(textLbl)
+        btn.set_child(box)
+        btn.connect("clicked", () => execAsync(cmd))
+        return btn
+      }
+
+      // ZUR BREITE, weil der Kopf dieses Blocks mit ihr rechnet:
+      // "Herunterfahren" sind vierzehn Zeichen, "Shut down" neun. Die
+      // englische Fassung ist die KUERZERE - das Gitter wird durch die
+      // Uebersetzung also nicht breiter. Massgeblich bleibt das laengste
+      // Wort ueber alle Sprachen, und das ist weiterhin das deutsche,
+      // fuer das die drei Spalten gebaut sind.
+      //
+      // Diese fuenf Beschriftungen sind der Grund, aus dem
+      // tests/src/test_ags_i18n.py seit dem 17.08.2026 ZWEI Netze
+      // auswirft: sie standen in einer Tabelle von Tupeln, wurden erst
+      // beim Durchlaufen zu einem Argument, und die Suche nach
+      // Eigenschaften und Setzern hat sie deshalb NICHT gesehen. Gefunden
+      // hat sie die zweite Suche - die nach deutschen Woertern.
+      const POWER_BUTTONS: Array<[string, string, string, string]> = [
+        [ICONS.shutdown, _("Shut down"), "shutdown", "systemctl poweroff"],
+        [ICONS.reboot, _("Restart"), "reboot", "systemctl reboot"],
+        [ICONS.suspend, _("Suspend"), "suspend", "systemctl suspend"],
+        [ICONS.lock, _("Lock"), "lock", "zepos-lock"],
+        [ICONS.logout, _("Log out"), "logout", "hyprctl dispatch exit"],
+      ]
+      POWER_BUTTONS.forEach(([icon, label, cssClass, cmd], index) => {
+        powerGrid.attach(createPowerBtn(icon, label, cssClass, cmd),
+                         index % 3, Math.floor(index / 3), 1, 1)
+      })
+
+      // ===== ZUSAMMENSETZEN =====
+      mainBox.append(privacyBox)
+      mainBox.append(netTitle)
+      mainBox.append(netRow)
+      mainBox.append(ipRow)
+      mainBox.append(vpnRow)
+      mainBox.append(btRow)
+      mainBox.append(div1)
+      mainBox.append(audioTitle)
+      mainBox.append(volRow)
+      mainBox.append(micRow)
+      mainBox.append(brightRow)
+      mainBox.append(mediaRow)
+      mainBox.append(displayRow)
+      mainBox.append(div2)
+      mainBox.append(deskTitle)
+      mainBox.append(weatherRow)
+      mainBox.append(clocksRow)
+      mainBox.append(hardwareBox)
+      mainBox.append(shortcutsBox)
+      mainBox.append(floatingBox)
+      mainBox.append(wallpaperBox)
+      mainBox.append(diskBox)
+      mainBox.append(div2b)
+      mainBox.append(sysTitle)
+      mainBox.append(printerRow)
+      mainBox.append(watchdogRow)
+      mainBox.append(helpersRow)
+      mainBox.append(styleRow)
+      mainBox.append(updateRow)
+      mainBox.append(div3)
+      mainBox.append(powerGrid)
+
+      return mainBox
+    },
+  })
+}

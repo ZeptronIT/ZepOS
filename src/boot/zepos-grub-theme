@@ -1,0 +1,142 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Das ZepOS-Startmenue auf die Partition legen, aus der GRUB liest.
+# Installiert nach /usr/bin/zepos-grub-theme, ausgeloest von
+# /usr/share/libalpm/hooks/90-zepos-grub-theme.hook.
+#
+# WARUM ES DIESEN WEG GEBEN MUSS
+#     Das Thema gehoert dem Paket und liegt deshalb unter
+#     /usr/share/grub/themes/zepos. Auf einer ZepOS-Installation ist das
+#     die verschluesselte Wurzel, und fuer grub-mkconfig ist alles darauf
+#     unlesbar: is_path_readable_by_grub (grub 2:2.14-1,
+#     /usr/share/grub/grub-mkconfig_lib, Zeilen 77-85) verwirft jeden
+#     Pfad, dessen Abstraktionsliste `cryptodisk` enthaelt, solange
+#     GRUB_ENABLE_CRYPTODISK nicht `y` ist. /etc/grub.d/00_header
+#     ueberspringt daraufhin den ganzen Themenblock - ohne Fehler, ohne
+#     Warnung, ohne eine Zeile in grub.cfg. src/boot/grub-zepos.cfg
+#     traegt die Messung vom 17.08.2026 aus, mit der die Bedingung
+#     gefunden wurde.
+#
+#     Dieses Skript legt deshalb eine Kopie dorthin, wo GRUB sie liest:
+#     nach /boot. Das ist keine Vorliebe - /boot IST das Dateisystem, aus
+#     dem GRUB liest, sonst laege dort keine grub.cfg.
+#
+# WARUM EIN ALPM-HAKEN UND KEIN SCHRITT IM INSTALLER
+#     Weil die Kopie sonst genau einmal entstuende und danach altert. Ein
+#     `pacman -Syu`, das ein neues zepos-config bringt, erneuert
+#     /usr/share/grub/themes/zepos und liesse die Kopie unter /boot als
+#     die des Installationstages stehen. Der Haken laeuft bei jeder
+#     Transaktion, die das Themenverzeichnis anfasst - auch bei der
+#     ersten, also der Installation selbst.
+#
+#     DASS ALPM-HAKEN WAEHREND DER INSTALLATION UEBERHAUPT LAUFEN, ist
+#     gemessen und nicht angenommen. /var/log/pacman.log der Zielplatte
+#     vom 17.08.2026:
+#
+#         [2026-08-17T07:53:23+0000] [ALPM] running '90-zepos-update.hook'...
+#
+#     und die grub.cfg desselben Laufs traegt 09:53:26 Ortszeit, also
+#     drei Sekunden spaeter. Der zweite grub-mkconfig-Lauf aus
+#     installer/core/translate.py (GRUB_MKCONFIG_COMMAND) sieht die Kopie
+#     damit. pacman chrootet fuer Haken in sein Wurzelverzeichnis, und
+#     /boot ist dort die eingehaengte EFI-Partition.
+#
+# WARUM ES NICHTS ANLEGT, WO KEIN GRUB IST
+#     `/boot/grub` entsteht durch grub-install. Wo es das nicht gibt,
+#     bootet die Maschine ueber etwas anderes, und ein Themenverzeichnis
+#     unter /boot waere dort Muell, den niemand mehr wegraeumt. Auf einer
+#     ZepOS-Installation ist die Reihenfolge gemessen: grub-install legte
+#     /boot/grub/x86_64-efi um 09:52 an, zepos-config kam um 09:53:13.
+#
+# WARUM `cp` UND NICHT `rsync`
+#     Weil dieses Skript im Chroot einer frischen Installation laeuft, in
+#     der nur die Pakete der Basis liegen. rsync ist keins davon. Es sind
+#     elf Dateien und keine 200 Megabyte; die Warnung dieses Baumes vor
+#     `cp` gilt grossen Baeumen auf fremden Platten, nicht einem
+#     Themenverzeichnis.
+#
+# WARUM `set -e` HIER FEHLT, obwohl es sonst ueberall in diesem Baum steht
+#     Weil es genau das taete, was dieses Skript nicht tun darf. Bei einem
+#     `cp`, das auf einer vollen EFI-Partition scheitert, verliesse `set
+#     -e` das Skript mit dessen Rueckgabewert - und pacman meldet die
+#     ganze Transaktion als fehlgeschlagen, wenn ein Haken mit != 0 endet.
+#     Der Preis fuer ein Bild waere dann ein halb aktualisiertes System.
+#     Jeder Schritt unten wird deshalb einzeln geprueft, und jeder
+#     Fehlschlag endet mit einer Meldung und einer 0.
+set -u
+
+# Die Wurzel, unter der dieses Skript arbeitet. Leer, wenn es das tut,
+# wofuer es geschrieben ist - der Haken laeuft im Chroot, und dort IST /
+# das Ziel. Die Variable ist da, damit tests/boot/test_grub_theme.py es
+# AUSFUEHREN kann statt es zu lesen; derselbe Grund und dieselbe Naht wie
+# ZEPOS_WURZEL in installer/core/translate.py, PLYMOUTH_COMMAND.
+wurzel="${ZEPOS_WURZEL:-}"
+
+quelle="$wurzel/usr/share/grub/themes/zepos"
+grubdir="$wurzel/boot/grub"
+ziel="$grubdir/themes/zepos"
+
+melde() { printf 'ZepOS: %s\n' "$1"; }
+melde_fehler() { printf 'ZepOS: %s\n' "$1" >&2; }
+
+# ---------------------------------------------------------------------
+# Vorbedingungen. Jede heisst "lass es bleiben", keine heisst "brich ab".
+# ---------------------------------------------------------------------
+# Ein Haken, der mit != 0 endet, laesst pacman die Transaktion als
+# fehlgeschlagen melden. Ein Startmenue ohne Thema ist haesslich; ein
+# `pacman -Syu`, das mittendrin abbricht, ist ein halb aktualisiertes
+# System.
+if [ ! -r "$quelle/theme.txt" ]; then
+    melde_fehler "$quelle/theme.txt fehlt - das Startmenue bleibt, wie es ist."
+    exit 0
+fi
+if [ ! -d "$grubdir" ]; then
+    melde "Kein $grubdir - diese Maschine startet nicht ueber GRUB, also nichts zu tun."
+    exit 0
+fi
+
+# ---------------------------------------------------------------------
+# Spiegeln.
+# ---------------------------------------------------------------------
+# Erst weg, dann hin: eine Datei, die aus dem Thema verschwindet, muss
+# auch aus der Kopie verschwinden. `rm -rf` steht hier auf einem Pfad,
+# den die Zuweisungen an `grubdir` und `ziel` weiter oben aus zwei festen
+# Zeichenketten und `$wurzel` zusammengesetzt haben - kein Muster, keine
+# Auswertung eines fremden Wertes, und `$grubdir` ist eine Zeile vorher
+# als Verzeichnis nachgewiesen.
+if ! rm -rf "$ziel"; then
+    melde_fehler "$ziel liess sich nicht leeren - das Startmenue bleibt, wie es ist."
+    exit 0
+fi
+if ! mkdir -p "$ziel"; then
+    melde_fehler "$ziel liess sich nicht anlegen - das Startmenue bleibt, wie es ist."
+    exit 0
+fi
+
+# -R und nicht -a: das Ziel ist FAT32, dort gibt es weder Besitzer noch
+# Rechte-Bits, und `cp -a` bruellt darueber, ohne dass es etwas aendert.
+if ! cp -R "$quelle/." "$ziel/"; then
+    melde_fehler "Das Startmenue liess sich nicht nach $ziel kopieren."
+    exit 0
+fi
+
+# ---------------------------------------------------------------------
+# Und nachsehen, ob es angekommen ist.
+# ---------------------------------------------------------------------
+# Eine Kopie, die nur behauptet wird, ist genau der Fehler, den diese
+# Kette schon einmal hatte: alle Glieder da, das Ergebnis fehlt.
+if [ ! -r "$ziel/theme.txt" ]; then
+    melde_fehler "Das Startmenue kam nicht nach $ziel - GRUB bleibt beim Textmenue."
+    exit 0
+fi
+
+quell_zahl="$(find "$quelle" -type f | wc -l)"
+ziel_zahl="$(find "$ziel" -type f | wc -l)"
+if [ "$quell_zahl" != "$ziel_zahl" ]; then
+    melde_fehler "Nur $ziel_zahl von $quell_zahl Dateien des Startmenues liegen unter $ziel."
+    exit 0
+fi
+
+melde "Startmenue nach $ziel gespiegelt ($ziel_zahl Dateien)."
+exit 0
