@@ -110,7 +110,11 @@ def _font_names() -> list[str]:
 
 
 def _icon_names() -> list[str]:
-    return [f"{sizes.ICON_PREFIX}{role}" for role, _ in sizes.FONT_ROLES]
+    # sizes.ICON_ROLES und nicht sizes.FONT_ROLES: DISPLAY hat seit
+    # task-C (18.08.2026) keinen Symbol-Leser mehr, siehe die
+    # Begruendung dort. Von Hand ausgezaehlt waere genau die Liste, die
+    # dieser Test verhindern soll.
+    return [f"{sizes.ICON_PREFIX}{role}" for role, _ in sizes.ICON_ROLES]
 
 
 def _radius_names() -> list[str]:

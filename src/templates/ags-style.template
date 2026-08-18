@@ -1365,66 +1365,41 @@ $overlay-border: $border;
 // (.overlay-header). Gezaehlt ueber alle Vorlagen - keine nennt diese
 // drei Klassen mehr.
 
-.net-nm-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}};
-  min-width: 32px;
-  min-height: 32px;
-  font-size: {{STYLE_FONT_LEAD}};
-  color: $network-accent;
-
-  label {
-    min-width: 18px;
-  }
-
-  &:hover {
-    background: rgba($network-accent, 0.2);
-    border-color: rgba($network-accent, 0.5);
-  }
-}
-
-.net-current {
-  background: rgba($surface, 0.3);
-  border-left: 3px solid $network-accent;
-  padding: {{STYLE_SPACE_16}} {{STYLE_SPACE_16}};
-  margin: {{STYLE_SPACE_12}} {{STYLE_SPACE_12}};
-}
-
-.net-status-icon {
-  font-size: {{STYLE_ICON_DISPLAY}};
-  color: $network-accent;
-  margin-right: {{STYLE_SPACE_4}};
-}
-
-.net-status-label {
-  font-size: {{STYLE_FONT_LEAD}};
-  font-weight: bold;
-  color: $text;
-}
-
-.net-ip-label {
-  font-size: {{STYLE_FONT_BODY}};
-  color: $subtext;
-  font-family: monospace;
-}
-
-.net-divider {
-  background: rgba($surface, 0.5);
-  min-height: 1px;
-  margin: {{STYLE_SPACE_4}} {{STYLE_SPACE_12}};
-}
-
-.net-section-title {
-  font-size: {{STYLE_FONT_CAPTION}};
-  font-weight: bold;
-  color: $subtext;
-  letter-spacing: 1px;
-  margin: 0 {{STYLE_SPACE_12}};
-}
-
-.net-wifi-toggle, .net-refresh-btn {
+// GEGANGEN am 18.08.2026 (task-C, Stufe 4): net-nm-btn, net-back-btn,
+// net-connect-btn, net-detail-btn, net-disconnect-btn, net-refresh-btn
+// (aus der gemeinsamen Regel mit net-wifi-toggle) - die sechs benannten
+// Klassen dieser Aufgabe, ersetzt durch zepButton mit den Rollen voll/
+// umrandet/still/kritisch (siehe ags-network.template). GEPRUEFT je
+// Klasse einzeln, mit `grep -c` auf den Klassennamen in
+// ags-network.template, auf 0 vor jeder gefallenen Regel.
+//
+// Dazu, wie im Bluetoothfenster (task-5), die ganze alte Zeilen- und
+// Kopf-Apparatur, die keine der sechs Klassen war (kein "btn"/"-button"
+// im Namen, zaehlt also nicht zur Ratsche), aber durch zepRow/
+// zepSectionLabel/zepDivider ersetzt wurde: net-current, net-status-
+// icon, net-status-label, net-ip-label, net-divider, net-section-title,
+// net-item (+ active/hover darin), net-signal-icon (+ vier signal-*-
+// Untergruppen darin), net-ssid, net-detail, net-detail-header,
+// net-detail-icon, net-detail-ssid, net-detail-signal - vierzehn
+// Regelgruppen. GEPRUEFT ebenso einzeln.
+//
+// Dazu drei bereits VOR diesem Auftrag tote Regeln, gefunden bei
+// derselben Pruefung und aus demselben Grund entfernt (Rueckbau statt
+// liegenlassen, kein Klassenname dieser Aufgabe): net-pw-header,
+// net-pw-ssid (keine der beiden hatte je einen Leser in
+// ags-network.template) und net-signal-strength (ebenso ohne Leser -
+// nicht zu verwechseln mit net-signal-icon, das einen hatte).
+//
+// net-item.active/net-item:hover standen zusaetzlich in der BEWEGUNG
+// weiter unten (Uebergangsregeln fuer :hover und .active); beide
+// Eintraege sind dort mitgegangen.
+//
+// net-connected-icon, net-lock-icon (Zeilenende der WLAN-Liste),
+// net-list (Listenkasten), net-detail-box/-grid/-row/-label/-value
+// (die Tabelle IP/Gateway/DNS/Sicherheit - kein Symbol+Titel+Nebenzeile,
+// darum keine zepRow) und net-password-box/-pw-title/-pw-entry/-pw-error
+// bleiben: sie gehoeren keinem der fuenf Bauteile.
+.net-wifi-toggle {
   background: rgba($surface, 0.4);
   border: 1px solid transparent;
   border-radius: {{STYLE_RADIUS_CONTROL}};
@@ -1465,47 +1440,6 @@ $overlay-border: $border;
   padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_12}};
 }
 
-.net-item {
-  background: rgba($surface, 0.2);
-  border: none;
-  border-left: 3px solid transparent;
-  border-radius: {{STYLE_RADIUS_CARD}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_12}};
-  margin-bottom: {{STYLE_SPACE_2}};
-
-  &.active {
-    background: rgba($network-accent, 0.15);
-    border-left-color: $network-accent;
-  }
-
-  &:hover {
-    background: rgba($surface, 0.45);
-    border-left-color: rgba($network-accent, 0.5);
-  }
-}
-
-.net-signal-icon {
-  font-size: {{STYLE_ICON_LEAD}};
-  color: $network-accent;
-  min-width: 24px;
-
-  &.signal-strong { color: $green; }
-  &.signal-medium { color: $network-accent; }
-  &.signal-weak { color: $yellow; }
-  &.signal-poor { color: $red; }
-}
-
-.net-ssid {
-  font-size: {{STYLE_FONT_BODY}};
-  font-weight: bold;
-  color: $text;
-}
-
-.net-detail {
-  font-size: {{STYLE_FONT_CAPTION}};
-  color: $subtext;
-}
-
 .net-connected-icon {
   font-size: {{STYLE_ICON_BODY}};
   color: $green;
@@ -1516,69 +1450,9 @@ $overlay-border: $border;
   color: rgba($subtext, 0.7);
 }
 
-.net-detail-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid rgba($network-accent, 0.3);
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}};
-  font-size: {{STYLE_FONT_LEAD}};
-  color: $network-accent;
-  min-width: 40px;
-  min-height: 40px;
-
-  label {
-    min-width: 24px;
-    min-height: 24px;
-  }
-
-  &:hover {
-    background: rgba($network-accent, 0.2);
-    border-color: $network-accent;
-  }
-}
-
 // Network Detail View
 .net-detail-box {
   padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-}
-
-.net-back-btn {
-  background: transparent;
-  border: none;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
-  font-size: {{STYLE_FONT_BODY}};
-  color: $subtext;
-
-  &:hover {
-    color: $network-accent;
-    background: rgba($network-accent, 0.1);
-  }
-}
-
-.net-detail-header {
-  background: rgba($surface, 0.3);
-  border-left: 3px solid $network-accent;
-  padding: {{STYLE_SPACE_16}};
-  margin-bottom: {{STYLE_SPACE_12}};
-}
-
-.net-detail-icon {
-  font-size: {{STYLE_ICON_DISPLAY}};
-  color: $network-accent;
-  margin-right: {{STYLE_SPACE_4}};
-}
-
-.net-detail-ssid {
-  font-size: {{STYLE_FONT_TITLE}};
-  font-weight: bold;
-  color: $text;
-}
-
-.net-detail-signal {
-  font-size: {{STYLE_FONT_BODY}};
-  font-weight: bold;
-  color: $green;
 }
 
 .net-detail-grid {
@@ -1611,39 +1485,12 @@ $overlay-border: $border;
   color: $text;
 }
 
-.net-disconnect-btn {
-  background: rgba($red, 0.15);
-  border: 1px solid rgba($red, 0.4);
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_20}};
-  color: $red;
-  font-size: {{STYLE_FONT_BODY}};
-  margin: {{STYLE_SPACE_4}} {{STYLE_SPACE_12}} {{STYLE_SPACE_12}} {{STYLE_SPACE_12}};
-
-  &:hover {
-    background: rgba($red, 0.3);
-    border-color: rgba($red, 0.6);
-  }
-}
-
 // Network Password Entry
 .net-password-box {
   background: rgba($surface, 0.3);
   padding: {{STYLE_SPACE_16}};
   margin: {{STYLE_SPACE_8}} {{STYLE_SPACE_12}};
   border-left: 3px solid $network-accent;
-}
-
-.net-pw-header {
-  padding-bottom: {{STYLE_SPACE_12}};
-  margin-bottom: {{STYLE_SPACE_12}};
-  border-bottom: 1px solid rgba($surface, 0.5);
-}
-
-.net-pw-ssid {
-  font-size: {{STYLE_FONT_LEAD}};
-  font-weight: bold;
-  color: $text;
 }
 
 .net-pw-title {
@@ -1671,30 +1518,6 @@ $overlay-border: $border;
   font-size: {{STYLE_FONT_BODY}};
   color: $red;
   margin-top: {{STYLE_SPACE_8}};
-}
-
-.net-connect-btn {
-  background: rgba($network-accent, 0.25);
-  border: 1px solid rgba($network-accent, 0.6);
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_20}};
-  color: $text;
-  font-size: {{STYLE_FONT_BODY}};
-  font-weight: bold;
-
-  &:hover {
-    background: rgba($network-accent, 0.4);
-    border-color: $network-accent;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-  }
-}
-
-.net-signal-strength {
-  font-size: {{STYLE_FONT_BODY}};
-  color: $subtext;
 }
 
 // ===== BLUETOOTH MANAGER =====
@@ -2976,7 +2799,6 @@ $overlay-border: $border;
 // beim Fuellen einer Liste aendert, laeuft dann sichtbar auseinander.
 
 button:hover,
-.net-item:hover,
 .launcher-item:hover,
 .wp-thumb:hover,
 .se-theme-card:hover {
@@ -2984,7 +2806,6 @@ button:hover,
               color {{STYLE_MOTION_INSTANT}} {{STYLE_MOTION_CURVE}};
 }
 
-.net-item.active,
 .cc-toggle-btn.active,
 .se-tab-btn.active,
 .vpn-tab-btn.active,

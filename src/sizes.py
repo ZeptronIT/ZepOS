@@ -351,6 +351,30 @@ FONT_ROLES: tuple[tuple[str, int], ...] = (
     ("HERO", 7),
 )
 
+# Sechs der sieben Rollen, nicht sieben: DISPLAY faellt hier heraus.
+#
+# GEMESSEN am 18.08.2026 (task-C, Stufe 4): STYLE_ICON_DISPLAY hatte
+# genau zwei Leser, .net-status-icon und .net-detail-icon in
+# ags-style.template - der grosse freistehende Zeichenkopf, den die
+# alten .net-current/.net-detail-header-Kaesten vor einer Zeile trugen.
+# Beide sind mit dem Umbau auf zepRow gefallen (der Umbau auf das
+# Bauteil-Kit, siehe ags-network.template): zepRow traegt sein Symbol
+# IMMER in derselben Groesse, {{STYLE_ICON_CAPTION}}, ohne Ausnahme fuer
+# eine "grosse" Kopfzeile. Der dritte Leser, .bt-status-icon, war schon
+# vorher gefallen (task-5, Bluetooth). STYLE_FONT_DISPLAY bleibt: die
+# Rolle traegt weiter die grosse ZAHL einer Kachel (Akkuprozent,
+# Kalendertag), nur kein SYMBOL mehr daneben in dieser Groesse - jedes
+# Symbol, das noch an einer Statuszeile mit grosser Zahl steht, kommt
+# jetzt aus dem geteilten Bauteil und ist klein.
+#
+# GEPRUEFT mit `grep -rn STYLE_ICON_DISPLAY src/templates/*.template
+# src/styles/*.template` auf 0 Treffer, bevor diese Ausnahme entstand -
+# eine Rolle ohne Leser waere sonst wieder die Liste, die
+# test_sizes.py::test_every_settable_size_is_named_by_a_template und
+# test_design.py::test_every_rung_has_a_reader ausdruecklich verbieten.
+ICON_ROLES: tuple[tuple[str, int], ...] = tuple(
+    (role, step) for role, step in FONT_ROLES if role != "DISPLAY")
+
 # Die Zeilenhoehe, und damit die Groesse eines SYMBOLS in einer Zeile.
 #
 # WARUM SYMBOLE UEBERHAUPT AN DIE ZEILE GEBUNDEN WERDEN
@@ -1338,13 +1362,14 @@ TABLE: dict[str, Size] = {
     "STYLE_CLIPBOARD_WIDTH": Size(600, BARE, SCALED),
     "STYLE_CLIPBOARD_HEIGHT": Size(220, BARE, SCALED),
 
-    # Die Schriftleiter, siehe oben. Sieben Rollen, jede zweimal: einmal
-    # als Schrift und einmal als die Hoehe der Zeile, in der ein Symbol
-    # steht.
+    # Die Schriftleiter, siehe oben. Sieben Rollen als Schrift, sechs
+    # davon zusaetzlich als die Hoehe der Zeile, in der ein Symbol steht
+    # - DISPLAY fehlt hier bewusst, siehe ICON_ROLES oben (task-C,
+    # 18.08.2026).
     **{f"{FONT_PREFIX}{role}": Size(font_px(step), PX, SCALED)
        for role, step in FONT_ROLES},
     **{f"{ICON_PREFIX}{role}": Size(icon_px(step), PX, SCALED)
-       for role, step in FONT_ROLES},
+       for role, step in ICON_ROLES},
 
     # Die Rundungsleiter, siehe oben. SCALED, weil eine Ecke, die
     # stehenbleibt, waehrend ihr Kasten waechst, eine andere Form ist.

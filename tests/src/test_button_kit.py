@@ -139,7 +139,18 @@ AUSGANGSZAHL = 52
 #                   in einem 474px breiten Fenster wuerden die verfuegbare
 #                   Breite sprengen. GEZAEHLT mit _knopfklassen/
 #                   _ist_knopfname aus diesem Modul, nicht abgeschrieben.
-ERLAUBT = 38
+#   32  18.08.2026  Task C (Netzwerk): net-back-btn, net-connect-btn,
+#                   net-detail-btn, net-disconnect-btn, net-nm-btn,
+#                   net-refresh-btn (aus der gemeinsamen Regel mit
+#                   net-wifi-toggle) sind gefallen - alle sechs benannten
+#                   Klassen. net-wifi-toggle bleibt stehen: kein "btn"/
+#                   "-button" im Namen, zaehlt also gar nicht zur
+#                   Ratsche - kein Fall von "lass ihn stehen", sondern
+#                   ausserhalb ihrer Zaehlung von Anfang an.
+#                   GEZAEHLT mit _knopfklassen/_ist_knopfname aus diesem
+#                   Modul (VORHER 38, NACHHER 32, `git show HEAD` gegen
+#                   den Arbeitsbaum), nicht abgeschrieben.
+ERLAUBT = 32
 
 
 def _without_comments(css: str) -> str:

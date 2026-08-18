@@ -1088,10 +1088,17 @@ _FIXED_STYLE_VARIABLES = {
     # ein Symbolzeichen steht. Das ist der Unterschied, den der Katalog
     # nicht ausdruecken konnte - `.cc-label` und `.cc-icon` standen beide
     # auf 14, obwohl das eine ein Wort ist und das andere ein Bild.
+    #
+    # sizes.ICON_ROLES und nicht sizes.FONT_ROLES fuer die zweite Haelfte
+    # (18.08.2026, task-C): DISPLAY hat keinen Symbol-Leser mehr, siehe
+    # die Begruendung bei ICON_ROLES in src/sizes.py. sizes.TABLE traegt
+    # "STYLE_ICON_DISPLAY" darum nicht mehr, und size_value() darauf
+    # waere ein KeyError - dieselbe Rolle bleibt als Schrift bestehen,
+    # nur nicht mehr als Symbolgroesse.
     **{f"{sizes.FONT_PREFIX}{role}": size_value(f"{sizes.FONT_PREFIX}{role}")
        for role, _step in sizes.FONT_ROLES},
     **{f"{sizes.ICON_PREFIX}{role}": size_value(f"{sizes.ICON_PREFIX}{role}")
-       for role, _step in sizes.FONT_ROLES},
+       for role, _step in sizes.ICON_ROLES},
 
     # ============================================================================
     # DIE RUNDUNGSLEITER
