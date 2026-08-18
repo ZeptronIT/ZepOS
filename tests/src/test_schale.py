@@ -14,7 +14,17 @@ KIT = WURZEL / "src" / "templates" / "ags-kit.template"
 STIL = WURZEL / "src" / "templates" / "ags-style.template"
 
 
-def test_das_kit_liefert_die_drei_bauteile():
+def test_das_kit_liefert_die_beiden_schalen_bauteile():
+    """Die Schale braucht ZWEI neue Bauteile, nicht drei.
+
+    Hier stand "die_drei_bauteile", und das war eine Ungenauigkeit im
+    Plan vom 18.08.2026: die Eintraege der Seitenleiste sind keine
+    eigene Form, sie sind `zepRow` mit `ausgewaehlt` - das Bauteil gibt
+    es seit demselben Tag, und es deckelt bereits die natuerliche
+    Breite von Fremdtexten. Eine dritte Zeilenform danebenzustellen
+    waere genau die Doppelung, die dieses Vorhaben in sieben Auftraegen
+    fuer Knoepfe abgeraeumt hat.
+    """
     text = KIT.read_text(encoding="utf-8")
     for name in ("zepSidebar", "zepStateHeader"):
         assert f"export function {name}" in text, f"{name} fehlt im Kit"
