@@ -36,6 +36,7 @@ import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _ } from "../utils/i18n"
+import { zepButton } from "../utils/kit"
 
 const HOME = GLib.get_home_dir()
 // The keybind editor opens the USER template: editing the packaged one
@@ -321,9 +322,9 @@ export default function Shortcuts(): OverlayWidget {
 
       const footerSpacer = new Gtk.Box({ hexpand: true })
 
-      const editBtn = new Gtk.Button({ can_focus: false })
-      editBtn.add_css_class("sc-edit-btn")
-      editBtn.connect("clicked", () => openEditor(closeWindow))
+      // zepButton, Rolle "voll" (Task A, 18.08.2026): der einzige Knopf
+      // dieses Fensters ist damit per Definition seine Hauptsache.
+      const editBtn = zepButton("", "voll", () => openEditor(closeWindow))
 
       const editBtnBox = new Gtk.Box({ spacing: 6 })
       const editIcon = new Gtk.Label({ label: ICONS.edit })

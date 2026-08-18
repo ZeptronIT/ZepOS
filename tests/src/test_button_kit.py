@@ -94,7 +94,26 @@ AUSGANGSZAHL = 52
 #                   gefallen, kein Fenster hat sich einen neuen Knopf
 #                   gebaut - GEZAEHLT mit _knopfklassen/_ist_knopfname
 #                   aus diesem Modul, nicht abgeschrieben.
-ERLAUBT = 50
+#   45  18.08.2026  Task A (die sechs Fenster mit je einer Klasse):
+#                   battery-profile-btn, calendar-action-btn,
+#                   disk-action-btn, notif-close-btn und sc-edit-btn sind
+#                   gefallen - fuenf von sechs benannten Klassen.
+#                   overlay-close-btn bleibt stehen: er sitzt in
+#                   createOverlayWindow() (ags-overlay-utils.template)
+#                   und ist damit das x in JEDER Kopfzeile JEDES
+#                   Fensters. GEMESSEN an den Sprossen in src/sizes.py:
+#                   zep-btn setzt min-height auf STYLE_CONTROL_HEIGHT
+#                   (32px) und padding auf "0 STYLE_SPACE_16" (0/16px);
+#                   overlay-close-btn hat min-width/min-height fest auf
+#                   28px und padding "STYLE_SPACE_4 STYLE_SPACE_8"
+#                   (4/8px) stehen. zepButton mit Rolle "still" wuerde
+#                   das Kreuz also hoeher (32 statt 28) UND breiter
+#                   (16 statt 8px Innenabstand je Seite) machen, in allen
+#                   zwoelf Fensterkoepfen zugleich - genau der Fall, den
+#                   der Plan mit "lass ihn stehen und melde es"
+#                   vorwegnimmt. GEZAEHLT mit _knopfklassen/
+#                   _ist_knopfname aus diesem Modul, nicht abgeschrieben.
+ERLAUBT = 45
 
 
 def _without_comments(css: str) -> str:

@@ -7,6 +7,7 @@ import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _ } from "../utils/i18n"
+import { zepButton } from "../utils/kit"
 
 // Die Masse, die dieses Fenster sich wuenscht. utils/overlay.ts deckelt
 // sie gegen den Schirm, sie sind also eine Obergrenze und keine Zusage.
@@ -460,10 +461,11 @@ export default function Calendar(): OverlayWidget {
         if (!path) continue
         anyInstalled = true
 
-        const button = new Gtk.Button({ can_focus: false })
-        button.add_css_class("calendar-action-btn")
+        // zepButton, Rolle "umrandet" (Task A, 18.08.2026): Kalender und
+        // Mail sind zwei gleichrangige Wege nach draussen, keiner ist
+        // die Hauptsache dieses Fensters (das ist das Gitter darueber).
+        const button = zepButton("", "umrandet", () => launchApp(path))
         button.set_tooltip_text(action.tooltip)
-        button.connect("clicked", () => launchApp(path))
 
         // Zeichen und Wort NEBENeinander: uebereinander war dieser
         // Kasten am 12.08.2026 gemessene 115 Punkte hoch, nebeneinander

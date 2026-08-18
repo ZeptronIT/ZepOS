@@ -10,6 +10,7 @@ import GLib from "gi://GLib"
 import Pango from "gi://Pango"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
+import { zepButton } from "../utils/kit"
 
 const WINDOW_NAME = "battery"
 const UPDATE_INTERVAL = 5000
@@ -99,6 +100,16 @@ const WIN_HEIGHT = 657
 //     GEMESSEN: "Energiesparen" ist 13 Zeichen und 137 Punkte breit,
 //     also 10,5 Punkte je Zeichen - die Schrift dieser Oberflaeche ist
 //     Fira Code und damit dicktengleich. In 88 Punkte passen acht davon.
+//
+// GEFUNDEN, NICHT BEHOBEN, am 18.08.2026 (Task A): die Rechnung oben
+// geht von "battery-profile-btn padding {{STYLE_SPACE_8}} 2x" aus - der
+// alten, fenstereigenen Knopfregel. Der Knopf ist seither ein zepButton
+// (Rolle "umrandet", ags-kit.template), und dessen Regel zep-btn traegt
+// `padding: 0 {{STYLE_SPACE_16}}` - doppelt so viel horizontal wie hier
+// gerechnet. Die 88 Punkte fuer die Beschriftung stimmen damit nicht
+// mehr; WIN_WIDTH und PROFILE_LABEL_CHARS bleiben trotzdem stehen, weil
+// die Breitenleiter (Stufe 5) diese Rechnung neu macht und nicht dieser
+// Auftrag (sechs Fenster mit je einer Klasse).
 const PROFILE_LABEL_CHARS = 8
 
 // Icons
@@ -384,8 +395,23 @@ export default function Battery(): OverlayWidget {
       profileRow.add_css_class("battery-profile-buttons")
 
       for (const p of PROFILES) {
-        const btn = new Gtk.Button({ can_focus: false })
-        btn.add_css_class("battery-profile-btn")
+        // zepButton, Rolle "umrandet" (Task A, 18.08.2026): die drei
+        // Profile sind gleichrangige Auswahlmoeglichkeiten und keine
+        // Hauptsache-gegen-Nebenwege-Reihe wie bei Bluetooth (dort hat
+        // "suchen" ein klares "voll") - dieselbe Einordnung wie die
+        // Geraetezeilen dort, die ebenfalls "umrandet" tragen. Welches
+        // Profil GERADE gilt, zeigt weiterhin die Klasse "active" unten
+        // (siehe battery-profile-buttons zep-btn.active im Stylesheet)
+        // und nicht die Rolle - eine Rolle "voll" waere IMMER hell,
+        // unabhaengig vom gewaehlten Profil, und stuende damit gegen die
+        // "active"-Kennzeichnung.
+        const btn = zepButton("", "umrandet", () => {
+          setPowerProfile(p.id)
+          GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+            updateDisplay()
+            return GLib.SOURCE_REMOVE
+          })
+        })
         btn.add_css_class(`profile-${p.id}`)
 
         const btnBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
@@ -433,14 +459,6 @@ export default function Battery(): OverlayWidget {
         btnBox.append(btnIcon)
         btnBox.append(btnLabel)
         btn.set_child(btnBox)
-
-        btn.connect("clicked", () => {
-          setPowerProfile(p.id)
-          GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            updateDisplay()
-            return GLib.SOURCE_REMOVE
-          })
-        })
 
         profileButtons.set(p.id, btn)
         profileRow.append(btn)

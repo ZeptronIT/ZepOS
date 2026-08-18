@@ -8,6 +8,7 @@ import { interval } from "ags/time"
 import Cairo from "gi://cairo"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _, ngettext, format } from "../utils/i18n"
+import { zepButton } from "../utils/kit"
 
 // DIE BREITE IST EINE ADDITION UND KEINE GEGRIFFENE ZAHL
 //
@@ -512,8 +513,11 @@ export default function DiskUsage(): OverlayWidget {
       const actionsBox = new Gtk.Box({ spacing: 11, homogeneous: true })
       actionsBox.add_css_class("disk-actions")
 
-      const filesBtn = new Gtk.Button({ can_focus: false })
-      filesBtn.add_css_class("disk-action-btn")
+      // zepButton, Rolle "umrandet" fuer beide (Task A, 18.08.2026):
+      // Dateimanager und Analyse sind zwei gleichrangige Werkzeuge,
+      // keins ist die Hauptsache dieses Fensters (das ist die
+      // Speicherplatzuebersicht darueber).
+      const filesBtn = zepButton("", "umrandet", () => launchApp("nautilus / &"))
       filesBtn.set_tooltip_text(_("Open the root directory"))
       const filesBtnBox = new Gtk.Box({ spacing: 11, halign: Gtk.Align.CENTER })
       const filesIcon = new Gtk.Label({ label: ICONS.folder })
@@ -523,10 +527,8 @@ export default function DiskUsage(): OverlayWidget {
       filesBtnBox.append(filesIcon)
       filesBtnBox.append(filesLabel)
       filesBtn.set_child(filesBtnBox)
-      filesBtn.connect("clicked", () => launchApp("nautilus / &"))
 
-      const analyzeBtn = new Gtk.Button({ can_focus: false })
-      analyzeBtn.add_css_class("disk-action-btn")
+      const analyzeBtn = zepButton("", "umrandet", () => launchApp("baobab &"))
       analyzeBtn.set_tooltip_text(_("Analyze disk usage with Baobab"))
       const analyzeBtnBox = new Gtk.Box({ spacing: 11, halign: Gtk.Align.CENTER })
       const analyzeIcon = new Gtk.Label({ label: ICONS.search })
@@ -536,7 +538,6 @@ export default function DiskUsage(): OverlayWidget {
       analyzeBtnBox.append(analyzeIcon)
       analyzeBtnBox.append(analyzeLabel)
       analyzeBtn.set_child(analyzeBtnBox)
-      analyzeBtn.connect("clicked", () => launchApp("baobab &"))
 
       // Zwei Knoepfe, nicht drei. Der dritte hiess "Disks" und rief
       // `gnome-disks` - gnome-disk-utility 46.1-3, GTK3, und auf keinem

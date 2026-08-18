@@ -316,26 +316,18 @@ $overlay-border: $border;
 .calendar-actions {
   padding-top: {{STYLE_SPACE_12}};
 
-  .calendar-action-btn {
-    background: rgba($surface, 0.4);
-    border: 1px solid transparent;
-    border-radius: {{STYLE_RADIUS_CONTROL}};
-    padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_24}};
+  // Die Farben der beiden Knoepfe (Task A, 18.08.2026): Rahmen und
+  // Hintergrund kommen seither von zep-btn-umrandet, nur Zeichen und
+  // Beschriftung bleiben eigene Regeln - dieselbe Aufteilung wie im
+  // Speicherplatzfenster (disk-action-icon/disk-action-text).
+  .calendar-action-icon {
+    font-size: {{STYLE_ICON_TITLE}};
+    color: $calendar-accent;
+  }
 
-    &:hover {
-      background: rgba($calendar-accent, 0.2);
-      border-color: rgba($calendar-accent, 0.5);
-    }
-
-    .calendar-action-icon {
-      font-size: {{STYLE_ICON_TITLE}};
-      color: $calendar-accent;
-    }
-
-    .calendar-action-label {
-      font-size: {{STYLE_FONT_BODY}};
-      color: $text;
-    }
+  .calendar-action-label {
+    font-size: {{STYLE_FONT_BODY}};
+    color: $text;
   }
 }
 
@@ -432,25 +424,29 @@ $overlay-border: $border;
   padding-top: {{STYLE_SPACE_8}};
   border-top: 1px solid rgba($surface, 0.5);
 
-  .sc-edit-btn {
-    background: rgba($shortcuts-accent, 0.2);
-    border: 1px solid rgba($shortcuts-accent, 0.5);
-    border-radius: {{STYLE_RADIUS_CONTROL}};
-    padding: {{STYLE_SPACE_8}} {{STYLE_SPACE_16}};
+  // Rahmen und Hintergrund kommen seit Task A (18.08.2026) von
+  // zep-btn-voll, nur Zeichen und Beschriftung bleiben eigene Regeln.
+  //
+  // GEFUNDEN UND KORRIGIERT, noch am 18.08.2026: hier stand `color:
+  // $shortcuts-accent` (Zeichen) und `color: $text` (Beschriftung) - aus
+  // der Zeit, in der der Knopf einen dezent getoenten Rahmen trug.
+  // zep-btn-voll fuellt seither mit vollem $accent, und src/brand.py
+  // setzt shortcuts_accent auf denselben Farbwert wie overlay_accent
+  // (beide CYAN_TEXT, #33C9EE) - das Zeichen waere also GENAUSO farbig
+  // wie sein eigener Hintergrund und damit unsichtbar gewesen, und $text
+  // (#DCEEF4, fast weiss) auf #33C9EE haette kaum Kontrast getragen.
+  // zep-btn-voll setzt fuer genau diesen Fall `color: $bg` - dieselbe
+  // Farbe uebernehmen Zeichen und Beschriftung hier, statt sich auf die
+  // Vererbung vom Knopf zu verlassen (beide Klassen setzen ihre eigene
+  // `color` und ueberschreiben sie damit ohnehin).
+  .sc-edit-icon {
+    font-size: {{STYLE_ICON_CAPTION}};
+    color: $bg;
+  }
 
-    &:hover {
-      background: rgba($shortcuts-accent, 0.4);
-    }
-
-    .sc-edit-icon {
-      font-size: {{STYLE_ICON_CAPTION}};
-      color: $shortcuts-accent;
-    }
-
-    .sc-edit-label {
-      font-size: {{STYLE_FONT_BODY}};
-      color: $text;
-    }
+  .sc-edit-label {
+    font-size: {{STYLE_FONT_BODY}};
+    color: $bg;
   }
 }
 
@@ -579,20 +575,14 @@ $overlay-border: $border;
 
 .battery-profile-buttons {
   padding: {{STYLE_SPACE_4}} 0;
-}
 
-.battery-profile-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_8}};
-
-  &:hover {
-    background: rgba($battery-accent, 0.2);
-    border-color: rgba($battery-accent, 0.3);
-  }
-
-  &.active {
+  // Der gewaehlte Wert, in der Akzentfarbe dieses Fensters (Task A,
+  // 18.08.2026): zepButton (ags-kit.template) kennt selbst keinen
+  // "aktiv"-Zustand, nur Rollen - dieselbe Sprache wie zep-row.active
+  // (siehe ags-kit.template), nur mit $battery-accent statt dem
+  // allgemeinen $accent, weil dieser Farbton diesem Fenster gehoert und
+  // nicht dem geteilten Bauteil.
+  .zep-btn.active {
     background: rgba($battery-accent, 0.3);
     border-color: $battery-accent;
   }
@@ -822,18 +812,6 @@ $overlay-border: $border;
 .disk-actions {
   padding-top: {{STYLE_SPACE_12}};
   border-top: 1px solid rgba($surface, 0.3);
-}
-
-.disk-action-btn {
-  background: rgba($surface, 0.4);
-  border: 1px solid transparent;
-  border-radius: {{STYLE_RADIUS_CONTROL}};
-  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
-
-  &:hover {
-    background: rgba($disk-accent, 0.2);
-    border-color: rgba($disk-accent, 0.5);
-  }
 }
 
 .disk-action-icon {
@@ -2993,20 +2971,11 @@ $overlay-border: $border;
   margin-top: {{STYLE_SPACE_2}};
 }
 
-.notif-close-btn {
-  background: transparent;
-  border: none;
-  padding: 0 {{STYLE_SPACE_4}};
-  margin-left: {{STYLE_SPACE_8}};
-  color: $subtext;
-  font-size: {{STYLE_FONT_BODY}};
-  min-width: 16px;
-  min-height: 16px;
-
-  &:hover {
-    color: $red;
-  }
-}
+// GEGANGEN am 18.08.2026 (Task A): notif-close-btn. zepButton mit Rolle
+// "still" (ags-kit.template) traegt die Schliessflaeche jetzt, siehe
+// ags-notifications.template. GEPRUEFT mit `grep -rn notif-close-btn
+// src/templates/` auf ausschliesslich diesen Kommentar, bevor die Regel
+// fiel.
 
 // HIER STANDEN NEUN FARBEN JE ANWENDUNG, UND SIE SIND FORT
 //

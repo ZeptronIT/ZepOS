@@ -100,6 +100,7 @@ import AstalNotifd from "gi://AstalNotifd?version=0.1"
 import GLib from "gi://GLib"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _ } from "../utils/i18n"
+import { zepButton } from "../utils/kit"
 
 const MAX_VISIBLE = 5
 const TIMEOUT_LOW = 5000
@@ -311,11 +312,13 @@ function notificationCard(app: string, time: string, summary: string,
   const timeLabel = new Gtk.Label({ label: time, xalign: 1 })
   timeLabel.add_css_class("notif-time")
 
-  // X close as separate Gtk.Button (native click handling)
-  const closeBtn = new Gtk.Button({ can_focus: false })
-  closeBtn.add_css_class("notif-close-btn")
-  closeBtn.set_child(new Gtk.Label({ label: ICONS.close }))
-  closeBtn.connect("clicked", dismiss)
+  // X close, zepButton mit Rolle "still" (Task A, 18.08.2026): Schliessen
+  // ist ein Nebenweg dieser Karte, nicht ihre Hauptsache. Anders als
+  // overlay-close-btn (siehe dort, ags-overlay-utils.template) sitzt
+  // dieser Knopf NICHT in einer geteilten Fabrik, sondern nur in dieser
+  // einen Datei - eine Groessenaenderung trifft also nur die
+  // Meldungskarten und nicht alle zwoelf Fensterkoepfe.
+  const closeBtn = zepButton(ICONS.close, "still", dismiss)
 
   header.append(appLabel)
   header.append(spacer)
