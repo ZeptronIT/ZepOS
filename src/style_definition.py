@@ -1527,9 +1527,21 @@ _FIXED_STYLE_VARIABLES = {
     "STYLE_GTK4_SUBTEXT": get_user_color("overlay_subtext"),
     "STYLE_GTK4_ACCENT": get_user_color("overlay_accent"),
     "STYLE_GTK4_ACCENT_BG": THEME.CYAN,
-    # Auf der Cyan-Flaeche steht das Ink und nicht das Text-Weiss:
-    # #08262C auf #0096C0 misst 6,79:1, #DCEEF4 nur 1,87:1. Eine
-    # Schaltflaeche, deren Beschriftung man nicht liest, ist keine.
+    # Auf der Cyan-Flaeche steht das Ink und nicht das Text-Weiss.
+    #
+    # NACHGERECHNET am 19.08.2026, WCAG 2.1, dieselbe Formel wie
+    # tests/src/test_brand.py:
+    #
+    #     #08262C auf #0096C0    4,63:1   besteht
+    #     #DCEEF4 auf #0096C0    2,87:1   besteht NICHT
+    #
+    # Hier standen 6,79:1 und 1,87:1. Beide Zahlen waren falsch, und die
+    # erste in die gefaehrliche Richtung: sie liess eine KNAPPE Wahl
+    # bequem aussehen. Der Abstand zur Schwelle betraegt 0,13 und nicht
+    # 2,29. Die Entscheidung bleibt richtig - eine Schaltflaeche, deren
+    # Beschriftung man nicht liest, ist keine -, aber wer die Cyan-
+    # Flaeche kuenftig auch nur eine Spur heller macht, faellt darunter.
+    # Gefunden beim Umstellen der Einstellungen auf die Knopf-Rollen.
     "STYLE_GTK4_ACCENT_FG": THEME.INK,
     "STYLE_GTK4_SUCCESS": get_user_color("success"),
     "STYLE_GTK4_SUCCESS_BG": THEME.GREEN_DIM,
