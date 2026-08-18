@@ -9,7 +9,13 @@ import style from "./style.scss"
 // 17.08.2026 die Bedingung dafuer, an tests/src/test_modal_rule.py
 // vorbeizukommen - vorher stand dort der Dateiname, und ein Name ist ein
 // Freibrief fuer alles, was in der Datei sonst noch passiert.
-import type { OverlayAnchor, OverlayWidget } from "./utils/overlay"
+// ShellWidget dazu seit Aufgabe 7 (18.08.2026, "Bluetooth wird eine
+// Seite"): toggleByName() muss widgets.control auf ShellWidget
+// zuschneiden, um zeigeSeite() zu rufen - bleibt im selben `import
+// type` und damit fuer
+// tests/src/test_modal_rule.py::test_who_imports_the_toolbox_imports_the_factory
+// weiterhin die Ausnahme "nur ein Typ".
+import type { OverlayAnchor, OverlayWidget, ShellWidget } from "./utils/overlay"
 import Bar from "./widget/Bar"
 import Dock, { DockHandle } from "./widget/Dock"
 import Calendar from "./widget/Calendar"
@@ -18,7 +24,6 @@ import Battery from "./widget/Battery"
 import DiskUsage from "./widget/DiskUsage"
 import ControlCenter from "./widget/ControlCenter"
 import NetworkManager from "./widget/NetworkManager"
-import BluetoothManager from "./widget/BluetoothManager"
 import WallpaperSelector from "./widget/WallpaperSelector"
 import StyleEditor from "./widget/StyleEditor"
 import VpnManager from "./widget/VpnManager"
@@ -31,6 +36,11 @@ import Notifications, {
 } from "./widget/Notifications"
 
 // Store overlay widget references
+// "bluetooth" faellt seit Aufgabe 7 (18.08.2026): BluetoothManager.tsx
+// baut kein eigenes Fenster mehr, es exportiert nur noch bluetoothSeite,
+// die ControlCenter() direkt in die Schale einhaengt. toggleByName()
+// erreicht die Seite ueber widgets.control.zeigeSeite(), nicht mehr
+// ueber diese Tabelle.
 let widgets: Record<string, OverlayWidget | null> = {
   calendar: null,
   shortcuts: null,
@@ -38,7 +48,6 @@ let widgets: Record<string, OverlayWidget | null> = {
   disk: null,
   control: null,
   network: null,
-  bluetooth: null,
   wallpaper: null,
   style: null,
   vpn: null,
@@ -75,7 +84,31 @@ async function toggleWidget(widget: OverlayWidget | null,
 // ueber den Astal-Socket an genau diesen Prozess schickte, der dann
 // toggleWidget aufrief. Sechs Module taten das. Jetzt rufen sie diese
 // Funktion.
+//
+// SEIT AUFGABE 7 (18.08.2026, "Bluetooth wird eine Seite") LEITET SIE
+// "bluetooth" IN DIE SCHALE UM, STATT EIN FENSTER ZU TOGGELN
+//     BluetoothManager.tsx baut kein eigenes Astal.Window mehr - es
+//     exportiert bluetoothSeite: ShellSeite, die ControlCenter() als
+//     Seite unter VERBINDUNGEN einhaengt (ags-control-center.template).
+//     `widgets.control` ist zur Laufzeit ein ShellWidget (ControlCenter()
+//     ruft seit Aufgabe 6 createShellWindow()); die Tabelle bleibt als
+//     `Record<string, OverlayWidget | null>` typisiert (ShellWidget
+//     ERWEITERT OverlayWidget nur um zeigeSeite()), darum der Zuschnitt
+//     hier am Aufruf und nicht an der Tabelle selbst.
+//
+//     EIN Aenderungsort fuer DREI Aufrufer: die Leiste (`toggles:
+//     "bluetooth"` in ags-bar.template), die Tastenbindung
+//     (`reqStr.includes("bluetooth")` im requestHandler unten) und die
+//     Zeile "Bluetooth" auf der Seite "general" des Kontrollzentrums
+//     selbst (btRow, ruft `toggle("bluetooth")` ueber denselben Weg) -
+//     alle drei gehen durch toggleByName(). Netzwerk und VPN bleiben bis
+//     zu ihren eigenen Aufgaben (8/9) echte, eigene Fenster und nehmen
+//     weiterhin den toggleWidget-Weg.
 function toggleByName(name: string, at?: OverlayAnchor): void {
+  if (name === "bluetooth") {
+    (widgets.control as ShellWidget | null)?.zeigeSeite(name, at)
+    return
+  }
   void toggleWidget(widgets[name] ?? null, at)
 }
 
@@ -174,15 +207,11 @@ app.start({
       console.error("Failed to create NetworkManager:", e)
     }
 
-    // Das Bluetooth-Fenster. Es haengt am selben Leistenmodul, an dem
-    // bis zum 17.08.2026 ein `blueman-manager` hing - siehe den Kopf von
-    // ags-bluetooth.template.
-    try {
-      widgets.bluetooth = BluetoothManager()
-      console.log("BluetoothManager loaded successfully")
-    } catch (e) {
-      console.error("Failed to create BluetoothManager:", e)
-    }
+    // Bluetooth baut seit Aufgabe 7 (18.08.2026) kein eigenes Fenster
+    // mehr - bluetoothSeite haengt bereits INNERHALB von ControlCenter()
+    // (wenige Zeilen weiter oben) in der Schale, es gibt hier nichts
+    // mehr eigenstaendig zu erzeugen. Der Leistenklick auf das
+    // Bluetooth-Modul findet sein Ziel weiterhin ueber toggleByName().
 
     // Create wallpaper selector widget
     try {
@@ -288,7 +317,13 @@ app.start({
     } else if (reqStr.includes("network")) {
       toggleWidget(widgets.network).then(r => res(r))
     } else if (reqStr.includes("bluetooth")) {
-      toggleWidget(widgets.bluetooth).then(r => res(r))
+      // Seit Aufgabe 7 (18.08.2026) keine eigene widgets.bluetooth mehr -
+      // toggleByName() leitet auf widgets.control.zeigeSeite("bluetooth")
+      // um (siehe dort). Die Tastenbindung, die diesen Zweig ausloest,
+      // bleibt darum wirksam, sie oeffnet nur die Schale statt eines
+      // eigenen Fensters.
+      toggleByName("bluetooth")
+      res("toggled")
     } else if (reqStr.includes("wallpaper")) {
       toggleWidget(widgets.wallpaper).then(r => res(r))
     } else if (reqStr.includes("style")) {

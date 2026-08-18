@@ -169,6 +169,10 @@ msgstr "Bluetooth ist aus"
 msgid "Bluetooth is on"
 msgstr "Bluetooth ist an"
 
+#: src/templates/ags-bluetooth.template:412
+msgid "{connected} of {total} devices connected"
+msgstr "{connected} von {total} Geräten verbunden"
+
 #: src/templates/ags-bluetooth.template:421
 msgid "Turn Bluetooth on to see devices"
 msgstr "Schalte Bluetooth ein, um Geräte zu sehen"
@@ -328,8 +332,8 @@ msgid "VPN: off"
 msgstr "VPN: Aus"
 
 #: src/templates/ags-control-center.template:856
-msgid "Bluetooth devices - the same window as above"
-msgstr "Bluetooth-Geräte - dasselbe Fenster wie oben"
+msgid "Bluetooth devices - the same page as above"
+msgstr "Bluetooth-Geräte - dieselbe Seite wie oben"
 
 #: src/templates/ags-control-center.template:866
 msgid "SOUND & DISPLAY"

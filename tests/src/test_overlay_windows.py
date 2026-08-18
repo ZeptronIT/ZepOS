@@ -185,13 +185,19 @@ FENSTER_UND_KASTEN = {
     "ags-vpn-settings.template": ".vpn-settings-container",
 }
 
-# Die beiden, deren Kasten mit Absicht keine min-width hat. Der Grund
+# Das eine, dessen Kasten mit Absicht keine min-width hat. Der Grund
 # steht in ags-style.template ueber .bt-power-btn: "Die Groesse kommt aus
 # Schrift und Innenabstand, also aus der Leiter in src/sizes.py, und
 # nicht aus einem min-width daneben." Ohne min-width gibt es hier nichts
 # nachzurechnen - aber es muss AUFGESCHRIEBEN sein, sonst faellt ein
 # neues Fenster einfach aus dieser Zusicherung heraus.
-OHNE_MIN_WIDTH = {"ags-network.template", "ags-bluetooth.template"}
+#
+# "ags-bluetooth.template" ist am 18.08.2026 (Aufgabe 7) aus dieser
+# Menge gefallen: die Vorlage meldet ueberhaupt keine `const WIN_WIDTH`
+# mehr an (sie ist eine Seite der Schale, keine eigene Fensterbreite
+# mehr - siehe Kopf der Vorlage), darum landet sie gar nicht mehr in
+# `erklaert` unten und braucht auch keinen Platz mehr in dieser Menge.
+OHNE_MIN_WIDTH = {"ags-network.template"}
 
 # DIE SENKRECHTE BILDLAUFLEISTE, GEMESSEN und nicht geschaetzt.
 #

@@ -36,6 +36,11 @@ import Pango from "gi://Pango"
 import { createShellWindow, ShellSeite, ShellWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
 import { zepButton, ZepRolle, zepStateHeader } from "../utils/kit"
+// AUFGABE 7 (18.08.2026): die echte Bluetooth-Seite statt des
+// Umzugshinweises - bluetoothSeite baut sich selbst vollstaendig
+// (Kopf, Geraeteliste, eigener Takt), diese Datei haengt sie nur noch
+// in `seiten` ein.
+import { bluetoothSeite } from "./BluetoothManager"
 
 const HOME = GLib.get_home_dir()
 // Das Widget laeuft eigenstaendig unter AGS und kann paths.py nicht
@@ -550,16 +555,15 @@ export default function ControlCenter(
     bauen: () => zepStateHeader({ titel, unterzeile: UMZUGSHINWEIS }),
   })
 
-  // VERBINDUNGEN: noch leer, Aufgaben 7-9 fuellen sie. "network",
-  // "bluetooth" und "vpn" sind die IDs, unter denen die jeweilige
-  // Aufgabe ihre echte Seite spaeter eintraegt (zeigeSeite("bluetooth",
-  // ...) - siehe Aufgabenblatt 7, Schritt 2) - ein spaeterer Umbau
-  // ERSETZT diese drei stubSeite()-Aufrufe, er fuegt keine neuen IDs
-  // hinzu.
+  // VERBINDUNGEN: "network" und "vpn" noch leer, Aufgaben 8-9 fuellen sie
+  // (dieselbe stubSeite()-Form wie bisher). "bluetooth" ist seit Aufgabe 7
+  // (18.08.2026) die echte, importierte bluetoothSeite - siehe den Import
+  // am Kopf dieser Datei. Ihre `gruppe` traegt denselben msgid
+  // "CONNECTIONS" wie gruppeVerbindungen hier (zwei `_()`-Aufrufe auf
+  // denselben msgid ergeben denselben Text; gruppenAus() gruppiert nach
+  // dem TEXT), darum keine eigene Uebergabe von aussen.
   const networkSeite = stubSeite("network", _("Network"), ICONS.wifi,
                                  gruppeVerbindungen)
-  const bluetoothSeite = stubSeite("bluetooth", _("Bluetooth"),
-                                   ICONS.bluetooth, gruppeVerbindungen)
   const vpnSeite = stubSeite("vpn", _("VPN"), ICONS.vpn, gruppeVerbindungen)
 
   // SYSTEM: Ton und Anzeige, ausserhalb des Umfangs dieses Plans (siehe
@@ -681,6 +685,23 @@ export default function ControlCenter(
         execAsync(["bash", "-c", command])
         closeFn?.()
       }
+
+      // NACHGETRAGEN AB AUFGABE 7 (18.08.2026): FUER BLUETOOTH (UND
+      // AB AUFGABE 8/9 NETZWERK/VPN) IST `opens()` OBEN FALSCH
+      //
+      //     `opens()` schliesst DIESE Schale, nachdem sie ein ANDERES
+      //     Fenster geoeffnet hat - richtig, solange das Ziel wirklich
+      //     ein zweites Fenster ist (Stil-Editor, Hintergruende, ...).
+      //     Bluetooth ist seit Aufgabe 7 keines mehr: `toggle("bluetooth")`
+      //     ruft ueber toggleByName() (ags-config.template) inzwischen
+      //     `widgets.control.zeigeSeite("bluetooth", ...)` - also GENAU
+      //     DIESE Schale, nur auf eine andere Seite. Ein `closeFn?.()`
+      //     danach wuerde sie sofort wieder zumachen, kaum dass sie
+      //     umgeschaltet hat.
+      //
+      //     `zeigtSeite()` ist darum `opens()` OHNE das Schliessen - eine
+      //     Navigation innerhalb derselben Schale, keine Fensteroeffnung.
+      const zeigtSeite = (seite: string) => () => { toggle(seite) }
 
       // ===== DATENSCHUTZ =====
       //
@@ -857,10 +878,16 @@ export default function ControlCenter(
       const btIcon = new Gtk.Label({ label: ICONS.bluetooth })
       btIcon.add_css_class("cc-icon")
       btLabel = ccLabel(_("Bluetooth"))
-      // zepButton, Rolle "still" (Task D, 18.08.2026): Navigation zum
-      // Bluetooth-Fenster.
-      const btBtn = zepButton(ICONS.settings, "still", opens("bluetooth"))
-      btBtn.set_tooltip_text(_("Bluetooth devices - the same window as above"))
+      // zepButton, Rolle "still" (Task D, 18.08.2026): Navigation zur
+      // Bluetooth-Seite dieser Schale.
+      //
+      // `zeigtSeite("bluetooth")` statt `opens("bluetooth")` seit
+      // Aufgabe 7 (18.08.2026, siehe der Kommentar bei zeigtSeite()
+      // oben) - Bluetooth ist kein zweites Fenster mehr, das man
+      // aufmacht und dabei dieses hier schliesst, sondern eine Seite
+      // DERSELBEN Schale.
+      const btBtn = zepButton(ICONS.settings, "still", zeigtSeite("bluetooth"))
+      btBtn.set_tooltip_text(_("Bluetooth devices - the same page as above"))
       btRow.append(btIcon)
       btRow.append(btLabel)
       btRow.append(btBtn)

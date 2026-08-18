@@ -1,4 +1,4 @@
-// Das Bluetooth-Fenster (AGS v3, GTK4) - eine Ueberlagerung aus der Fabrik
+// Die Bluetooth-Seite der Schale (AGS v3, GTK4)
 // Von ZepOS erzeugt
 // Enthaelt: Adapter an/aus, Suchlauf, Geraeteliste, verbinden und trennen
 //
@@ -29,6 +29,61 @@
 //     Netzwerkfreigabe -, sind genau die Nebenfunktionen, von denen der
 //     Nutzer im selben Satz sagt, dass sie bleiben duerfen.
 //
+// AUFGABE 7 (18.08.2026): AUS DEM FENSTER WIRD EINE SEITE DER SCHALE
+//     Spezifikation docs/superpowers/specs/2026-08-18-ags-gestaltungssystem-
+//     design.md, Abschnitt 2.2: "Netzwerk, Bluetooth und VPN hoeren auf,
+//     eigene Fenster zu sein, und werden Seiten darin [in der Schale]."
+//     Aus `createOverlayWindow({...})` (siehe die naechste Ueberschrift,
+//     die WARUM ueber die Fabrik erklaert und bis zu diesem Umbau woertlich
+//     gestimmt hat) wird ein exportiertes `bluetoothSeite: ShellSeite` -
+//     dieselbe Fabrik wird jetzt nur noch INDIREKT gerufen, naemlich von
+//     `createShellWindow()` (ags-overlay-utils.template, Aufgabe 5) fuer
+//     die Schale als Ganzes. Der Inhaltsbauer bleibt derselbe - was faellt,
+//     ist nur die Fensterhuelle (Kopf mit Zeichen+Titel+Schliesskreuz,
+//     eigene Breite/Hoehe, eigener Namensraum), nicht die Logik: dieselbe
+//     `updateDisplay()`, dieselbe Geraeteliste, derselbe Takt.
+//
+//     Der KOPF der Seite - vorher eine `zepRow` mit Zeichen, Titel,
+//     Nebenzeile und Schalter INNERHALB des Fensterinhalts, zusaetzlich zum
+//     Fensterkopf der Fabrik ("Bluetooth" mit Symbol) - wird jetzt
+//     `zepStateHeader`: "der Kopf ist der Zustand, nicht eine Titelzeile
+//     darueber" (Spezifikation 2.2). `zepStateHeader` hat KEIN Symbolfeld
+//     (anders als `zepRow`) - die Seitenleiste zeigt das Symbol schon,
+//     redundant waere es hier ein zweites Mal. Die Nebenzeile zeigt jetzt,
+//     wieviele der bekannten Geraete gerade verbunden sind (Beispieltext
+//     aus der Spezifikation: "1 von 2 Geraeten verbunden") statt des
+//     Adapternamens - dafuer wird `readDevices()` jetzt IMMER gerufen
+//     (auch bei ausgeschaltetem Adapter, wo `bluetoothctl devices` weiter
+//     die bekannte Datenbank meldet, nur "Connected" bleibt dann leer),
+//     nicht mehr nur im eingeschalteten Zweig.
+//
+//     BREITE UND HOEHE FALLEN (Schritt 4 des Aufgabenblatts nennt nur die
+//     Breite; dieselbe Begruendung gilt fuer die Hoehe genauso, siehe
+//     Bericht): `const WIN_WIDTH`/`const WIN_HEIGHT` und die rund 65
+//     Zeilen Messgeschichte darueber ("Die Masse, die dieses Fenster sich
+//     WUENSCHT" bis "DREI PUNKTE") beschrieben ein Feld, das ShellConfig
+//     nicht kennt - SHELL_WIDTH/SHELL_HEIGHT in ags-overlay-utils.template
+//     gelten einmal fuer ALLE Seiten der Schale. Stehen gelassen waere die
+//     Messgeschichte eine Erklaerung ohne Adresse (Regel 14, wie schon bei
+//     `generalSeite` in ags-control-center.template, Aufgabe 6) - geloescht,
+//     nicht als veraltet markiert.
+//
+//     Der Namensraum "bluetooth" (GLASS_LAYERS/GLASS_PLATES,
+//     src/style_definition.py) faellt mit dem eigenen `createOverlayWindow`-
+//     Aufruf weg - Bluetooth teilt sich jetzt die Glasplatte der Schale
+//     (Namensraum "control"). NICHT in der Dateiliste dieses
+//     Aufgabenblatts genannt, aber test-erzwungen
+//     (tests/src/test_glass.py::_declared_namespaces() faende sonst einen
+//     verwaisten GLASS_LAYERS-Eintrag) - siehe Bericht.
+//
+//     Die CSS-Klasse `.BluetoothManager` (bisheriges `cssClass:` der
+//     Fensterhuelle) wird NICHT in diesem Commit aus ags-style.template
+//     entfernt - Aufgabenblatt 9, Schritt 3 raeumt sie zusammen mit
+//     `.NetworkManager` und `.VpnManager` in einem Zug auf, wenn alle drei
+//     Fensterhuellen gefallen sind. Kein Waechter dieses Baums prueft
+//     verwaiste CSS-Selektoren automatisch (siehe Bericht) - das
+//     Aufschieben ist darum sicher.
+//
 // WARUM AUS DER FABRIK UND NICHT SELBST GEBAUT
 //     createOverlayWindow() in utils/overlay.ts. Sie bringt den
 //     Hoehendeckel (MEASURE_MODAL_SHARE), die Bildlaufleiste NEBEN dem
@@ -37,7 +92,10 @@
 //     bis zum 12.08.2026 selbst gebaut und stand dafuer 721 Punkte hoch
 //     da, wo der Deckel 540 sagt; tests/src/test_modal_rule.py haelt die
 //     Regel seither ueber ALLE Vorlagen. Ein zweites Fenstersystem
-//     entsteht hier nicht.
+//     entsteht hier nicht - und seit Aufgabe 7 gilt das eine weitere Stufe
+//     indirekter: die Schale (createShellWindow(), von der diese Seite
+//     eine von mehreren ist) ruft ihrerseits createOverlayWindow(), diese
+//     Seite selbst tut es nicht mehr.
 //
 // JEDE FRAGE AN bluetoothctl BEKOMMT EINE FRIST, UND DAS IST GEMESSEN
 //     GEMELDET am 17.08.2026: "wenn ich auf meinem zepos system versuche
@@ -75,9 +133,18 @@
 import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import { interval } from "ags/time"
-import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
+// `import type`, nicht `import`: ShellSeite ist ausschliesslich ein
+// Typ (ein Interface, siehe ags-overlay-utils.template), diese Seite
+// ruft weder createOverlayWindow() noch createShellWindow() selbst -
+// sie WIRD nur so getypt. tests/src/test_modal_rule.py unterscheidet
+// genau daran, wer die Fabrik umgeht: ein `import type` zaehlt als
+// "nur ein Typ" und ist von der Pflicht ausgenommen, createOverlayWindow
+// im eigenen Quelltext aufzurufen (siehe _takes_only_types() dort) -
+// ein `import` ohne `type` waere das nicht, obwohl zur Laufzeit
+// ohnehin nichts uebrigbleibt (esbuild entfernt Typ-Importe restlos).
+import type { ShellSeite } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
-import { zepButton, zepRow, zepToggle, zepSectionLabel, zepDivider }
+import { zepButton, zepRow, zepToggle, zepSectionLabel, zepDivider, zepStateHeader }
   from "../utils/kit"
 
 // NACHGETRAGEN am 18.08.2026, task-5: dieses Fenster stellte bis hierher
@@ -102,79 +169,12 @@ import { zepButton, zepRow, zepToggle, zepSectionLabel, zepDivider }
 // betrifft alle kuenftigen Verbraucher und ist keine Aenderung, die
 // Task 5 (ein Fenster) fuer sich allein treffen sollte.
 
-const WINDOW_NAME = "bluetooth"
 const UPDATE_INTERVAL = 5000
-
-// Die Masse, die dieses Fenster sich WUENSCHT. utils/overlay.ts deckelt
-// sie auf MEASURE_MODAL_SHARE des Schirms und auf die gemessene
-// natuerliche Groesse des Inhalts - dieselbe Rechnung wie beim
-// Netzfenster nebenan, und dieselben Zahlen, weil beide dieselbe Sorte
-// Liste zeigen: eine Handvoll Zeilen aus Zeichen, Name und Zustand.
-//
-// NACHGEMESSEN am 17.08.2026 im verschachtelten Compositor, mit dem
-// Adapter dieser Maschine und einem gekoppelten Geraet ("Keychron K3
-// Version 3"), auf einem Schirm, auf dem weder MODAL_SHARE noch der
-// Wunsch bindet - und ZWEIMAL geoeffnet, weil die Fabrik in show() VOR
-// onShow misst und beim ersten Mal deshalb den leeren Inhalt sieht:
-//
-//     erstes Aufgehen    312x416   die Liste ist noch leer
-//     zweites Aufgehen   466x446   mit der Geraetezeile darin
-//
-// 460 STANDEN HIER, und das waren sechs Punkte zu wenig. Auf dem Bild
-// vom selben Tag lag der dritte Knopf ueber der Liste - der, der
-// blueman oeffnet - hinter der rechten Kante, und daneben stand die
-// waagerechte Bildlaufleiste der Fabrik. Sechs Punkte, ein
-// unerreichbarer Knopf.
-//
-// UND 500, NICHT 470: zu den 466 des Inhalts kommt die senkrechte
-// Bildlaufleiste, die NEBEN ihm liegt (overlay_scrolling: false in der
-// Fabrik). NACHGEMESSEN mit einem Wunsch von 620, damit weder er noch
-// MODAL_SHARE bindet: das Fenster steht dann 490 breit da. 500 ist die
-// naechste Zehnerstufe darueber.
-//
-// Sie bleibt ein WUNSCH: MODAL_SHARE deckelt auf 960 (bei 1920), und ein
-// Geraetename an der Ellipsengrenze von {{STYLE_MEASURE_LINE}} Zeichen
-// kann darueber hinausgehen - dann greift die Bildlaufleiste, und dafuer
-// ist sie da.
-//
-// NACHTRAG VOM 17.08.2026, NACHMITTAG: DIE 490 WAREN NICHT DER INHALT,
-// SONDERN EIN FREMDER AUSSENRAND
-//     GEMELDET: "die ags fenster die du gebaut hast sind so
-//     eingequetscht das man nach rechts und nach unten scrollen muss".
-//
-//     GEMESSEN mit einem Messfuehler in der erzeugten utils/overlay.ts,
-//     Schirm 1920x1200: die Flaeche war 490 breit, `win.get_width()`
-//     aber 475, das Sichtfenster 449 und der Inhalt 464 - fuenfzehn
-//     Punkte lagen hinter der Kante. Die fuenfzehn sind
-//     STYLE_MODULE_SPACING: `#bluetooth` in src/styles/bar-style.template
-//     ist der Abstand ZWISCHEN ZWEI LEISTENMODULEN und traf dieses
-//     Fenster, weil es bis dahin ebenfalls `bluetooth` hiess. Die ganze
-//     Messung steht in ags-overlay-utils.template beim Widgetnamen.
-//
-//     500 bleibt damit richtig und ist es jetzt auch wirklich: der
-//     Inhalt misst sich 464, die senkrechte Bildlaufleiste kostet 24,
-//     macht 490 - und die passen seither auch an.
-const WIN_WIDTH = 500
-
-// DIE HOEHE IST AM 17.08.2026 VON 550 AUF 600 GEGANGEN, UND ES WAREN
-// DREI PUNKTE
-//     GEMESSEN am selben Tag mit drei bekannten Geraeten: der Inhalt
-//     wollte 553 Punkte, das Fenster gab 550 - eine Bildlaufleiste fuer
-//     DREI Punkte, und der Nutzer hat sie gesehen ("und nach unten
-//     scrollen muss").
-//
-//     600 ist keine gegriffene Zahl: MEASURE_MODAL_SHARE mal 1200 - der
-//     Schirmhoehe des Nutzers - ist genau 600, und das Kontrollzentrum
-//     steht dort ebenso hoch da. Auf jedem Schirm unter 1200 Zeilen
-//     entscheidet weiter MODAL_SHARE (auf 1080 sind es 540), auf jedem
-//     darueber dieser Wunsch. Er ist also nicht tot, sondern die
-//     Obergrenze fuer grosse Schirme.
-const WIN_HEIGHT = 600
 
 // Die Frist auf jede Frage an bluetoothctl, in Sekunden. DIESELBE Zahl
 // wie ANTWORTFRIST in bar-status-config.template, und aus demselben
-// Grund: lang genug fuer ein traeges Werkzeug, kurz genug, dass ein
-// Fenster nach spaetestens drei Sekunden wieder etwas zeigt.
+// Grund: lang genug fuer ein traeges Werkzeug, kurz genug, dass diese
+// Seite nach spaetestens drei Sekunden wieder etwas zeigt.
 const FRIST = 3
 
 // Wie lange ein Suchlauf laeuft. `bluetoothctl scan on` kehrt NIE
@@ -202,10 +202,6 @@ const ICONS = {
   settings: "{{ICON_SETTINGS}}",
   alert: "{{ICON_ALERT}}",
 }
-
-// Was an der Stelle einer fehlenden Angabe steht - dasselbe Zeichen wie
-// im Netzfenster.
-const NOTHING = "—"
 
 /** Ein Geraet, wie bluetoothctl es kennt. */
 interface Device {
@@ -296,6 +292,13 @@ function parseDevices(output: string): Map<string, string> {
  * saegt zwar Gekoppelt und Verbunden fuer EIN Geraet heraus, und bei
  * acht bekannten Geraeten waeren das acht Prozessstarts je Takt. Die
  * drei Listen beantworten dieselbe Frage fuer alle auf einmal.
+ *
+ * WIRD SEIT AUFGABE 7 (18.08.2026) AUCH BEI AUSGESCHALTETEM ADAPTER
+ * GERUFEN: der Seitenkopf (zepStateHeader) zeigt jetzt immer, wieviele
+ * bekannte Geraete verbunden sind, und `bluetoothctl devices`/`devices
+ * Paired` melden die bekannte Datenbank unabhaengig vom Schalterstand -
+ * nur `devices Connected` ist bei ausgeschaltetem Adapter naturgemaess
+ * leer.
  */
 async function readDevices(): Promise<Device[]> {
   let alle: Map<string, string>
@@ -348,306 +351,320 @@ function removeAllChildren(box: Gtk.Box): void {
   }
 }
 
-export default function BluetoothManager(): OverlayWidget {
-  // Die Widgets, die spaeter beschrieben werden. Sie stehen hier und
-  // nicht in buildContent(), weil updateDisplay() sie von aussen
-  // erreichen muss - dieselbe Aufteilung wie im Netzfenster.
-  // statusIcon/statusLabel/statusDetail/powerBtn sind mit dem Umbau auf
-  // die Bauteile (task-5, 18.08.2026) verschwunden: zepRow nimmt Titel
-  // und Nebenzeile nur als TEXT entgegen, es gibt keinen Griff, um sie
-  // nachtraeglich zu aendern. Der Zustandskopf wird deshalb jeden Takt
-  // neu in statusWrap hinein gebaut - derselbe Kunstgriff wie deviceList
-  // weiter unten, das schon vorher jeden Takt neu gebaut wurde.
-  let statusWrap: Gtk.Box
-  let scanBtn: Gtk.Button
-  let deviceList: Gtk.Box
-  let emptyLabel: Gtk.Label
+/** Die Bluetooth-Seite der Schale, unter VERBINDUNGEN.
+ *
+ * `gruppe` traegt denselben englischen msgid wie `gruppeVerbindungen` in
+ * ags-control-center.template ("CONNECTIONS") - zwei `_()`-Aufrufe auf
+ * denselben msgid ergeben denselben uebersetzten Text, und
+ * `gruppenAus()` (ags-overlay-utils.template) gruppiert nach dem TEXT,
+ * nicht nach Objektidentitaet.
+ */
+export const bluetoothSeite: ShellSeite = {
+  id: "bluetooth",
+  titel: _("Bluetooth"),
+  symbol: ICONS.bluetooth,
+  gruppe: _("CONNECTIONS"),
 
-  // Steht das Fenster gerade auf dem Schirm? Ohne diese Frage liefe der
-  // Takt unten ab dem Aufbau der Oberflaeche und ohne Ende - vier
-  // bluetoothctl-Aufrufe alle fuenf Sekunden, den ganzen Tag, fuer ein
-  // Fenster, das zu ist. Dieselbe Messung wie im Netzfenster.
-  let windowIsUp = false
+  bauen: (win, schliessen) => {
+    // Die Widgets, die spaeter beschrieben werden. Sie stehen hier und
+    // nicht weiter unten im Rueckgabewert, weil updateDisplay() sie von
+    // aussen erreichen muss - dieselbe Aufteilung wie im Netzfenster.
+    let statusWrap: Gtk.Box
+    let scanBtn: Gtk.Button
+    let deviceList: Gtk.Box
+    let emptyLabel: Gtk.Label
 
-  // Laeuft gerade ein Suchlauf? Ein zweiter waehrenddessen ist ein
-  // zweites bluetoothctl auf demselben Adapter.
-  let suchtGerade = false
+    // Laeuft gerade ein Suchlauf? Ein zweiter waehrenddessen ist ein
+    // zweites bluetoothctl auf demselben Adapter.
+    let suchtGerade = false
 
-  // Der zuletzt gelesene Zustand. Die Knoepfe brauchen ihn beim Klick,
-  // und ihn dort neu zu lesen hiesse, auf eine Antwort zu warten, bevor
-  // ueberhaupt etwas passiert.
-  let adapter: Adapter = { vorhanden: false, powered: false, name: "", fehler: "" }
+    // Der zuletzt gelesene Zustand. Die Knoepfe brauchen ihn beim Klick,
+    // und ihn dort neu zu lesen hiesse, auf eine Antwort zu warten, bevor
+    // ueberhaupt etwas passiert.
+    let adapter: Adapter = { vorhanden: false, powered: false, name: "", fehler: "" }
 
-  const updateDisplay = async () => {
-    if (!windowIsUp) return
+    const updateDisplay = async () => {
+      adapter = await readAdapter()
 
-    adapter = await readAdapter()
-
-    // Der Schalter, frisch fuer DIESEN Takt gebaut. zepToggle verbindet
-    // sich erst NACH dem Konstruktor mit "notify::active" (siehe
-    // ags-kit.template) - der Anfangswert loest darum keinen Klick aus.
-    // DASSELBE Zeichen fuer an und aus, und der Unterschied ist der
-    // Schalterstand - das ist von bar-status-config.template
-    // uebernommen, wo ein ausgeschalteter Adapter seit dem 13.08.2026
-    // abgeblendet dasteht statt zu verschwinden. Immer noch powerBtn
-    // genannt, auch als zepToggle: tests/src/test_overlay_windows.py
-    // haelt Spec §7.4 (kein bedienbar aussehender Knopf ohne Ziel) am
-    // Namen fest.
-    const buildPowerToggle = (): Gtk.Widget => {
-      const powerBtn = zepToggle(adapter.powered, async (an) => {
-        powerBtn.set_sensitive(false)
-        try {
-          await bctl(an ? "power on" : "power off")
-        } catch (e) {
-          console.error("Bluetooth: power schlug fehl:", e)
-        }
-        updateDisplay()
-      })
-      // KEIN Schalter, der nichts tun kann. Ein Adapter, den es nicht
-      // gibt, laesst sich nicht einschalten und nicht suchen lassen -
-      // Spec §7.4. adapter.vorhanden ist in genau den beiden Faellen,
-      // die das betrifft (Fehler, kein Adapter), false.
-      powerBtn.set_sensitive(adapter.vorhanden)
-      powerBtn.set_tooltip_text(_("Turn Bluetooth on or off"))
-      return powerBtn
-    }
-
-    removeAllChildren(statusWrap)
-
-    if (adapter.fehler) {
-      statusWrap.append(zepRow({
-        symbol: ICONS.alert,
-        titel: _("Bluetooth is not answering"),
-        unterzeile: adapter.fehler,
-        ende: buildPowerToggle(),
-      }))
-      scanBtn.set_sensitive(false)
-      removeAllChildren(deviceList)
-      emptyLabel.set_visible(false)
-      return
-    }
-
-    if (!adapter.vorhanden) {
-      statusWrap.append(zepRow({
-        symbol: ICONS.bluetooth,
-        titel: _("No Bluetooth adapter"),
-        unterzeile: _("This machine reports no controller"),
-        ende: buildPowerToggle(),
-      }))
-      scanBtn.set_sensitive(false)
-      removeAllChildren(deviceList)
-      emptyLabel.set_visible(false)
-      return
-    }
-
-    statusWrap.append(zepRow({
-      symbol: ICONS.bluetooth,
-      titel: adapter.powered ? _("Bluetooth is on") : _("Bluetooth is off"),
-      unterzeile: adapter.name || NOTHING,
-      ende: buildPowerToggle(),
-    }))
-    // Suchen kann man nur mit eingeschaltetem Adapter, und waehrend ein
-    // Suchlauf laeuft nicht noch einmal.
-    scanBtn.set_sensitive(adapter.powered && !suchtGerade)
-
-    removeAllChildren(deviceList)
-    if (!adapter.powered) {
-      emptyLabel.set_text(_("Turn Bluetooth on to see devices"))
-      emptyLabel.set_visible(true)
-      return
-    }
-
-    const devices = await readDevices()
-    if (devices.length === 0) {
-      emptyLabel.set_text(suchtGerade
-        ? _("Searching …")
-        : _("No device known - search for devices"))
-      emptyLabel.set_visible(true)
-      return
-    }
-    emptyLabel.set_visible(false)
-    for (const device of devices) deviceList.append(createDeviceRow(device))
-  }
-
-  /** Eine Zeile: Zeichen, Name, Zustand - und ein Klick, der etwas tut.
-   *
-   * zepButton fuer den Klick und die Rolle "umrandet" (siehe die
-   * Rollen-Zuteilung im Aufgabenbrief), zepRow fuer den Inhalt - eine
-   * Zusammensetzung, kein neues Bauteil. Verbunden bekommt "ausgewaehlt"
-   * an zepRow statt einer eigenen Klasse (task-5, 18.08.2026).
-   */
-  const createDeviceRow = (device: Device): Gtk.Button => {
-    // Der Zustand IN WORTEN und die Adresse daneben. Die Adresse ist
-    // das, was zwei gleich benannte Kopfhoerer unterscheidet, und der
-    // Zustand das, was der Klick gleich aendert.
-    const zustand = device.connected ? "Verbunden"
-      : device.paired ? "Gekoppelt" : "Gefunden"
-
-    // zepRow nimmt die Nebenzeile nur als Text entgegen - eine frische
-    // Zeile je Aufruf ist darum der einzige Weg, sie spaeter zu aendern
-    // (waehrend des Klicks, siehe unten), derselbe Kunstgriff wie beim
-    // Zustandskopf in updateDisplay().
-    const rowContent = (unterzeile: string) => zepRow({
-      symbol: device.connected ? ICONS.connected : ICONS.bluetooth,
-      titel: device.name,
-      unterzeile,
-      ausgewaehlt: device.connected,
-    })
-
-    const row = zepButton("", "umrandet", async () => {
-      // Waehrend der Aufruf laeuft, sagt die Zeile es. Ein Knopf, der
-      // nach dem Klick zwei Sekunden lang aussieht wie vorher, sieht aus
-      // wie einer, der nichts tut.
-      row.set_child(rowContent(
-        device.connected ? _("Disconnecting …") : _("Connecting …")))
-      row.set_sensitive(false)
-      try {
-        // `connect`/`disconnect` warten auf die Gegenstelle. Die Frist
-        // ist hier laenger als bei einer Abfrage: ein Kopfhoerer, der
-        // aus der Tasche geholt wird, braucht mehr als drei Sekunden.
-        await execAsync(["bash", "-c",
-          `timeout 15 bluetoothctl ${device.connected ? "disconnect" : "connect"} `
-          + `${device.address}`])
-      } catch (e) {
-        console.error("Bluetooth:", device.address, e)
-        row.set_child(rowContent(device.connected
-          ? _("Disconnecting failed")
-          : _("Connecting failed - is it paired?")))
+      // Der Schalter, frisch fuer DIESEN Takt gebaut. zepToggle verbindet
+      // sich erst NACH dem Konstruktor mit "notify::active" (siehe
+      // ags-kit.template) - der Anfangswert loest darum keinen Klick aus.
+      // DASSELBE Zeichen fuer an und aus, und der Unterschied ist der
+      // Schalterstand - das ist von bar-status-config.template
+      // uebernommen, wo ein ausgeschalteter Adapter seit dem 13.08.2026
+      // abgeblendet dasteht statt zu verschwinden. Immer noch powerBtn
+      // genannt, auch als zepToggle: tests/src/test_overlay_windows.py
+      // haelt Spec §7.4 (kein bedienbar aussehender Knopf ohne Ziel) am
+      // Namen fest.
+      const buildPowerToggle = (): Gtk.Widget => {
+        const powerBtn = zepToggle(adapter.powered, async (an) => {
+          powerBtn.set_sensitive(false)
+          try {
+            await bctl(an ? "power on" : "power off")
+          } catch (e) {
+            console.error("Bluetooth: power schlug fehl:", e)
+          }
+          updateDisplay()
+        })
+        // KEIN Schalter, der nichts tun kann. Ein Adapter, den es nicht
+        // gibt, laesst sich nicht einschalten und nicht suchen lassen -
+        // Spec §7.4. adapter.vorhanden ist in genau den beiden Faellen,
+        // die das betrifft (Fehler, kein Adapter), false.
+        powerBtn.set_sensitive(adapter.vorhanden)
+        powerBtn.set_tooltip_text(_("Turn Bluetooth on or off"))
+        return powerBtn
       }
-      row.set_sensitive(true)
-      updateDisplay()
-    })
-    row.set_child(rowContent(`${zustand} • ${device.address}`))
-    row.set_tooltip_text(device.connected
-      ? format(_("Disconnect {device}"), { device: device.name })
-      : format(_("Connect to {device}"), { device: device.name }))
 
-    return row
-  }
+      removeAllChildren(statusWrap)
 
-  return createOverlayWindow({
-    name: WINDOW_NAME,
-    width: WIN_WIDTH,
-    height: WIN_HEIGHT,
-    cssClass: "BluetoothManager",
-    headerIcon: ICONS.bluetooth,
-    headerTitle: _("Bluetooth"),
-    // DIESELBE Akzentfarbe wie das Netzfenster, und das ist keine
-    // Sparsamkeit: Bluetooth ist eine Verbindung wie das WLAN, und die
-    // Farbe steht in src/brand.py unter "network_accent" mit der
-    // Ueberschrift "Netzwerk". Ein eigener Regler dafuer waere ein
-    // siebzigster Eintrag im Style Editor fuer eine Unterscheidung, die
-    // niemand treffen will.
-    accentCssClass: "network-accent",
-    onShow: () => {
-      windowIsUp = true
-      updateDisplay()
-    },
-    onHide: () => {
-      windowIsUp = false
-    },
-    buildContent: (_win, closeWindow) => {
-      const container = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL, spacing: 12,
+      if (adapter.fehler) {
+        // AUFGABE 7 (18.08.2026): zepStateHeader statt zepRow - "der
+        // Kopf ist der Zustand" (Spezifikation 2.2). Kein `symbol`-Feld
+        // mehr (die Seitenleiste zeigt das Bluetooth-Zeichen schon).
+        statusWrap.append(zepStateHeader({
+          titel: _("Bluetooth is not answering"),
+          unterzeile: adapter.fehler,
+          ende: buildPowerToggle(),
+        }))
+        scanBtn.set_sensitive(false)
+        removeAllChildren(deviceList)
+        emptyLabel.set_visible(false)
+        return
+      }
+
+      if (!adapter.vorhanden) {
+        statusWrap.append(zepStateHeader({
+          titel: _("No Bluetooth adapter"),
+          unterzeile: _("This machine reports no controller"),
+          ende: buildPowerToggle(),
+        }))
+        scanBtn.set_sensitive(false)
+        removeAllChildren(deviceList)
+        emptyLabel.set_visible(false)
+        return
+      }
+
+      // Die Geraete werden HIER gelesen, VOR dem Seitenkopf - Aufgabe 7
+      // braucht die Anzahl der verbundenen Geraete fuer die Nebenzeile
+      // des Kopfes, unabhaengig vom Schalterstand (siehe readDevices()).
+      const devices = await readDevices()
+      const verbundenCount = devices.filter(device => device.connected).length
+
+      statusWrap.append(zepStateHeader({
+        titel: adapter.powered ? _("Bluetooth is on") : _("Bluetooth is off"),
+        unterzeile: format(_("{connected} of {total} devices connected"),
+                           { connected: verbundenCount, total: devices.length }),
+        ende: buildPowerToggle(),
+      }))
+      // Suchen kann man nur mit eingeschaltetem Adapter, und waehrend ein
+      // Suchlauf laeuft nicht noch einmal.
+      scanBtn.set_sensitive(adapter.powered && !suchtGerade)
+
+      removeAllChildren(deviceList)
+      if (!adapter.powered) {
+        emptyLabel.set_text(_("Turn Bluetooth on to see devices"))
+        emptyLabel.set_visible(true)
+        return
+      }
+
+      if (devices.length === 0) {
+        emptyLabel.set_text(suchtGerade
+          ? _("Searching …")
+          : _("No device known - search for devices"))
+        emptyLabel.set_visible(true)
+        return
+      }
+      emptyLabel.set_visible(false)
+      for (const device of devices) deviceList.append(createDeviceRow(device))
+    }
+
+    /** Eine Zeile: Zeichen, Name, Zustand - und ein Klick, der etwas tut.
+     *
+     * zepButton fuer den Klick und die Rolle "umrandet" (siehe die
+     * Rollen-Zuteilung im Aufgabenbrief), zepRow fuer den Inhalt - eine
+     * Zusammensetzung, kein neues Bauteil. Verbunden bekommt "ausgewaehlt"
+     * an zepRow statt einer eigenen Klasse (task-5, 18.08.2026).
+     */
+    const createDeviceRow = (device: Device): Gtk.Button => {
+      // Der Zustand IN WORTEN und die Adresse daneben. Die Adresse ist
+      // das, was zwei gleich benannte Kopfhoerer unterscheidet, und der
+      // Zustand das, was der Klick gleich aendert.
+      const zustand = device.connected ? "Verbunden"
+        : device.paired ? "Gekoppelt" : "Gefunden"
+
+      // zepRow nimmt die Nebenzeile nur als Text entgegen - eine frische
+      // Zeile je Aufruf ist darum der einzige Weg, sie spaeter zu aendern
+      // (waehrend des Klicks, siehe unten), derselbe Kunstgriff wie beim
+      // Zustandskopf in updateDisplay().
+      const rowContent = (unterzeile: string) => zepRow({
+        symbol: device.connected ? ICONS.connected : ICONS.bluetooth,
+        titel: device.name,
+        unterzeile,
+        ausgewaehlt: device.connected,
       })
 
-      // ----- Der Zustand des Adapters, mit dem Schalter daneben -----
-      //
-      // Ersetzt `.bt-current` (Kasten mit linkem Akzentstreifen) durch
-      // eine zepRow: Punkt, Ueberschrift, Nebenzeile, zepToggle rechts
-      // (task-5, 18.08.2026). statusWrap traegt jeweils GENAU eine
-      // zepRow und wird in updateDisplay() jeden Takt neu befuellt.
-      statusWrap = new Gtk.Box({})
-
-      // Ein Gtk.Separator und kein leerer Kasten: ein Kasten ohne Kind
-      // ist null Punkte hoch und braucht eine Mindesthoehe im
-      // Stylesheet, ein Separator bringt seine eigene mit.
-      const divider = zepDivider()
-
-      // ----- Die Zeile ueber der Liste: Ueberschrift und drei Knoepfe -----
-      //
-      // Dieselbe Aufteilung wie im Netzfenster, wo dieselben drei Rollen
-      // stehen: etwas anstossen, neu lesen, das grosse Werkzeug oeffnen.
-      const toolRow = new Gtk.Box({ spacing: 12 })
-      const listHeader = zepSectionLabel(_("DEVICES"))
-      listHeader.set_hexpand(true)
-
-      // "Geraete suchen" ist die Hauptsache dieser Zeile - die Rolle
-      // "voll" (task-5-brief, Schritt 4).
-      scanBtn = zepButton(ICONS.search, "voll", async () => {
-        if (suchtGerade) return
-        suchtGerade = true
-        scanBtn.set_sensitive(false)
-        emptyLabel.set_text(_("Searching …"))
-        emptyLabel.set_visible(true)
+      const row = zepButton("", "umrandet", async () => {
+        // Waehrend der Aufruf laeuft, sagt die Zeile es. Ein Knopf, der
+        // nach dem Klick zwei Sekunden lang aussieht wie vorher, sieht aus
+        // wie einer, der nichts tut.
+        row.set_child(rowContent(
+          device.connected ? _("Disconnecting …") : _("Connecting …")))
+        row.set_sensitive(false)
         try {
-          // Die aeussere Frist ist die innere plus Anlauf. Ohne sie
-          // haengt dieses Fenster an genau dem Werkzeug, dessen Haengen
-          // der Anlass dieser Datei war.
+          // `connect`/`disconnect` warten auf die Gegenstelle. Die Frist
+          // ist hier laenger als bei einer Abfrage: ein Kopfhoerer, der
+          // aus der Tasche geholt wird, braucht mehr als drei Sekunden.
           await execAsync(["bash", "-c",
-            `timeout ${SUCHDAUER + 5} bluetoothctl --timeout ${SUCHDAUER} scan on`])
+            `timeout 15 bluetoothctl ${device.connected ? "disconnect" : "connect"} `
+            + `${device.address}`])
         } catch (e) {
-          console.error("Bluetooth: der Suchlauf schlug fehl:", e)
+          console.error("Bluetooth:", device.address, e)
+          row.set_child(rowContent(device.connected
+            ? _("Disconnecting failed")
+            : _("Connecting failed - is it paired?")))
         }
-        suchtGerade = false
+        row.set_sensitive(true)
         updateDisplay()
       })
-      scanBtn.set_tooltip_text(
-        format(_("Search for devices for {seconds} seconds"),
-               { seconds: SUCHDAUER }))
+      row.set_child(rowContent(`${zustand} • ${device.address}`))
+      row.set_tooltip_text(device.connected
+        ? format(_("Disconnect {device}"), { device: device.name })
+        : format(_("Connect to {device}"), { device: device.name }))
 
-      const refreshBtn = zepButton(ICONS.refresh, "umrandet", () => { updateDisplay() })
-      refreshBtn.set_tooltip_text(_("Read the list again"))
+      return row
+    }
 
-      // blueman, und zwar fuer das, was hier NICHT steht: der
-      // Kopplungsassistent mit PIN-Vergleich, die Dateiuebertragung, die
-      // Netzwerkfreigabe. Es ist eine harte Abhaengigkeit von
-      // zepos-desktop (siehe dort), also fuehrt dieser Knopf auf jeder
-      // Installation irgendwohin - anders als der
-      // `nm-connection-editor`, den das Netzfenster am 12.08.2026
-      // losgeworden ist. Rolle "still": es ist die Nebenfunktion.
-      const bluemanBtn = zepButton(ICONS.settings, "still", () => {
-        execAsync("blueman-manager")
-        closeWindow()
-      })
-      bluemanBtn.set_tooltip_text(
-        _("Open Blueman - pairing, sending files"))
+    const container = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL, spacing: 12,
+    })
 
-      toolRow.append(listHeader)
-      toolRow.append(scanBtn)
-      toolRow.append(refreshBtn)
-      toolRow.append(bluemanBtn)
+    // ----- Der Zustand des Adapters, mit dem Schalter daneben -----
+    //
+    // Ersetzt `.bt-current` (Kasten mit linkem Akzentstreifen) durch
+    // eine zepRow/zepStateHeader: Punkt, Ueberschrift, Nebenzeile,
+    // zepToggle rechts (task-5, 18.08.2026; auf zepStateHeader
+    // umgestellt in Aufgabe 7, 18.08.2026, siehe Kopf der Datei).
+    // statusWrap traegt jeweils GENAU einen Kopf und wird in
+    // updateDisplay() jeden Takt neu befuellt.
+    statusWrap = new Gtk.Box({})
 
-      // ----- Die Liste, OHNE eigene Bildlaufleiste -----
-      //
-      // Die Fabrik haengt eine um den GANZEN Inhalt. Zwei ineinander
-      // waeren zwei Raeder unter einem Finger - die Begruendung steht
-      // ausgeschrieben in ags-network.template.
-      deviceList = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL, spacing: 6,
-      })
-      deviceList.add_css_class("bt-list")
+    // Ein Gtk.Separator und kein leerer Kasten: ein Kasten ohne Kind
+    // ist null Punkte hoch und braucht eine Mindesthoehe im
+    // Stylesheet, ein Separator bringt seine eigene mit.
+    const divider = zepDivider()
 
-      // Eine leere Liste sagt, WARUM sie leer ist. Ohne diese Zeile
-      // saehe "Adapter aus", "nichts gefunden" und "der Dienst laeuft
-      // nicht" gleich aus, naemlich wie nichts.
-      emptyLabel = new Gtk.Label({
-        label: "", xalign: 0, wrap: true,
-        max_width_chars: {{STYLE_MEASURE_LINE}},
-      })
-      emptyLabel.add_css_class("bt-empty")
+    // ----- Die Zeile ueber der Liste: Ueberschrift und drei Knoepfe -----
+    //
+    // Dieselbe Aufteilung wie im Netzfenster, wo dieselben drei Rollen
+    // stehen: etwas anstossen, neu lesen, das grosse Werkzeug oeffnen.
+    const toolRow = new Gtk.Box({ spacing: 12 })
+    const listHeader = zepSectionLabel(_("DEVICES"))
+    listHeader.set_hexpand(true)
 
-      container.append(statusWrap)
-      container.append(divider)
-      container.append(toolRow)
-      container.append(deviceList)
-      container.append(emptyLabel)
+    // "Geraete suchen" ist die Hauptsache dieser Zeile - die Rolle
+    // "voll" (task-5-brief, Schritt 4).
+    scanBtn = zepButton(ICONS.search, "voll", async () => {
+      if (suchtGerade) return
+      suchtGerade = true
+      scanBtn.set_sensitive(false)
+      emptyLabel.set_text(_("Searching …"))
+      emptyLabel.set_visible(true)
+      try {
+        // Die aeussere Frist ist die innere plus Anlauf. Ohne sie
+        // haengt diese Seite an genau dem Werkzeug, dessen Haengen
+        // der Anlass dieser Datei war.
+        await execAsync(["bash", "-c",
+          `timeout ${SUCHDAUER + 5} bluetoothctl --timeout ${SUCHDAUER} scan on`])
+      } catch (e) {
+        console.error("Bluetooth: der Suchlauf schlug fehl:", e)
+      }
+      suchtGerade = false
+      updateDisplay()
+    })
+    scanBtn.set_tooltip_text(
+      format(_("Search for devices for {seconds} seconds"),
+             { seconds: SUCHDAUER }))
 
-      // Derselbe Takt wie im Netzfenster, an derselben Stelle.
-      // updateDisplay() steigt oben aus, solange das Fenster zu ist.
-      interval(UPDATE_INTERVAL, updateDisplay)
+    const refreshBtn = zepButton(ICONS.refresh, "umrandet", () => { updateDisplay() })
+    refreshBtn.set_tooltip_text(_("Read the list again"))
 
-      return container
-    },
-  })
+    // blueman, und zwar fuer das, was hier NICHT steht: der
+    // Kopplungsassistent mit PIN-Vergleich, die Dateiuebertragung, die
+    // Netzwerkfreigabe. Es ist eine harte Abhaengigkeit von
+    // zepos-desktop (siehe dort), also fuehrt dieser Knopf auf jeder
+    // Installation irgendwohin - anders als der
+    // `nm-connection-editor`, den das Netzfenster am 12.08.2026
+    // losgeworden ist. Rolle "still": es ist die Nebenfunktion.
+    //
+    // `schliessen()` statt `closeWindow()`: seit Aufgabe 7 ist das der
+    // Rueckruf, den `bauen()` von der Schale bekommt (siehe ShellSeite
+    // in ags-overlay-utils.template) - er schliesst die GANZE Schale,
+    // nicht nur diese Seite, aus demselben Grund wie vorher: ein
+    // fremder GTK3-Prozess soll nicht hinter dem eigenen Fenster
+    // auftauchen.
+    const bluemanBtn = zepButton(ICONS.settings, "still", () => {
+      execAsync("blueman-manager")
+      schliessen()
+    })
+    bluemanBtn.set_tooltip_text(
+      _("Open Blueman - pairing, sending files"))
+
+    toolRow.append(listHeader)
+    toolRow.append(scanBtn)
+    toolRow.append(refreshBtn)
+    toolRow.append(bluemanBtn)
+
+    // ----- Die Liste, OHNE eigene Bildlaufleiste -----
+    //
+    // Die Fabrik haengt eine um den GANZEN Inhalt der Schale. Zwei
+    // ineinander waeren zwei Raeder unter einem Finger - die Begruendung
+    // steht ausgeschrieben in ags-network.template.
+    deviceList = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL, spacing: 6,
+    })
+    deviceList.add_css_class("bt-list")
+
+    // Eine leere Liste sagt, WARUM sie leer ist. Ohne diese Zeile
+    // saehe "Adapter aus", "nichts gefunden" und "der Dienst laeuft
+    // nicht" gleich aus, naemlich wie nichts.
+    emptyLabel = new Gtk.Label({
+      label: "", xalign: 0, wrap: true,
+      max_width_chars: {{STYLE_MEASURE_LINE}},
+    })
+    emptyLabel.add_css_class("bt-empty")
+
+    container.append(statusWrap)
+    container.append(divider)
+    container.append(toolRow)
+    container.append(deviceList)
+    container.append(emptyLabel)
+
+    // DER TAKT LAEUFT FUER DIE LEBENSDAUER DER SCHALE, NICHT MEHR NUR
+    // "SOLANGE DIESE SEITE OFFEN IST" - UND TROTZDEM OHNE DIE 300
+    // PROZESSSTARTS JE MINUTE, DIE DER FIX VOM 12.08.2026 BEHOBEN HAT
+    //
+    // ShellConfig (ags-overlay-utils.template, Aufgabe 5) kennt kein
+    // onShow/onHide - `bauen()` laeuft GENAU EINMAL, beim Start der
+    // Oberflaeche, und der Takt liefe fortan ohne Ende weiter, auch
+    // waehrend eine ANDERE Seite der Schale aktiv ist, wenn hier nicht
+    // gegengehalten wuerde. Geloest wie das Kontrollzentrum es seit
+    // Aufgabe 6 vormacht: der Takt LAEUFT durch, aber sein Rueckruf
+    // fragt zuerst `win.visible` und tut sonst nichts - `windowIsUp`
+    // (das eigene Feld, das diese Seite vorher als eigenstaendiges
+    // Fenster fuehrte) faellt darum weg, `win` reicht dafuer.
+    //
+    // UND EIN ZWEITER RUECKRUF FUER DIE SOFORTIGE FRISCHE BEIM OEFFNEN:
+    // `notify::visible` feuert bei jedem Sichtbarwerden sofort, GTK4s
+    // eigenes Signal fuer genau diesen Wechsel - ohne ihn saehe man bis
+    // zu UPDATE_INTERVAL (5s) alte Werte, wenn man von einer anderen
+    // Seite auf Bluetooth zurueckwechselt.
+    //
+    // NICHT AM ECHTEN COMPOSITOR NACHGEMESSEN: tests/render/ ist fuer
+    // diese Aufgabe verboten (Blattkopf). Dieselbe, in Aufgabe 6 bereits
+    // angewandte Lesart der GTK4-Dokumentation, keine neue Messung.
+    interval(UPDATE_INTERVAL, () => { if (win.visible) updateDisplay() })
+    win.connect("notify::visible", () => { if (win.visible) updateDisplay() })
+
+    return container
+  },
 }

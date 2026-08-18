@@ -1242,6 +1242,16 @@ export function BarContent(monitorName: string,
         toggles: "network",
       })
 
+      // GEPRUEFT, NICHT VERGESSEN (Aufgabe 7, 18.08.2026, "Bluetooth wird
+      // eine Seite"): `toggles: "bluetooth"` bleibt woertlich stehen und
+      // braucht KEINEN Codewechsel hier. `open("bluetooth")` ruft
+      // `toggle("bluetooth", anchorOf(...))`, und `toggle` IST
+      // toggleByName aus ags-config.template - dieselbe Funktion, die
+      // seit Aufgabe 7 "bluetooth" auf
+      // `widgets.control.zeigeSeite("bluetooth", anker)` umleitet (siehe
+      // dort). Der Klick fuehrt weiterhin genau einen Handgriff aus, er
+      // landet nur woanders - ohne dass diese Datei davon etwas wissen
+      // muss.
       case "bluetooth": return sharedModule(name, "bluetooth", {
         toggles: "bluetooth",
       })
