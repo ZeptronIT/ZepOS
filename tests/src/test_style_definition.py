@@ -243,7 +243,6 @@ def test_every_style_still_resolves_with_no_compositor(tmp_path, monkeypatch):
 
     variables = dict(style.STYLE_VARIABLES)
     assert variables["STYLE_SCALE_FACTOR_MON0"] == "1.00"
-    assert variables["STYLE_EWW_WINDOW_BATTERY_MON0"] == "360px"
     assert "no monitor" in variables["STYLE_SCALE_INFO"].lower(), (
         "the debug line names screens that are not attached")
     assert all(isinstance(value, str) for value in variables.values()), (
@@ -276,8 +275,6 @@ def test_the_five_monitor_placeholders_survive_any_number_of_screens(style):
     variables = dict(style.STYLE_VARIABLES)
     for index in range(5):
         assert f"STYLE_SCALE_FACTOR_MON{index}" in variables
-        assert f"STYLE_EWW_WINDOW_BATTERY_MON{index}" in variables
-        assert f"STYLE_EWW_SCROLL_NETWORK_MON{index}" in variables
 
     # Three screens are attached, so MON3 and MON4 name nothing and get
     # the fallback rather than a value from a neighbouring screen.
@@ -435,9 +432,11 @@ def test_no_per_screen_value_is_written_out_once_per_screen():
     Every STYLE_*_MONx family in this file held the same value in all
     five slots - measured, with no exception among the fifty-eight - so
     each was ten or thirty lines copied five times, and every value that
-    had to change had to change in five places. The comment beside
-    _WIDGET_WINDOW_WIDTHS records that the widget widths were once the
-    same five copies; this holds the rest of them to the same shape.
+    had to change had to change in five places. _WIDGET_WINDOW_WIDTHS
+    was the same argument applied to a ninth family - widget window
+    widths - until 18.08.2026, when it and the placeholders it built
+    fell for want of a reader; see the note at
+    style_definition._monitor_style_variables().
 
     It matters most for the type scale. The system has three answers to
     "how big is text" - pixels on the desktop, rem in the installer, and

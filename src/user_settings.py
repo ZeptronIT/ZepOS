@@ -6,8 +6,8 @@ Handles reading, writing, and merging user settings for style customization.
 Settings are stored GLOBALLY (for all profiles) in:
     <user root>/user-settings.json
 
-This means widget sizes, colors, and other settings apply to ALL profiles
-on this PC, not per-profile.
+This means colors and other settings apply to ALL profiles on this PC,
+not per-profile.
 
 Usage as module:
     from user_settings import load_settings, save_settings, get_defaults
@@ -72,56 +72,21 @@ DEFAULT_SETTINGS = {
         "created": "",
         "modified": ""
     },
-    "widget_sizes": {
-        "1920": {
-            "battery": {"width": 360, "height": 400},
-            "control": {"width": 380, "height": 450},
-            "network": {"width": 380, "height": 320},
-            "calendar": {"width": 420, "height": 380},
-            "shortcuts": {"width": 850, "height": 520},
-            "disk": {"width": 480, "height": 320},
-            "wallpaper": {"width": 450, "height": 280},
-            "style_settings": {"width": 450, "height": 550},
-            "vpn": {"width": 420, "height": 520},
-            "vpn_settings": {"width": 500, "height": 600}
-        },
-        "2560": {
-            "battery": {"width": 360, "height": 400},
-            "control": {"width": 380, "height": 450},
-            "network": {"width": 380, "height": 320},
-            "calendar": {"width": 420, "height": 380},
-            "shortcuts": {"width": 850, "height": 520},
-            "disk": {"width": 480, "height": 320},
-            "wallpaper": {"width": 450, "height": 280},
-            "style_settings": {"width": 450, "height": 550},
-            "vpn": {"width": 420, "height": 520},
-            "vpn_settings": {"width": 500, "height": 600}
-        },
-        "3440": {
-            "battery": {"width": 360, "height": 400},
-            "control": {"width": 380, "height": 450},
-            "network": {"width": 380, "height": 320},
-            "calendar": {"width": 420, "height": 380},
-            "shortcuts": {"width": 850, "height": 520},
-            "disk": {"width": 480, "height": 320},
-            "wallpaper": {"width": 450, "height": 280},
-            "style_settings": {"width": 450, "height": 550},
-            "vpn": {"width": 420, "height": 520},
-            "vpn_settings": {"width": 500, "height": 600}
-        },
-        "3840": {
-            "battery": {"width": 360, "height": 400},
-            "control": {"width": 380, "height": 450},
-            "network": {"width": 380, "height": 320},
-            "calendar": {"width": 420, "height": 380},
-            "shortcuts": {"width": 850, "height": 520},
-            "disk": {"width": 480, "height": 320},
-            "wallpaper": {"width": 450, "height": 280},
-            "style_settings": {"width": 450, "height": 550},
-            "vpn": {"width": 420, "height": 520},
-            "vpn_settings": {"width": 500, "height": 600}
-        }
-    },
+    # DEN REITER "FENSTERGROESSEN" GAB ES, UND ER HAT NIE ETWAS BEWIRKT
+    #
+    #     Er bot zehn Fenster mal vier Aufloesungen an, schrieb sie nach
+    #     user-settings.json unter widget_sizes, und style_definition.py
+    #     machte daraus die Platzhalter STYLE_EWW_WINDOW_<WIDGET>_MON<n>
+    #     und STYLE_EWW_SCROLL_<WIDGET>_MON<n>.
+    #
+    #     GEMESSEN am 18.08.2026, `grep -rl` gegen src/templates/ UND
+    #     src/styles/: NULL Vorlagen lasen einen dieser Platzhalter. Die
+    #     Fenster nahmen stattdessen ihre eigene, ausgemessene WIN_WIDTH.
+    #     Vierzig Regler ohne Wirkung.
+    #
+    #     Das EWW im Namen ist der Rest einer Leiste, die dieses Projekt
+    #     nicht mehr hat. An ihre Stelle tritt die Breitenleiter in
+    #     sizes.py - drei Sprossen, die das Fenster selbst nennt.
     # One factor per width bracket, and it scales widths. A "height"
     # stood beside every one of these - see RETIRED_SCALING_DIMENSION.
     "scaling": {
@@ -274,17 +239,23 @@ DEFAULT_SETTINGS = {
 # written back by every save - a setting maintained with some care and
 # connected to nothing.
 #
-# Retired rather than connected, because the height of a widget is
-# already settable and already reaches the output: widget_sizes.<width>
-# .<widget>.height, in pixels, per bracket, which is what the AGS style
-# editor writes. A factor multiplied onto that would be a second control
-# for one number, and the first question about a widget that came out too
-# tall would be which of the two did it.
+# KORREKTUR vom 18.08.2026: hier stand, die Hoehe sei retired statt
+# angeschlossen worden, WEIL sie bereits ueber widget_sizes.<width>
+# .<widget>.height ankomme - "was the AGS style editor writes". Das war
+# nie wahr. GEMESSEN am 18.08.2026, `grep -rl` gegen src/templates/ UND
+# src/styles/: STYLE_EWW_WINDOW_* und STYLE_EWW_SCROLL_*, die einzigen
+# Platzhalter, die widget_sizes je erreichte, hatten NULL Leser.
+# widget_sizes ist seit demselben Tag geloescht (siehe die Notiz an
+# seiner alten Stelle in DEFAULT_SETTINGS oben). Ein Widget-Fenster war
+# schon vorher HOCH ueber seine eigene, ausgemessene Konstante im
+# Vorlagenkopf und nicht ueber eine Einstellung - genau wie beim
+# Breitenfaktor, der hier tatsaechlich retired und nicht angeschlossen
+# wurde.
 RETIRED_SCALING_DIMENSION = "height"
 RETIRED_SCALING_REASON = (
     "Nothing read this: the only factor derived from the scaling section "
-    "is the width one. Widget heights are set in pixels per resolution "
-    "under widget_sizes.<width>.<widget>.height. The value you chose is "
+    "is the width one. What a widget is high was never read from here - "
+    "each window carries its own measured height. The value you chose is "
     "kept here so it is not lost, and is no longer applied."
 )
 
@@ -789,42 +760,6 @@ def clear_size(name, profile_name=None):
     save_settings(None, settings)
 
 
-def reset_widget_sizes_resolution(resolution, profile_name=None):
-    """
-    Reset widget sizes for a specific resolution to defaults.
-    Saves to GLOBAL settings.
-
-    Args:
-        resolution: Screen width as string (1920, 2560, 3440, 3840)
-        profile_name: Ignored (kept for backwards compatibility)
-    """
-    res_key = str(resolution)
-    settings = load_settings()
-
-    if "widget_sizes" not in settings:
-        settings["widget_sizes"] = {}
-
-    # Reset this resolution to defaults
-    if res_key in DEFAULT_SETTINGS.get("widget_sizes", {}):
-        settings["widget_sizes"][res_key] = DEFAULT_SETTINGS["widget_sizes"][res_key].copy()
-        save_settings(None, settings)
-        print(f"Widget sizes for {res_key}px reset to defaults")
-    else:
-        print(f"No default widget sizes found for resolution {res_key}")
-
-def reset_all_widget_sizes(profile_name=None):
-    """
-    Reset all widget sizes to defaults, keeping other settings.
-    Saves to GLOBAL settings.
-
-    Args:
-        profile_name: Ignored (kept for backwards compatibility)
-    """
-    settings = load_settings()
-    settings["widget_sizes"] = json.loads(json.dumps(DEFAULT_SETTINGS["widget_sizes"]))
-    save_settings(None, settings)
-    print("All widget sizes reset to defaults")
-
 def get_scale(width, profile_name=None):
     """
     Get the scaling factor for a specific screen width.
@@ -950,98 +885,13 @@ def set_weather_location(location):
 # so this raised TypeError on any document written in the last two
 # formats - and it raised it nowhere, because nothing called it.
 
-def get_widget_size(widget_name, resolution, dimension, profile_name=None):
-    """
-    Get widget size for a specific widget, resolution, and dimension.
-
-    Args:
-        widget_name: Widget name (battery, control, network, calendar, shortcuts, disk, wallpaper, style_settings)
-        resolution: Screen width as string (1920, 2560, 3440, 3840)
-        dimension: "width" or "height"
-        profile_name: Profile name, or None for current
-
-    Returns:
-        int: Size in pixels
-    """
-    settings = load_settings(profile_name)
-    widget_sizes = settings.get("widget_sizes", {})
-
-    res_sizes = widget_sizes.get(str(resolution), {})
-    widget_data = res_sizes.get(widget_name, {})
-
-    # Get default from DEFAULT_SETTINGS
-    default_sizes = DEFAULT_SETTINGS.get("widget_sizes", {})
-    default_res = default_sizes.get(str(resolution), {})
-    default_widget = default_res.get(widget_name, {"width": 400, "height": 400})
-    default_value = default_widget.get(dimension, 400)
-
-    return int(widget_data.get(dimension, default_value))
-
-def set_widget_size(widget_name, resolution, dimension, value, profile_name=None):
-    """
-    Set widget size for a specific widget, resolution, and dimension.
-    Saves to GLOBAL settings.
-
-    Args:
-        widget_name: Widget name
-        resolution: Screen width as string
-        dimension: "width" or "height"
-        value: Size in pixels
-        profile_name: Ignored (kept for backwards compatibility)
-    """
-    settings = load_settings()
-
-    if "widget_sizes" not in settings:
-        settings["widget_sizes"] = {}
-
-    res_key = str(resolution)
-    if res_key not in settings["widget_sizes"]:
-        # Initialize from defaults
-        settings["widget_sizes"][res_key] = DEFAULT_SETTINGS.get("widget_sizes", {}).get(res_key, {}).copy()
-
-    if widget_name not in settings["widget_sizes"][res_key]:
-        default_widget = DEFAULT_SETTINGS.get("widget_sizes", {}).get(res_key, {}).get(widget_name, {"width": 400, "height": 400})
-        settings["widget_sizes"][res_key][widget_name] = default_widget.copy()
-
-    settings["widget_sizes"][res_key][widget_name][dimension] = int(value)
-    save_settings(None, settings)
-
-def get_all_widget_sizes(profile_name=None):
-    """
-    Get all widget sizes merged with defaults.
-
-    Args:
-        profile_name: Profile name, or None for current
-
-    Returns:
-        dict: All widget sizes by resolution
-    """
-    settings = load_settings(profile_name)
-    result = {}
-
-    # Start with defaults
-    #
-    # Die Schleifenvariable hiess `sizes` und verdeckte damit das Modul
-    # sizes, das dieses Modul oben importiert. Hier ging das noch gut -
-    # die Funktion greift auf nichts daraus zu - aber es ist eine
-    # gestellte Falle: die erste Zeile, die in dieser Funktion
-    # sizes.TABLE liest, bekommt ein AttributeError auf einem dict.
-    for res, widgets in DEFAULT_SETTINGS.get("widget_sizes", {}).items():
-        result[res] = {}
-        for widget, dimensions in widgets.items():
-            result[res][widget] = dimensions.copy()
-
-    # Override with user settings
-    user_sizes = settings.get("widget_sizes", {})
-    for res, widgets in user_sizes.items():
-        if res not in result:
-            result[res] = {}
-        for widget, dimensions in widgets.items():
-            if widget not in result[res]:
-                result[res][widget] = {}
-            result[res][widget].update(dimensions)
-
-    return result
+# get_widget_size(), set_widget_size() und get_all_widget_sizes() standen
+# hier und lasen/schrieben settings["widget_sizes"] - die Kette, die
+# die Notiz bei DEFAULT_SETTINGS oben (und die bei
+# style_definition._monitor_style_variables()) als ohne Leser ausweist.
+# get_all_widget_sizes() hatte ohnehin keinen Aufrufer ausser sich
+# selbst - GEMESSEN am 18.08.2026, `grep -rn` gegen den ganzen Baum.
+# Alle drei fallen mit dem Reiter, der sie fuellte.
 
 # =============================================================================
 # CLI INTERFACE
@@ -1164,19 +1014,9 @@ def cmd_reset(args):
         reset_colors()
     elif args.scope == "sizes":
         reset_sizes()
-    elif args.scope == "widgets":
-        if args.resolution:
-            reset_widget_sizes_resolution(args.resolution)
-        else:
-            reset_all_widget_sizes()
     else:
         # Full reset
         reset_settings()
-
-def cmd_set_widget_size(args):
-    """Set a widget size value in GLOBAL settings"""
-    set_widget_size(args.widget, args.resolution, args.dimension, args.value)
-    print(f"Set {args.widget} {args.dimension} at {args.resolution}px to {args.value}px")
 
 def cmd_list_profiles(args):
     """List all profiles with settings status"""
@@ -1256,28 +1096,16 @@ Examples:
     reset_parser = subparsers.add_parser("reset", help="Reset settings to defaults")
     reset_parser.add_argument("--profile", "-p", help="Profile name (default: current)")
     reset_parser.add_argument("--scope", "-s",
-                              choices=["all", "colors", "sizes", "widgets"],
+                              choices=["all", "colors", "sizes"],
                               default="all",
-                              help="What to reset: all, colors, sizes, or widgets")
-    reset_parser.add_argument("--resolution", "-r", choices=["1920", "2560", "3440", "3840"],
-                              help="For widgets scope: reset only this resolution")
+                              help="What to reset: all, colors, or sizes")
     reset_parser.set_defaults(func=cmd_reset)
 
-    # set-widget-size command
-    widget_parser = subparsers.add_parser("set-widget-size", help="Set a widget size")
-    widget_parser.add_argument("--profile", "-p", help="Profile name (default: current)")
-    widget_parser.add_argument("--widget", "-w", required=True,
-                               choices=["battery", "control", "network", "calendar", "shortcuts", "disk", "wallpaper", "style_settings", "vpn", "vpn_settings"],
-                               help="Widget name")
-    widget_parser.add_argument("--resolution", "-r", required=True,
-                               choices=["1920", "2560", "3440", "3840"],
-                               help="Screen resolution (width)")
-    widget_parser.add_argument("--dimension", "-d", required=True,
-                               choices=["width", "height"],
-                               help="Dimension to set")
-    widget_parser.add_argument("--value", "-v", type=int, required=True,
-                               help="Size value in pixels")
-    widget_parser.set_defaults(func=cmd_set_widget_size)
+    # set-widget-size stand hier. Es rief set_widget_size() auf, das mit
+    # der ganzen widget_sizes-Kette am 18.08.2026 gefallen ist - siehe
+    # die Notiz bei DEFAULT_SETTINGS oben. Ein Unterbefehl, der eine
+    # Einstellung ohne Wirkung anbietet, ist dieselbe Luege eine Ebene
+    # tiefer, also faellt er mit.
 
     # set-size command
     #

@@ -4,10 +4,16 @@
 user_settings.py offered a height factor per resolution bracket, gave it
 four defaults, migrated it into the shape it is stored in and wrote it
 back on every save. Nothing read it: the only factor any placeholder is
-built from is the width one, and what a widget is HIGH comes from
-widget_sizes.<width>.<widget>.height, in pixels. See
-tests/src/test_style_definition.py for the measurement - two documents
-that differ only in that value produce identical style values.
+built from is the width one. See tests/src/test_style_definition.py for
+the measurement - two documents that differ only in that value produce
+identical style values.
+
+KORREKTUR vom 18.08.2026: hier stand, was ein Widget HOCH sei komme
+stattdessen aus widget_sizes.<width>.<widget>.height. Auch das war nie
+wahr - GEMESSEN am 18.08.2026, `grep -rl` gegen src/templates/ UND
+src/styles/: kein Platzhalter, den widget_sizes je erreichte, hatte
+einen Leser. widget_sizes ist seither geloescht (Aufgabe 2, siehe
+user_settings.DEFAULT_SETTINGS).
 
 So it goes. The tests here are about how it goes, which is the part a
 user can be hurt by: a number somebody chose may not disappear out of

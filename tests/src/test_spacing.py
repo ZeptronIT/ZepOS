@@ -371,11 +371,15 @@ def test_the_sizes_are_measured_and_still_open():
     min-height bleiben Literale, und das ist eine Entscheidung und kein
     Vergessen: sie sind BREITEN und HOEHEN. Sie haben in
     style_definition.py bereits ihre eigene, ebenfalls tote Leiter
-    (STYLE_EWW_MIN_WIDTH_TINY bis _SCALE_LG) und dazu die
-    Fenstergroessen aus _WIDGET_WINDOW_WIDTHS, die pro Bildschirm
-    verschieden sein KOENNEN und es auch sind. Sie auf die
-    Abstandsleiter zu ziehen waere falsch; sie brauchen eine eigene,
-    und die ist eine zweite Aufgabe.
+    (STYLE_EWW_MIN_WIDTH_TINY bis _SCALE_LG - GEMESSEN am 18.08.2026,
+    dieselbe `grep -rl` gegen src/templates/ UND src/styles/, dieselben
+    NULL Treffer wie bei der Groessen-Kette, die Aufgabe 2 an diesem Tag
+    entfernt hat). Die Fenstergroessen selbst kamen bis zum 18.08.2026
+    zusaetzlich aus _WIDGET_WINDOW_WIDTHS - ebenfalls ohne Leser und mit
+    derselben Aufgabe geloescht; jedes Fenster traegt seine Breite seither
+    nur noch in seiner eigenen, ausgemessenen WIN_WIDTH-Konstante. Beides
+    auf die Abstandsleiter zu ziehen waere falsch; sie brauchen eine
+    eigene, und die ist eine zweite Aufgabe.
 
     BORDER-RADIUS STAND HIER MIT 54 UND IST JETZT NULL. Das war die
     zweite Haelfte des Satzes oben - "alle Werte im Baum sind heute 0
