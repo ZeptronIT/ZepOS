@@ -716,6 +716,66 @@ MEASURE_MODAL_SHARE = 0.5
 
 
 # =====================================================================
+# DIE BREITENLEITER - drei Sprossen fuer alle Aufklappfenster
+# =====================================================================
+#
+# WARUM ES SIE GIBT
+#     Am 18.08.2026 trugen zwoelf Fenster zwoelf einzeln gegriffene
+#     Breiten, von 420 bis 1076. Jede war fuer sich richtig - sie kamen
+#     aus echten Messungen, siehe die Kommentarkoepfe von
+#     ags-vpn.template und ags-calendar.template -, aber zusammen ergaben
+#     sie kein Bild: zwei Fenster mit fast demselben Inhalt standen 24
+#     Punkte verschieden breit nebeneinander.
+#
+# WIE DIE ZAHLEN ENTSTANDEN SIND
+#     Nicht gewaehlt, sondern aufgerundet. Jedes Fenster brachte seine
+#     gemessene Breite mit, und jede Sprosse ist die naechste runde Zahl
+#     ueber dem breitesten Fenster, das sie traegt:
+#
+#         S   500   Meldungen 420, Akku 436, Stil-Editor 474,
+#                   Kalender 496
+#         M   660   Datentraeger 556, Hintergruende 616,
+#                   VPN-Einstellungen 642
+#         L   880   Kuerzel (heute 1076, zweispaltig), die Schale
+#
+#     DREI und nicht vier: die Spezifikation trennt L=720 und XL=880.
+#     Nachdem Netzwerk, Bluetooth und VPN in die Schale gezogen sind,
+#     wohnt auf 720 niemand mehr, und eine leere Sprosse ist eine
+#     geratene Zahl mit besserem Namen.
+#
+# DER DECKEL BLEIBT
+#     MEASURE_MODAL_SHARE deckelt weiterhin auf die halbe Schirmbreite.
+#     Auf 1920 sind das 960, L passt also mit 80 Punkten Luft. Genau
+#     dieser Deckel ist der Grund, warum die Kuerzel bisher 1076 wollten
+#     und 960 bekamen.
+#
+# WARUM SIE NICHT IN TABLE STEHEN
+#     TABLE traegt Groessen, die eine Vorlage ueber value_of() aus einem
+#     Faktor herleitet - Size(base, unit, scales). Eine Sprosse ist ein
+#     fester Punktwert ohne Einheit, den spaetere Aufgaben direkt aus
+#     Python lesen, nicht ueber einen {{STYLE_*}}-Platzhalter. Sie in
+#     TABLE zu stecken wuerde test_no_size_can_be_rounded_down_to_nothing
+#     treffen (das prueft ueber jeden TABLE-Wert), aber MODAL_WIDTHS ist
+#     absichtlich aussen vor - genau wie MEASURE_MODAL_SHARE darueber,
+#     mit derselben Begruendung im Kommentar dort.
+MODAL_WIDTHS = {
+    "S": 500,
+    "M": 660,
+    "L": 880,
+}
+
+
+def MODAL_WIDTH(sprosse):
+    """Die Breite einer Sprosse, in Punkten.
+
+    Wirft bei einem unbekannten Namen, statt eine Ersatzzahl zu
+    erfinden - ein Tippfehler im Fenster soll auffallen, solange er
+    noch billig ist, und nicht als 0 Punkte breites Fenster enden.
+    """
+    return MODAL_WIDTHS[sprosse]
+
+
+# =====================================================================
 # DIE BEWEGUNG - eine Kurve, drei Dauern
 # =====================================================================
 #
