@@ -44,6 +44,19 @@ Jede Aufgabe erbt diese Liste. Ein Verstoss ist ein Fehler, kein Geschmack.
 - Kommentare auf Deutsch, mit Datum und der Messung, auf der sie beruhen.
 - Bei Abweichung zwischen Plan und Baum gilt **der Baum**, und die Abweichung
   gehoert in den Bericht.
+- **`node --check` allein ist KEIN Beweis, dass erzeugtes TypeScript laedt.**
+  GEMESSEN am 18.08.2026 in Aufgabe 3: sobald eine `.ts`-Datei mit einem
+  `import` beginnt - und das tun alle AGS-Dateien -, wechselt Node in den
+  ESM-Modus mit Type-Stripping und nimmt `const WIN_WIDTH = 500px`
+  klaglos hin. Exit 0. Derselbe Text ohne fuehrenden `import` wird
+  korrekt als SyntaxError abgelehnt. Jedes der acht Fenster waere am
+  Compositor beim Laden abgestuerzt, und die vorgeschriebene Pruefung
+  haette es nicht gemeldet.
+  **Darum gilt zusaetzlich:** nach jeder Erzeugungsprobe die geaenderten
+  Zeilen im erzeugten Code mit eigenen Augen gegenlesen. Ein Wert, der
+  aus einem Platzhalter kommt, wird einzeln angesehen - steht dort eine
+  Zahl, wo eine Zahl hingehoert, und eine Laengenangabe nur dort, wo
+  CSS sie liest?
 
 ---
 
@@ -861,12 +874,130 @@ git commit -m "feat(UI-1): VPN als Seite, die drei Einzelfenster fallen"
 
 ---
 
+### Aufgabe 10: Der Loeschdialog der Hintergruende
+
+**Gefunden am 18.08.2026** beim Aufraeumen der toten Regeln, und er ist der
+einzige seiner Art im Baum.
+
+**Der Befund, gemessen:**
+
+```
+grep -rn "new Gtk.Window|new Astal.Window" src/templates/ags-*.template
+
+  ags-overlay-utils.template:411   Astal.Window   das IST die Fabrik
+  ags-bar.template:1895            Astal.Window   die Leiste
+  ags-dock.template:712            Astal.Window   das Dock
+  ags-notifications.template:420   Astal.Window   die Meldungen
+  ags-wallpaper.template:220       Gtk.Window     <- der Ausreisser
+```
+
+`showDeleteConfirmation()` baut ein blankes `Gtk.Window` mit rohen
+`Gtk.Button`n und haengt fuenf Klassen daran - `wp-confirm-dialog`,
+`-content`, `-title`, `-detail`, `-btn` und `destructive` -, **zu denen es
+keine einzige CSS-Regel gibt** (`grep -c "wp-confirm"` gegen
+`ags-style.template`: 0).
+
+**Warum das schlimmer ist als fehlender Stil:** ein `Gtk.Window` aus einem
+AGS-Prozess ist auf Wayland keine Layer-Shell-Flaeche, sondern ein
+xdg-toplevel, das der Compositor verwaltet. Es bekommt Hyprlands
+Fensterregeln statt der Glasregeln, es steht nicht ueber der Leiste, und die
+Rundung, die dieses Vorhaben ueberall hergestellt hat, geht daran vorbei.
+
+**Warum es niemand gefunden hat:** die Ratsche zaehlt Knopf-Klassen **im
+Stylesheet**. `wp-confirm-btn` steht nur in der Vorlage und hat gar keine
+Regel - der Zaehler sieht sie nicht. Das ist eine echte Luecke des
+Waechters und gehoert in seinen Kommentar.
+
+**Dateien:**
+- Aendern: `src/templates/ags-wallpaper.template:215-270`
+- Aendern: `tests/src/test_button_kit.py` (Kommentar zur Luecke)
+- Test: `tests/src/test_schale.py` (Waechter gegen den zweiten Fensterweg)
+
+- [ ] **Schritt 1: Den Waechter schreiben, der das kuenftig faengt**
+
+In `tests/src/test_schale.py`:
+
+```python
+def test_kein_ags_fenster_baut_sich_ein_gtk_window():
+    """Auf Wayland ist ein Gtk.Window keine Layer-Shell-Flaeche.
+
+    GEMESSEN am 18.08.2026: ags-wallpaper.template baute sein
+    Loeschbestaetigung als blankes Gtk.Window. Es bekam damit Hyprlands
+    Fensterregeln statt der Glasregeln, stand nicht ueber der Leiste, und
+    die Rundung dieses Vorhabens ging daran vorbei.
+
+    Astal.Window ist erlaubt - das ist die Layer-Shell-Klasse. Verboten
+    ist nur der xdg-toplevel-Weg.
+    """
+    import re
+    from pathlib import Path
+    wurzel = Path(__file__).resolve().parents[2]
+    for vorlage in (wurzel / "src" / "templates").glob("ags-*.template"):
+        text = vorlage.read_text(encoding="utf-8")
+        treffer = re.findall(r"new\s+Gtk\.Window\b", text)
+        assert not treffer, (
+            f"{vorlage.name} baut ein Gtk.Window - auf Wayland ist das "
+            f"keine Layer-Shell-Flaeche")
+```
+
+- [ ] **Schritt 2: Den Test laufen lassen und das Fallen sehen**
+
+Erwartet: faellt auf `ags-wallpaper.template`.
+
+- [ ] **Schritt 3: Den Dialog auf die Bauteile stellen**
+
+Die beiden Knoepfe werden `zepButton`: "Nein" in der Rolle `still`, "Ja" in
+der Rolle `kritisch`. Die Zeilen `add_css_class("wp-confirm-*")` und
+`add_css_class("destructive")` fallen vollstaendig - nach Regel 14 wird
+geloescht, nicht umbenannt.
+
+**Die Fensterfrage entscheidest du am Baum, nicht nach Gefuehl:** ein
+modaler Dialog ueber einem Aufklappfenster ist nicht dasselbe wie ein
+Aufklappfenster. Sieh nach, wie `ags-network.template` seine
+Passwortabfrage loest - sie ist derselbe Fall (eine Rueckfrage in einem
+bestehenden Fenster) und hat ihn ohne zweites Fenster geloest, ueber
+`onEscape` und eine Unteransicht. **Wenn dieser Weg hier auch traegt, nimm
+ihn**, und der Dialog verschwindet als Fenster ganz. Traegt er nicht,
+begruende im Bericht, warum, und nimm `createOverlayWindow`.
+
+- [ ] **Schritt 4: Die Luecke im Ratschen-Kommentar festhalten**
+
+In `tests/src/test_button_kit.py`, beim Zaehler:
+
+```
+# WAS DIESER ZAEHLER NICHT SIEHT
+#     Er liest die Knopf-Klassen aus dem STYLESHEET. Eine Klasse, die
+#     eine Vorlage an ein Widget haengt, zu der es aber gar keine Regel
+#     gibt, kommt hier nie vor - sie ist unsichtbar und zugleich
+#     schlimmer als eine doppelte Regel, weil der Knopf dann in blankem
+#     GTK-Standard steht.
+#
+#     GEMESSEN am 18.08.2026: genau so lag wp-confirm-btn in
+#     ags-wallpaper.template, durch fuenf Umbauten hindurch. Gefunden hat
+#     es nicht dieser Zaehler, sondern der Auftrag, der totes CSS suchte
+#     und auf die Gegenrichtung stiess.
+#
+#     Den Fall deckt seit dem 18.08.2026 tests/src/test_schale.py ab:
+#     test_kein_ags_fenster_baut_sich_ein_gtk_window.
+```
+
+- [ ] **Schritt 5: Erzeugungsprobe, `node --check`, voller sicherer Lauf**
+
+- [ ] **Schritt 6: Einchecken**
+
+```bash
+git add src/templates/ags-wallpaper.template tests/src/test_schale.py \
+        tests/src/test_button_kit.py
+git commit -m "fix(UI-1): der Loeschdialog der Hintergruende war ein blankes Gtk.Window"
+```
+
+---
+
 ## Was NICHT dazugehoert
 
 - **UI-2**, die Farbreduktion von 69 auf ~10. Vertagt, im Register.
 - **UI-3**, die 67 Klassen in 11 wiederkehrenden Formen. Vertagt, im Register.
-- Die zwanzig toten CSS-Regeln aus dem Kontrollzentrum. Eigener Auftrag,
-  im Register.
+- Die toten CSS-Regeln. Erledigt am 18.08.2026, commit 1d29a3c: 73 Regeln.
 - Der Kuerzel-Editor mit Tastenaufnahme. Eigene Aufgabe, im Register.
 - **Ton und Anzeige** als Seiten unter SYSTEM. Die Seitenleiste nennt sie,
   weil die Spezifikation sie nennt; gebaut werden sie hier nicht. Bis dahin
