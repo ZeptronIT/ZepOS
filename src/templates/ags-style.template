@@ -272,6 +272,40 @@ $overlay-border: $border;
   min-width: 672px;
 }
 
+// UEBERSTIMMT .cc-container'S EIGENEN BODEN, WENN BEIDE ZUSAMMEN STEHEN -
+// GEFUNDEN am 19.08.2026 (Aufgabe 17, echter Compositor)
+//
+//     .cc-container (weiter unten, "CONTROL CENTER (COMPACT)") traegt
+//     seit jeher ein EIGENES `min-width: 320px` - ein Rest aus der Zeit,
+//     als das Kontrollzentrum sein eigenes, kleineres Fenster war (vor
+//     Aufgabe 6). ags-notifications.template (Meldungszentrum, KEINE
+//     Seite der Schale - siehe Bericht Aufgabe 11, "Notifications ist
+//     NICHT Teil der Schale, es bleibt ein eigenstaendiges
+//     createOverlayWindow-Fenster") traegt dieselbe Klasse und braucht
+//     diesen Boden weiterhin - er wird HIER bewusst NICHT geloescht.
+//
+//     general/sound/display (ags-control-center.template) tragen seit
+//     Aufgabe 6/17 BEIDE Klassen auf demselben Wurzel-Widget
+//     (`.cc-container.zep-shell-page`). Bei zwei Klassenregeln mit
+//     GLEICHER Spezifitaet (0,1,0 je Regel) entscheidet die
+//     REIHENFOLGE im Stylesheet, nicht die groessere Zahl - `.cc-
+//     container` steht SPAETER in dieser Datei und gewann darum bisher
+//     IMMER, gleich welche der beiden Klassen zuerst geschrieben stand.
+//     GEMESSEN, echter Compositor, 1920x1080: general 852 statt 880
+//     (-28, nachdem Aufgabe 17 drei Zeilen von "general" abgezogen hat
+//     und sein natuerlicher Inhalt zum ersten Mal unter 672 fiel), sound/
+//     display 637 statt 880 (-243, volle Wirkung - ihr Inhalt ist von
+//     Anfang an schmal).
+//
+//     Die Antwort ist eine Verbundregel: `.cc-container.zep-shell-page`
+//     hat Spezifitaet (0,2,0), schlaegt also JEDE der beiden einzelnen
+//     Regeln unabhaengig von der Reihenfolge - und trifft NUR Widgets,
+//     die wirklich beide Klassen tragen. `.cc-container` allein (also
+//     Notifications) bleibt bei seinen 320px, unveraendert.
+.cc-container.zep-shell-page {
+  min-width: 672px;
+}
+
 // ===== SHARED OVERLAY STYLES (Muted Dark / HyprLaunch / HyprClipX) =====
 //
 // DIE PLATTE ALLER ELF UEBERLAGERUNGEN

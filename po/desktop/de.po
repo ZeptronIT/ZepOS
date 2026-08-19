@@ -10,10 +10,12 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
+"Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
+"POT-Creation-Date: 2026-08-19 10:58+0200\n"
+"Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: de\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: src/templates/ags-bar.template:449
@@ -24,1110 +26,1115 @@ msgstr "{module} antwortet nicht: {error}"
 msgid "{script} is not answering: {reason}"
 msgstr "{script} antwortet nicht: {reason}"
 
-#: src/templates/ags-bar.template:1269
-#: src/templates/ags-control-center.template:1151
-#: src/templates/ags-disk.template:335
+#: src/templates/ags-bar.template:1322
+#: src/templates/ags-control-center.template:1450
+#: src/templates/ags-disk.template:368
 msgid "Disk space"
 msgstr "Speicherplatz"
 
-#: src/templates/ags-bar.template:1272
-#: src/templates/ags-control-center.template:1148
-#: src/templates/ags-style-editor.template:99
-#: src/templates/ags-wallpaper.template:299
+#: src/templates/ags-bar.template:1325
+#: src/templates/ags-control-center.template:1447
+#: src/templates/ags-wallpaper.template:329
 msgid "Wallpaper"
 msgstr "Hintergrundbild"
 
-#: src/templates/ags-bar.template:1296
+#: src/templates/ags-bar.template:1349
 msgid "Appearance and colors"
 msgstr "Aussehen und Farben"
 
-#: src/templates/ags-bar.template:1300
-#: src/templates/ags-control-center.template:588
+#: src/templates/ags-bar.template:1353
 msgid "Control center"
 msgstr "Kontrollzentrum"
 
-#: src/templates/ags-control-center.template:530
-msgid "CONNECTIONS"
-msgstr "VERBINDUNGEN"
-
-#: src/templates/ags-control-center.template:531
-msgid "SYSTEM"
-msgstr "SYSTEM"
-
-#: src/templates/ags-control-center.template:540
-msgid "This page is moving."
-msgstr "Diese Seite zieht gerade um."
-
-#: src/templates/ags-control-center.template:569
-msgid "Sound"
-msgstr "Ton"
-
-#: src/templates/ags-control-center.template:571
-msgid "Display"
-msgstr "Anzeige"
-
-#: src/templates/ags-bar.template:1351
+#: src/templates/ags-bar.template:1404
 msgid "What no longer fits on this screen"
 msgstr "Was auf diesem Schirm nicht mehr hinpasst"
 
-#: src/templates/ags-bar.template:1608
+#: src/templates/ags-bar.template:1661
 msgid "Do not disturb is on - it is recorded, but nothing is shown"
 msgstr "Nicht stören ist an - es wird aufgezeichnet, aber nichts eingeblendet"
 
-#: src/templates/ags-bar.template:1616
+#: src/templates/ags-bar.template:1669
 msgid "{count} message since you last looked"
 msgid_plural "{count} messages since you last looked"
 msgstr[0] "{count} Meldung seit dem letzten Blick"
 msgstr[1] "{count} Meldungen seit dem letzten Blick"
 
-#: src/templates/ags-bar.template:1829
+#: src/templates/ags-bar.template:1898
 msgid "Keyboard layout: {layout} - click switches to the next of {count}"
 msgstr "Tastaturbelegung: {layout} - Klick schaltet auf die nächste von {count} um"
 
-#: src/templates/ags-bar.template:1832
+#: src/templates/ags-bar.template:1901
 msgid "Keyboard layout: {layout} - it is the only one configured"
 msgstr "Tastaturbelegung: {layout} - es ist die einzige eingerichtete"
 
-#: src/templates/ags-bar.template:1846
+#: src/templates/ags-bar.template:1915
 msgid "hyprctl did not name the keyboard layout"
 msgstr "hyprctl hat die Tastaturbelegung nicht genannt"
 
-#: src/templates/ags-battery.template:54
+#: src/templates/ags-battery.template:157
 msgid "Power Saver"
 msgstr "Energiesparen"
 
-#: src/templates/ags-battery.template:56
+#: src/templates/ags-battery.template:159
 msgid "Balanced"
 msgstr "Ausbalanciert"
 
-#: src/templates/ags-battery.template:58
+#: src/templates/ags-battery.template:161
 msgid "Performance"
 msgstr "Leistung"
 
-#: src/templates/ags-battery.template:149
-msgid "Power profile"
-msgstr "Energieprofil"
-
-#: src/templates/ags-battery.template:153
-msgid "Error: {message}"
-msgstr "Fehler: {message}"
-
-#: src/templates/ags-battery.template:184
-msgid "Charging"
-msgstr "Lädt"
-
-#: src/templates/ags-battery.template:185
-msgid "Discharging"
-msgstr "Entlädt"
-
-#: src/templates/ags-battery.template:186
-msgid "Full"
-msgstr "Voll"
-
-#: src/templates/ags-battery.template:187
+#: src/templates/ags-battery.template:233
+#: src/templates/ags-battery.template:296
 msgid "On mains"
 msgstr "Am Netz"
 
-#: src/templates/ags-battery.template:215
-#: src/templates/ags-style-editor.template:93
+#: src/templates/ags-battery.template:258
+msgid "Power profile"
+msgstr "Energieprofil"
+
+#: src/templates/ags-battery.template:262
+msgid "Error: {message}"
+msgstr "Fehler: {message}"
+
+#: src/templates/ags-battery.template:293
+msgid "Charging"
+msgstr "Lädt"
+
+#: src/templates/ags-battery.template:294
+msgid "Discharging"
+msgstr "Entlädt"
+
+#: src/templates/ags-battery.template:295
+msgid "Full"
+msgstr "Voll"
+
+#: src/templates/ags-battery.template:324
 msgid "Battery"
 msgstr "Batterie"
 
-#: src/templates/ags-battery.template:263
+#: src/templates/ags-battery.template:372
 msgid "Time left"
 msgstr "Restzeit"
 
-#: src/templates/ags-battery.template:274
+#: src/templates/ags-battery.template:383
 msgid "Power"
 msgstr "Leistung"
 
-#: src/templates/ags-bluetooth.template:245
+#: src/templates/ags-bluetooth.template:256
 msgid "bluetoothctl is not answering ({error}). Usually the service is not running: systemctl enable --now bluetooth.service"
 msgstr "bluetoothctl antwortet nicht ({error}). Meist läuft der Dienst nicht: systemctl enable --now bluetooth.service"
 
-#: src/templates/ags-bluetooth.template:312
+#: src/templates/ags-bluetooth.template:330
 msgid "Unnamed device"
 msgstr "Unbenanntes Gerät"
 
-#: src/templates/ags-bluetooth.template:371
-msgid "Bluetooth is not answering"
-msgstr "Bluetooth antwortet nicht"
-
-#: src/templates/ags-bluetooth.template:383
-msgid "No Bluetooth adapter"
-msgstr "Kein Bluetooth-Adapter"
-
-#: src/templates/ags-bluetooth.template:384
-msgid "This machine reports no controller"
-msgstr "Dieser Rechner meldet keinen Controller"
-
-#: src/templates/ags-bluetooth.template:406
-msgid "Bluetooth is off"
-msgstr "Bluetooth ist aus"
-
-#: src/templates/ags-bluetooth.template:406
-msgid "Bluetooth is on"
-msgstr "Bluetooth ist an"
-
-#: src/templates/ags-bluetooth.template:412
-msgid "{connected} of {total} devices connected"
-msgstr "{connected} von {total} Geräten verbunden"
-
-#: src/templates/ags-bluetooth.template:421
-msgid "Turn Bluetooth on to see devices"
-msgstr "Schalte Bluetooth ein, um Geräte zu sehen"
-
-#: src/templates/ags-bluetooth.template:429
-#: src/templates/ags-bluetooth.template:630
-msgid "Searching …"
-msgstr "Suche läuft …"
-
-#: src/templates/ags-bluetooth.template:430
-msgid "No device known - search for devices"
-msgstr "Kein Gerät bekannt - suche nach Geräten"
-
-#: src/templates/ags-bluetooth.template:485
-msgid "Disconnect {device}"
-msgstr "{device} trennen"
-
-#: src/templates/ags-bluetooth.template:486
-msgid "Connect to {device}"
-msgstr "Mit {device} verbinden"
-
-#: src/templates/ags-bluetooth.template:493
-msgid "Connecting …"
-msgstr "Verbinde …"
-
-#: src/templates/ags-bluetooth.template:493
-msgid "Disconnecting …"
-msgstr "Trenne …"
-
-#: src/templates/ags-bluetooth.template:505
-msgid "Disconnecting failed"
-msgstr "Trennen fehlgeschlagen"
-
-#: src/templates/ags-bluetooth.template:506
-msgid "Connecting failed - is it paired?"
-msgstr "Verbinden fehlgeschlagen - gekoppelt?"
-
-#: src/templates/ags-bluetooth.template:521
-#: src/templates/ags-control-center.template:852
+#: src/templates/ags-bluetooth.template:364
+#: src/templates/ags-control-center.template:445
+#: src/templates/ags-control-center.template:1212
 msgid "Bluetooth"
 msgstr "Bluetooth"
 
-#: src/templates/ags-bluetooth.template:566
-#: src/templates/ags-control-center.template:803
-msgid "Loading …"
-msgstr "Lade …"
+#: src/templates/ags-bluetooth.template:366
+#: src/templates/ags-control-center.template:594
+#: src/templates/ags-network.template:368 src/templates/ags-vpn.template:456
+msgid "CONNECTIONS"
+msgstr "VERBINDUNGEN"
 
-#: src/templates/ags-bluetooth.template:585
+#: src/templates/ags-bluetooth.template:414
 msgid "Turn Bluetooth on or off"
 msgstr "Bluetooth ein- oder ausschalten"
 
-#: src/templates/ags-bluetooth.template:616
+#: src/templates/ags-bluetooth.template:425
+msgid "Bluetooth is not answering"
+msgstr "Bluetooth antwortet nicht"
+
+#: src/templates/ags-bluetooth.template:437
+msgid "No Bluetooth adapter"
+msgstr "Kein Bluetooth-Adapter"
+
+#: src/templates/ags-bluetooth.template:438
+msgid "This machine reports no controller"
+msgstr "Dieser Rechner meldet keinen Controller"
+
+#: src/templates/ags-bluetooth.template:454
+msgid "Bluetooth is off"
+msgstr "Bluetooth ist aus"
+
+#: src/templates/ags-bluetooth.template:454
+msgid "Bluetooth is on"
+msgstr "Bluetooth ist an"
+
+#: src/templates/ags-bluetooth.template:455
+msgid "{connected} of {total} devices connected"
+msgstr "{connected} von {total} Geräten verbunden"
+
+#: src/templates/ags-bluetooth.template:465
+msgid "Turn Bluetooth on to see devices"
+msgstr "Schalte Bluetooth ein, um Geräte zu sehen"
+
+#: src/templates/ags-bluetooth.template:472
+#: src/templates/ags-bluetooth.template:595
+msgid "Searching …"
+msgstr "Suche läuft …"
+
+#: src/templates/ags-bluetooth.template:473
+msgid "No device known - search for devices"
+msgstr "Kein Gerät bekannt - suche nach Geräten"
+
+#: src/templates/ags-bluetooth.template:531
+msgid "Connecting …"
+msgstr "Verbinde …"
+
+#: src/templates/ags-bluetooth.template:531
+msgid "Disconnecting …"
+msgstr "Trenne …"
+
+#: src/templates/ags-bluetooth.template:544
+msgid "Disconnecting failed"
+msgstr "Trennen fehlgeschlagen"
+
+#: src/templates/ags-bluetooth.template:545
+msgid "Connecting failed - is it paired?"
+msgstr "Verbinden fehlgeschlagen - gekoppelt?"
+
+#: src/templates/ags-bluetooth.template:552
+msgid "Disconnect {device}"
+msgstr "{device} trennen"
+
+#: src/templates/ags-bluetooth.template:553
+msgid "Connect to {device}"
+msgstr "Mit {device} verbinden"
+
+#: src/templates/ags-bluetooth.template:586
 msgid "DEVICES"
 msgstr "GERÄTE"
 
-#: src/templates/ags-bluetooth.template:624
+#: src/templates/ags-bluetooth.template:610
 msgid "Search for devices for {seconds} seconds"
 msgstr "{seconds} Sekunden nach Geräten suchen"
 
-#: src/templates/ags-bluetooth.template:648
+#: src/templates/ags-bluetooth.template:614
 msgid "Read the list again"
 msgstr "Liste neu lesen"
 
-#: src/templates/ags-bluetooth.template:662
+#: src/templates/ags-bluetooth.template:635
 msgid "Open Blueman - pairing, sending files"
 msgstr "Blueman öffnen - Koppeln, Dateien senden"
 
-#: src/templates/ags-calendar.template:152
-#: src/templates/ags-calendar.template:274
-#: src/templates/ags-style-editor.template:96
+#: src/templates/ags-calendar.template:209
+#: src/templates/ags-calendar.template:331
 msgid "Calendar"
 msgstr "Kalender"
 
-#: src/templates/ags-calendar.template:153
+#: src/templates/ags-calendar.template:210
 msgid "Open GNOME Calendar"
 msgstr "GNOME Kalender öffnen"
 
-#: src/templates/ags-calendar.template:158
+#: src/templates/ags-calendar.template:215
 msgid "Mail"
 msgstr "Mail"
 
-#: src/templates/ags-calendar.template:159
+#: src/templates/ags-calendar.template:216
 msgid "Open Thunderbird"
 msgstr "Thunderbird öffnen"
 
-#: src/templates/ags-calendar.template:174
+#: src/templates/ags-calendar.template:231
 msgid "%B %-d, %Y"
 msgstr "%-d. %B %Y"
 
-#: src/templates/ags-calendar.template:362
+#: src/templates/ags-calendar.template:419
 msgid "Previous month"
 msgstr "Voriger Monat"
 
-#: src/templates/ags-calendar.template:378
+#: src/templates/ags-calendar.template:435
 msgid "Next month"
 msgstr "Nächster Monat"
 
-#: src/templates/ags-control-center.template:357
+#: src/templates/ags-control-center.template:450
 msgid "VPN: {status}"
 msgstr "VPN: {status}"
 
-#: src/templates/ags-control-center.template:386
+#: src/templates/ags-control-center.template:479
 msgid "Network watchdog: {status}"
 msgstr "Netz-Watchdog: {status}"
 
-#: src/templates/ags-control-center.template:394
+#: src/templates/ags-control-center.template:487
 msgid "Helper scripts ({count})"
 msgstr "Hilfsskripte ({count})"
 
-#: src/templates/ags-control-center.template:442
+#: src/templates/ags-control-center.template:535
 msgid "Regenerate the configuration"
 msgstr "Die Konfiguration neu erzeugen"
 
-#: src/templates/ags-control-center.template:445
+#: src/templates/ags-control-center.template:538
 msgid "Try the update again"
 msgstr "Die Aktualisierung noch einmal versuchen"
 
-#: src/templates/ags-control-center.template:454
+#: src/templates/ags-control-center.template:547
 msgid "Update the Arch base - in the terminal, with a prompt"
 msgstr "Die Arch-Basis aktualisieren - im Terminal, mit Rückfrage"
 
-#: src/templates/ags-control-center.template:457
+#: src/templates/ags-control-center.template:550
 msgid "Configure the self-update"
 msgstr "Die Selbstaktualisierung einstellen"
 
-#: src/templates/ags-control-center.template:487
-#: src/templates/ags-control-center.template:1136
+#: src/templates/ags-control-center.template:580
+#: src/templates/ags-control-center.template:1435
 msgid "Hardware"
 msgstr "Hardware"
 
-#: src/templates/ags-control-center.template:695
+#: src/templates/ags-control-center.template:595
+msgid "SYSTEM"
+msgstr "SYSTEM"
+
+#: src/templates/ags-control-center.template:642
+msgid "Sound"
+msgstr "Ton"
+
+#: src/templates/ags-control-center.template:732
+msgid "Volume muted"
+msgstr "Lautstärke stumm"
+
+#: src/templates/ags-control-center.template:733
+msgid "Volume {level}%"
+msgstr "Lautstärke {level}%"
+
+#: src/templates/ags-control-center.template:735
+msgid "Microphone muted"
+msgstr "Mikrofon stumm"
+
+#: src/templates/ags-control-center.template:736
+msgid "Microphone {level}%"
+msgstr "Mikrofon {level}%"
+
+#: src/templates/ags-control-center.template:755
+msgid "Display"
+msgstr "Anzeige"
+
+#: src/templates/ags-control-center.template:802
+msgid "Brightness {level}%"
+msgstr "Helligkeit {level}%"
+
+#: src/templates/ags-control-center.template:923
+msgid "Control"
+msgstr "Kontrolle"
+
+#: src/templates/ags-control-center.template:1033
 msgid "PRIVACY"
 msgstr "DATENSCHUTZ"
 
-#: src/templates/ags-control-center.template:715
+#: src/templates/ags-control-center.template:1053
 msgid "Microphone:"
 msgstr "Mikrofon:"
 
-#: src/templates/ags-control-center.template:721
+#: src/templates/ags-control-center.template:1064
 msgid "Mute the microphone"
 msgstr "Mikrofon stummschalten"
 
-#: src/templates/ags-control-center.template:735
+#: src/templates/ags-control-center.template:1074
 msgid "Camera:"
 msgstr "Kamera:"
 
-#: src/templates/ags-control-center.template:794
+#: src/templates/ags-control-center.template:1143
 msgid "NETWORK & CONNECTIONS"
 msgstr "NETZ & VERBINDUNGEN"
 
-#: src/templates/ags-control-center.template:807
+#: src/templates/ags-control-center.template:1152
+msgid "Loading …"
+msgstr "Lade …"
+
+#: src/templates/ags-control-center.template:1161
 msgid "Wi-Fi networks - the same page as above"
 msgstr "WLAN-Netzwerke - dieselbe Seite wie oben"
 
-#: src/templates/ags-control-center.template:838
+#: src/templates/ags-control-center.template:1191
 msgid "VPN: off"
 msgstr "VPN: Aus"
 
-#: src/templates/ags-control-center.template:856
+#: src/templates/ags-control-center.template:1222
 msgid "Bluetooth devices - the same page as above"
 msgstr "Bluetooth-Geräte - dieselbe Seite wie oben"
 
-#: src/templates/ags-control-center.template:866
+#: src/templates/ags-control-center.template:1242
 msgid "SOUND & DISPLAY"
 msgstr "TON & BILD"
 
-#: src/templates/ags-control-center.template:1000
+#: src/templates/ags-control-center.template:1299
 msgid "Previous track"
 msgstr "Vorheriger Titel"
 
-#: src/templates/ags-control-center.template:1007
+#: src/templates/ags-control-center.template:1311
 msgid "Pause / resume"
 msgstr "Anhalten / Fortsetzen"
 
-#: src/templates/ags-control-center.template:1013
+#: src/templates/ags-control-center.template:1313
 msgid "Next track"
 msgstr "Nächster Titel"
 
-#: src/templates/ags-control-center.template:1044
+#: src/templates/ags-control-center.template:1344
 msgid "Displays"
 msgstr "Bildschirme"
 
-#: src/templates/ags-control-center.template:1049
+#: src/templates/ags-control-center.template:1352
 msgid "Set arrangement, resolution and refresh rate"
 msgstr "Anordnung, Auflösung und Frequenz einstellen"
 
-#: src/templates/ags-control-center.template:1082
+#: src/templates/ags-control-center.template:1381
 msgid "DESKTOP"
 msgstr "SCHREIBTISCH"
 
-#: src/templates/ags-control-center.template:1118
+#: src/templates/ags-control-center.template:1417
 msgid "Set the location for the weather"
 msgstr "Den Ort für das Wetter einstellen"
 
-#: src/templates/ags-control-center.template:1136
+#: src/templates/ags-control-center.template:1435
 msgid "Open btop"
 msgstr "btop öffnen"
 
-#: src/templates/ags-control-center.template:1140
-#: src/templates/ags-shortcuts.template:264
+#: src/templates/ags-control-center.template:1439
+#: src/templates/ags-shortcuts.template:342
 msgid "Keyboard shortcuts"
 msgstr "Tastenkürzel"
 
-#: src/templates/ags-control-center.template:1141
+#: src/templates/ags-control-center.template:1440
 msgid "Show all keyboard shortcuts"
 msgstr "Alle Tastenkürzel zeigen"
 
-#: src/templates/ags-control-center.template:1144
+#: src/templates/ags-control-center.template:1443
 msgid "Floating windows"
 msgstr "Schwebende Fenster"
 
-#: src/templates/ags-control-center.template:1145
+#: src/templates/ags-control-center.template:1444
 msgid "Restore the saved arrangement"
 msgstr "Die gespeicherte Anordnung wiederherstellen"
 
-#: src/templates/ags-control-center.template:1148
+#: src/templates/ags-control-center.template:1447
 msgid "Choose another image"
 msgstr "Ein anderes Bild wählen"
 
-#: src/templates/ags-control-center.template:1151
+#: src/templates/ags-control-center.template:1450
 msgid "Show how the drives are filled"
 msgstr "Belegung der Laufwerke zeigen"
 
-#: src/templates/ags-control-center.template:1158
+#: src/templates/ags-control-center.template:1457
 msgid "SYSTEM SERVICES"
 msgstr "SYSTEMDIENSTE"
 
-#: src/templates/ags-control-center.template:1167
+#: src/templates/ags-control-center.template:1466
 msgid "Printer"
 msgstr "Drucker"
 
-#: src/templates/ags-control-center.template:1195
+#: src/templates/ags-control-center.template:1494
 msgid "Network watchdog"
 msgstr "Netz-Watchdog"
 
-#: src/templates/ags-control-center.template:1221
+#: src/templates/ags-control-center.template:1519
 msgid "Helper scripts"
 msgstr "Hilfsskripte"
 
-#: src/templates/ags-control-center.template:1257
+#: src/templates/ags-control-center.template:1554
 msgid "Style editor"
 msgstr "Stil-Editor"
 
-#: src/templates/ags-control-center.template:1262
+#: src/templates/ags-control-center.template:1559
 msgid "Appearance and colors - the same window as above"
 msgstr "Aussehen und Farben - dasselbe Fenster wie oben"
 
-#: src/templates/ags-control-center.template:1369
+#: src/templates/ags-control-center.template:1697
 msgid "Shut down"
 msgstr "Herunterfahren"
 
-#: src/templates/ags-control-center.template:1370
+#: src/templates/ags-control-center.template:1698
 msgid "Restart"
 msgstr "Neustart"
 
-#: src/templates/ags-control-center.template:1371
+#: src/templates/ags-control-center.template:1699
 msgid "Suspend"
 msgstr "Bereitschaft"
 
-#: src/templates/ags-control-center.template:1372
+#: src/templates/ags-control-center.template:1700
 msgid "Lock"
 msgstr "Sperren"
 
-#: src/templates/ags-control-center.template:1373
+#: src/templates/ags-control-center.template:1701
 msgid "Log out"
 msgstr "Abmelden"
 
-#: src/templates/ags-disk.template:111
+#: src/templates/ags-disk.template:144
 msgid "{count} partition"
 msgid_plural "{count} partitions"
 msgstr[0] "{count} Partition"
 msgstr[1] "{count} Partitionen"
 
-#: src/templates/ags-disk.template:118 src/templates/ags-disk.template:448
+#: src/templates/ags-disk.template:151 src/templates/ags-disk.template:481
 msgid "System"
 msgstr "System"
 
-#: src/templates/ags-disk.template:280
+#: src/templates/ags-disk.template:313
 msgid "{size} used"
 msgstr "{size} verwendet"
 
-#: src/templates/ags-disk.template:284
+#: src/templates/ags-disk.template:317
 msgid "{size} free"
 msgstr "{size} frei"
 
-#: src/templates/ags-disk.template:374
+#: src/templates/ags-disk.template:407
 msgid "in use"
 msgstr "belegt"
 
-#: src/templates/ags-disk.template:402
+#: src/templates/ags-disk.template:435
 msgid "Used"
 msgstr "Verwendet"
 
-#: src/templates/ags-disk.template:421
+#: src/templates/ags-disk.template:454
 msgid "Available"
 msgstr "Verfügbar"
 
-#: src/templates/ags-disk.template:440
+#: src/templates/ags-disk.template:473
 msgid "Total"
 msgstr "Gesamt"
 
-#: src/templates/ags-disk.template:462
+#: src/templates/ags-disk.template:495
 msgid "PARTITIONS"
 msgstr "PARTITIONEN"
 
-#: src/templates/ags-disk.template:491
+#: src/templates/ags-disk.template:527
 msgid "Open the root directory"
 msgstr "Root-Verzeichnis öffnen"
 
-#: src/templates/ags-disk.template:495
+#: src/templates/ags-disk.template:531
 msgid "Files"
 msgstr "Dateien"
 
-#: src/templates/ags-disk.template:504
+#: src/templates/ags-disk.template:538
 msgid "Analyze disk usage with Baobab"
 msgstr "Speicheranalyse mit Baobab"
 
-#: src/templates/ags-disk.template:508
+#: src/templates/ags-disk.template:542
 msgid "Analyze"
 msgstr "Analyse"
 
-#: src/templates/ags-network.template:268
-msgid "Password for \"{ssid}\""
-msgstr "Passwort für \"{ssid}\""
-
-#: src/templates/ags-network.template:311
-msgid "Open"
-msgstr "Offen"
-
-#: src/templates/ags-network.template:326
-msgid "Please enter the password"
-msgstr "Bitte Passwort eingeben"
-
-#: src/templates/ags-network.template:329 src/templates/ags-vpn.template:333
-msgid "Connecting ..."
-msgstr "Verbinde ..."
-
-#: src/templates/ags-network.template:333 src/templates/ags-vpn.template:402
-msgid "Connection failed"
-msgstr "Verbindung fehlgeschlagen"
-
-#: src/templates/ags-network.template:359
-msgid "{signal}% • {security}"
-msgstr "{signal}% • {security}"
-
-#: src/templates/ags-network.template:361
-msgid "open"
-msgstr "offen"
-
-#: src/templates/ags-network.template:436
-#: src/templates/ags-style-editor.template:95
+#: src/templates/ags-network.template:366
 msgid "Network"
 msgstr "Netzwerk"
 
-#: src/templates/ags-network.template:462
-#: src/templates/ags-network.template:624
-msgid "Back"
-msgstr "Zurück"
+#: src/templates/ags-network.template:399
+msgid "Password for \"{ssid}\""
+msgstr "Passwort für \"{ssid}\""
 
-#: src/templates/ags-network.template:467
-msgid "Password for network"
-msgstr "Passwort für Netzwerk"
+#: src/templates/ags-network.template:438
+msgid "Open"
+msgstr "Offen"
 
-#: src/templates/ags-network.template:475
-msgid "Enter the Wi-Fi password ..."
-msgstr "WLAN-Passwort eingeben ..."
+#: src/templates/ags-network.template:453
+msgid "Please enter the password"
+msgstr "Bitte Passwort eingeben"
 
-#: src/templates/ags-network.template:481 src/templates/ags-vpn.template:693
-msgid "Connect"
-msgstr "Verbinden"
+#: src/templates/ags-network.template:456 src/templates/ags-vpn.template:498
+msgid "Connecting ..."
+msgstr "Verbinde ..."
 
-#: src/templates/ags-network.template:553
-msgid "Wi-Fi networks"
-msgstr "WLAN-Netzwerke"
+#: src/templates/ags-network.template:460 src/templates/ags-vpn.template:569
+msgid "Connection failed"
+msgstr "Verbindung fehlgeschlagen"
 
-#: src/templates/ags-network.template:560
+#: src/templates/ags-network.template:498
+msgid "{signal}% • {security}"
+msgstr "{signal}% • {security}"
+
+#: src/templates/ags-network.template:500
+msgid "open"
+msgstr "offen"
+
+#: src/templates/ags-network.template:568
 msgid "Turn Wi-Fi on or off"
 msgstr "WLAN ein- oder ausschalten"
 
-#: src/templates/ags-network.template:566
+#: src/templates/ags-network.template:607
+#: src/templates/ags-network.template:754
+msgid "Back"
+msgstr "Zurück"
+
+#: src/templates/ags-network.template:611
+msgid "Password for network"
+msgstr "Passwort für Netzwerk"
+
+#: src/templates/ags-network.template:619
+msgid "Enter the Wi-Fi password ..."
+msgstr "WLAN-Passwort eingeben ..."
+
+#: src/templates/ags-network.template:627 src/templates/ags-vpn.template:827
+msgid "Connect"
+msgstr "Verbinden"
+
+#: src/templates/ags-network.template:670
+msgid "Wi-Fi networks"
+msgstr "WLAN-Netzwerke"
+
+#: src/templates/ags-network.template:690
 msgid "Scan again"
 msgstr "Erneut suchen"
 
-#: src/templates/ags-network.template:572
+#: src/templates/ags-network.template:713
 msgid "Open network management"
 msgstr "Netzwerkverwaltung öffnen"
 
-#: src/templates/ags-network.template:668
+#: src/templates/ags-network.template:785
 msgid "IP address"
 msgstr "IP-Adresse"
 
-#: src/templates/ags-network.template:670
+#: src/templates/ags-network.template:787
 msgid "Gateway"
 msgstr "Gateway"
 
-#: src/templates/ags-network.template:672
-#: src/templates/ags-vpn-settings.template:874
+#: src/templates/ags-network.template:789
+#: src/templates/ags-vpn-settings.template:918
 msgid "DNS"
 msgstr "DNS"
 
-#: src/templates/ags-network.template:674
+#: src/templates/ags-network.template:791
 msgid "Security"
 msgstr "Sicherheit"
 
-#: src/templates/ags-network.template:686 src/templates/ags-vpn.template:248
-#: src/templates/ags-vpn.template:444 src/templates/ags-vpn.template:551
+#: src/templates/ags-network.template:802 src/templates/ags-vpn.template:402
+#: src/templates/ags-vpn.template:611 src/templates/ags-vpn.template:682
 msgid "Disconnect"
 msgstr "Trennen"
 
-#: src/templates/ags-notifications.template:555
+#: src/templates/ags-notifications.template:563
 msgid "Do not disturb is on - nothing is shown, everything is recorded"
 msgstr "Nicht stören ist an - es wird nichts eingeblendet, aber alles aufgezeichnet"
 
-#: src/templates/ags-notifications.template:556
+#: src/templates/ags-notifications.template:564
 msgid "Turn on do not disturb"
 msgstr "Nicht stören einschalten"
 
-#: src/templates/ags-notifications.template:599
+#: src/templates/ags-notifications.template:607
 msgid "Notifications"
 msgstr "Mitteilungen"
 
-#: src/templates/ags-notifications.template:641
+#: src/templates/ags-notifications.template:649
 msgid "Do not disturb"
 msgstr "Nicht stören"
 
-#: src/templates/ags-notifications.template:666
+#: src/templates/ags-notifications.template:674
 msgid "Nothing missed."
 msgstr "Nichts verpasst."
 
-#: src/templates/ags-notifications.template:672
+#: src/templates/ags-notifications.template:680
 msgid "Clear the whole history"
 msgstr "Den ganzen Verlauf löschen"
 
-#: src/templates/ags-notifications.template:676
+#: src/templates/ags-notifications.template:684
 msgid "Clear all"
 msgstr "Alle löschen"
 
-#: src/templates/ags-shortcuts.template:296
+#: src/templates/ags-shortcuts.template:374
 msgid "Edit keybinds"
 msgstr "Tastenkürzel bearbeiten"
 
-#: src/templates/ags-style-editor.template:94
-msgid "Control Panel"
-msgstr "Kontrollzentrum"
-
-#: src/templates/ags-style-editor.template:97
-msgid "Shortcuts"
-msgstr "Tastenkürzel"
-
-#: src/templates/ags-style-editor.template:98
-msgid "Disk Usage"
-msgstr "Speicherplatz"
-
-#: src/templates/ags-style-editor.template:100
-#: src/templates/ags-style-editor.template:878
-msgid "Style Editor"
-msgstr "Stil-Editor"
-
-#: src/templates/ags-style-editor.template:101
-msgid "VPN"
-msgstr "VPN"
-
-#: src/templates/ags-style-editor.template:102
-msgid "VPN Settings"
-msgstr "VPN-Einstellungen"
-
-#: src/templates/ags-style-editor.template:218
+#: src/templates/ags-style-editor.template:221
 msgid "The factory setting: petrol, cyan and yellow"
 msgstr "Die Werkseinstellung: Petrol, Cyan und Gelb"
 
-#: src/templates/ags-style-editor.template:223
+#: src/templates/ags-style-editor.template:226
 msgid "Futuristic neon theme with cyan and magenta"
 msgstr "Futuristisches Neon-Theme mit Cyan und Magenta"
 
-#: src/templates/ags-style-editor.template:252
+#: src/templates/ags-style-editor.template:255
 msgid "Natural theme with green and brown tones"
 msgstr "Natürliches Theme mit Grün- und Brauntönen"
 
-#: src/templates/ags-style-editor.template:281
+#: src/templates/ags-style-editor.template:284
 msgid "Warm theme with orange and red tones"
 msgstr "Warmes Theme mit Orange und Rottönen"
 
-#: src/templates/ags-style-editor.template:310
+#: src/templates/ags-style-editor.template:313
 msgid "Cool theme with blue and turquoise tones"
 msgstr "Kühles Theme mit Blau- und Türkistönen"
 
-#: src/templates/ags-style-editor.template:339
+#: src/templates/ags-style-editor.template:342
 msgid "Elegant theme with violet and gold"
 msgstr "Elegantes Theme mit Violett und Gold"
 
-#: src/templates/ags-style-editor.template:422
+#: src/templates/ags-style-editor.template:435
 msgid "ZepOS Style"
 msgstr "ZepOS Style"
 
-#: src/templates/ags-style-editor.template:423
-#: src/templates/ags-vpn-settings.template:260
+#: src/templates/ags-style-editor.template:436
+#: src/templates/ags-vpn-settings.template:310
 msgid "Not saved: {error}"
 msgstr "Nicht gespeichert: {error}"
 
-#: src/templates/ags-style-editor.template:686
-msgctxt "widget size, width"
-msgid "W"
-msgstr "B"
-
-#: src/templates/ags-style-editor.template:716
-msgctxt "widget size, height"
-msgid "H"
-msgstr "H"
-
-#: src/templates/ags-style-editor.template:815
-#: src/templates/ags-style-editor.template:1332
+#: src/templates/ags-style-editor.template:689
+#: src/templates/ags-style-editor.template:1210
 msgid "Reset all colors"
 msgstr "Alle Farben zurücksetzen"
 
-#: src/templates/ags-style-editor.template:825
-#: src/templates/ags-style-editor.template:1198
-msgid "Reset widget sizes for {width}px"
-msgstr "Widget-Größen für {width}px zurücksetzen"
+#: src/templates/ags-style-editor.template:741
+msgid "Style Editor"
+msgstr "Stil-Editor"
 
-#: src/templates/ags-style-editor.template:906
+#: src/templates/ags-style-editor.template:788
 msgid "Colors"
 msgstr "Farben"
 
-#: src/templates/ags-style-editor.template:916
-msgid "Sizes"
-msgstr "Größen"
-
-#: src/templates/ags-style-editor.template:926
+#: src/templates/ags-style-editor.template:798
 msgid "Themes"
 msgstr "Themes"
 
-#: src/templates/ags-style-editor.template:978
+#: src/templates/ags-style-editor.template:849
 msgid "← Back"
 msgstr "← Zurück"
 
-#: src/templates/ags-style-editor.template:1117
+#: src/templates/ags-style-editor.template:988
 msgid "Presets"
 msgstr "Vorlagen"
 
-#: src/templates/ags-style-editor.template:1152
-#: src/templates/ags-vpn-settings.template:927
+#: src/templates/ags-style-editor.template:1061
+#: src/templates/ags-vpn-settings.template:1003
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: src/templates/ags-style-editor.template:1156
-#: src/templates/ags-style-editor.template:1321
+#: src/templates/ags-style-editor.template:1064
+#: src/templates/ags-style-editor.template:1192
 msgid "Apply"
 msgstr "Übernehmen"
 
-#: src/templates/ags-style-editor.template:1205
-msgid "Width and height for each widget (in pixels)"
-msgstr "Breite und Höhe für jedes Widget (in Pixel)"
-
-#: src/templates/ags-style-editor.template:1238
+#: src/templates/ags-style-editor.template:1097
 msgid "Predefined themes"
 msgstr "Vordefinierte Themes"
 
-#: src/templates/ags-style-editor.template:1242
+#: src/templates/ags-style-editor.template:1101
 msgid "Choose a theme to change all colors at once"
 msgstr "Wähle ein Theme um alle Farben auf einmal zu ändern"
 
-#: src/templates/ags-style-editor.template:1318
+#: src/templates/ags-style-editor.template:1189
 msgid "Regenerate all configs"
 msgstr "Alle Configs neu generieren"
 
-#: src/templates/ags-style-editor.template:1335
-#: src/templates/ags-vpn-settings.template:922
+#: src/templates/ags-style-editor.template:1213
+#: src/templates/ags-vpn-settings.template:1000
 msgid "Reset"
 msgstr "Reset"
 
-#: src/templates/ags-vpn-settings.template:259
-#: src/templates/ags-vpn-settings.template:294
-#: src/templates/ags-vpn-settings.template:850
+#: src/templates/ags-vpn-settings.template:309
+#: src/templates/ags-vpn-settings.template:344
+#: src/templates/ags-vpn-settings.template:894
 msgid "VPN settings"
 msgstr "VPN-Einstellungen"
 
-#: src/templates/ags-vpn-settings.template:294
+#: src/templates/ags-vpn-settings.template:344
 msgid "Settings saved"
 msgstr "Einstellungen gespeichert"
 
-#: src/templates/ags-vpn-settings.template:503
+#: src/templates/ags-vpn-settings.template:554
 msgid "Connection settings"
 msgstr "Verbindungseinstellungen"
 
-#: src/templates/ags-vpn-settings.template:507
+#: src/templates/ags-vpn-settings.template:558
 msgid "VPN server"
 msgstr "VPN Server"
 
-#: src/templates/ags-vpn-settings.template:508
+#: src/templates/ags-vpn-settings.template:559
 msgid "Connection name"
 msgstr "Verbindungsname"
 
-#: src/templates/ags-vpn-settings.template:509
+#: src/templates/ags-vpn-settings.template:560
 msgid "Default username"
 msgstr "Standard-Benutzername"
 
-#: src/templates/ags-vpn-settings.template:512
+#: src/templates/ags-vpn-settings.template:563
 msgid "Test host (optional)"
 msgstr "Test-Host (optional)"
 
-#: src/templates/ags-vpn-settings.template:517
+#: src/templates/ags-vpn-settings.template:568
 msgid "Enable XAuth"
 msgstr "XAuth aktivieren"
 
-#: src/templates/ags-vpn-settings.template:523
+#: src/templates/ags-vpn-settings.template:574
 msgid "Show debug terminal"
 msgstr "Debug-Terminal anzeigen"
 
-#: src/templates/ags-vpn-settings.template:530
+#: src/templates/ags-vpn-settings.template:581
 msgid "Pre-shared key"
 msgstr "Pre-Shared Key"
 
-#: src/templates/ags-vpn-settings.template:536
+#: src/templates/ags-vpn-settings.template:587
 msgid "Enter or show the PSK ..."
 msgstr "PSK eingeben oder anzeigen..."
 
-#: src/templates/ags-vpn-settings.template:543
+#: src/templates/ags-vpn-settings.template:612
 msgid "Show PSK"
 msgstr "PSK anzeigen"
 
-#: src/templates/ags-vpn-settings.template:572
-msgid "Save PSK"
-msgstr "PSK speichern"
-
-#: src/templates/ags-vpn-settings.template:582
+#: src/templates/ags-vpn-settings.template:632
 msgid "The PSK was stored securely"
 msgstr "PSK wurde sicher gespeichert"
 
-#: src/templates/ags-vpn-settings.template:582
-#: src/templates/ags-vpn-settings.template:596
+#: src/templates/ags-vpn-settings.template:632
+#: src/templates/ags-vpn-settings.template:646
 msgid "VPN PSK"
 msgstr "VPN PSK"
 
-#: src/templates/ags-vpn-settings.template:584
-#: src/templates/ags-vpn-settings.template:611
+#: src/templates/ags-vpn-settings.template:634
+#: src/templates/ags-vpn-settings.template:662
 msgid "✓ PSK present in {path}"
 msgstr "✓ PSK vorhanden in {path}"
 
-#: src/templates/ags-vpn-settings.template:596
+#: src/templates/ags-vpn-settings.template:646
 msgid "The PSK could not be saved"
 msgstr "PSK konnte nicht gespeichert werden"
 
-#: src/templates/ags-vpn-settings.template:598
+#: src/templates/ags-vpn-settings.template:648
 msgid "⚠ The PSK could not be saved"
 msgstr "⚠ PSK konnte nicht gespeichert werden"
 
-#: src/templates/ags-vpn-settings.template:614
+#: src/templates/ags-vpn-settings.template:654
+msgid "Save PSK"
+msgstr "PSK speichern"
+
+#: src/templates/ags-vpn-settings.template:665
 msgid "⚠ No PSK saved - please enter one and save it"
 msgstr "⚠ Kein PSK gespeichert - bitte eingeben und speichern"
 
-#: src/templates/ags-vpn-settings.template:630
+#: src/templates/ags-vpn-settings.template:681
 msgid "IKE phase 1 settings"
 msgstr "IKE Phase 1 Einstellungen"
 
-#: src/templates/ags-vpn-settings.template:635
-#: src/templates/ags-vpn-settings.template:676
+#: src/templates/ags-vpn-settings.template:686
+#: src/templates/ags-vpn-settings.template:727
 msgid "Mode"
 msgstr "Modus"
 
-#: src/templates/ags-vpn-settings.template:636
+#: src/templates/ags-vpn-settings.template:687
 msgid "Aggressive"
 msgstr "Aggressive"
 
-#: src/templates/ags-vpn-settings.template:637
+#: src/templates/ags-vpn-settings.template:688
 msgid "Main"
 msgstr "Main"
 
-#: src/templates/ags-vpn-settings.template:641
+#: src/templates/ags-vpn-settings.template:692
 msgid "IKE version"
 msgstr "IKE Version"
 
-#: src/templates/ags-vpn-settings.template:642
+#: src/templates/ags-vpn-settings.template:693
 msgid "IKEv1"
 msgstr "IKEv1"
 
-#: src/templates/ags-vpn-settings.template:643
+#: src/templates/ags-vpn-settings.template:694
 msgid "IKEv2"
 msgstr "IKEv2"
 
-#: src/templates/ags-vpn-settings.template:651
+#: src/templates/ags-vpn-settings.template:702
 msgid "IKE proposals"
 msgstr "IKE Proposals"
 
-#: src/templates/ags-vpn-settings.template:652
+#: src/templates/ags-vpn-settings.template:703
 msgid "Key lifetime (seconds)"
 msgstr "Key Lifetime (Sekunden)"
 
-#: src/templates/ags-vpn-settings.template:653
+#: src/templates/ags-vpn-settings.template:704
 msgid "DPD delay (seconds)"
 msgstr "DPD Delay (Sekunden)"
 
-#: src/templates/ags-vpn-settings.template:654
+#: src/templates/ags-vpn-settings.template:705
 msgid "DPD timeout (seconds)"
 msgstr "DPD Timeout (Sekunden)"
 
-#: src/templates/ags-vpn-settings.template:658
+#: src/templates/ags-vpn-settings.template:709
 msgid "NAT encapsulation"
 msgstr "NAT Encapsulation"
 
-#: src/templates/ags-vpn-settings.template:659
+#: src/templates/ags-vpn-settings.template:710
 msgid "MOBIKE"
 msgstr "MOBIKE"
 
-#: src/templates/ags-vpn-settings.template:669
+#: src/templates/ags-vpn-settings.template:720
 msgid "ESP phase 2 settings"
 msgstr "ESP Phase 2 Einstellungen"
 
-#: src/templates/ags-vpn-settings.template:673
+#: src/templates/ags-vpn-settings.template:724
 msgid "Rekey time (seconds)"
 msgstr "Rekey Time (Sekunden)"
 
-#: src/templates/ags-vpn-settings.template:674
+#: src/templates/ags-vpn-settings.template:725
 msgid "Life time (seconds)"
 msgstr "Life Time (Sekunden)"
 
-#: src/templates/ags-vpn-settings.template:677
+#: src/templates/ags-vpn-settings.template:728
 msgid "Tunnel"
 msgstr "Tunnel"
 
-#: src/templates/ags-vpn-settings.template:678
+#: src/templates/ags-vpn-settings.template:729
 msgid "Transport"
 msgstr "Transport"
 
-#: src/templates/ags-vpn-settings.template:681
+#: src/templates/ags-vpn-settings.template:732
 msgid "Replay window"
 msgstr "Replay Window"
 
-#: src/templates/ags-vpn-settings.template:682
+#: src/templates/ags-vpn-settings.template:733
 msgid "ESP proposals"
 msgstr "ESP Proposals"
 
-#: src/templates/ags-vpn-settings.template:691
+#: src/templates/ags-vpn-settings.template:742
 msgid "Routed networks"
 msgstr "Geroutete Netze"
 
-#: src/templates/ags-vpn-settings.template:697
+#: src/templates/ags-vpn-settings.template:753
 msgid "Add network"
 msgstr "Netz hinzufügen"
 
-#: src/templates/ags-vpn-settings.template:704
+#: src/templates/ags-vpn-settings.template:760
 msgid "Without at least one network the tunnel comes up and carries no traffic."
 msgstr "Ohne mindestens ein Netz baut sich der Tunnel auf und trägt keinen Verkehr."
 
-#: src/templates/ags-vpn-settings.template:730
+#: src/templates/ags-vpn-settings.template:786
 msgid "e.g. 10.0.0.0/8"
 msgstr "z.B. 10.0.0.0/8"
 
-#: src/templates/ags-vpn-settings.template:765
+#: src/templates/ags-vpn-settings.template:814
 msgid "DNS settings"
 msgstr "DNS Einstellungen"
 
-#: src/templates/ags-vpn-settings.template:769
+#: src/templates/ags-vpn-settings.template:818
 msgid "Search domain"
 msgstr "Search Domain"
 
-#: src/templates/ags-vpn-settings.template:773
+#: src/templates/ags-vpn-settings.template:822
 msgid "DNS servers"
 msgstr "DNS Server"
 
-#: src/templates/ags-vpn-settings.template:779
+#: src/templates/ags-vpn-settings.template:830
 msgid "Add DNS server"
 msgstr "DNS Server hinzufügen"
 
-#: src/templates/ags-vpn-settings.template:804
+#: src/templates/ags-vpn-settings.template:855
 msgid "IP address ..."
 msgstr "IP-Adresse..."
 
-#: src/templates/ags-vpn-settings.template:871
+#: src/templates/ags-vpn-settings.template:915
 msgid "General"
 msgstr "Allgemein"
 
-#: src/templates/ags-vpn-settings.template:872
+#: src/templates/ags-vpn-settings.template:916
 msgid "Phase 1"
 msgstr "Phase 1"
 
-#: src/templates/ags-vpn-settings.template:873
+#: src/templates/ags-vpn-settings.template:917
 msgid "Phase 2"
 msgstr "Phase 2"
 
-#: src/templates/ags-vpn-settings.template:934
+#: src/templates/ags-vpn-settings.template:1006
 msgid "← VPN"
 msgstr "← VPN"
 
-#: src/templates/ags-vpn-settings.template:935
+#: src/templates/ags-vpn-settings.template:1010
 msgid "Back to the VPN connection"
 msgstr "Zurück zur VPN-Verbindung"
 
-#: src/templates/ags-vpn-settings.template:944
+#: src/templates/ags-vpn-settings.template:1021
 msgid "Save"
 msgstr "Speichern"
 
-#: src/templates/ags-vpn.template:244 src/templates/ags-vpn.template:537
+#: src/templates/ags-vpn.template:398 src/templates/ags-vpn.template:667
 msgid "IP: {ip}"
 msgstr "IP: {ip}"
 
-#: src/templates/ags-vpn.template:245 src/templates/ags-vpn.template:540
+#: src/templates/ags-vpn.template:399 src/templates/ags-vpn.template:670
 msgid "Server: {server}"
 msgstr "Server: {server}"
 
-#: src/templates/ags-vpn.template:246 src/templates/ags-vpn.template:543
+#: src/templates/ags-vpn.template:400 src/templates/ags-vpn.template:673
 msgid "Connection: {connection}"
 msgstr "Verbindung: {connection}"
 
-#: src/templates/ags-vpn.template:263
+#: src/templates/ags-vpn.template:417
 msgid "VPN incomplete – please reconnect"
 msgstr "VPN unvollständig – bitte neu verbinden"
 
-#: src/templates/ags-vpn.template:274 src/templates/ags-vpn.template:584
+#: src/templates/ags-vpn.template:428 src/templates/ags-vpn.template:711
 msgid "Not connected"
 msgstr "Nicht verbunden"
 
-#: src/templates/ags-vpn.template:302
+#: src/templates/ags-vpn.template:454
+msgid "VPN"
+msgstr "VPN"
+
+#: src/templates/ags-vpn.template:467
 msgid "Username required"
 msgstr "Benutzername erforderlich"
 
-#: src/templates/ags-vpn.template:306
+#: src/templates/ags-vpn.template:471
 msgid "Password required"
 msgstr "Passwort erforderlich"
 
-#: src/templates/ags-vpn.template:314
+#: src/templates/ags-vpn.template:479
 msgid "PSK not found! Please save it in the VPN settings."
 msgstr "PSK nicht gefunden! Bitte in VPN-Einstellungen speichern."
 
-#: src/templates/ags-vpn.template:418
+#: src/templates/ags-vpn.template:585
 msgid "Disconnecting ..."
 msgstr "Trenne..."
 
-#: src/templates/ags-vpn.template:467
-msgid "VPN connection"
-msgstr "VPN Verbindung"
-
-#: src/templates/ags-vpn.template:527
+#: src/templates/ags-vpn.template:657
 msgid "Connected"
 msgstr "Verbunden"
 
-#: src/templates/ags-vpn.template:606
+#: src/templates/ags-vpn.template:730
 msgid "Username"
 msgstr "Benutzername"
 
-#: src/templates/ags-vpn.template:612
+#: src/templates/ags-vpn.template:736
 msgid "Username ..."
 msgstr "Benutzername..."
 
-#: src/templates/ags-vpn.template:623
+#: src/templates/ags-vpn.template:747
 msgid "Password"
 msgstr "Passwort"
 
-#: src/templates/ags-vpn.template:629
+#: src/templates/ags-vpn.template:753
 msgid "Password ..."
 msgstr "Passwort..."
 
-#: src/templates/ags-vpn.template:656
+#: src/templates/ags-vpn.template:788
 msgid "2FA token (optional)"
 msgstr "2FA Token (optional)"
 
-#: src/templates/ags-vpn.template:662
+#: src/templates/ags-vpn.template:794
 msgid "6-digit code ..."
 msgstr "6-stelliger Code..."
 
-#: src/templates/ags-vpn.template:674
+#: src/templates/ags-vpn.template:806
 msgid "Remember username"
 msgstr "Benutzername merken"
 
-#: src/templates/ags-wallpaper.template:156
+#: src/templates/ags-wallpaper.template:196
 msgid "Unknown"
 msgstr "Unbekannt"
 
-#: src/templates/ags-wallpaper.template:187
-msgid "Confirmation"
-msgstr "Bestätigung"
-
-#: src/templates/ags-wallpaper.template:201
-msgid "Delete wallpaper?"
-msgstr "Wallpaper löschen?"
-
-#: src/templates/ags-wallpaper.template:209
+#: src/templates/ags-wallpaper.template:261
 msgid "Really delete \"{name}\"?"
 msgstr "\"{name}\" wirklich löschen?"
 
-#: src/templates/ags-wallpaper.template:214
-msgid "No"
-msgstr "Nein"
-
-#: src/templates/ags-wallpaper.template:221
-msgid "Yes"
-msgstr "Ja"
-
-#: src/templates/ags-wallpaper.template:300
+#: src/templates/ags-wallpaper.template:330
 msgid "Setting: {name}"
 msgstr "Setze: {name}"
 
-#: src/templates/ags-wallpaper.template:333
-#: src/templates/ags-wallpaper.template:469
+#: src/templates/ags-wallpaper.template:363
+#: src/templates/ags-wallpaper.template:519
 msgid "LANDSCAPE"
 msgstr "LANDSCAPE"
 
-#: src/templates/ags-wallpaper.template:333
+#: src/templates/ags-wallpaper.template:363
 msgid "PORTRAIT"
 msgstr "PORTRAIT"
 
-#: src/templates/ags-wallpaper.template:371
-#: src/templates/ags-wallpaper.template:473
+#: src/templates/ags-wallpaper.template:401
+#: src/templates/ags-wallpaper.template:523
 msgid "Landscape Wallpapers"
 msgstr "Landscape Wallpapers"
 
-#: src/templates/ags-wallpaper.template:371
+#: src/templates/ags-wallpaper.template:401
 msgid "Portrait Wallpapers"
 msgstr "Portrait Wallpapers"
 
-#: src/templates/ags-wallpaper.template:395
+#: src/templates/ags-wallpaper.template:425
 msgid "{icon} Monitor:"
 msgstr "{icon} Monitor:"
 
-#: src/templates/ags-wallpaper.template:405
+#: src/templates/ags-wallpaper.template:435
 msgctxt "monitor orientation, portrait"
 msgid "P"
 msgstr "H"
 
-#: src/templates/ags-wallpaper.template:406
+#: src/templates/ags-wallpaper.template:436
 msgctxt "monitor orientation, landscape"
 msgid "L"
 msgstr "Q"
 
-#: src/templates/ags-wallpaper.template:413
+#: src/templates/ags-wallpaper.template:449
 msgid "{monitor} ({orientation})"
 msgstr "{monitor} ({orientation})"
 
-#: src/templates/ags-wallpaper.template:415
+#: src/templates/ags-wallpaper.template:451
 msgid "Landscape"
 msgstr "Landscape"
 
-#: src/templates/ags-wallpaper.template:415
+#: src/templates/ags-wallpaper.template:451
 msgid "Portrait"
 msgstr "Portrait"
 
-#: src/templates/ags-wallpaper.template:437
+#: src/templates/ags-wallpaper.template:472
 msgid "Wallpapers"
 msgstr "Hintergründe"
 
-#: src/templates/ags-wallpaper.template:481
+#: src/templates/ags-wallpaper.template:537
 msgid "Import wallpaper"
 msgstr "Wallpaper importieren"
 
-#: src/templates/ags-wallpaper.template:525
+#: src/templates/ags-wallpaper.template:584
 msgid "Random wallpaper for this monitor"
 msgstr "Zufälliges Wallpaper für diesen Monitor"
 
-#: src/templates/ags-wallpaper.template:533
+#: src/templates/ags-wallpaper.template:592
 msgid "Random"
 msgstr "Random"
 
-#: src/templates/ags-wallpaper.template:549
+#: src/templates/ags-wallpaper.template:606
 msgid "Regenerate thumbnails"
 msgstr "Thumbnails neu generieren"
 
-#: src/templates/ags-wallpaper.template:557
+#: src/templates/ags-wallpaper.template:614
 msgid "Refresh"
 msgstr "Refresh"
+
+#: src/templates/ags-wallpaper.template:650
+msgid "Delete wallpaper?"
+msgstr "Wallpaper löschen?"
+
+#: src/templates/ags-wallpaper.template:663
+msgid "No"
+msgstr "Nein"
+
+#: src/templates/ags-wallpaper.template:670
+msgid "Yes"
+msgstr "Ja"
+
+#~ msgid "This page is moving."
+#~ msgstr "Diese Seite zieht gerade um."
+
+#~ msgid "Shortcuts"
+#~ msgstr "Tastenkürzel"
+
+#~ msgid "Disk Usage"
+#~ msgstr "Speicherplatz"
+
+#~ msgid "VPN Settings"
+#~ msgstr "VPN-Einstellungen"
+
+#~ msgctxt "widget size, width"
+#~ msgid "W"
+#~ msgstr "B"
+
+#~ msgctxt "widget size, height"
+#~ msgid "H"
+#~ msgstr "H"
+
+#~ msgid "Reset widget sizes for {width}px"
+#~ msgstr "Widget-Größen für {width}px zurücksetzen"
+
+#~ msgid "Sizes"
+#~ msgstr "Größen"
+
+#~ msgid "Width and height for each widget (in pixels)"
+#~ msgstr "Breite und Höhe für jedes Widget (in Pixel)"
+
+#~ msgid "VPN connection"
+#~ msgstr "VPN Verbindung"
+
+#~ msgid "Confirmation"
+#~ msgstr "Bestätigung"

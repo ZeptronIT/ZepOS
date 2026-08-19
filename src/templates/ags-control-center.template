@@ -184,6 +184,20 @@ function joined(value: unknown): string {
   return Array.isArray(value) ? value.join(", ") : ""
 }
 
+// Ein Behaelter leeren, bevor ein frisches Bauteil hineinkommt - dieselbe
+// Funktion wie in ags-network.template/ags-bluetooth.template, hier
+// gebraucht seit Aufgabe 17 (19.08.2026): soundSeite/displaySeite bauen
+// ihren zepStateHeader jeden Takt neu (er kennt keinen Mutator fuer
+// seinen Text), genau wie statusWrap dort.
+function removeAllChildren(box: Gtk.Box): void {
+  let child = box.get_first_child()
+  while (child) {
+    const next = child.get_next_sibling()
+    box.remove(child)
+    child = next
+  }
+}
+
 // Ein Skript rufen
 //
 // EIN SKRIPT, DAS SEINEN EIGENEN PFAD AUSGIBT, HAT NICHT GEANTWORTET -
@@ -333,12 +347,16 @@ let closeFn: (() => void) | null = null
  * die Seite "general" unter SYSTEM - nichts ist weggenommen, siehe die
  * Zusage vom 17.08.2026 ("alle funktionen auch im control panel aber
  * auch ausserhalb"). Netzwerk, Bluetooth und VPN bekommen ihre
- * Eintraege unter VERBINDUNGEN schon jetzt, zeigen aber bis zu den
- * Aufgaben 7-9 nur einen Umzugshinweis (siehe stubSeite() unten) - ein
- * Eintrag, der ins Leere fuehrt, ist schlimmer als einer, der sagt, was
- * los ist. Dasselbe gilt fuer Ton und Anzeige unter SYSTEM: die
- * Spezifikation sieht sie vor, dieser Plan baut sie nicht (siehe
- * Bericht zu Aufgabe 6).
+ * Eintraege unter VERBINDUNGEN in den Aufgaben 7-9. Ton und Anzeige
+ * unter SYSTEM standen bis Aufgabe 17 (19.08.2026) noch auf demselben
+ * Umzugshinweis (stubSeite(), Aufgabe 6) - ein Eintrag, der ins Leere
+ * fuehrt, ist schlimmer als einer, der sagt, was los ist. Seit Aufgabe
+ * 17 sind auch sie echte Seiten: soundSeite traegt Lautstaerke und
+ * Mikrofon, displaySeite die Helligkeit - beide Regler standen vorher
+ * auf "general" (siehe der Kommentar bei soundSeite/displaySeite unten
+ * fuer die Zaehlung, die belegt, dass dabei kein Bedienelement verloren
+ * geht). stubSeite() selbst ist mit diesem Umzug gegangen: kein Aufrufer
+ * blieb (Rule 14, totes Werkzeug wird geloescht, nicht behalten).
  *
  * `toggle` oeffnet ein anderes Aufklappfenster DIESES Prozesses - genau
  * die Funktion, die auch die Leiste bekommt (toggleByName in
@@ -361,14 +379,6 @@ export default function ControlCenter(
   let ipLabel: Gtk.Label
   let vpnIcon: Gtk.Label
   let vpnLabel: Gtk.Label
-  let volumeSlider: Gtk.Scale
-  let volumeIcon: Gtk.Label
-  let volumeLabel: Gtk.Label
-  let micSlider: Gtk.Scale
-  let micIcon: Gtk.Label
-  let micLabel: Gtk.Label
-  let brightnessSlider: Gtk.Scale
-  let brightnessLabel: Gtk.Label
   let printerLabel: Gtk.Label
   let watchdogLabel: Gtk.Label
   let watchdogIcon: Gtk.Label
@@ -447,22 +457,22 @@ export default function ControlCenter(
       vpnIcon.add_css_class("disconnected")
     }
 
-    // Ton
-    const vol = await getVolumeStatus()
-    volumeSlider.set_value(vol.level)
-    volumeIcon.set_text(vol.muted ? ICONS.volumeMute : ICONS.volume)
-    volumeLabel.set_text(`${vol.level}%`)
-
-    // Mikrofon
-    const mic = await getMicStatus()
-    micSlider.set_value(mic.level)
-    micIcon.set_text(mic.muted ? ICONS.micMute : ICONS.mic)
-    micLabel.set_text(`${mic.level}%`)
-
-    // Helligkeit
-    const brightness = await getBrightness()
-    brightnessSlider.set_value(brightness)
-    brightnessLabel.set_text(`${brightness}%`)
+    // Ton und Helligkeit: SEIT AUFGABE 17 (19.08.2026) NICHT MEHR HIER
+    //
+    // Lautstaerke, Mikrofon und Helligkeit lasen bis heute hier ihren
+    // Zustand - dieselben drei Regler standen auf "general". Sie sind
+    // mit Aufgabe 17 auf ihre eigenen Seiten umgezogen (soundSeite,
+    // displaySeite, beide unten in dieser Datei) und lesen ihren
+    // Zustand seither dort, ueber ihre eigene, istAktiv-gegatete
+    // Schliessung - derselbe Grund, aus dem Bluetooth/Netzwerk/VPN ihren
+    // eigenen Takt fuehren und nicht den von "general" (Aufgabe 15/16,
+    // "1.2 Was stattdessen real und reparaturwuerdig war"): ein Takt,
+    // der fuer eine Seite arbeitet, die gerade niemand sieht, ist
+    // unnoetige Arbeit bei jedem Oeffnen der Schale.
+    //
+    // getVolumeStatus()/getMicStatus()/getBrightness() bleiben
+    // module-weite Funktionen (siehe oben) - soundSeite/displaySeite
+    // rufen dieselben drei auf, keine zweite Fassung.
 
     // Systemdienste
     printerLabel.set_text(await getPrinterStatus())
@@ -584,26 +594,6 @@ export default function ControlCenter(
   const gruppeVerbindungen = _("CONNECTIONS")
   const gruppeSystem = _("SYSTEM")
 
-  // Der Umzugshinweis (Aufgabenblatt 6, Schritt 2, woertlich): "Ein
-  // Eintrag, der ins Leere fuehrt, ist schlimmer als einer, der sagt,
-  // was los ist." Netzwerk, Bluetooth und VPN ziehen in den Aufgaben
-  // 7-9 ein; Ton und Anzeige stehen in der Spezifikation (Abschnitt
-  // 2.2), werden aber von diesem Plan ueberhaupt nicht gebaut (siehe
-  // Bericht zu Aufgabe 6) - beide Faelle bekommen deshalb denselben
-  // Platzhalter statt eines fehlenden oder toten Eintrags.
-  const UMZUGSHINWEIS = _("This page is moving.")
-
-  // Eine Seite, die nur den Umzugshinweis zeigt - fuenfmal gebraucht
-  // (Netzwerk, Bluetooth, VPN, Ton, Anzeige), darum eine Funktion und
-  // nicht fuenf fast identische Objektliterale (derselbe Grundsatz wie
-  // bei ccLabel/mediaButton/deskRow weiter unten in dieser Datei).
-  const stubSeite = (
-    id: string, titel: string, symbol: string, gruppe: string,
-  ): ShellSeite => ({
-    id, titel, symbol, gruppe,
-    bauen: () => zepStateHeader({ titel, unterzeile: UMZUGSHINWEIS }),
-  })
-
   // VERBINDUNGEN: "bluetooth", "network" und "vpn" sind seit Aufgabe 7/8/9
   // (18.08.2026) alle drei die echten, importierten Seiten - siehe die
   // Importe am Kopf dieser Datei. Ihre `gruppe` traegt denselben msgid
@@ -611,14 +601,216 @@ export default function ControlCenter(
   // denselben msgid ergeben denselben Text; gruppenAus() gruppiert nach
   // dem TEXT), darum keine eigene Uebergabe von aussen.
 
-  // SYSTEM: Ton und Anzeige, ausserhalb des Umfangs dieses Plans (siehe
-  // Bericht) - beide bleiben Umzugshinweise, bis eine spaetere Aufgabe
-  // sie mit echtem Inhalt aus dem Abschnitt "TON UND BILD" unten
-  // fuellt.
-  const soundSeite = stubSeite("sound", _("Sound"), ICONS.volume,
-                               gruppeSystem)
-  const displaySeite = stubSeite("display", _("Display"), ICONS.displays,
-                                 gruppeSystem)
+  // SYSTEM: Ton und Anzeige, seit Aufgabe 17 (19.08.2026) echte Seiten -
+  // vorher zeigten beide nur den Umzugshinweis aus stubSeite() (Aufgabe
+  // 6). "Das Meiste ist schon gebaut, es sitzt nur an der falschen
+  // Stelle" (Aufgabenblatt 17, woertlich): volumeSlider/micSlider/
+  // brightnessSlider samt ihrer Mute-Knoepfe standen bis heute auf
+  // "general" (Abschnitt TON UND BILD, siehe unten) - dieselben
+  // Bedienelemente ziehen hier ein, keine Neuentwicklung.
+  //
+  // WARUM ZWEI SEITEN UND NICHT EINE GEMEINSAME "TON & ANZEIGE"
+  //     Die Spezifikation (Abschnitt 2.2) fuehrt "Ton" und "Anzeige" als
+  //     ZWEI eigene Sidebar-Eintraege - dieser Auftrag baut genau das
+  //     nach, keine Zusammenlegung, die es dort nicht gibt.
+  //
+  // WARUM DER KOPF DER SOUND-SEITE ZWEI WERTE TRAEGT
+  //     zepStateHeader kennt Titel und Nebenzeile, kein drittes Feld
+  //     (Aufgabe 4, ags-kit.template) - "der Kopf ist der Zustand"
+  //     (Spezifikation 2.2). Die Sound-Seite haelt ZWEI unabhaengige
+  //     Regler (Lautstaerke, Mikrofon); ihr Zustand ist deshalb beides:
+  //     Titel fuer die Lautstaerke (die Beispielzeile des Aufgabenblatts,
+  //     "Lautstaerke 40 %") und Nebenzeile fuer das Mikrofon. Anzeige
+  //     traegt nur einen Regler und darum nur einen Titel.
+  //
+  // WAS AN DEN UEBERNOMMENEN BEDIENELEMENTEN SELBST GEAENDERT WURDE:
+  // NICHTS. Byte fuer Byte dieselben zepButton()-Aufrufe, dieselben
+  // Gtk.Scale-Bereiche (0-100 fuer Ton, 5-100 fuer Helligkeit) und
+  // dieselben Befehle (pamixer/brightnessctl) wie vorher auf "general" -
+  // nur updateDisplay() heisst hier lokal updateSound()/updateBrightness()
+  // und liest istAktiv(), wie es Netzwerk/Bluetooth/VPN seit Aufgabe
+  // 15/16 auch tun (kein Takt fuer eine Seite, die niemand sieht).
+  //
+  // BEDIENELEMENTE VORHER/NACHHER (Aufgabenblatt 17, "zaehl sie wieder"):
+  // siehe der Bericht dieser Aufgabe fuer die vollstaendige Rechnung -
+  // 29 vorher (26 Knoepfe + 3 Regler, alle auf "general"), 29 nachher
+  // (24 Knoepfe + 0 Regler auf "general", 2 Knoepfe + 2 Regler auf
+  // "sound", 0 Knoepfe + 1 Regler auf "display" - 24+4+1 = 29). Es
+  // verschwindet nichts, nur der Ort aendert sich.
+  const soundSeite: ShellSeite = {
+    id: "sound",
+    titel: _("Sound"),
+    symbol: ICONS.volume,
+    gruppe: gruppeSystem,
+    bauen: (win, _schliessen, istAktiv) => {
+      let headerWrap: Gtk.Box
+      let volumeSlider: Gtk.Scale, volumeIcon: Gtk.Label, volumeLabel: Gtk.Label
+      let micSlider: Gtk.Scale, micIcon: Gtk.Label, micLabel: Gtk.Label
+
+      const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+      mainBox.add_css_class("cc-container")
+      // Der Mindestbreiten-Boden der Schale (.zep-shell-page,
+      // ags-style.template) - dieselbe Rechnung wie bei Netzwerk/
+      // Bluetooth/VPN (Aufgabe 15/16): SHELL_WIDTH (880) minus die
+      // 208px feste Seitenleiste = 672 fuer den Seiteninhalt selbst.
+      mainBox.add_css_class("zep-shell-page")
+
+      headerWrap = new Gtk.Box({})
+      mainBox.append(headerWrap)
+
+      // Zeile: die Lautstaerke - unveraendert aus "general" uebernommen
+      // (Aufgabe 6/Task D, 18.08.2026). set_child() ueberschreibt die
+      // Beschriftung von zepButton mit volumeIcon selbst, weil
+      // updateSound() dessen Text laufend zwischen ICONS.volume/
+      // ICONS.volumeMute wechselt (derselbe Kunstgriff wie vorher).
+      const volRow = new Gtk.Box({ spacing: 8 })
+      volRow.add_css_class("cc-row")
+      volumeIcon = new Gtk.Label({ label: ICONS.volume })
+      volumeIcon.add_css_class("cc-icon")
+      volumeIcon.add_css_class("volume-icon")
+      const volBtn = zepButton("", "still", async () => {
+        await execAsync("pamixer -t")
+        updateSound()
+      })
+      volBtn.set_child(volumeIcon)
+      volumeSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
+      volumeSlider.set_range(0, 100)
+      volumeSlider.add_css_class("cc-slider")
+      volumeSlider.connect("value-changed", () => {
+        const val = Math.round(volumeSlider.get_value())
+        volumeLabel.set_text(`${val}%`)
+        execAsync(`pamixer --set-volume ${val}`)
+      })
+      volumeLabel = new Gtk.Label({ label: "0%" })
+      volumeLabel.add_css_class("cc-value")
+      volRow.append(volBtn)
+      volRow.append(volumeSlider)
+      volRow.append(volumeLabel)
+
+      // Zeile: das Mikrofon - unveraendert aus "general" uebernommen.
+      const micRow = new Gtk.Box({ spacing: 8 })
+      micRow.add_css_class("cc-row")
+      micIcon = new Gtk.Label({ label: ICONS.mic })
+      micIcon.add_css_class("cc-icon")
+      micIcon.add_css_class("mic-icon")
+      const micBtn = zepButton("", "still", async () => {
+        await execAsync("pamixer --default-source -t")
+        updateSound()
+      })
+      micBtn.set_child(micIcon)
+      micSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
+      micSlider.set_range(0, 100)
+      micSlider.add_css_class("cc-slider")
+      micSlider.connect("value-changed", () => {
+        const val = Math.round(micSlider.get_value())
+        micLabel.set_text(`${val}%`)
+        execAsync(`pamixer --default-source --set-volume ${val}`)
+      })
+      micLabel = new Gtk.Label({ label: "0%" })
+      micLabel.add_css_class("cc-value")
+      micRow.append(micBtn)
+      micRow.append(micSlider)
+      micRow.append(micLabel)
+
+      mainBox.append(volRow)
+      mainBox.append(micRow)
+
+      const updateSound = async () => {
+        const vol = await getVolumeStatus()
+        volumeSlider.set_value(vol.level)
+        volumeIcon.set_text(vol.muted ? ICONS.volumeMute : ICONS.volume)
+        volumeLabel.set_text(`${vol.level}%`)
+
+        const mic = await getMicStatus()
+        micSlider.set_value(mic.level)
+        micIcon.set_text(mic.muted ? ICONS.micMute : ICONS.mic)
+        micLabel.set_text(`${mic.level}%`)
+
+        removeAllChildren(headerWrap)
+        headerWrap.append(zepStateHeader({
+          titel: vol.muted
+            ? _("Volume muted")
+            : format(_("Volume {level}%"), { level: vol.level }),
+          unterzeile: mic.muted
+            ? _("Microphone muted")
+            : format(_("Microphone {level}%"), { level: mic.level }),
+        }))
+      }
+
+      // NUR WENN DIESE SEITE AUCH DIE AKTIVE IST - derselbe Grundsatz wie
+      // Netzwerk/Bluetooth/VPN (Aufgabe 15/16, Fund 1.3): der Takt laeuft
+      // fuer die Lebensdauer der Schale, tut aber nur etwas, wenn "sound"
+      // auch die gezeigte Seite ist.
+      interval(UPDATE_INTERVAL, () => { if (win.visible && istAktiv()) updateSound() })
+      win.connect("notify::visible", () => {
+        if (win.visible && istAktiv()) updateSound()
+      })
+
+      return mainBox
+    },
+  }
+
+  const displaySeite: ShellSeite = {
+    id: "display",
+    titel: _("Display"),
+    symbol: ICONS.displays,
+    gruppe: gruppeSystem,
+    bauen: (win, _schliessen, istAktiv) => {
+      let headerWrap: Gtk.Box
+      let brightnessSlider: Gtk.Scale, brightnessLabel: Gtk.Label
+
+      const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+      mainBox.add_css_class("cc-container")
+      mainBox.add_css_class("zep-shell-page")
+
+      headerWrap = new Gtk.Box({})
+      mainBox.append(headerWrap)
+
+      // Zeile: die Helligkeit - unveraendert aus "general" uebernommen
+      // (Aufgabe 6/Task D, 18.08.2026): kein Knopf, weil Helligkeit -
+      // anders als Lautstaerke/Mikrofon - kein Stummschalten kennt, also
+      // keine Handlung, die ein Knopf sinnvoll uebernehmen koennte (Spec
+      // §7.4, "ein Knopf, hinter dem nichts passiert").
+      const brightRow = new Gtk.Box({ spacing: 8 })
+      brightRow.add_css_class("cc-row")
+      const brightIcon = new Gtk.Label({ label: ICONS.brightness })
+      brightIcon.add_css_class("cc-icon")
+      brightIcon.add_css_class("brightness-icon")
+      brightnessSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
+      brightnessSlider.set_range(5, 100)
+      brightnessSlider.add_css_class("cc-slider")
+      brightnessSlider.connect("value-changed", () => {
+        const val = Math.round(brightnessSlider.get_value())
+        brightnessLabel.set_text(`${val}%`)
+        execAsync(`brightnessctl set ${val}%`)
+      })
+      brightnessLabel = new Gtk.Label({ label: "100%" })
+      brightnessLabel.add_css_class("cc-value")
+      brightRow.append(brightIcon)
+      brightRow.append(brightnessSlider)
+      brightRow.append(brightnessLabel)
+
+      mainBox.append(brightRow)
+
+      const updateBrightness = async () => {
+        const brightness = await getBrightness()
+        brightnessSlider.set_value(brightness)
+        brightnessLabel.set_text(`${brightness}%`)
+
+        removeAllChildren(headerWrap)
+        headerWrap.append(zepStateHeader({
+          titel: format(_("Brightness {level}%"), { level: brightness }),
+        }))
+      }
+
+      interval(UPDATE_INTERVAL, () => { if (win.visible && istAktiv()) updateBrightness() })
+      win.connect("notify::visible", () => {
+        if (win.visible && istAktiv()) updateBrightness()
+      })
+
+      return mainBox
+    },
+  }
 
   // DIE SEITE "general": WAS DAS KONTROLLZENTRUM VOR AUFGABE 6 GANZ
   // ALLEIN WAR
@@ -675,6 +867,18 @@ export default function ControlCenter(
       // Die Oberflaeche bauen
       const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
       mainBox.add_css_class("cc-container")
+      // NACHGETRAGEN Aufgabe 17 (19.08.2026): "general" erreichte 672+
+      // bisher NUR, weil sein eigener Inhalt zufaellig breit genug war
+      // (Aufgabe 15, siehe der Kommentar bei .zep-shell-page,
+      // ags-style.template) - kein erzwungener Boden, nur ein Zufall.
+      // Seit dieser Aufgabe DREI Zeilen weniger (Lautstaerke, Mikrofon,
+      // Helligkeit sind auf "sound"/"display" umgezogen): GEMESSEN,
+      // echter Compositor, 852 statt 880 (-28) OHNE diese Klasse. Mit
+      // ihr - und der Verbundregel `.cc-container.zep-shell-page` in
+      // ags-style.template, die .cc-container's eigenes 320px-Minimum
+      // fuer Notifications unangetastet laesst - erreicht general
+      // wieder verlaesslich die vollen 880, wie Netzwerk/Bluetooth/VPN.
+      mainBox.add_css_class("zep-shell-page")
 
       /** Die Beschriftung einer Zeile - die, die den Text traegt.
        *
@@ -962,100 +1166,19 @@ export default function ControlCenter(
       div1.add_css_class("cc-divider")
 
       // ===== TON UND BILD =====
+      //
+      // NUR NOCH ZWEI ZEILEN SEIT AUFGABE 17 (19.08.2026): Lautstaerke,
+      // Mikrofon und Helligkeit sind auf ihre eigenen Seiten umgezogen
+      // (soundSeite, displaySeite - siehe unten in dieser Datei). Die
+      // Ueberschrift "SOUND & DISPLAY" bleibt trotzdem stehen, weil sie
+      // fuer die BEIDEN verbliebenen Zeilen weiterhin stimmt:
+      // mediaRow handelt von dem, was durch die Lautstaerke hindurchgeht
+      // (Wiedergabe), displayRow oeffnet die Bildschirmanordnung (nwg-
+      // displays-Nachfolger) - beides Nebenfunktionen dieses Fensters,
+      // keine der beiden ist "die" Lautstaerke- oder Helligkeitsregelung
+      // selbst, die jetzt auf ihrer eigenen Seite steht.
       const audioTitle = new Gtk.Label({ label: _("SOUND & DISPLAY"), xalign: 0 })
       audioTitle.add_css_class("cc-section-title")
-
-      // Zeile: die Lautstaerke
-      const volRow = new Gtk.Box({ spacing: 8 })
-      volRow.add_css_class("cc-row")
-      volumeIcon = new Gtk.Label({ label: ICONS.volume })
-      volumeIcon.add_css_class("cc-icon")
-      volumeIcon.add_css_class("volume-icon")
-      // zepButton, Rolle "still" (Task D, 18.08.2026): ein kleiner
-      // Nebenweg neben dem Regler, nicht die Hauptsache der Zeile -
-      // .zep-btn-still ist ebenso randlos wie das bisherige
-      // cc-icon-btn. set_child() ueberschreibt die Beschriftung von
-      // zepButton mit volumeIcon selbst (derselbe Kunstgriff wie
-      // btnBox in ags-battery.template), weil updateDisplay() dessen
-      // Text laufend zwischen ICONS.volume/ICONS.volumeMute wechselt.
-      const volBtn = zepButton("", "still", async () => {
-        await execAsync("pamixer -t")
-        updateDisplay()
-      })
-      volBtn.set_child(volumeIcon)
-      volumeSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
-      volumeSlider.set_range(0, 100)
-      volumeSlider.add_css_class("cc-slider")
-      volumeSlider.connect("value-changed", () => {
-        const val = Math.round(volumeSlider.get_value())
-        volumeLabel.set_text(`${val}%`)
-        execAsync(`pamixer --set-volume ${val}`)
-      })
-      volumeLabel = new Gtk.Label({ label: "0%" })
-      volumeLabel.add_css_class("cc-value")
-      volRow.append(volBtn)
-      volRow.append(volumeSlider)
-      volRow.append(volumeLabel)
-
-      // Zeile: das Mikrofon
-      const micRow = new Gtk.Box({ spacing: 8 })
-      micRow.add_css_class("cc-row")
-      micIcon = new Gtk.Label({ label: ICONS.mic })
-      micIcon.add_css_class("cc-icon")
-      micIcon.add_css_class("mic-icon")
-      // zepButton, Rolle "still" (Task D, 18.08.2026): wie volBtn oben,
-      // derselbe Kunstgriff mit set_child(micIcon).
-      const micBtn = zepButton("", "still", async () => {
-        await execAsync("pamixer --default-source -t")
-        updateDisplay()
-      })
-      micBtn.set_child(micIcon)
-      micSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
-      micSlider.set_range(0, 100)
-      micSlider.add_css_class("cc-slider")
-      micSlider.connect("value-changed", () => {
-        const val = Math.round(micSlider.get_value())
-        micLabel.set_text(`${val}%`)
-        execAsync(`pamixer --default-source --set-volume ${val}`)
-      })
-      micLabel = new Gtk.Label({ label: "0%" })
-      micLabel.add_css_class("cc-value")
-      micRow.append(micBtn)
-      micRow.append(micSlider)
-      micRow.append(micLabel)
-
-      // Zeile: die Helligkeit
-      //
-      // GEFUNDEN am 18.08.2026 (Task D) beim Umbau von cc-icon-btn auf
-      // zepButton: brightBtn war ein Gtk.Button OHNE
-      // connect("clicked", ...) - ein Knopf, hinter dem nichts
-      // passiert, nach Spec §7.4 "der schlimmste Fehler, den ZepOS
-      // erzeugen kann" (Wortlaut siehe Kommentar zu deskRow weiter
-      // unten in dieser Datei). zepButton verlangt eine Aktion im
-      // Aufruf selbst und macht so einen tatenlosen Knopf unmoeglich -
-      // und anders als Lautstaerke/Mikrofon kennt Helligkeit kein
-      // Stummschalten, also keine Handlung, die dieser Knopf sinnvoll
-      // uebernehmen koennte. Er wird darum kein Knopf mehr, nur noch
-      // das Zeichen selbst - wie printerIcon/watchdogIcon/helpersIcon
-      // in diesem Fenster, die ebenfalls ohne Knopf auskommen.
-      const brightRow = new Gtk.Box({ spacing: 8 })
-      brightRow.add_css_class("cc-row")
-      const brightIcon = new Gtk.Label({ label: ICONS.brightness })
-      brightIcon.add_css_class("cc-icon")
-      brightIcon.add_css_class("brightness-icon")
-      brightnessSlider = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false })
-      brightnessSlider.set_range(5, 100)
-      brightnessSlider.add_css_class("cc-slider")
-      brightnessSlider.connect("value-changed", () => {
-        const val = Math.round(brightnessSlider.get_value())
-        brightnessLabel.set_text(`${val}%`)
-        execAsync(`brightnessctl set ${val}%`)
-      })
-      brightnessLabel = new Gtk.Label({ label: "100%" })
-      brightnessLabel.add_css_class("cc-value")
-      brightRow.append(brightIcon)
-      brightRow.append(brightnessSlider)
-      brightRow.append(brightnessLabel)
 
       // Zeile: die Wiedergabe
       //
@@ -1529,9 +1652,6 @@ export default function ControlCenter(
       mainBox.append(btRow)
       mainBox.append(div1)
       mainBox.append(audioTitle)
-      mainBox.append(volRow)
-      mainBox.append(micRow)
-      mainBox.append(brightRow)
       mainBox.append(mediaRow)
       mainBox.append(displayRow)
       mainBox.append(div2)
