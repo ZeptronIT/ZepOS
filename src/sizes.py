@@ -1420,19 +1420,45 @@ TABLE: dict[str, Size] = {
     # ungefaehr so breit wie hoch. STYLE_ICON_CAPTION (roh 13, dieselbe
     # Verankerung wie STYLE_FONT_BODY - siehe icon_px()) ist damit die
     # sichere obere Schranke fuer EIN Zeichen an dieser Schriftgroesse,
-    # ohne dass sie beschnitten wird. Dazu zweimal STYLE_PADDING_BUTTON
-    # (roh 5), dieselbe Polsterung, die `.bar-module` bereits traegt -
-    # keine zweite Zahl fuer denselben Rand.
+    # ohne dass sie beschnitten wird.
     #
-    #     13 + 2*5 = 23.
+    # DER WERT WAR BIS ZUM SPAETEN 19.08.2026 23 UND NICHT 13, UND DAS
+    # WAR EIN RECHENFEHLER MIT ZWEI SICHTBAREN FOLGEN (Aufgabe 33).
     #
-    # GEGENGEPRUEFT: 23 roh skaliert auf 35px bei Vorgabegroesse - nahe an
-    # der GEMESSENEN #network-Breite (Zeichen 19 + 2*Polsterung 8 = 35),
-    # dem bisher breitesten Modul. #network wird durch die Mindestbreite
-    # also praktisch nicht breiter; #bluetooth (+9), #pulseaudio (+4) und
-    # #pulseaudio#microphone (+7) gleichen sich AN #network an, nicht
-    # umgekehrt - die billigste Angleichung, die die Leiste zu holen war.
-    "STYLE_BAR_SYMBOL_WIDTH": Size(23, PX, SCALED),
+    #     Hier stand "13 + 2*5 = 23": die Zeichenbreite PLUS zweimal
+    #     STYLE_PADDING_BUTTON, mit der Begruendung, das sei "dieselbe
+    #     Polsterung, die .bar-module bereits traegt - keine zweite Zahl
+    #     fuer denselben Rand". Genau das Gegenteil ist der Fall
+    #     gewesen: `min-width` ist in GTK4 die Mindestbreite des
+    #     INHALTSkastens, und Polsterung und Rahmen kommen OBEN DRAUF.
+    #     Die 2*5 waren damit doppelt gezaehlt - einmal in dieser Zahl
+    #     und einmal als das padding, das .bar-module ohnehin setzt.
+    #
+    #     GEMESSEN am 19.08.2026 mit tests/src/test_bar_headless.py
+    #     (Vorgabegroesse, echte Zeichen), #network:
+    #
+    #         Modulbreite    51 px  =  min-width 35 + 2 * padding 8
+    #         Zeichenbreite  12 px
+    #
+    #     Also 51 px Kasten fuer 12 px Zeichen, wo 23 roh (35 px) das
+    #     GANZE Modul haetten sein sollen. Das ist die eine Haelfte der
+    #     Meldung "die kaestchen viel zu breit"; die andere ist, dass
+    #     die 23 ueberschuessigen Punkte VOLLSTAENDIG RECHTS vom Zeichen
+    #     lagen (gemessen 8:31 links:rechts) - eine Gtk.Box setzt ihr
+    #     einziges Kind an den ANFANG und laesst den Rest hinten liegen.
+    #     Das ist die Meldung "immernoch nicht zentreirt in ihrem
+    #     kaestchen", und sie hat dieselbe Wurzel.
+    #
+    # 13 ist deshalb der ganze Wert: die Breite, die EIN Zeichen
+    # bekommt, und nichts weiter. Die Polsterung steht dort, wo sie
+    # hingehoert, in .bar-module. Und der Leser in bar-style.template
+    # haengt sie seither an die BESCHRIFTUNG statt an den Kasten - eine
+    # Gtk.Label mit ueberschuessiger Breite setzt ihren Satz mittig
+    # hinein (xalign 0.5, die Vorgabe), eine Gtk.Box tut das nicht.
+    #
+    # GEGENGEPRUEFT im selben Aufbau, nach der Aenderung: #network
+    # 51 -> 36 px, das Zeichen darin 12:12 statt 8:31.
+    "STYLE_BAR_SYMBOL_WIDTH": Size(13, PX, SCALED),
 
     # Die Fenstertitelleiste von hyprbars. Nackte Zahlen, weil Hyprland
     # sie so liest.

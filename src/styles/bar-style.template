@@ -535,25 +535,106 @@ tooltip label {
 
 /* NACHGETRAGEN am 19.08.2026 (Aufgabe 19). GEMELDET: "die icon im header
  * rechts oben sind nicht genau exakt gleich lang alligned von der
- * breite". Diese zeigen NUR ein Zeichen, nie Text daneben (anders
- * als Uhr, Datum oder der Akku mit seinem Prozentsatz, die darum absicht-
- * lich UNGLEICH breit bleiben) - siehe die Messung und Herleitung bei
- * STYLE_BAR_SYMBOL_WIDTH, sizes.py. Eine gemeinsame Mindestbreite statt
- * einer je Fundstelle: die Zeichen bleiben unterschiedlich TINTE, aber
- * belegen dieselbe FLAECHE - dasselbe Prinzip wie .zep-btn (eine Hoehe,
- * vier Rollen) statt einer Zahl pro Fundstelle.
+ * breite". Ein Zeichen ist so breit, wie die Schrift es setzt - ohne
+ * eine gemeinsame Untergrenze belegt jedes reine Symbolmodul eine
+ * andere Flaeche. Diese Regel gibt ihnen dieselbe; die Zeichen bleiben
+ * unterschiedlich TINTE, aber sie stehen im selben Raster.
  *
- * VIER WAREN ES BIS ZUM SPAETEN 19.08.2026; #pulseaudio und
- * #pulseaudio#microphone sind herausgefallen. Sie tragen seit der
- * Bestellung dieses Tages ihre Prozentzahl neben dem Zeichen ("auf wie
- * viel prozent sie gestellt sind") und gehoeren damit zur anderen
- * Gruppe - der mit Text, die absichtlich ungleich breit bleibt.
- * GEMESSEN im selben Aufbau: sie sind mit Zahl 90 und 78 px breit, also
- * ohnehin weit ueber dieser Mindestbreite. Die Regel haette sie nicht
- * mehr erreicht, aber der Satz darueber waere falsch gewesen. */
-#network,
-#bluetooth {
+ * UMGEBAUT AM SPAETEN 19.08.2026 (Aufgabe 33), UND ZWAR AUS EINER
+ * URSACHE FUER ZWEI MELDUNGEN.
+ *
+ *     GEMELDET: "die icon im header sind immernoch nicht zentreirt in
+ *     ihrem kaestchen" und "die kaestchen viel zu breit sie koennen
+ *     alle enger nebene einandern sein ... ich rede hier nur von der
+ *     rechten seite".
+ *
+ *     "immernoch" trifft zu: am Vormittag desselben Tages ist die
+ *     Zentrierung schon einmal gemeldet und schon einmal beantwortet
+ *     worden - mit dem Rand ZWISCHEN den Modulen (siehe "EIN RAND UND
+ *     NICHT ZWEI" bei .bar-module weiter oben). Der Rand war wirklich
+ *     doppelt, und er ist zu Recht gefallen; ein Rand AUSSERHALB eines
+ *     Kastens kann aber nicht bewegen, wo das Zeichen INNERHALB
+ *     desselben Kastens sitzt. Die Meldung war nach der Reparatur
+ *     deshalb so wahr wie vorher.
+ *
+ *     WAS SIE WIRKLICH VERURSACHT HAT, GEMESSEN mit
+ *     tests/src/test_bar_headless.py (Zeile `zentriert`, die fuer
+ *     genau diese Frage dazugekommen ist), Vorgabegroesse, echte
+ *     Zeichen:
+ *
+ *         #network   Modul 51 px, Zeichen 12 px, links 8 : rechts 31
+ *
+ *     Die Mindestbreite stand auf dem KASTEN (`#network, #bluetooth {
+ *     min-width }`), und GTK4 liest min-width als Mindestbreite des
+ *     INHALTS - Polsterung und Rahmen kommen oben drauf. Der Kasten war
+ *     damit eine Polsterbreite zu breit (die ganze Rechnung steht bei
+ *     STYLE_BAR_SYMBOL_WIDTH in sizes.py), und die ueberschuessige
+ *     Breite lag VOLLSTAENDIG RECHTS: eine Gtk.Box teilt ihrem einzigen
+ *     Kind seine natuerliche Breite zu, setzt es an den Anfang und
+ *     laesst den Rest hinten liegen. Zentriert hat niemand.
+ *
+ *     Die Mindestbreite haengt jetzt an der BESCHRIFTUNG statt am
+ *     Kasten. Eine Gtk.Label, die breiter ist als ihr Satz, setzt ihn
+ *     mittig hinein - xalign 0.5, die Vorgabe, und eine Eigenschaft des
+ *     WIDGETS und nicht des Stils. Damit zentriert die Sache selbst,
+ *     statt dass eine zweite Regel es nachtraeglich versucht. GEMESSEN
+ *     danach: #network 36 px, Zeichen 12:12.
+ *
+ * WARUM #modules-right UND NICHT EINE LISTE VON NAMEN
+ *     Zwei Gruende. Der erste ist die Bestellung: "ich rede hier nur
+ *     von der rechten seite nicht linksen siete die links ist in
+ *     ordnung". Eine Regel auf `.bar-module` traefe beide Haelften -
+ *     der Name der rechten Gruppe (ags-bar.template, `modules-right`)
+ *     ist die einzige Stelle, an der sich die Seiten ueberhaupt
+ *     trennen lassen.
+ *
+ *     Der zweite ist der, der dieser Datei ihren Kopf gegeben hat: die
+ *     Vorgaengerfassung nannte vier Namen, dann zwei, und wer ein Modul
+ *     hinzufuegte, musste daran denken.
+ *
+ *     Module MIT Text bleiben unangetastet, obwohl die Regel sie
+ *     erreicht: Uhr, Datum, der Akku und seit heute Ton und Mikrofon
+ *     sind ohnehin breiter als diese Grenze. GEMESSEN: #pulseaudio
+ *     setzt 74 px gegen 20 px Mindestbreite.
+ *
+ * DAS `>` IST NICHT ZIERDE, ES SCHLIESST DEN EINKLAPP-KNOPF AUS
+ *     #bar-overflow traegt ebenfalls .bar-module und steht ebenfalls in
+ *     dieser Gruppe, aber es ist ein Gtk.MenuButton: seine Beschriftung
+ *     haengt zwei Knoten tiefer (menubutton > button > box > label) und
+ *     ist damit kein direktes Kind. Genau richtig so - GEMESSEN mit
+ *     dem Kindkennzeichen und ohne: ohne wird der Knopf von 68 auf
+ *     76 px breit, und zwar in dem einen Zustand, in dem der Platz
+ *     schon nicht reicht. Auf 1024 px stieg die verlangte Mindestbreite
+ *     dadurch von 1016 auf 1024, also genau auf die Schirmbreite. Der
+ *     Knopf ist kein Statusmodul, sondern das Bedienelement, das
+ *     erscheint, WEIL kein Platz mehr ist; ihm eine Mindestbreite zu
+ *     geben, kostet dort Platz, wo keiner ist, und richtet nichts aus:
+ *     er steht allein und neben keinem zweiten Zeichen, mit dem er
+ *     fluchten muesste. */
+#modules-right .bar-module > label {
   min-width: {{STYLE_BAR_SYMBOL_WIDTH}};
+}
+
+/* ENGER NEBENEINANDER, UND NUR RECHTS (19.08.2026, Aufgabe 33).
+ *
+ * GEMELDET: "die kaestchen viel zu breit sie koennen alle enger nebene
+ * einandern sein und ich rede hier nur von der rechten seite nicht
+ * linksen siete die links ist in ordnung".
+ *
+ * Zwei Schrauben, und dies ist die zweite: die Kaesten selbst sind ueber
+ * STYLE_BAR_SYMBOL_WIDTH schmaler geworden (siehe oben), hier ruecken
+ * sie zusaetzlich zusammen. Eine Sprosse der Abstandsleiter tiefer als
+ * .bar-module - STYLE_SPACE_4 statt STYLE_SPACE_8, gemessene 6 statt 12
+ * Punkte -, und keine erfundene Zahl dazwischen.
+ *
+ * Die linke Haelfte behaelt STYLE_SPACE_8 aus .bar-module, woertlich wie
+ * bestellt. Dass die beiden Haelften seither verschieden dicht stehen,
+ * ist die Entscheidung des Nutzers und kein Versehen.
+ *
+ * GEMESSEN mit tests/src/test_bar_headless.py, Vorgabegroesse: fuenf
+ * Fugen in der rechten Haelfte, 60 Punkte vorher, 30 nachher. */
+#modules-right .bar-module {
+  margin-left: {{STYLE_SPACE_4}};
 }
 
 /* NACHGETRAGEN am 19.08.2026 (Aufgabe 25). GEMELDET: "einige icon ohne
@@ -748,15 +829,40 @@ tooltip label {
  * GEMESSEN am selben Tag mit tests/src/test_bar_headless.py: der Knopf
  * kostet die Leiste 48 Punkte - genau seine Zeichenbreite und keinen
  * Rand, weil dieser Block `margin-left: 0; margin-right: 0` traegt.
- * Also 1558 statt 1510. In der Reihe davor waeren es 63 gewesen. */
-#custom-disk,
-#custom-wallpaper,
-#custom-theme,
-#custom-system {
+ * Also 1558 statt 1510. In der Reihe davor waeren es 63 gewesen.
+ *
+ * ZWEI AENDERUNGEN AM SPAETEN 19.08.2026 (Aufgabe 33), BEIDE AUS
+ * DERSELBEN BESTELLUNG: "die kaestchen viel zu breit sie koennen alle
+ * enger nebene einandern sein".
+ *
+ *     DIE EIGENE POLSTERUNG IST WEG. Hier stand
+ *     `padding: STYLE_SPACE_4 STYLE_SPACE_12`, also gemessene 18 Punkte
+ *     links und rechts - mehr als das Doppelte der 8, die .bar-module
+ *     jedem anderen Modul gibt, und eine zweite Zahl fuer dieselbe
+ *     Sache. GEMESSEN: 48 px Kasten fuer 12 px Zeichen, drei Module
+ *     lang. Ohne sie gilt .bar-module, und die drei sind genau so breit
+ *     wie #network daneben - 36 px, dieselbe Flaeche fuer dasselbe
+ *     eine Zeichen. Das ist zugleich die Antwort auf die aeltere
+ *     Meldung "nicht genau exakt gleich lang alligned von der breite":
+ *     sie hat diese vier nie erreicht.
+ *
+ *     DER WAHLAUSDRUCK NENNT JETZT #modules-right. Ohne das verloere
+ *     dieser Block seine Null gegen die neue Regel `#modules-right
+ *     .bar-module { margin-left }` weiter oben - eine Kennung plus eine
+ *     Klasse wiegt mehr als eine Kennung allein, und der Block bekaeme
+ *     die Fugen, die er ausdruecklich nicht haben soll. Es ist
+ *     ausserdem die wahrere Bedingung: "am rechten Ende" ist eine
+ *     Aussage ueber den Platz. #custom-wallpaper laesst sich in die
+ *     linke Haelfte stellen (BAR_MODULES_AVAILABLE, style_definition.py),
+ *     und dort ist es kein Endblock, sondern ein Modul wie jedes
+ *     andere - es bekommt dann den gewoehnlichen Rand. */
+#modules-right #custom-disk,
+#modules-right #custom-wallpaper,
+#modules-right #custom-theme,
+#modules-right #custom-system {
   border-radius: {{STYLE_RADIUS_CONTROL}};
   margin-left: 0;
   margin-right: 0;
-  padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_12}};
 }
 
 #custom-wallpaper {
@@ -1017,4 +1123,59 @@ window.power-button-window {
 
 #power-button button.power-btn:hover {
   background: {{STYLE_HOVER_BG}};
+}
+
+/* DAS ZEICHEN IM ABSCHALTKNOPF (19.08.2026, Aufgabe 33).
+ *
+ * BESTELLT: "das icon fuer shutdwon soll groesser dargestellt werden es
+ * ist etwas zu klein".
+ *
+ * ES HATTE UEBERHAUPT KEINE GROESSE, und das ist der Grund. Der Knopf
+ * traegt ein Nerd-Font-Zeichen (ags-power-button.template, ICON_POWER),
+ * also SCHRIFT - dieselbe Lage wie beim Ersatzzeichen des Docks weiter
+ * oben, das deshalb eine font-size bekommt. Nur stand hier keine, und
+ * seine eigene Flaeche (window.power-button-window) erbt auch keine:
+ * die 20 px aus window.bar-window gelten fuer die Leiste, nicht fuer
+ * dieses zweite Fenster. Uebrig blieb die Vorgabe des GTK-Themas.
+ *
+ * GEMESSEN im verschachtelten Compositor gegen die erzeugte bar.css,
+ * Vorgabegroesse - der Knopf nachgebaut, wie ags-power-button.template
+ * ihn baut, das Dock daneben mit einem echten Bild:
+ *
+ *     Schrift            Platte      Zeichentinte
+ *      ohne (GTK-Vorgabe) 53 x 53     10 x 11
+ *      ICON_CAPTION 20px  53 x 53     14 x 15
+ *      ICON_BODY    25px  53 x 53     17 x 19
+ *      ICON_LEAD    29px  53 x 57     20 x 22   <- diese
+ *      ICON_TITLE   34px  53 x 63     23 x 25
+ *      DOCK_ICON    35px  53 x 65     24 x 26
+ *
+ *     Zum Vergleich, im selben Lauf: die Dock-Platte ist 59 x 60, ihr
+ *     Knopf 49 x 50 und traegt ein 35 x 35 grosses Bild.
+ *
+ * WARUM ICON_LEAD UND NICHT STYLE_DOCK_ICON_SIZE, DIE SPROSSE DER
+ * SYMBOLE DANEBEN
+ *     Weil ein Bild und ein Zeichen bei derselben Zahl nicht dieselbe
+ *     Hoehe brauchen: ein 35 px grosses Bild ist 35 px hoch, eine 35 px
+ *     grosse Schrift braucht eine Zeile von 55. Die Platte waere damit
+ *     65 hoch und stuende 5 Punkte ueber dem Dock - beide Flaechen
+ *     haengen an der UNTEREN Kante mit demselben Rand (siehe
+ *     ags-power-button.template, Astal.Exclusivity.IGNORE), ein
+ *     Unterschied waechst also nach oben und ist zu sehen.
+ *
+ *     ICON_LEAD ist die groesste Sprosse der Symbolleiter, bei der die
+ *     Platte unter den 60 Punkten des Docks bleibt. Das Zeichen wird
+ *     damit von 10 x 11 auf 20 x 22 Punkte Tinte fast doppelt so gross,
+ *     ohne dass der Knopf ueber seinen Nachbarn hinauswaechst.
+ *
+ *     Das Ersatzzeichen des Docks oben hat dieselbe Rechnung NICHT
+ *     angestellt (font-size: STYLE_DOCK_ICON_SIZE) und macht die
+ *     Dock-Platte GEMESSEN 72 statt 60 Punkte hoch, sobald es einmal
+ *     auftritt. Das steht hier als Befund und wird hier nicht
+ *     mitrepariert: es ist ein anderer Knopf, es war nicht bestellt,
+ *     und eine stillschweigende Aenderung an der Hoehe des Docks
+ *     verschoebe jedes Fenster des Schirms (die Flaeche des Docks ist
+ *     EXCLUSIVE). */
+#power-button button.power-btn label {
+  font-size: {{STYLE_ICON_LEAD}};
 }

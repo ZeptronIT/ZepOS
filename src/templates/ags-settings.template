@@ -58,6 +58,7 @@
 import { Gtk } from "ags/gtk4"
 import { execAsync, subprocess } from "ags/process"
 import { timeout } from "ags/time"
+import GLib from "gi://GLib"
 import { createShellWindow, ShellSeite, ShellWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
 import {
@@ -220,31 +221,46 @@ interface Schirm {
 
 /** Ein Aufruf der Bruecke. Wirft nie - der Fehler IST die Antwort.
  *
- * `--json set` schreibt seine Klage auf stdout und endet mit 1 (siehe
- * den Kopf von bridge.py: "weil der Aufrufer eine Oberflaeche ist und
- * die Klage ANZEIGEN muss"). execAsync verwirft bei einem Rueckgabewert
- * ungleich 0 - also wird der Wurf hier wieder eingefangen und sein Text
- * als JSON gelesen. Ein Fenster, das die Begruendung im Fehlerstrom
- * liegen laesst, zeigt "es hat nicht geklappt" und sonst nichts.
+ * WARUM DURCH EINE SHELL UND NICHT DIREKT, UND WARUM `; exit 0`
+ *     Die Bruecke endet mit 1, wenn sie eine Aenderung ABLEHNT, und
+ *     legt ihre Klage dabei auf STDOUT - das ist ihre ausdrueckliche
+ *     Entscheidung (Kopf von bridge.py: "weil der Aufrufer eine
+ *     Oberflaeche ist und die Klage ANZEIGEN muss, und ein Fenster, das
+ *     deutsche Prosa aus einem Fehlerstrom fischt, liest beim naechsten
+ *     Wortlaut das Falsche").
+ *
+ *     execAsync verwirft bei jedem Rueckgabewert ungleich 0 und reicht
+ *     dabei STDERR weiter, nicht stdout - GEPRUEFT am 19.08.2026 in
+ *     /usr/share/ags/js/lib/process.ts: `reject(new Error(err.trim()))`,
+ *     und `err` ist die zweite Rueckgabe von communicate_utf8_finish.
+ *     Ein direkter Aufruf haette die Klage also GENAU DANN verloren,
+ *     wenn man sie braucht: der Nutzer saehe "Error: " und nichts
+ *     dahinter.
+ *
+ *     `; exit 0` nimmt dem Aufruf seinen Rueckgabewert, damit die
+ *     Ausgabe ankommt; unterschieden wird danach an `ok` im Dokument,
+ *     das die Bruecke ohnehin in JEDE Antwort schreibt. Die Argumente
+ *     gehen durch GLib.shell_quote() und nicht durch selbstgebaute
+ *     Anfuehrungszeichen - eines der Argumente ist ein JSON-Dokument
+ *     voller Anfuehrungszeichen und Klammern.
  */
 async function bruecke(argumente: string[]): Promise<any> {
-  const befehl = [BEFEHL, JSON_SCHALTER, ...argumente]
+  const zeile = [BEFEHL, JSON_SCHALTER, ...argumente]
+    .map(teil => GLib.shell_quote(teil)).join(" ")
+  let ausgabe = ""
   try {
-    const ausgabe = await execAsync(befehl)
-    return JSON.parse(ausgabe)
+    ausgabe = await execAsync(["bash", "-c", `${zeile}; exit 0`])
   } catch (fehler) {
-    const text = String(fehler)
-    // Der geworfene Text traegt die Ausgabe des Befehls, wenn er eine
-    // hatte - dann steht darin das JSON mit "problems".
-    const anfang = text.indexOf("{")
-    if (anfang >= 0) {
-      try {
-        return JSON.parse(text.slice(anfang))
-      } catch {
-        // faellt durch
-      }
-    }
-    return { ok: false, problems: [text] }
+    return { ok: false, problems: [String(fehler)] }
+  }
+  try {
+    return JSON.parse(ausgabe)
+  } catch {
+    // Kein JSON heisst: der Befehl ist gar nicht gelaufen (er fehlt,
+    // eine seiner Wurzeln fehlt) oder er ist abgestuerzt. Beides sagt
+    // der Text, den er hinterlassen hat, besser als ein Satz von hier.
+    return { ok: false, problems: [ausgabe || format(
+      _("{command} did not answer."), { command: BEFEHL })] }
   }
 }
 

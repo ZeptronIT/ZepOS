@@ -219,14 +219,23 @@ def test_das_fenster_schreibt_nur_durch_die_bruecke():
         "es frueher oder spaeter hinein")
     assert "settings.py" not in code
 
-    befehle = re.findall(r"execAsync\(\[([^\]]*)\]", code)
-    assert befehle, "es wird gar kein Befehl gerufen"
-    for befehl in befehle:
-        assert "BEFEHL" in befehl, (
-            f"execAsync([{befehl}]) geht an etwas anderes als "
-            "zepos-settings-gui")
-    for befehl in re.findall(r"subprocess\(\s*\[([^\]]*)\]", code):
-        assert "BEFEHL" in befehl
+    # Jeder Prozessstart nennt entweder BEFEHL selbst oder die eine
+    # Zeile, die aus BEFEHL gebaut ist. Der Umweg ueber `bash -c` hat
+    # einen Grund, der am Kopf von bruecke() steht (execAsync verwirft
+    # bei Rueckgabewert 1 und reicht STDERR weiter, waehrend die Klage
+    # auf stdout steht); die Shell ist dabei kein zweites Werkzeug,
+    # sondern die Roehre um dasselbe.
+    starts = (re.findall(r"execAsync\(\[([^\]]*)\]", code)
+              + re.findall(r"subprocess\(\s*\[([^\]]*)\]", code))
+    assert len(starts) >= 3, f"nur {len(starts)} Prozessstarts gefunden"
+    for start in starts:
+        assert "BEFEHL" in start or "zeile" in start, (
+            f"[{start}] startet etwas, das nicht aus BEFEHL gebaut ist")
+    # Und die Zeile selbst wird aus BEFEHL gebaut, nicht getippt.
+    assert re.search(r"const zeile = \[BEFEHL, JSON_SCHALTER", code)
+    assert "GLib.shell_quote" in code, (
+        "die Argumente werden von Hand in Anfuehrungszeichen gesetzt - "
+        "eines davon ist ein JSON-Dokument voller Anfuehrungszeichen")
 
 
 def test_kein_wert_der_aus_einer_vorlage_kommen_koennte_ist_getippt():

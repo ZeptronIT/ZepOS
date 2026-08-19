@@ -1685,6 +1685,50 @@ WIDTHS = (1024, 1280, 1366, 1600, 1680, 1920)
 #
 #         DER SCHIRM DES NUTZERS - 1920x1200 bei Faktor 1.00 - traegt
 #         weiterhin alles.
+#
+#     UND NOCH AM SPAETEN 19.08.2026 IST DIE VOLLE LISTE 81 PUNKTE
+#     SCHMALER GEWORDEN - DIE ZAHL HIER BLEIBT TROTZDEM 1600.
+#
+#         BESTELLT: "die kaestchen viel zu breit sie koennen alle enger
+#         nebene einandern sein und ich rede hier nur von der rechten
+#         seite nicht linksen siete die links ist in ordnung", dazu "die
+#         icon im header sind immernoch nicht zentreirt in ihrem
+#         kaestchen". Beides hatte dieselbe Ursache; sie steht in
+#         bar-style.template ueber #modules-right .bar-module > label
+#         und in sizes.py bei STYLE_BAR_SYMBOL_WIDTH.
+#
+#         GEMESSEN mit genau diesem Aufbau (Vorgabegroesse, zehn
+#         Arbeitsbereiche, echte Zeichen), vorher und nachher:
+#
+#             Schirm   vorher   nachher   eingeklappt (nachher)
+#              1024     1022      1016     9
+#              1280     1208      1262     5   (vorher 6)
+#              1366     1298      1346     4   (vorher 5)
+#              1600     1586      1505     0
+#              1680     1586      1505     0
+#              1920     1586      1505     0
+#
+#         DIE EINZELNEN MODULE DER RECHTEN HAELFTE, im selben Lauf:
+#
+#             custom-disk             48 px -> 36 px
+#             network                 51 px -> 36 px
+#             bluetooth               53 px -> 53 px  (Text, unberuehrt)
+#             pulseaudio              90 px -> 90 px  (Text)
+#             pulseaudio#microphone   78 px -> 78 px  (Text)
+#             battery                 78 px -> 78 px  (Text)
+#             custom-theme            48 px -> 36 px
+#             custom-system           48 px -> 36 px
+#
+#         Dazu fuenf Fugen von 12 auf 6 Punkte. Die rechte Haelfte misst
+#         damit 473 statt 554 Punkte; die linke ist unveraendert, wie
+#         bestellt.
+#
+#         WARUM DIE ZAHL HIER TROTZDEM STEHENBLEIBT: die volle Liste
+#         will 1505 px, und die naechstkleinere Zeile der Tabelle oben
+#         ist 1366. 1505 passt nicht auf 1366, also waere jede kleinere
+#         Zahl hier eine Behauptung statt einer Messung. 1600 ist
+#         weiterhin die kleinste GEMESSENE Breite, auf der alles steht -
+#         mit 95 px Luft statt 14.
 COMPLETE_FROM = 1600
 
 # Der verbreitetste Notebookschirm, und auf ihm reicht es seit dem
@@ -1735,8 +1779,25 @@ COMMON_NOTEBOOK = 1366
 #     dem Knopf, und der Nutzer erfaehrt das im Bericht. Wer dort alles
 #     sehen will, nimmt ein Modul aus der Vorgabe (user-settings.json,
 #     Abschnitt "bar") - fort ist keines, sie liegen hinter dem Knopf.
+#
+# UND NOCH AM SPAETEN 19.08.2026 IST SIE WIEDER VIER: `pulseaudio#micro-
+# phone` IST ZURUECK AUF DER LEISTE.
+#
+#     Kein Rueckbau der Prozentzahl - die bleibt, sie war bestellt. Was
+#     die 66 px wieder eingebracht hat, ist die rechte Haelfte selbst:
+#     die reinen Symbolmodule sind eine Polsterbreite zu breit gewesen
+#     (STYLE_BAR_SYMBOL_WIDTH stand auf dem Kasten statt auf dem
+#     Zeichen), die drei Knoepfe am Ende trugen ausserdem eine eigene,
+#     doppelt so grosse Polsterung, und die Fugen sind auf Bestellung
+#     eine Sprosse enger. Die ganze Rechnung steht bei COMPLETE_FROM.
+#
+#     GEMESSEN am 19.08.2026, in der Reihenfolge, in der die Regel sie
+#     abgibt: auf 1366 px will die Leiste 1346 px und gibt VIER Module
+#     ab. Vorher waren es fuenf bei 1298 px.
+#
+#     Auf 1280 sind es aus demselben Grund fuenf statt sechs.
 FOLDED_ON_COMMON_NOTEBOOK = ("custom-disk", "network", "bluetooth",
-                             "pulseaudio", "pulseaudio#microphone")
+                             "pulseaudio")
 
 # Die Groessenfaktoren, ueber die die Dicke geprueft wird.
 #

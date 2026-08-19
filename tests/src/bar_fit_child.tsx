@@ -220,6 +220,28 @@ function snapshot(prefix: string): void {
     // wird auch fuer die eingeklappten mitgeschrieben: ein Modul im
     // Aufklappfenster ist dasselbe Modul.
     const breadth: string[] = []
+    // WO DAS ZEICHEN INNERHALB SEINES MODULS SITZT (19.08.2026).
+    //
+    // Der Nutzer hat die Zentrierung an diesem Tag ZWEIMAL gemeldet
+    // ("die icon im header sind immernoch nicht zentreirt in ihrem
+    // kaestchen"), und der erste Versuch hat sie nicht behoben, weil
+    // niemand sie gemessen hat: `gestellt` sagt, wo das MODUL liegt,
+    // nicht, wo das Zeichen DARIN sitzt. Genau der Unterschied ist die
+    // Frage, und genau dafuer gab es bis heute kein Messgeraet.
+    //
+    // GEMESSEN WIRD DER SATZ UND NICHT DAS WIDGET, und das ist der
+    // Unterschied, an dem der erste Versuch vorbeigemessen haette: eine
+    // Gtk.Label ist nicht ihr Text. Sie kann breiter sein als er (dann
+    // entscheidet ihr xalign, wo er darin liegt) und sie kann genau so
+    // breit sein (dann entscheidet der Kasten darum). Nur die Lage des
+    // PangoLayout beantwortet beide Faelle in einer Zahl -
+    // get_layout_offsets() gibt sie in Widget-Koordinaten.
+    //
+    // Geschrieben wird je Modul `name=links:rechts`: die beiden
+    // Abstaende zwischen der Kante des Moduls und der Kante seines
+    // Satzes, in denselben Koordinaten wie `gestellt`. Gleich heisst
+    // zentriert; ungleich nennt die Seite, auf der es klemmt.
+    const centred: string[] = []
     // Und was DIE PLATTE INNEN tragen muss.
     //
     // `tallest` oben ist die Messung des CenterBox, und die zaehlt
@@ -247,6 +269,20 @@ function snapshot(prefix: string): void {
         if (child.visible) {
           const [x, w] = bounds(child, probe.surface)
           placed.push(`${child.get_name()}@${x}+${w}`)
+          // Nur Module, die WIRKLICH eine Beschriftung tragen -
+          // moduleBox() in ags-bar.template baut genau das. Die
+          // Arbeitsbereiche, die Ablage und der Einklapp-Knopf haben
+          // andere Kinder; fuer sie ist die Frage nach der Mitte eines
+          // Zeichens gegenstandslos.
+          const inside = child.get_first_child()
+          if (inside instanceof Gtk.Label && inside.get_text()) {
+            const [lx] = bounds(inside, probe.surface)
+            const [ox] = inside.get_layout_offsets()
+            const [, logical] = inside.get_layout().get_pixel_extents()
+            const links = lx + ox + logical.x - x
+            const rechts = x + w - (lx + ox + logical.x + logical.width)
+            centred.push(`${child.get_name()}=${links}:${rechts}`)
+          }
         }
         breadth.push(
           `${child.get_name()}=${child.measure(Gtk.Orientation.VERTICAL, -1)[0]}`)
@@ -275,6 +311,7 @@ function snapshot(prefix: string): void {
     lines.push(`  dicke ${BAR_THICKNESS}`)
     lines.push(`  knopf ${overflow && overflow.visible ? "sichtbar" : "aus"}`)
     lines.push(`  gestellt ${placed.join(" ")}`)
+    lines.push(`  zentriert ${centred.join(" ")}`)
     lines.push(`  eingeklappt ${folded.join(" ")}`)
     lines.push(`  breite ${breadth.join(" ")}`)
   }
