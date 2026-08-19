@@ -84,28 +84,50 @@ async function toggleWidget(widget: OverlayWidget | null,
 // Funktion.
 //
 // SEIT AUFGABE 7/8/9 (18.08.2026) LEITET SIE "bluetooth", "network" UND
-// "vpn" IN DIE SCHALE UM, STATT EIN FENSTER ZU TOGGELN
-//     Keine der drei Vorlagen baut ein eigenes Astal.Window mehr - alle
-//     drei exportieren nur noch ihre ShellSeite (bluetoothSeite/
-//     networkSeite/vpnSeite), die ControlCenter() als Seite unter
-//     VERBINDUNGEN einhaengt (ags-control-center.template).
-//     `widgets.control` ist zur Laufzeit ein ShellWidget (ControlCenter()
-//     ruft seit Aufgabe 6 createShellWindow()); die Tabelle bleibt als
+// "vpn" IN DIE SCHALE UM, STATT EIN FENSTER ZU TOGGELN - UND SEIT
+// AUFGABE 17 (19.08.2026) AUCH "sound"
+//     Keine der drei Vorlagen (Aufgabe 7/8/9) baut ein eigenes
+//     Astal.Window mehr - alle drei exportieren nur noch ihre ShellSeite
+//     (bluetoothSeite/networkSeite/vpnSeite), die ControlCenter() als
+//     Seite unter VERBINDUNGEN einhaengt (ags-control-center.template).
+//     "sound" ist KEINE eigene Vorlage - soundSeite steht direkt in
+//     ags-control-center.template (Aufgabe 17, "Ton wird eine Seite") -,
+//     aber derselbe Umleitungsweg gilt: `widgets.control` ist zur
+//     Laufzeit ein ShellWidget (ControlCenter() ruft seit Aufgabe 6
+//     createShellWindow()); die Tabelle bleibt als
 //     `Record<string, OverlayWidget | null>` typisiert (ShellWidget
 //     ERWEITERT OverlayWidget nur um zeigeSeite()), darum der Zuschnitt
 //     hier am Aufruf und nicht an der Tabelle selbst.
 //
-//     EIN Aenderungsort fuer DREI Aufrufer je Name: die Leiste
-//     (`toggles: "bluetooth"`/`"network"` in ags-bar.template - VPN hat
-//     kein eigenes Leistenmodul), die Tastenbindung
-//     (`reqStr.includes(...)` im requestHandler unten) und die jeweilige
-//     Zeile auf der Seite "general" des Kontrollzentrums selbst
-//     (btRow/netRow/vpnRow, rufen `toggle(name)` ueber denselben Weg) -
-//     alle gehen durch toggleByName(). "vpn-settings" bleibt AUSSEN vor
-//     und nimmt weiterhin den toggleWidget-Weg: die VPN-Einstellungen
-//     sind ein eigenes Fenster, kein Verbindungsziel.
+//     BESTELLT, woertlich (19.08.2026): "ich will das auch bei mikrofon
+//     oder sprecher ein fenster kommt mit einer scrollbar oder
+//     progressbar aehnlich wie im kontrollzentrum sodass man die
+//     lautstaerke auch einstellen kann." KEIN eigenes drittes Fenster
+//     dafuer (Aufgabenblatt 17, Aufgabe 2, woertlich: "zwei Wege zu
+//     derselben Funktion waeren zwei Staende, die sich widersprechen
+//     koennen") - die Leistenmodule `pulseaudio`/`pulseaudio#microphone`
+//     (ags-bar.template) rufen `toggle("sound", ...)` und landen ueber
+//     denselben Pfad wie Netzwerk/Bluetooth auf der Sound-Seite der
+//     Schale.
+//
+//     EIN Aenderungsort fuer JE NAME BIS ZU DREI Aufrufer: die Leiste
+//     (`toggles: "bluetooth"`/`"network"`/"sound"` in ags-bar.template),
+//     die Tastenbindung (`reqStr.includes(...)` im requestHandler unten)
+//     und die jeweilige Zeile auf der Seite "general" des
+//     Kontrollzentrums selbst (btRow/netRow/vpnRow, rufen `toggle(name)`
+//     ueber denselben Weg) - alle gehen durch toggleByName(). "vpn" hat
+//     kein eigenes Leistenmodul. "sound" bekommt mit dieser Aufgabe NUR
+//     den ersten der drei (die Leiste, siehe pulseaudio/pulseaudio#
+//     microphone unten) - keine Tastenbindung (Aufgabenblatt 17, Aufgabe
+//     2 nennt nur die Leiste) und keine Zeile auf "general" (die drei
+//     Regler zogen dort weg, siehe Aufgabe 1 desselben Blatts, "Umzug,
+//     keine Neuentwicklung" - eine zusaetzliche Navigationszeile waere
+//     das Zweite). "vpn-settings" bleibt AUSSEN vor und nimmt weiterhin
+//     den toggleWidget-Weg: die VPN-Einstellungen sind ein eigenes
+//     Fenster, kein Verbindungsziel.
 function toggleByName(name: string, at?: OverlayAnchor): void {
-  if (name === "bluetooth" || name === "network" || name === "vpn") {
+  if (name === "bluetooth" || name === "network" || name === "vpn"
+      || name === "sound") {
     (widgets.control as ShellWidget | null)?.zeigeSeite(name, at)
     return
   }

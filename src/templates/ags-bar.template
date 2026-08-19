@@ -1198,14 +1198,49 @@ export function BarContent(monitorName: string,
         onClick: "hyprctl hyprlaunch:helpers",
       }, toggle, refit, monitorName)
 
+      // DERSELBE WEG WIE NETZ UND BLUETOOTH, SEIT AUFGABE 17 (19.08.2026)
+      //
+      //     BESTELLT, woertlich: "ich will das auch bei mikrofon oder
+      //     sprecher ein fenster kommt mit einer scrollbar oder
+      //     progressbar aehnlich wie im kontrollzentrum sodass man die
+      //     lautstaerke auch einstellen kann."
+      //
+      //     Beide Module hatten bis heute einen Klick, der einen
+      //     BEFEHL lief (`pamixer -t`/`pamixer --default-source -t`,
+      //     Stummschalten) - kein Fenster, keine Regler. Der Nutzer will
+      //     genau das: eine Bildlaufleiste, mit der sich die Lautstaerke
+      //     EINSTELLEN laesst, nicht nur an/aus schalten.
+      //
+      //     `toggles: "sound"` statt `onClick`, wortgleich zur Loesung
+      //     bei network/bluetooth unten: eine Funktion IN DIESEM
+      //     PROZESS statt eines Befehls, und KEIN eigenes drittes
+      //     Fenster - toggleByName() (ags-config.template) leitet
+      //     "sound" seit dieser Aufgabe auf
+      //     `widgets.control.zeigeSeite("sound", anker)` um, dieselbe
+      //     Sound-Seite der Schale, die auch das Kontrollzentrum zeigt.
+      //     Zwei Wege zu derselben Funktion waeren zwei Staende, die
+      //     sich widersprechen koennen (Aufgabenblatt 17) - darum kein
+      //     zweiter Regler-Bausatz hier, sondern derselbe.
+      //
+      //     DAS STUMMSCHALTEN GEHT NICHT VERLOREN, ES ZIEHT MIT UM: der
+      //     Mute-Knopf steht als volBtn/micBtn direkt neben dem Regler
+      //     auf der Sound-Seite (Aufgabe 17, ags-control-center.template)
+      //     - derselbe `pamixer -t`/`pamixer --default-source -t` wie
+      //     hier vorher, nur einen Klick weiter.
+      //
+      //     Scrollen bleibt UNVERAENDERT ein direkter Befehl (kein
+      //     `toggles` fuer onScrollUp/onScrollDown - attachClicks() liest
+      //     beide unabhaengig von `toggles`/`onClick`): das Rad ueber dem
+      //     Leistensymbol regelt die Lautstaerke weiterhin ohne die
+      //     Schale zu oeffnen, genau wie vorher.
       case "pulseaudio": return sharedModule(name, "audio", {
-        onClick: "pamixer -t",
+        toggles: "sound",
         onScrollUp: "pamixer -i 5",
         onScrollDown: "pamixer -d 5",
       })
 
       case "pulseaudio#microphone": return sharedModule(name, "microphone", {
-        onClick: "pamixer --default-source -t",
+        toggles: "sound",
         onScrollUp: "pamixer --default-source -i 5",
         onScrollDown: "pamixer --default-source -d 5",
       })
