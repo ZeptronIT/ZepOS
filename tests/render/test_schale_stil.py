@@ -238,29 +238,125 @@ def schale(tmp_path_factory):
     return {"vorher": vorher, "seiten": ergebnis}
 
 
-def _sidebar_grenze(bild: measure.Image, platte: tuple[int, int, int, int],
-                    y_versatz: int) -> int | None:
-    """Die x-Spalte, an der die Seitenleiste aufhoert und der Inhalt
-    beginnt - gesucht als NACHHALTIGER Farbsprung (5 Bildpunkte in
-    Folge deutlich anders), nicht als einzelner Pixel: ein einzelner
-    Pixel waere so gut wie sicher ein Buchstabenrand.
+# DIE ZWEI FUNKTIONEN UNTEN ERSETZEN _sidebar_grenze() UND DIE
+# HANDGEROLLTE randzeile()-SUCHE DER FRUEHEREN FASSUNG - BEIDE SUCHTEN
+# NACH EINER RANDLINIE, UND GENAU DAS WAR DER FEHLER
+#
+#     GEMELDET (Aufgabenblatt dieser Aufgabe): beide frueheren Tests
+#     beschrieben den KAPUTTEN Zustand als Sollzustand. Sie fanden ihre
+#     Grenze/Zeilenhoehe ueber eine RANDLINIE - solange jeder
+#     Seitenleisten-Eintrag ein zepButton("umrandet") um eine zepRow war
+#     (die "Kasten in Kasten"-Wand, siehe tests/src/test_kit_nesting.py),
+#     malte JEDE Zeile ihre EIGENE, immer sichtbare Umrandung, und der
+#     Abstand zwischen zwei solchen Randlinien war eine robuste, viele
+#     Bildpunkte breite Zeilenhoehe.
+#
+#     74008b5 (19.08.2026, "zepRow traegt ihre Klickbarkeit selbst - kein
+#     zweiter Kasten mehr") hat genau das behoben: ein Eintrag ist seither
+#     eine randlose Zeile, nur der AKTIVE traegt noch etwas Sichtbares -
+#     einen linken Farbstreifen plus getoenten Grund (.zep-row.active,
+#     ags-style.template). Die einzige verbliebene Randlinie im ganzen
+#     Bild ist .zep-sidebar { border-right: 1px solid $border } - GENAU
+#     EIN Bildpunkt breit (GEMESSEN, Bericht dieser Aufgabe: x_offset=209
+#     traegt die Randfarbe, x_offset=210 ist schon wieder Hintergrund).
+#     Ein Test, der einen Sprung "haelt fuenf Punkte lang" verlangt, kann
+#     einen einzelnen Bildpunkt grundsaetzlich nie finden - nicht durch
+#     Pech, sondern durch Konstruktion. Und zwischen zwei UNMARKIERTEN
+#     Eintraegen gibt es seit 74008b5 ueberhaupt keine Randlinie mehr,
+#     die REPARIERTE Seitenleiste beschreibt also exakt das Bild, das die
+#     alten Zusicherungen als Fehlschlag gelesen haben.
+#
+# WAS STATTDESSEN GEMESSEN WIRD
+#     Der AKTIVE Eintrag ist auf JEDER der vier gemessenen Seiten
+#     vorhanden (die eigene Seite ist immer markiert) und seine
+#     Hervorhebung ist keine duenne Linie, sondern eine FLAECHE: 74
+#     Bildpunkte hoch und praktisch die ganze Spaltenbreite breit
+#     (GEMESSEN, alle vier Seiten, Bericht dieser Aufgabe). Eine Flaeche
+#     dieser Groesse haelt einen Schwellenwert-Sprung locker ueber viele
+#     Bildpunkte - genau die Eigenschaft, die der alten Suche fehlte.
+#     _aktive_zeile() findet ihre Ober-/Unterkante (die Zeilenhoehe der
+#     zweiten Zusicherung), _spaltengrenze() ihre rechte Kante (die
+#     Spaltenbreite der ersten).
+_AKTIV_X_VERSATZ = 50  # GEMESSEN: liegt auf allen vier Seiten sicher
+                       # innerhalb des Zeilengrundes, rechts vom Symbol
+                       # (Symbole liegen bei x_offset 22-38).
+_HALT_PUNKTE = 37      # STYLE_ROW_HEIGHT (74) // 2 - klar ueber jedem
+                       # Buchstaben-/Symbol-Ausschlag (hoechstens ein
+                       # paar Bildpunkte lang), klar unter der echten
+                       # Hervorhebung (74 Punkte).
+_SCHWELLE = 15         # GEMESSEN (Bericht dieser Aufgabe): zwischen zwei
+                       # BENACHBARTEN Eintraegen blutet der Weichzeichner
+                       # ein paar Bildpunkte lang mit einem Sprung von
+                       # ~10-11 ueber - eine Schwelle von 10 (wie in der
+                       # alten Fassung) reisst diese Unschaerfe mit in
+                       # den Lauf und misst dadurch bis zu 8px zu viel
+                       # Zeilenhoehe. 15 liegt klar darueber und klar
+                       # unter dem echten Sprung in die Hervorhebung
+                       # (mindestens 28 auf allen vier Seiten).
+
+
+def _aktive_zeile(bild: measure.Image,
+                  platte: tuple[int, int, int, int]) -> tuple[int, int] | None:
+    """Ober- und Unterkante (relativ zur Fensteroberkante) des einen
+    Seitenleisten-Eintrags, der gerade als "aktiv" markiert ist -
+    gefunden ueber seine Hervorhebungsflaeche, nicht ueber eine Randlinie
+    (siehe der Blattkopf oben).
+
+    Beginnt bei y_platte+85 (sicher unterhalb des Fensterkopfs, sicher
+    oberhalb jeder Gruppenmarke - GEMESSEN: die Kopfzeile endet bei
+    Versatz 77, "CONNECTIONS"/"SYSTEM" beginnt fruehestens bei 118) und
+    sucht den ERSTEN Lauf abweichender Farbe, der mindestens
+    _HALT_PUNKTE lang haelt.
     """
-    x_platte, y_platte, _, _ = platte
-    y = y_platte + y_versatz
-    start_x = x_platte + 180
-    ende_x = x_platte + 240
-    basis = bild.at(start_x, y)[:3]
-    for x in range(start_x, ende_x - 5):
-        hier = bild.at(x, y)[:3]
-        if max(abs(a - b) for a, b in zip(hier, basis)) <= 10:
-            continue
-        # Haelt der Sprung fuenf Punkte lang, oder ist es nur ein
-        # Buchstabenpixel, das gleich wieder verschwindet?
-        haelt = all(
-            max(abs(a - b) for a, b in zip(bild.at(x + i, y)[:3], hier)) <= 12
-            for i in range(1, 5))
-        if haelt:
-            return x - x_platte
+    x = platte[0] + _AKTIV_X_VERSATZ
+    y_start = platte[1] + 85
+    y_ende = platte[1] + platte[3] - 5
+    basis = bild.at(x, y_start)[:3]
+
+    lauf_start = None
+    for y in range(y_start, y_ende):
+        anders = max(abs(a - b) for a, b in
+                    zip(bild.at(x, y)[:3], basis)) > _SCHWELLE
+        if anders and lauf_start is None:
+            lauf_start = y
+        elif not anders and lauf_start is not None:
+            if y - lauf_start >= _HALT_PUNKTE:
+                return (lauf_start - platte[1], y - platte[1])
+            lauf_start = None
+    return None
+
+
+def _spaltengrenze(bild: measure.Image, platte: tuple[int, int, int, int],
+                   y_mitte_abs: int) -> int | None:
+    """Die x-Spalte, an der die Hervorhebung des aktiven Eintrags aufhoert
+    - die rechte Kante der Seitenleiste, gemessen an der Flaeche selbst
+    statt an ihrer 1px-Randlinie (siehe der Blattkopf oben).
+
+    `y_mitte_abs` ist die Mitte der Zeile, die _aktive_zeile() gefunden
+    hat - garantiert innerhalb der Hervorhebung, nicht daneben.
+
+    -1 AM ENDE: platte[0] ist die AEUSSERE Fensterkante, und die traegt
+    selbst einen 1px-Rand (.overlay-outer { border: 1px solid $border }).
+    Der erste Bildpunkt DAHINTER (Versatz 1) ist der Beginn von
+    .zep-sidebar - eine Spaltenbreite wird also von DORT gezaehlt, nicht
+    von der Fensterkante. GEMESSEN (Bericht dieser Aufgabe): ohne diesen
+    Abzug landet die Messung bei 209, nicht bei den 208px, die
+    .zep-sidebar in ags-style.template als min-width traegt.
+    """
+    x_start = platte[0] + _AKTIV_X_VERSATZ
+    basis = bild.at(x_start, y_mitte_abs)[:3]
+
+    lauf_start = None
+    for i in range(0, 260 - _AKTIV_X_VERSATZ):
+        x = x_start + i
+        anders = max(abs(a - b) for a, b in
+                    zip(bild.at(x, y_mitte_abs)[:3], basis)) > _SCHWELLE
+        if anders and lauf_start is None:
+            lauf_start = x
+        elif not anders and lauf_start is not None:
+            lauf_start = None
+        if anders and lauf_start is not None and x - lauf_start >= _HALT_PUNKTE:
+            return lauf_start - platte[0] - 1
     return None
 
 
@@ -304,26 +400,41 @@ def test_die_seitenleiste_bemalt_208_punkte(schale):
     prueft nur die Zeichenkette "208px", nicht was GTK daraus macht.
 
     Gemessen auf JEDER der vier Seiten (der Wert darf nicht von der
-    aktiven Seite abhaengen) und an EINEM y innerhalb der ersten
-    Sidebar-Zeile - 100 Punkte unter der Fensteroberkante liegt bei
-    allen vier Seiten sicher in der Gruppe VERBINDUNGEN (die
-    Kopfzeile+Randabstand braucht darunter deutlich weniger als 100px,
-    und der erste Eintrag ist laut Messung dieser Aufgabe rund 74-76px
-    hoch - 100 trifft ihn also mittig).
+    aktiven Seite abhaengen) - ueber die Hervorhebung des jeweils
+    AKTIVEN Eintrags (siehe der Blattkopf ueber _aktive_zeile()/
+    _spaltengrenze()), nicht mehr ueber eine Randlinie zwischen zwei
+    Eintraegen, die es seit 74008b5 nicht mehr gibt.
+
+    TOLERANZ VON 1 PUNKT, UND SIE IST GEMESSEN, NICHT GERATEN
+        Die rechte Kante der Hervorhebung liegt GENAU auf der 1px
+        Randlinie von .zep-sidebar (border-right) - derselbe Bildpunkt
+        traegt beides. Ob DIESER eine Bildpunkt (halb Hervorhebungs-,
+        halb Randfarbe durch Antialiasing) die Schwelle _SCHWELLE
+        ueberschreitet, haengt vom exakten Farbmix ab: GEMESSEN (Bericht
+        dieser Aufgabe, alle vier Seiten desselben Laufs) ergab general/
+        network/bluetooth exakt 208, vpn 209 - derselbe Sachverhalt, ein
+        Bildpunkt anders gerundet. Eine Zusicherung, die diesen einen
+        Bildpunkt nicht zulaesst, verwechselt Rundung mit einem Fehler.
     """
-    ergebnisse = {}
+    ergebnisse: dict[str, int | None] = {}
     for name, info in schale["seiten"].items():
-        grenze = _sidebar_grenze(info["bild"], info["platte"], y_versatz=100)
-        ergebnisse[name] = grenze
+        zeile = _aktive_zeile(info["bild"], info["platte"])
+        if zeile is None:
+            ergebnisse[name] = None
+            continue
+        oben, unten = zeile
+        y_mitte_abs = info["platte"][1] + (oben + unten) // 2
+        ergebnisse[name] = _spaltengrenze(info["bild"], info["platte"], y_mitte_abs)
 
     fehlend = {name: grenze for name, grenze in ergebnisse.items()
               if grenze is None}
     assert not fehlend, (
-        f"auf diesen Seiten liess sich gar keine Grenze finden: "
-        f"{sorted(fehlend)} - siehe die Bilder aus dieser Aufgabe")
+        f"auf diesen Seiten liess sich die Hervorhebung des aktiven "
+        f"Eintrags gar nicht finden: {sorted(fehlend)} - siehe die "
+        "Bilder aus dieser Aufgabe")
 
     falsch = {name: grenze for name, grenze in ergebnisse.items()
-             if grenze != SIDEBAR_BREITE_SOLL}
+             if abs(grenze - SIDEBAR_BREITE_SOLL) > 1}
     assert not falsch, (
         f"die Seitenleiste soll {SIDEBAR_BREITE_SOLL}px breit bemalen "
         f"(.zep-sidebar, ags-style.template), gemessen: {falsch}")
@@ -337,10 +448,24 @@ def test_ein_seitenleisten_eintrag_ist_nicht_die_knopfhoehe_hoch(schale):
     gewinnt das Kind. Diese Zusicherung haelt die Kit-Regel ("ein Knopf
     ist 32/49px hoch") gegen das BILD und nicht gegen die Behauptung.
 
-    Gemessen als Abstand zwischen den beiden ersten vollstaendig
-    randfarbenen Zeilen der Seitenleiste (der gemeinsame Rand zwischen
-    dem ersten und dem zweiten Eintrag) - dieselbe Idee wie
-    _sidebar_grenze(), nur senkrecht.
+    GEMESSEN UEBER DIE HERVORHEBUNG, NICHT MEHR UEBER RANDLINIEN
+        Die fruehere Fassung suchte den Abstand zwischen zwei
+        "vollstaendig randfarbenen" Zeilen - ein Muster, das es seit
+        74008b5 nur noch an der AEUSSEREN Fensterplatte gibt (Kopf- und
+        Fussrand), nicht mehr zwischen zwei Eintraegen. GEMESSEN, mit dem
+        alten Code gegen den REPARIERTEN Baum: die einzigen beiden
+        "Randzeilen", die er fand, waren der untere Rand des
+        Fensterkopfs (y=77) und die UNTERKANTE DER GANZEN PLATTE
+        (y=539, praktisch hoehe_platte) - macht 462px "Zeilenhoehe",
+        offensichtlich kein einzelner Eintrag.
+        _aktive_zeile() misst stattdessen die Ausdehnung der
+        Hervorhebungsflaeche des aktiven Eintrags direkt - dieselbe
+        Flaeche, mit der test_die_seitenleiste_bemalt_208_punkte oben
+        auch die Spaltenbreite findet.
+
+    Gemessen auf "general" (wie vorher) - der aktive Eintrag ist dort
+    "Control", per Messung dieser Aufgabe 74 Bildpunkte hoch, mit
+    derselben 1-Punkt-Toleranz wie oben.
     """
     # NICHT size_of() aus desktop_session.py: das dortige int(...) setzt
     # voraus, dass value_of() OHNE Einheit zurueckkommt (BARE) - fuer
@@ -359,40 +484,23 @@ def test_ein_seitenleisten_eintrag_ist_nicht_die_knopfhoehe_hoch(schale):
     zeilenhoehe = _px("STYLE_ROW_HEIGHT")
 
     info = schale["seiten"]["general"]
-    bild = info["bild"]
-    x_platte, y_platte, breite_platte, hoehe_platte = info["platte"]
-
-    rand = (33, 79, 89)  # $border, siehe die Messung im Bericht dieser Aufgabe
-
-    def randzeile(y: int) -> bool:
-        n = sum(1 for x in range(x_platte + 6, x_platte + 200)
-               if max(abs(a - b) for a, b in
-                     zip(bild.at(x, y)[:3], rand)) <= 6)
-        return n / 194 > 0.5
-
-    grenzen = [y - y_platte for y in range(y_platte + 60, y_platte + hoehe_platte)
-              if randzeile(y)]
-    # Benachbarte Treffer (die 1-2px Antialiasing derselben Linie)
-    # zusammenfassen.
-    zusammengefasst: list[int] = []
-    for y in grenzen:
-        if zusammengefasst and y - zusammengefasst[-1] <= 2:
-            continue
-        zusammengefasst.append(y)
-
-    assert len(zusammengefasst) >= 2, (
-        f"weniger als zwei Randlinien in der Seitenleiste gefunden: "
-        f"{zusammengefasst} - siehe das Bild schale-general.png dieser "
+    zeile = _aktive_zeile(info["bild"], info["platte"])
+    assert zeile is not None, (
+        "auf 'general' liess sich die Hervorhebung des aktiven Eintrags "
+        "('Control') nicht finden - siehe schale-general.png dieser "
         "Aufgabe")
 
-    erster_eintrag = zusammengefasst[1] - zusammengefasst[0]
-    assert erster_eintrag == knopfhoehe, (
-        f"der erste Eintrag der Seitenleiste ist {erster_eintrag}px hoch "
-        f"(gemessen zwischen y={zusammengefasst[0]} und "
-        f"y={zusammengefasst[1]}, bezogen auf die Fensteroberkante). "
-        f"zepButton (die aeussere Huelle) beansprucht "
-        f"STYLE_CONTROL_HEIGHT={knopfhoehe}px, aber zepRow (das Kind) "
-        f"verlangt STYLE_ROW_HEIGHT={zeilenhoehe}px - und gewinnt, weil "
-        f"der Knopf keine senkrechte Polsterung hat "
-        "(.zep-btn { padding: 0 SPACE_16 }). Siehe "
-        "tests/src/test_kit_nesting.py fuer die Ursache.")
+    oben, unten = zeile
+    eintrag_hoehe = unten - oben
+    assert abs(eintrag_hoehe - zeilenhoehe) <= 1, (
+        f"der aktive Eintrag der Seitenleiste ('Control') ist "
+        f"{eintrag_hoehe}px hoch (gemessen zwischen y={oben} und y={unten}, "
+        f"bezogen auf die Fensteroberkante), erwartet wird "
+        f"STYLE_ROW_HEIGHT={zeilenhoehe}px.")
+    assert eintrag_hoehe != knopfhoehe, (
+        f"der aktive Eintrag ist {eintrag_hoehe}px hoch - genau "
+        f"STYLE_CONTROL_HEIGHT={knopfhoehe}px, die Knopfhoehe. zepButton "
+        "(die aeussere Huelle) hat wieder die Zeilenhoehe zu ihrer "
+        "eigenen gemacht - genau der Fehler, den "
+        "tests/src/test_kit_nesting.py als Quelltext-Ursache haelt. "
+        "(.zep-btn { padding: 0 SPACE_16 }, keine senkrechte Polsterung.)")
