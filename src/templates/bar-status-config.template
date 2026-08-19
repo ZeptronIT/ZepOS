@@ -58,42 +58,81 @@
 #     der Tondienst ueberhaupt antwortet, und erst DANACH heisst eine
 #     leere Antwort auf `get-volume` "dieses Geraet gibt es nicht".
 #
-# DIE ZAHL STEHT SEIT DEM 12.08.2026 IM TOOLTIP UND NICHT AUF DER LEISTE
-#     BESTELLT an dem Tag: die drei Prozentzahlen "kosten viel Breite und
-#     sagen selten etwas. Symbol allein, Zahl im Tooltip - so macht es
-#     macOS."
+# SEIT DEM 19.08.2026 TRAGEN AKKU, TON UND MIKROFON IHRE ZAHL AUF DER
+# LEISTE - NUR DAS NETZ HAT SIE NOCH IM TOOLTIP
+#     BESTELLT an diesem Tag: "in dem header fehlen ausserdem beim
+#     lautstaerke und mikrofon icon die prozent zahlen auf wie viel
+#     prozent sie gestellt sind". Auf die Rueckfrage, ob die Zahl nur
+#     beim Verstellen erscheinen solle, hat der Nutzer ausdruecklich
+#     BEIDE DAUERHAFT MIT ZAHL gewaehlt, so wie der Akku es seit dem
+#     13.08.2026 macht.
 #
-#     DER AKKU IST SEIT DEM 13.08.2026 WIEDER AUSGENOMMEN, und der
-#     Nutzer hat den Unterschied selbst benannt: "ich will auch eine
-#     prozentzahl haben fuer die batterie nicht nur ein symbol", davor
-#     "ich weiss nicht wie voll der laptop ist".
+#     WAS DAS UMKEHRT, UND ES WIRD NICHT GELOESCHT, SONDERN UEBERSTIMMT
+#         Vom 12.08.2026 bis heute stand hier die Gegenregel, und zwar
+#         ebenfalls auf Ansage: die Prozentzahlen "kosten viel Breite und
+#         sagen selten etwas. Symbol allein, Zahl im Tooltip - so macht
+#         es macOS."
 #
-#     Der Unterschied ist nicht Geschmack, sondern die Art der Auskunft.
-#     Lautstaerke und Mikrofonpegel sind EINSTELLUNGEN - man hat sie
-#     selbst gerade gemacht, das Symbol bestaetigt sie, und die genaue
-#     Zahl braucht man nur beim Nachjustieren. Der Ladestand ist eine
-#     MESSUNG, die sich von selbst aendert und ueber die man planen
-#     muss. Ein Zeichen mit fuenf Fuellstufen sagt dafuer "ungefaehr
-#     halb", und genau das hat der Nutzer als zu wenig gemeldet.
+#         Der Akku wurde am 13.08.2026 als erster ausgenommen ("ich will
+#         auch eine prozentzahl haben fuer die batterie nicht nur ein
+#         symbol", davor "ich weiss nicht wie voll der laptop ist").
+#         Begruendet war die Ausnahme mit der ART der Auskunft:
+#         Lautstaerke und Mikrofonpegel seien EINSTELLUNGEN, die man
+#         gerade selbst gemacht hat und deren Symbol sie bestaetigt; der
+#         Ladestand sei eine MESSUNG, die sich von selbst aendert.
 #
-#     Was das kostet, ist gemessen und steht in
-#     tests/src/test_bar_headless.py: der Akku wird von einem
-#     Zeichenknopf zu einem Modul mit Zahl.
+#     WAS VON DIESER UEBERLEGUNG BESTEHEN BLEIBT
+#         Die Unterscheidung Einstellung/Messung ist richtig geblieben,
+#         sie traegt die Entscheidung nur nicht mehr. Der Nutzer hat mit
+#         seiner Formulierung - "auf wie viel prozent sie gestellt sind"
+#         - gesagt, dass er die EINSTELLUNG sehen will, nicht den Pegel;
+#         er will die Zahl also gerade fuer das, was das Argument als
+#         entbehrlich einstufte. Eine Ueberlegung, die eine Bestellung
+#         schlaegt, hat es nie gegeben.
 #
-#     GEMESSEN, was das zurueckgibt (tests/src/test_bar_headless.py,
-#     Vorgabegroesse, mit Glyphen): der Ton 104 px, das Netz 92, der
-#     Akku 92 - zusammen 288. Ohne Zahl misst sich jedes wie die
-#     Zeichenknoepfe rechts, also 48 px: zusammen 144. ZURUECK KOMMEN
-#     144 px, also mehr als ein Zehntel eines 1366 px breiten Schirms.
+#         Was ebenfalls bleibt: DAS ZEICHEN TRAEGT WEITER DIE STUFE.
+#         Zeichen und Zahl sagen Verschiedenes - das eine den Zustand
+#         (stumm, Kopfhoerer, Laden, Netzteil), das andere den Wert -,
+#         und deshalb steht die Zahl NEBEN dem Zeichen und nicht an
+#         seiner Stelle.
 #
-#     DAS GEHT NUR, WEIL DAS ZEICHEN DIE STUFE TRAEGT. Ein Symbol ohne
-#     Zahl ist nur dann dieselbe Auskunft, wenn man ihm den groben Stand
-#     ansieht: der Akku hat fuenf Stufen plus Laden und Netzteil, der Ton
-#     drei plus stumm, und das Netz bekommt seit heute die vier
-#     Feldstaerkezeichen (nf-md-wifi_strength_1..4), die
-#     src/icon_definition.py laengst kennt und die bis heute niemand
-#     benutzt hat. Wer es GENAU wissen will, faehrt darueber - dort
-#     steht die Zahl unveraendert.
+#         Und es bleibt fuer das NETZ vollstaendig gueltig: die vier
+#         Feldstaerkezeichen (nf-md-wifi_strength_1..4) sind vier
+#         Viertel, die Zahl daneben waere dieselbe Auskunft zweimal. Es
+#         ist deshalb das einzige der vier Module, dessen Prozentzahl
+#         weiter nur im Tooltip steht - und der Nutzer hat es heute auch
+#         nicht verlangt.
+#
+#     WAS DAS KOSTET, GEMESSEN AM 19.08.2026
+#         Werkzeug: tests/src/test_bar_headless.py, Vorgabegroesse, zehn
+#         Arbeitsbereiche, echte Zeichen. Dort stehen die Zahlen auch im
+#         Kommentar bei COMPLETE_FROM.
+#
+#             pulseaudio             51 px -> 90 px   (+39, "100%")
+#             pulseaudio#microphone  51 px -> 78 px   (+27, "45%")
+#
+#         Zusammen 66 px, und um genau die steigt die Mindestbreite der
+#         ausgelieferten Leiste: 1520 -> 1586 px.
+#
+#         DIE 288/144-RECHNUNG VOM 12.08.2026 STEHT HIER NICHT MEHR, weil
+#         sie zweimal ueberholt ist: sie zaehlte DREI Module (Ton, Netz,
+#         Akku) mit 104/92/92 px gegen 48 px je Zeichenknopf, und beide
+#         Seiten dieser Rechnung sind seither andere. Der Akku hat seine
+#         Zahl schon am 13.08. zurueckbekommen, das Netz hat seine
+#         behalten - und am 19.08.2026 ist der doppelte Modulrand
+#         gefallen, seither misst ein reines Zeichenmodul 51 px statt 48
+#         und der Akku 78 statt 92. Eine Rechnung, deren Posten nicht
+#         mehr existieren, ist kein Argument, sondern eine Fussangel.
+#
+#         DIE FOLGE, DIE DER NUTZER KENNEN MUSS: auf einem 1366 px
+#         breiten Notebookschirm klappt seither EIN Modul mehr hinter den
+#         Knopf, naemlich das Mikrofon. Auf dem Schirm des Nutzers
+#         (1920x1200, Faktor 1.00) steht weiterhin alles. Die
+#         namentliche Liste steht bei FOLDED_ON_COMMON_NOTEBOOK.
+#
+#     Wer es GENAU wissen will, faehrt weiter ueber das Modul - im
+#     Tooltip steht die Zahl unveraendert, dazu beim Akku der
+#     Ladezustand im Wortlaut, den kein Zeichen mit fuenf Stufen traegt.
 #
 # WIE EIN FEHLENDES GERAET AUFGEFANGEN WIRD
 #     Jedes der fuenf Werkzeuge darf fehlen oder schweigen - kein
@@ -321,7 +360,18 @@ audio_module() {
         # Lautsprechersymbol sagt dasselbe und braucht kein Wort dafuer -
         # und es ist das einzige Wort, das dieses Skript je geschrieben
         # hat, also auch das einzige, das je uebersetzt werden muesste.
-        module "$ICON_VOLUME_MUTE" "Ton stumm ($percent%)" "audio-muted"
+        #
+        # DIE ZAHL STEHT AUCH STUMM DANEBEN (19.08.2026). Sie ist die
+        # EINSTELLUNG, nicht der hoerbare Pegel - und stumm ist genau der
+        # Fall, in dem man die Einstellung nicht hoeren kann. Das
+        # durchgestrichene Zeichen traegt den Zustand, die Zahl den
+        # Wert; beide sagen Verschiedenes und widersprechen sich nicht.
+        # Die alte Zusicherung dagegen galt "0%" - einer FALSCHEN Zahl -,
+        # und diese hier ist die richtige. Dazu kommt eine gemessene
+        # Folge: ein Modul, dessen Zahl beim Stummschalten verschwindet,
+        # springt um 27 px und schiebt jeden Nachbarn mit - bei jedem
+        # Druck auf die Stummtaste.
+        module "$ICON_VOLUME_MUTE $percent%" "Ton stumm ($percent%)" "audio-muted"
         return
     fi
 
@@ -340,7 +390,10 @@ audio_module() {
            fi ;;
     esac
 
-    module "$icon" "Ausgabe: $percent%" "audio"
+    # Zeichen UND Zahl, seit dem 19.08.2026 - dieselbe Schreibweise wie
+    # beim Akku weiter unten, und aus demselben Grund EINE und nicht
+    # zwei: "$icon $percent%".
+    module "$icon $percent%" "Ausgabe: $percent%" "audio"
 }
 
 microphone_module() {
@@ -353,10 +406,12 @@ microphone_module() {
     percent=${reading% *}
     muted=${reading#* }
 
+    # Zeichen UND Zahl in BEIDEN Zweigen, seit dem 19.08.2026 - die
+    # Begruendung fuer den stummen Fall steht bei audio_module.
     if [ "$muted" = yes ]; then
-        module "$ICON_MIC_MUTE" "Mikrofon stumm ($percent%)" "microphone-muted"
+        module "$ICON_MIC_MUTE $percent%" "Mikrofon stumm ($percent%)" "microphone-muted"
     else
-        module "$ICON_MIC" "Mikrofon: $percent%" "microphone"
+        module "$ICON_MIC $percent%" "Mikrofon: $percent%" "microphone"
     fi
 }
 

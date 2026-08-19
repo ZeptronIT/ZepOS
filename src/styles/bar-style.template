@@ -535,17 +535,24 @@ tooltip label {
 
 /* NACHGETRAGEN am 19.08.2026 (Aufgabe 19). GEMELDET: "die icon im header
  * rechts oben sind nicht genau exakt gleich lang alligned von der
- * breite". Diese vier zeigen NUR ein Zeichen, nie Text daneben (anders
+ * breite". Diese zeigen NUR ein Zeichen, nie Text daneben (anders
  * als Uhr, Datum oder der Akku mit seinem Prozentsatz, die darum absicht-
  * lich UNGLEICH breit bleiben) - siehe die Messung und Herleitung bei
  * STYLE_BAR_SYMBOL_WIDTH, sizes.py. Eine gemeinsame Mindestbreite statt
- * vier einzelner: die Zeichen bleiben unterschiedlich TINTE, aber
+ * einer je Fundstelle: die Zeichen bleiben unterschiedlich TINTE, aber
  * belegen dieselbe FLAECHE - dasselbe Prinzip wie .zep-btn (eine Hoehe,
- * vier Rollen) statt einer Zahl pro Fundstelle. */
+ * vier Rollen) statt einer Zahl pro Fundstelle.
+ *
+ * VIER WAREN ES BIS ZUM SPAETEN 19.08.2026; #pulseaudio und
+ * #pulseaudio#microphone sind herausgefallen. Sie tragen seit der
+ * Bestellung dieses Tages ihre Prozentzahl neben dem Zeichen ("auf wie
+ * viel prozent sie gestellt sind") und gehoeren damit zur anderen
+ * Gruppe - der mit Text, die absichtlich ungleich breit bleibt.
+ * GEMESSEN im selben Aufbau: sie sind mit Zahl 90 und 78 px breit, also
+ * ohnehin weit ueber dieser Mindestbreite. Die Regel haette sie nicht
+ * mehr erreicht, aber der Satz darueber waere falsch gewesen. */
 #network,
-#bluetooth,
-#pulseaudio,
-#pulseaudio\#microphone {
+#bluetooth {
   min-width: {{STYLE_BAR_SYMBOL_WIDTH}};
 }
 

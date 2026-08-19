@@ -1403,9 +1403,17 @@ TABLE: dict[str, Size] = {
     #
     # Module MIT Text (Uhr, Datum, der Akkuprozentsatz) bleiben
     # ausdruecklich unangetastet - eine feste Breite wuerde sie
-    # abschneiden. Nur die vier reinen Symbolmodule oben bekommen diese
+    # abschneiden. Nur die reinen Symbolmodule bekommen diese
     # Mindestbreite (siehe STYLE_BAR_SYMBOL_WIDTH-Leser in
     # bar-style.template).
+    #
+    # ZWEI DER VIER SIND AM SPAETEN 19.08.2026 IN DIE ANDERE GRUPPE
+    # GEWECHSELT: #pulseaudio und #pulseaudio#microphone tragen seither
+    # ihre Prozentzahl neben dem Zeichen ("auf wie viel prozent sie
+    # gestellt sind", woertlich bestellt) und sind damit Module MIT
+    # Text. Die Messungen oben bleiben stehen, weil sie die Zeichentinte
+    # betreffen und die ist dieselbe geblieben; der Leser in
+    # bar-style.template nennt seither nur noch #network und #bluetooth.
     #
     # HERGELEITET: das breiteste gemessene Zeichen (#network, 19px) reicht
     # nahe an die eigene Schriftgroesse heran - ein Nerd-Font-Zeichen ist

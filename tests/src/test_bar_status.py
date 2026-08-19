@@ -365,12 +365,29 @@ def test_the_volume_is_whole_per_cent_and_rounded(sandbox):
     Fliesskommazahlen, also rechnet awk, und ohne das +0.5 dort waere
     jede Anzeige systematisch zu niedrig.
 
-    IM TOOLTIP UND NICHT IM TEXT, seit dem 12.08.2026: "Symbol allein,
-    Zahl im Tooltip - so macht es macOS." Die Rechnung ist dieselbe
-    geblieben und wird deshalb weiter hier geprueft; was sich geaendert
-    hat, ist, wo sie ankommt. Die zweite Zeile misst die andere Haelfte -
-    ohne sie bestuende dieser Test auch mit einem Skript, das die Zahl
-    an BEIDE Stellen schreibt, und dann waeren die 56 px wieder da.
+    AUF DER LEISTE UND IM TOOLTIP, SEIT DEM 19.08.2026 - und das ist die
+    Umkehrung dessen, was hier vom 12.08. bis heute stand.
+
+        Bis heute forderte die zweite Zeile das Gegenteil: "%" durfte im
+        Text NICHT vorkommen, mit der Fehlermeldung "die Prozentzahl
+        steht wieder auf der Leiste". Das war die Zusicherung zu
+        "Symbol allein, Zahl im Tooltip - so macht es macOS."
+
+        UMGEKEHRT hat sie der Nutzer selbst, am 19.08.2026: "in dem
+        header fehlen ausserdem beim lautstaerke und mikrofon icon die
+        prozent zahlen auf wie viel prozent sie gestellt sind" - auf
+        Nachfrage ausdruecklich BEIDE DAUERHAFT mit Zahl, so wie der
+        Akku es macht.
+
+        Das Argument von damals ist damit nicht falsch geworden,
+        sondern ueberstimmt; was davon bleibt und was es kostet, steht
+        im Kopf von bar-status-config.template. Die Rechnung oben ist
+        unberuehrt geblieben und wird deshalb weiter hier geprueft.
+
+    Der Waechter ist nicht geloescht, sondern gedreht: er misst
+    weiterhin BEIDE Stellen, nur mit umgekehrtem Vorzeichen. Ohne die
+    Zeile ueber den Tooltip bestuende dieser Test auch mit einem Skript,
+    das die genaue Zahl von dort wegnimmt.
     """
     sandbox.stub("wpctl", r"""
 case "$1" in
@@ -381,8 +398,19 @@ esac
     answer = sandbox.run()
 
     assert "46%" in answer["audio"]["tooltip"], answer["audio"]
-    assert "%" not in answer["audio"]["text"], (
-        f"die Prozentzahl steht wieder auf der Leiste: {answer['audio']}")
+    assert "46%" in answer["audio"]["text"], (
+        f"die Prozentzahl fehlt auf der Leiste: {answer['audio']}")
+    # Und das Zeichen bleibt daneben stehen - dieselbe Zusicherung wie
+    # beim Akku: eine nackte Zahl waere auf einer Leiste voller Zeichen
+    # nicht als Lautstaerke zu erkennen.
+    assert answer["audio"]["text"].strip() != "46%", answer["audio"]
+
+    # Das Mikrofon ist am selben Tag mitbestellt worden und wird deshalb
+    # in derselben Zeile gemessen - die Attrappe oben antwortet auf
+    # get-volume fuer beide Knoten.
+    assert "46%" in answer["microphone"]["text"], (
+        f"die Prozentzahl fehlt auf der Leiste: {answer['microphone']}")
+    assert answer["microphone"]["text"].strip() != "46%", answer["microphone"]
 
 
 def test_a_muted_sink_says_so_and_carries_the_muted_class(sandbox):
@@ -391,6 +419,20 @@ def test_a_muted_sink_says_so_and_carries_the_muted_class(sandbox):
     "0%" waere falsch: die Lautstaerke bleibt stehen, wo sie war, und
     kommt beim naechsten Druck auf die Stummtaste zurueck. Die Klasse
     traegt die Farbe, mit der bar-style.template das Modul abblendet.
+
+    UND DIE EINGESTELLTE ZAHL STEHT SEIT DEM 19.08.2026 TROTZDEM DA.
+
+        Das ist kein Widerspruch zum Satz oben, sondern seine
+        Praezisierung: verboten ist "0%" - eine FALSCHE Zahl -, nicht
+        die richtige. Das durchgestrichene Zeichen sagt den ZUSTAND, die
+        Zahl sagt die EINSTELLUNG, und stumm ist genau der Fall, in dem
+        man die Einstellung nicht hoeren kann. Bestellt hat der Nutzer
+        an diesem Tag die Zahl fuer "auf wie viel prozent sie gestellt
+        sind".
+
+        Dazu eine gemessene Folge: ein Modul, dessen Zahl beim
+        Stummschalten verschwindet, springt um 27 px und schiebt jeden
+        Nachbarn mit - bei jedem Druck auf die Stummtaste.
     """
     sandbox.stub("wpctl", r"""
 case "$1" in
@@ -408,6 +450,22 @@ esac
     assert "Muted" not in answer["audio"]["text"], answer["audio"]
     assert "stumm" in answer["audio"]["tooltip"], answer["audio"]
     assert answer["audio"]["class"] == "audio-muted", answer["audio"]
+
+    # Die eingestellten 40 Prozent, und nicht "0%".
+    assert "40%" in answer["audio"]["text"], (
+        "stumm zeigt die eingestellte Zahl seit dem 19.08.2026 mit: "
+        f"{answer['audio']}")
+    assert "0%" not in answer["audio"]["text"].replace("40%", ""), (
+        f"stumm ist nicht null Prozent: {answer['audio']}")
+
+    # Das Mikrofon ist der vierte Fall derselben Bestellung: die
+    # Attrappe antwortet auf get-volume fuer beide Knoten, also ist es
+    # hier ebenfalls stumm.
+    assert answer["microphone"]["class"] == "microphone-muted", (
+        answer["microphone"])
+    assert "40%" in answer["microphone"]["text"], (
+        "stumm zeigt die eingestellte Zahl seit dem 19.08.2026 mit: "
+        f"{answer['microphone']}")
 
 
 def test_headphones_get_the_headphone_icon(sandbox):
@@ -457,6 +515,11 @@ esac
 
     assert "10%" in answer["audio"]["tooltip"], answer["audio"]
     assert "90%" in answer["microphone"]["tooltip"], answer["microphone"]
+    # Und seit dem 19.08.2026 auf der Leiste, jedes mit SEINER Zahl -
+    # mit dem falschen Knoten stuenden hier zweimal dieselben 10%, und
+    # das faellt im Text eher auf als im Kurzhinweis.
+    assert "10%" in answer["audio"]["text"], answer["audio"]
+    assert "90%" in answer["microphone"]["text"], answer["microphone"]
 
 
 # --------------------------------------------------------------------
@@ -498,10 +561,16 @@ def test_the_battery_carries_its_per_cent_on_the_bar(sandbox):
     """"ich will auch eine prozentzahl haben fuer die batterie nicht nur
     ein symbol" - gemeldet am 13.08.2026.
 
-    Die Ausnahme von "Symbol allein, Zahl im Tooltip": ein Ladestand ist
-    eine Messung, ueber die man planen muss, keine Einstellung, die man
-    gerade selbst gemacht hat. Die Begruendung im Wortlaut steht im Kopf
-    von bar-status-config.template.
+    Der Akku war die ERSTE Ausnahme von "Symbol allein, Zahl im
+    Tooltip": ein Ladestand ist eine Messung, ueber die man planen muss,
+    keine Einstellung, die man gerade selbst gemacht hat.
+
+    SEIT DEM 19.08.2026 IST ER NICHT MEHR ALLEIN - Ton und Mikrofon
+    tragen ihre Zahl auf Ansage des Nutzers ebenfalls auf der Leiste,
+    und diese Zeile ist die Vorlage dafuer (die Schreibweise
+    "$icon $wert%" steht seither an vier weiteren Stellen). Die
+    Begruendung im Wortlaut steht im Kopf von
+    bar-status-config.template.
     """
     sandbox.battery(capacity="47", status="Discharging")
 

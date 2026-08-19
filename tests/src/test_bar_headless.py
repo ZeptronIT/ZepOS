@@ -1401,22 +1401,46 @@ FIT_MODULES = {
     "privacy.sh": "",
 }
 
-# OHNE PROZENTZAHL, seit dem 12.08.2026 - genau wie
-# bar-status-config.template sie seither ausgibt: "Symbol allein, Zahl
-# im Tooltip". Hier standen "100%", "45%", "87%" und "72%", und ein
-# Messaufbau, der Texte nachstellt, die das Skript nicht mehr schreibt,
-# misst eine Leiste, die es nicht gibt.
+# DREI PROZENTZAHLEN, SEIT DEM 19.08.2026 - genau die, die
+# bar-status-config.template heute ausgibt. Ein Messaufbau, der Texte
+# nachstellt, die das Skript nicht (mehr) schreibt, misst eine Leiste,
+# die es nicht gibt.
 #
-# DER AKKU HAT SEINE ZAHL AM 13.08.2026 ZURUECKBEKOMMEN, auf Ansage:
-# "ich will auch eine prozentzahl haben fuer die batterie nicht nur ein
-# symbol". Die Begruendung - warum bei ihm und nicht bei Ton und
-# Mikrofon - steht im Kopf von bar-status-config.template.
+# DIE GESCHICHTE DIESER FUENF ZEILEN, WEIL SIE DIE ZAHLEN UNTEN ERKLAERT
+#     12.08.2026  alle vier Zahlen weg ("Symbol allein, Zahl im Tooltip -
+#                 so macht es macOS").
+#     13.08.2026  der Akku bekommt seine zurueck ("ich will auch eine
+#                 prozentzahl haben fuer die batterie nicht nur ein
+#                 symbol").
+#     19.08.2026  Ton und Mikrofon bekommen ihre zurueck: "in dem header
+#                 fehlen ausserdem beim lautstaerke und mikrofon icon die
+#                 prozent zahlen auf wie viel prozent sie gestellt sind".
+#                 Auf Nachfrage ausdruecklich beide DAUERHAFT mit Zahl,
+#                 so wie der Akku es macht. Die ganze Begruendung steht
+#                 im Kopf von bar-status-config.template.
+#
+# Das Netz behaelt seine Zahl im Tooltip: sie wird vom Zeichen getragen
+# (nf-md-wifi_strength_1..4, vier Balken fuer vier Viertel), und darum
+# ist sie daneben keine zweite Auskunft. Genau diese Voraussetzung fehlt
+# bei Ton und Mikrofon - siehe wieder den Kopf der Vorlage.
 #
 # Das Bluetooth-Modul behaelt seine Zahl: sie ist die ANZAHL der
 # verbundenen Geraete, und die malt kein Zeichen.
+#
+# WARUM "100%" UND "45%" UND NICHT ZWEIMAL DASSELBE
+#     Es sind die Werte, die vor dem 12.08.2026 hier standen - damit
+#     bleibt die Messung mit den Zahlen vergleichbar, die der Kopf der
+#     Vorlage von damals nennt. Drei Stellen sind zugleich das Breiteste,
+#     was das Skript schreiben kann.
+#
+#     GEMESSEN am 19.08.2026 auch im unguenstigsten Fall - BEIDE auf
+#     "100%" -, weil die Schwelle darunter dafuer gerade stehen muss:
+#     die Leiste will dann 1598 px statt 1586, und auf 1600 steht immer
+#     noch alles. Die Einklappliste auf 1366 ist in beiden Faellen
+#     dieselbe.
 FIT_STATUS = {
-    "audio": _glyph("VOLUME_HIGH"),
-    "microphone": _glyph("MIC"),
+    "audio": f"{_glyph('VOLUME_HIGH')} 100%",
+    "microphone": f"{_glyph('MIC')} 45%",
     "battery": f"{_glyph('BATTERY_HIGH')} 87%",
     "network": _glyph("WIFI_3"),
     "bluetooth": f"{_glyph('BLUETOOTH_CONNECTED')} 2",
@@ -1620,7 +1644,48 @@ WIDTHS = (1024, 1280, 1366, 1600, 1680, 1920)
 #         das seit heute anders, und die Entscheidung darueber gehoert
 #         ihm: entweder die Belegungsanzeige oder die Hardwareanzeige
 #         waere dort der Posten, den man wieder nach rechts stellt.
-COMPLETE_FROM = 1680
+#
+#     UND AM 19.08.2026 IST SIE 1600, ALSO EINE STUFE KLEINER - OBWOHL
+#     ZWEI MODULE AN DIESEM TAG GEWACHSEN SIND.
+#
+#         BESTELLT: "in dem header fehlen ausserdem beim lautstaerke und
+#         mikrofon icon die prozent zahlen auf wie viel prozent sie
+#         gestellt sind", beide dauerhaft mit Zahl. Ton und Mikrofon
+#         tragen ihre Prozentzahl seither auf der Leiste; die
+#         Begruendung steht im Kopf von bar-status-config.template.
+#
+#         GEMESSEN mit genau diesem Aufbau (Vorgabegroesse, zehn
+#         Arbeitsbereiche, echte Zeichen), einmal ohne und einmal mit den
+#         beiden Zahlen:
+#
+#             Schirm   ohne Zahl   mit Zahl   eingeklappt (mit Zahl)
+#              1024       1022       1022     9
+#              1280       1208       1208     6
+#              1366       1361       1298     5
+#              1600       1520       1586     0
+#              1680       1520       1586     0
+#              1920       1520       1586     0
+#
+#         DIE EINZELNEN MODULE, im selben Lauf gemessen:
+#
+#             pulseaudio             51 px -> 90 px   (+39, "100%")
+#             pulseaudio#microphone  51 px -> 78 px   (+27, "45%")
+#
+#         Zusammen 66 px, und genau um die steigt die Mindestbreite der
+#         vollen Liste: 1520 -> 1586.
+#
+#         WARUM DIE ZAHL TROTZDEM FAELLT: 1680 war seit dem Vormittag
+#         des 19.08.2026 stehengeblieben. An dem Tag ist der doppelte
+#         Modulrand gefallen (siehe FOLDED_ON_COMMON_NOTEBOOK unten), und
+#         die volle Liste wollte seither 1520 statt 1680 px - die Zahl
+#         hier wurde nur nicht nachgezogen. Sie ist damit KEINE
+#         Aufweichung: 1600 wird jetzt mitgeprueft, wo es vorher
+#         uebersprungen wurde (siehe
+#         test_a_screen_with_room_keeps_every_module_on_the_bar).
+#
+#         DER SCHIRM DES NUTZERS - 1920x1200 bei Faktor 1.00 - traegt
+#         weiterhin alles.
+COMPLETE_FROM = 1600
 
 # Der verbreitetste Notebookschirm, und auf ihm reicht es seit dem
 # 13.08.2026 nicht mehr fuer alles. Was dort einklappt, steht hier
@@ -1651,8 +1716,27 @@ COMMON_NOTEBOOK = 1366
 #     Die Zusicherung bleibt, was sie war: nicht "es klappt etwas ein",
 #     sondern "es klappt GENAU das ein". Dass die Liste schrumpft, ist
 #     der messbare Gewinn - auf demselben Schirm passt jetzt mehr.
+#
+# UND AM SPAETEN 19.08.2026 IST SIE WIEDER LAENGER: FUENF STATT VIER.
+#
+#     `pulseaudio#microphone` ist dazugekommen, und das ist der Preis
+#     der Bestellung desselben Tages - Ton und Mikrofon tragen ihre
+#     Prozentzahl jetzt auf der Leiste (siehe COMPLETE_FROM oben, mit
+#     der Messung). Die beiden Module wachsen zusammen um 66 px, und auf
+#     1366 ist genau dafuer kein Platz.
+#
+#     GEMESSEN am 19.08.2026, in der Reihenfolge, in der die Regel sie
+#     abgibt: auf 1366 px will die Leiste 1298 px und gibt fuenf Module
+#     ab. Vorher waren es vier bei 1361 px.
+#
+#     DAS IST EIN BEFUND UND KEINE ENTSCHEIDUNG DIESER ZEILE. Auf dem
+#     Schirm des Nutzers (1920x1200, Faktor 1.00) steht weiterhin alles;
+#     auf einem 1366er Notebook liegt seit heute ein Modul mehr hinter
+#     dem Knopf, und der Nutzer erfaehrt das im Bericht. Wer dort alles
+#     sehen will, nimmt ein Modul aus der Vorgabe (user-settings.json,
+#     Abschnitt "bar") - fort ist keines, sie liegen hinter dem Knopf.
 FOLDED_ON_COMMON_NOTEBOOK = ("custom-disk", "network", "bluetooth",
-                             "pulseaudio")
+                             "pulseaudio", "pulseaudio#microphone")
 
 # Die Groessenfaktoren, ueber die die Dicke geprueft wird.
 #
