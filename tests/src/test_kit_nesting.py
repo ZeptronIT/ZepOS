@@ -198,13 +198,32 @@ def test_dieser_waechter_wuerde_ueberhaupt_ausloesen():
     assert not _kit_verschachtelungen(unauffaellig)
 
 
-def test_die_drei_bekannten_fundstellen_sind_genau_diese():
-    """Nagelt die AUSGANGSLAGE fest (Aufgabe 15, 19.08.2026): drei
-    Vorlagen, eine Fundstelle je Vorlage. Wird diese Zahl kleiner, ist
-    eine Fundstelle repariert - wird sie GROESSER, kopiert jemand das
-    Muster ein viertes Mal, waehrend es noch kaputt ist.
+def test_keine_neue_fundstelle_kommt_hinzu():
+    """Eine RATSCHE - und zwar seit dem 19.08.2026 auch im Code.
+
+    HIER STAND EINE UNMOEGLICHKEIT, UND SIE IST EINGETRETEN
+        Der Docstring sagte "wird diese Zahl kleiner, ist eine
+        Fundstelle repariert". Die Zusicherung darunter verlangte aber
+        strikte GLEICHHEIT mit dem kaputten Ausgangszustand vom selben
+        Vormittag. Zusammen heisst das: der Test wird rot, sobald jemand
+        tut, wozu er auffordert. Genau das ist am selben Tag passiert,
+        als die drei Fundstellen repariert wurden.
+
+        Ein Test, den eine erfolgreiche Reparatur rot macht, erzieht
+        dazu, ihn zu ignorieren - und dann faengt er auch den Fall nicht
+        mehr, fuer den es ihn ueberhaupt gibt.
+
+    WAS ER JETZT PRUEFT
+        Dass keine NEUE Vorlage das Muster uebernimmt. Die drei
+        bekannten duerfen verschwinden, und sie sind es seit 74008b5;
+        was nicht darf, ist eine vierte, die es neu einfuehrt.
+
+        Dass ueberhaupt keine Verschachtelung mehr existiert, haelt
+        test_kein_zepbutton_umschliesst_eine_zeprow daneben. Der ist der
+        strenge, und er war bis zur Reparatur rot.
     """
-    erwartet = {
+    # Der Stand vom 19.08.2026 vormittags, vor der Reparatur.
+    BEKANNT = {
         "ags-kit.template",
         "ags-network.template",
         "ags-bluetooth.template",
@@ -215,6 +234,11 @@ def test_die_drei_bekannten_fundstellen_sind_genau_diese():
         if _kit_verschachtelungen(text):
             tatsaechlich.add(vorlage.name)
 
-    assert tatsaechlich == erwartet, (
-        f"erwartet {sorted(erwartet)}, gefunden {sorted(tatsaechlich)} - "
-        "siehe Bericht zu Aufgabe 15 fuer den Stand vom 19.08.2026")
+    neu = tatsaechlich - BEKANNT
+    assert neu == set(), (
+        f"{sorted(neu)} traegt die Verschachtelung neu - ein zepButton, "
+        "der einen zepRow als Kind bekommt. Beide malen eigenen Grund, "
+        "eigenen Rand und eigenen Radius; das Ergebnis ist die Wand aus "
+        "Kaesten, die der Nutzer am 19.08.2026 gemeldet hat. zepRow "
+        "traegt seine Klickbarkeit seit 74008b5 selbst - gib ihm "
+        "`aktion`, statt ihn einzupacken.")
