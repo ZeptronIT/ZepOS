@@ -181,7 +181,9 @@ packaging/      20 PKGBUILD recipes, the build container, signing and publishing
 iso/            two archiso profiles and the build that assembles them
 lock/ logout/   zepos-lock, zepos-logout (C, GTK4, gtk4-layer-shell)
 menu/ settings/ zepos-menu, zepos-settings-gui (Python, GTK4)
-plugins/        hyprlaunch, hyprclipx (forked, see plugins/LICENSE)
+plugins/        ZepOS' own patches only. Upstream sources are fetched at
+                build time from a pinned commit, not vendored here -
+                see plugins/LICENSE for who wrote what, and under what.
 po/             gettext: zepos-installer and zepos-desktop domains
 tests/          110 test files and one isolation guard
 docs/specs/     design document and roadmap (German)
