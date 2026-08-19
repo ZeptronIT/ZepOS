@@ -247,11 +247,13 @@ depends=(
     #
     # Das Rezept daneben begruendet, warum es kein eigenes Symbol im Dock
     # bekommt (ein Orchestrierer fuer ein Projektverzeichnis, kein
-    # Fenster zum Anklicken), und was es kostet: 574 npm-Pakete, dazu
-    # nodejs und npm selbst - GEMESSEN am gebauten Paket in einem leeren
-    # Container: 1246,91 MiB installiert, 334,77 MiB Bezug. Das ist der
-    # GROESSTE einzelne Zuwachs, den ZepOS bisher bekommen hat, vor
-    # zepos-claude-code (310 MiB).
+    # Fenster zum Anklicken), warum es an nodejs-lts-krypton haengt und
+    # nicht am schlichten nodejs (claude-flows eigene optionale
+    # better-sqlite3 verlangt Node 20-25.x), und was es kostet: 574
+    # npm-Pakete, dazu nodejs-lts-krypton und npm selbst - GEMESSEN am
+    # gebauten Paket in einem leeren Container: 1247,99 MiB installiert,
+    # 335,72 MiB Bezug. Das ist der GROESSTE einzelne Zuwachs, den ZepOS
+    # bisher bekommen hat, vor zepos-claude-code (310 MiB).
     'zepos-ruflo'
 
     # --- der Rechner --------------------------------------------------

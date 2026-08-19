@@ -91,15 +91,27 @@ license=('MIT')
 #
 #     UND EIN ZWEITES MAL GEMESSEN, DIESMAL AM ECHTEN PAKET IN EINEM
 #     LEEREN CONTAINER (archlinux:latest, signierte [zepos]-Ablage, kein
-#     Vorwissen): `pacman -S zepos-ruflo` zieht nodejs, npm und deren
-#     eigene sieben Abhaengigkeiten (ada, c-ares, libuv, node-gyp,
-#     nodejs-nopt, semver, simdjson) automatisch mit. Aus pacmans eigener
-#     Transaktionsvorschau:
+#     Vorwissen): `pacman -S zepos-ruflo` zieht nodejs-lts-krypton, npm
+#     und deren eigene sieben Abhaengigkeiten (ada, c-ares, libuv,
+#     node-gyp, nodejs-nopt, semver, simdjson) automatisch mit. Aus
+#     pacmans eigener Transaktionsvorschau, NACH dem Wechsel auf
+#     nodejs-lts-krypton (siehe unten):
 #
-#         zepos-ruflo    1159,62 MiB  (314,80 MiB Bezug)
-#         nodejs+npm+7      87,29 MiB  ( 20,00 MiB Bezug, gerundet)
-#         ---------------------------------------------
-#         zusammen       1246,91 MiB  (334,77 MiB Bezug)
+#         zepos-ruflo         1169,51 MiB  (317,73 MiB Bezug)
+#         nodejs-lts-krypton+npm+7  78,48 MiB  ( 17,99 MiB Bezug, gerundet)
+#         --------------------------------------------------
+#         zusammen            1247,99 MiB  (335,72 MiB Bezug)
+#
+#     Gegenueber der ersten Messung (schlichtes nodejs 26.5.1, ohne das
+#     jetzt zusaetzlich installierte better-sqlite3@12.9.0):
+#     1246,91 MiB / 334,77 MiB. Der Wechsel selbst spart bei Node
+#     (52,39 statt 61,20 MiB installiert - nodejs-lts-krypton traegt kein
+#     libffi), das jetzt zusaetzlich installierte
+#     better-sqlite3@12.9.0 (samt der Abhaengigkeiten `bindings` und
+#     `prebuild-install`, die es erst durch die Engine-Anpassung
+#     ueberhaupt mitbringt) kostet mehr, als der Node-Wechsel spart -
+#     unterm Strich +1,08 MiB installiert, +0,95 MiB Bezug. Praktisch
+#     unveraendert, keine zweite Groessenordnung.
 #
 #     Das ist NICHT der zweitgroesste Zuwachs, den ZepOS je bekommen hat
 #     - es ist der GROESSTE, vor zepos-claude-code (310 MiB). Ruflo mit
@@ -127,6 +139,18 @@ license=('MIT')
 #     schon: nicht das Grundgeruest, sondern der ganze Baum, den claude-
 #     flow selbst fuer vollstaendig haelt.
 #
+#     MIT EINER LUECKE, DIE ERST DER NACHTRAG UNTEN SCHLIESST: unter
+#     `nodejs` (26.5.1) FEHLTE `better-sqlite3` GENAU an der Wurzel des
+#     Baums trotzdem - nicht wegen der Skript-Sperre, sondern weil
+#     claude-flows eigene optionale Kopie (12.9.0) einen engines-Bereich
+#     verlangt, den 26.5.1 nicht erfuellt, und npm eine solche
+#     Abhaengigkeit still auslaesst, ohne jede Meldung. Zwei NESTED
+#     Kopien (11.10.0, unter agentdb und agentic-flow) standen trotzdem
+#     im Baum - deren eigene engines-Bereiche liessen 26.5.1 zu. Siehe
+#     "WARUM nodejs-lts-krypton" weiter unten: genau dieser stille Ausfall
+#     hat zur Node-Version gefuehrt, die jetzt tatsaechlich installiert
+#     ist.
+#
 #     Einen Netzzugriff beim ERSTEN START gibt es nicht: `claude-flow
 #     doctor` (GEMESSEN unmittelbar nach `npm ci`, ohne jede weitere
 #     Einrichtung) meldet Node, npm, Claude Code CLI und Git jeweils mit
@@ -146,38 +170,79 @@ license=('MIT')
 #     Befehl, den auch `claude-flow doctor` an erster Stelle vorschlaegt.
 #
 # WAS TROTZDEM FEHLT, UND WARUM DAS HIER STEHT STATT VERSCHWIEGEN ZU WERDEN
-#     `npm ci` meldet fuer 12 der 574 Pakete "install scripts blocked
+#     `npm ci` meldet fuer 13 der 574 Pakete "install scripts blocked
 #     because they are not covered by allowScripts" - eine Sicherheits-
 #     vorgabe von npm 12.0.2 SELBST (nicht dieser Maschine; dieselbe
 #     Meldung kommt auch im frischen Bau-Container, weil er dieselbe
-#     npm-Version aus demselben Schnappschuss zieht). Blockiert sind
-#     better-sqlite3, argon2, sharp, onnxruntime-node, hnswlib-node,
-#     protobufjs, tldjs, @google/genai und die postinstall-Skripte von
-#     agentdb und agentic-flow selbst - Skripte, die eine native
-#     Erweiterung kompilieren oder eine vorgebaute Binaerdatei nachladen
-#     wuerden.
+#     npm-Version aus demselben Schnappschuss zieht). ES WAREN 12, BEVOR
+#     nodejs-lts-krypton das Node-Paket wurde (siehe unten) - der Wechsel
+#     hat claude-flows EIGENE optionale Abhaengigkeit
+#     better-sqlite3@12.9.0 erst installierbar gemacht (ihr eigener
+#     engines-Bereich verlangte Node 20-25.x, das schlichte nodejs
+#     traegt 26.5.1), und sie steht jetzt selbst mit auf der Liste. Alle
+#     dreizehn EINZELN gelesen (Quelltext, nicht vermutet) und im Nachtrag
+#     zu Aufgabe 28 protokolliert:
 #
-#     GEPRUEFT statt vermutet, wie stark das traegt: `claude-flow memory`
-#     nennt sql.js - eine reine JavaScript/WASM-SQLite-Umsetzung, KEINE
-#     native Erweiterung - als seine Speicher-Engine; better-sqlite3 ist
-#     dort die schnellere Alternative, nicht die einzige. `claude-flow
-#     doctor` bestaetigt das GEMESSEN (siehe oben): kein roter Fehlschlag
-#     wegen fehlender nativer Module. Die Kernorchestrierung - init,
-#     swarm, hive-mind, mcp, agent, task, memory - bleibt davon
-#     unberuehrt.
+#         @google/genai, agentdb, protobufjs      - Skript schreibt nur
+#                                                     eine Diagnosezeile
+#         agentic-flow                            - Skript zielt auf einen
+#                                                     agentdb-1.3.9-Pfad,
+#                                                     den es hier gar
+#                                                     nicht mehr gibt
+#         argon2, onnxruntime-node (x2), sharp    - eigene
+#                                                     linux-x64-Binaerdatei
+#                                                     bereits im Paket
+#                                                     gebuendelt; das
+#                                                     Skript wuerde nur
+#                                                     lokal verlinken
+#         tldjs                                   - einziger Zweig haengt
+#                                                     an einer Umgebungs-
+#                                                     variable, die nie
+#                                                     gesetzt ist
+#         better-sqlite3 (jetzt DREI Kopien, 11.10.0 x2 + 12.9.0),
+#         hnswlib-node                            - echte native
+#                                                     Beschleunigung, aber
+#                                                     mit sql.js- bzw.
+#                                                     WASM-Rueckfall hinter
+#                                                     derselben Schnitt-
+#                                                     stelle (agentdbs
+#                                                     eigener Kommentar in
+#                                                     dist/src/db-fallback.js:
+#                                                     "if the optional
+#                                                     peer is loadable ...
+#                                                     Both implementations
+#                                                     expose the same
+#                                                     interface")
 #
-#     Diese zwoelf Skripte selbst auszufuehren wuerde dieses Rezept eine
-#     dritte, groessere Reproduzierbarkeitsfrage stellen (node-gyp
-#     kompiliert dann waehrend package() gegen den C++-Compiler des
-#     Bau-Containers, und better-sqlite3s eigenes Skript versucht zuerst
-#     einen Download vorgebauter Binaerdateien von GitHub-Releases,
-#     ausserhalb jeder Pruefsumme, die dieses Rezept sonst fuehrt) - eine
-#     Entscheidung, die ausdruecklich vom Menschen kommen sollte und
-#     nicht still von diesem Rezept getroffen wird. Wer den vollen
-#     nativen Umfang will, kann `npm rebuild` mit erlaubten
-#     Install-Skripten im installierten Baum nachholen; Voraussetzung
-#     dafuer sind node-gyp, ein C-Compiler und make, die auf einer
-#     ZepOS-Installation nicht automatisch da sind.
+#     Eine echte Ausnahme bleibt bestehen und aendert sich durch die
+#     dreizehnte Zeile nicht: `agentic-flow`s `SharedMemoryPool` (geteilter
+#     Speicher zwischen Worker-Prozessen) hat keinen Rueckfall und wirft
+#     bei fehlendem better-sqlite3 eine sprechende Fehlermeldung - hinter
+#     zwei Ebenen Freiwilligkeit (agentic-flow selbst optional, der
+#     Worker-Betrieb ein fortgeschrittener Modus).
+#
+#     GEPRUEFT statt vermutet, wie stark das insgesamt traegt:
+#     `claude-flow memory` nennt sql.js - eine reine JavaScript/WASM-
+#     SQLite-Umsetzung, KEINE native Erweiterung - als seine
+#     Speicher-Engine. `claude-flow doctor` bestaetigt das GEMESSEN
+#     (siehe oben, beide Laeufe): kein roter Fehlschlag wegen fehlender
+#     nativer Module. Die Kernorchestrierung - init, swarm, hive-mind,
+#     mcp, agent, task, memory - bleibt unberuehrt.
+#
+#     Diese dreizehn Skripte selbst auszufuehren wuerde dieses Rezept ein
+#     STRUKTURELLES Risiko eintragen, kein tagesaktuelles: die einzige
+#     verfuegbare Freigabe (`--dangerously-allow-all-scripts`) gilt fuer
+#     ALLE 574 Pakete dieses Laufs und bliebe es bei jedem kuenftigen Bau
+#     gegen eine aktualisierte Lock-Datei - ein neues, ungeprueftes
+#     Skript in einer kuenftigen claude-flow-Version liefe dann
+#     stillschweigend mit. Der Zugewinn von heute (acht wirkungslos, vier
+#     nur schneller, eine Funktion mit klarer Fehlermeldung statt Absturz)
+#     rechtfertigt keine dauerhafte Blanko-Erlaubnis fuer morgen -
+#     ENTSCHIEDEN vom Nutzer nach genau dieser Abwaegung. Wer die native
+#     Beschleunigung trotzdem will: gezielt und einmalig ausserhalb des
+#     Pakets, `npm rebuild` im installierten, schreibbaren Baum unter
+#     /usr/lib/zepos-ruflo - eine bewusste Handlung, keine stille
+#     Voreinstellung.
 source=("package.json"
         "package-lock.json")
 sha256sums=('SKIP'
@@ -206,7 +271,54 @@ sha256sums=('SKIP'
 #     ist der Befehl, mit dem ein Nutzer ein Projekt zuerst einrichtet,
 #     also genau der erste Schritt von "direkt loslegen". npx liegt im
 #     npm-Paket, nicht im nodejs-Paket.
-depends=('nodejs' 'npm')
+#
+# WARUM nodejs-lts-krypton UND NICHT DAS SCHLICHTE nodejs - NACHGETRAGEN
+# am 19.08.2026, NACHDEM DER ERSTE BAU EINE STILLE LUECKE ZEIGTE
+#     GEFUNDEN, nicht gesucht: `pacman -Qkk` bestaetigte den ersten Bau
+#     als vollstaendig, aber claude-flows EIGENE optionale Abhaengigkeit
+#     better-sqlite3@12.9.0 fehlte danach trotzdem auf der Platte - ohne
+#     jede Fehlermeldung. Ursache, aus package-lock.json gelesen: ihr
+#     package.json verlangt "engines": {"node": "20.x || 22.x || 23.x ||
+#     24.x || 25.x"}, und das schlichte `nodejs` traegt im angehefteten
+#     Schnappschuss 2026/08/04 die Version 26.5.1 - npm laesst eine
+#     optionale Abhaengigkeit mit unpassendem engines-Bereich still weg,
+#     ohne Warnung, ohne roten Fehlschlag. Ein Ausfall ohne Fehlermeldung
+#     ist schlimmer als eine aeltere Fassung.
+#
+#     Der Nutzer hat entschieden: Ruflo haengt an einer Node-Fassung, die
+#     sein Hersteller ausdruecklich zusagt, statt an der jeweils
+#     neuesten. GEPRUEFT im Bau-Container gegen denselben Schnappschuss,
+#     nicht geraten - `pacman -Si` fuer jeden Namen, den Arch fuehrt:
+#
+#         nodejs               26.5.1-1   ("Current")   - AUSSERHALB von
+#                                                          20.x-25.x
+#         nodejs-lts-iron      20.20.2-1  (LTS "Iron")   - innerhalb, aber
+#                                                          nicht die hoechste
+#         nodejs-lts-jod       22.23.2-1  (LTS "Jod")    - innerhalb, aber
+#                                                          nicht die hoechste
+#         nodejs-lts-krypton   24.18.1-1  (LTS "Krypton") - innerhalb, UND
+#                                                          die hoechste
+#
+#     Kein 25.x-Paket existiert im Schnappschuss (25 ist offenbar kein
+#     LTS-Zweig) - 24.18.1 ist damit die hoechste Fassung, die Arch heute
+#     pflegt UND die claude-flows eigene Zusage einhaelt.
+#
+#     DER STREIT MIT npm, UND WARUM ER AUSBLEIBT
+#         Archs `npm` haengt versioniert an `nodejs>=20.17.0` (`pacman -Si
+#         npm`: "Depends On ... nodejs>=20.17.0 ..."), nicht an einem
+#         bestimmten Paketnamen. Jedes der drei LTS-Pakete traegt
+#         `Provides: nodejs=<seine Version>` UND `Conflicts With: nodejs`
+#         (GEPRUEFT, alle drei einzeln per `pacman -Si`) - sie ERSETZEN
+#         das schlichte `nodejs` fuer jeden, der nur den virtuellen Namen
+#         verlangt, und schliessen sich mit ihm gegenseitig aus, damit nie
+#         zwei Node-Laufzeiten dieselben Pfade beanspruchen. `pacman -Sp
+#         nodejs-lts-krypton npm` loest im selben Bau-Container sauber auf
+#         - OHNE das schlichte nodejs zu ziehen -, und die anschliessende
+#         Installation bestaetigt es: `node --version` -> v24.18.1,
+#         `npm --version` -> 12.0.2, kein Dateikonflikt. Es gibt hier also
+#         keinen Streit zu loesen, nur einen Namen zu waehlen, der die
+#         Provides-Zusage von npm einhaelt statt des schlichten `nodejs`.
+depends=('nodejs-lts-krypton' 'npm')
 
 # WARUM ES KEINEN STARTER UND KEIN SYMBOL IM DOCK GIBT
 #     zepos-claude-code bekommt beides, und der Unterschied ist keine
