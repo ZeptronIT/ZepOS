@@ -508,8 +508,50 @@ tooltip label {
   min-width: {{STYLE_BAR_SYMBOL_WIDTH}};
 }
 
+/* NACHGETRAGEN am 19.08.2026 (Aufgabe 25). GEMELDET: "einige icon ohne
+ * hover effekt wie lautsräke und mikrofon oder wlan und bluetooth
+ * ifnde ich nicht gut und sie sollte nicht als element zusammen
+ * dargestellt werden sondern getrennt icon und jedes icon in der
+ * liste hat den gleichen abstand". Zwei Meldungen aus einer Wurzel:
+ * #network und #pulseaudio trugen margin-right: STYLE_GROUP_INTERNAL
+ * (0px) statt STYLE_MODULE_SPACING und klebten damit an #bluetooth
+ * beziehungsweise #pulseaudio#microphone - genau die zwei Paare, die
+ * ohne eigenen Zwischenraum standen. Keins der vier hatte deshalb
+ * (oder unabhaengig davon) einen :hover.
+ *
+ * GEPRUEFT, OB DIE VERKLEBUNG EINEN GRUND HATTE, bevor sie faellt: die
+ * beiden margin-right: STYLE_GROUP_INTERNAL standen schon in der
+ * ersten oeffentlichen Fassung (edb20e2), Commits vor jeder
+ * Begruendung in dieser Datei. Der Kommentar an STYLE_GROUP_INTERNAL
+ * selbst (src/style_definition.py) sagt nur "No spacing within
+ * groups" - eine Beschreibung, kein Grund. Der Kopf dieser Datei nennt
+ * sogar die wahrscheinliche Herkunft: die alte Waybar-Fassung hatte
+ * ein network.css neben einer "misc"-Nachbarschaft, deren
+ * Importreihenfolge entschied, "ohne dass irgendwo stand, warum" -
+ * genau das Muster, das diese eine Datei abloesen sollte. Anders als
+ * #workspaces (eine echte Knopfgruppe, ein Steuerelement) trug die
+ * Verklebung hier keine eigene Begruendung fuer vier UNABHAENGIGE
+ * Anzeigen (Netz, Bluetooth, Lautstaerke, Mikrofon). Sie war ein nicht
+ * nachgezogenes Erbstueck und kein Entwurf - sie faellt, und die
+ * Entscheidung des Nutzers gilt.
+ *
+ * Zeigereffekt: dieselbe Farbe wie jedes andere Modul,
+ * STYLE_HOVER_BG / STYLE_HOVER_COLOR - keine zweite Hervorhebung
+ * erfunden. Kein border/box-shadow/outline-Reset noetig: diese vier
+ * sind ein Gtk.Box mit der Klasse bar-module (moduleBox() in
+ * ags-bar.template), keine GTK-eigene Kachel wie der MenuButton hinter
+ * #bar-overflow - derselbe Bau wie #battery, das denselben
+ * Zeigereffekt bereits ohne Reset traegt. */
+#network:hover,
+#bluetooth:hover,
+#pulseaudio:hover,
+#pulseaudio\#microphone:hover {
+  background: {{STYLE_HOVER_BG}};
+  color: {{STYLE_HOVER_COLOR}};
+}
+
 #network {
-  margin-right: {{STYLE_GROUP_INTERNAL}};
+  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 #network.network-disconnected {
@@ -573,7 +615,7 @@ tooltip label {
 }
 
 #pulseaudio {
-  margin-right: {{STYLE_GROUP_INTERNAL}};
+  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 #pulseaudio.audio-muted {
