@@ -147,9 +147,9 @@ makedepends=('cmake' 'ninja' 'zepos-hyprland')
 # zepos-config erzeugt ~/.config/hyprlaunch/config und style.css. Ohne
 # sie oeffnet der Starter trotzdem - in Full-HD-Groessen und
 # ungestylt -, und er sagt auf stderr, welcher Befehl die Dateien
-# schreibt. Deshalb eine Empfehlung und keine Abhaengigkeit, genau wie
-# bei zepos-logout: zwei Pakete, die einander nennen, sind ein Zyklus,
-# den pacman zwar aufloest und den niemand lesen kann.
+# schreibt. Deshalb eine Empfehlung und keine Abhaengigkeit: zwei
+# Pakete, die einander nennen, sind ein Zyklus, den pacman zwar
+# aufloest und den niemand lesen kann.
 optdepends=('zepos-config: erzeugt config und style.css, ohne die der Starter ungestylt bleibt')
 
 # Zwei Quellen: der unveraenderte Baum des Urhebers, auf den Commit
@@ -203,10 +203,11 @@ package() {
     #     readelf -d   was DIESES Objekt selbst angefordert hat
     #     ldd          was beim Start tatsaechlich alles geladen wird
     #
-    # Wortgleich zu packaging/zepos-logout/PKGBUILD, und die
-    # Begruendung gilt unveraendert: fuer "steht es auf GTK4" ist
-    # readelf richtig, fuer "kommt GTK3 durch eine Seitentuer" ist es
-    # FALSCH. Arch setzt -Wl,--as-needed, also traegt der Linker kein
+    # Wortgleich zu packaging/zepos-lock/PKGBUILD (und, bis zu seiner
+    # Loeschung mit dem Programm, packaging/zepos-logout/PKGBUILD -
+    # Aufgabe 26, 19.08.2026): fuer "steht es auf GTK4" ist readelf
+    # richtig, fuer "kommt GTK3 durch eine Seitentuer" ist es FALSCH.
+    # Arch setzt -Wl,--as-needed, also traegt der Linker kein
     # DT_NEEDED fuer eine Bibliothek ein, aus der kein Symbol benutzt
     # wird; die Gefahr ist ohnehin die Bibliothek, die IHRERSEITS GTK3
     # mitbringt, und die sieht nur ldd.

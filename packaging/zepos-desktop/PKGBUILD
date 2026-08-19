@@ -16,8 +16,18 @@
 #     outcome ZepOS can produce - worse than a missing feature, because
 #     nothing reports it. src/plugins.py can drop a plugin block when the
 #     object is absent; nothing does the equivalent for
-#     `bind = $mainMod, M, exec, zepos-logout`. So every program named
-#     in a bind this project ships is named here.
+#     `bind = $mainMod, L, exec, zepos-lock`. So every program named in a
+#     bind this project ships is named here.
+#
+#     `bind = $mainMod, M, exec, zepos-logout` stood here as the SAME
+#     example until Aufgabe 26 (19.08.2026): SUPER+M ran a standalone
+#     program, so this list had to carry it by name. It now runs
+#     `ags request logout` instead (src/templates/hyprland-universal-
+#     config.template) - the same AGS process every other window in this
+#     desktop already runs in, and `aylurs-gtk-shell` below already
+#     covers it. Deleting the zepos-logout entry below is therefore not
+#     an oversight; the key this rule was written to protect no longer
+#     names a separate package.
 #
 #     Applied the other way it is just as sharp: blueman appears in the
 #     templates too - a bar module's on-click - but ZepOS did not put it
@@ -205,7 +215,9 @@ depends=(
     'zepos-settings-gui'
 
     # --- what the default binds need ---------------------------------
-    'zepos-logout'            # SUPER+M
+    # SUPER+M ran zepos-logout here until Aufgabe 26 (19.08.2026); it
+    # now runs `ags request logout`, and aylurs-gtk-shell above already
+    # covers that - see the note at the head of this file.
     'zepos-lock'              # SUPER+L, and lock-style generates its stylesheet
     # playerctl: die sechs XF86Audio- und drei SUPER+F-Tasten, UND seit
     # dem 12.08.2026 das Leistenmodul "custom/media" samt der

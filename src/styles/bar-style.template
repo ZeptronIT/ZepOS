@@ -195,10 +195,39 @@ window.bar-window * {
  *     durchsichtig gemacht, sondern zusaetzlich den Text - und damit
  *     genau den Kontrast weggenommen, den brand.py fuer diesen Text
  *     ausgerechnet hat. */
+/* EIN RAND UND NICHT ZWEI (19.08.2026)
+ *
+ *     GEMELDET: "sie sind viel zu weit voneinander entfernt und auch
+ *     nicht zentriert in ihrer box".
+ *
+ *     Beides kam aus derselben Doppelzaehlung. Jedes Modul trug
+ *     margin-left von hier UND margin-right aus seiner eigenen Regel,
+ *     beide STYLE_CHIP_GAP/STYLE_MODULE_SPACING mit je 15 Punkten.
+ *     Zwischen zwei Symbolen lagen damit 8 Polsterung + 15 + 15 + 8
+ *     = 46 Punkte. Und weil nicht jedes Modul die zweite Regel hatte,
+ *     waren die Raender ungleich - deshalb sassen die Symbole
+ *     unterschiedlich in ihrer Flaeche.
+ *
+ *     Jetzt traegt nur diese Regel einen waagerechten Rand, und er
+ *     kommt aus der Abstandsleiter statt aus einer eigenen Groesse:
+ *     8 + 12 + 8 = 28 statt 46. Die Polsterung trennt bereits; der
+ *     Rand setzt nur die Flaechen auseinander.
+ *
+ *     GEFUNDEN BEIM NAECHSTEN GEBRAUCH DIESES BLOCKS (Aufgabe 26,
+ *     19.08.2026): hier standen `//`-Zeilenkommentare INNERHALB einer
+ *     Regel statt des Sternchen-Blockkommentars (wie dieser hier), den
+ *     der Rest dieser Datei durchgehend traegt. GTK4s CSS-Parser liest
+ *     `//` nur ZWISCHEN Regeln, nicht innerhalb eines Deklarationsblocks -
+ *     GEMESSEN im verschachtelten Compositor: "CSS Error bar.css:201:3
+ *     Expected an identifier" und "bar.css:216:67 No property named
+ *     'der'", tests/render/test_schale_stil.py hat es gefunden. Text-
+ *     basierte Pruefungen (tests/src/test_placement.py) sehen den
+ *     Fehler nicht, weil sie nur den Text zwischen den Klammern lesen
+ *     und keine echte CSS-Engine durchlaufen. */
 .bar-module {
   padding: {{STYLE_PADDING_MODULE}};
   margin: {{STYLE_MARGIN_VERTICAL}};
-  margin-left: {{STYLE_CHIP_GAP}};
+  margin-left: {{STYLE_SPACE_8}};
   border-radius: {{STYLE_RADIUS_CARD}};
 }
 
@@ -339,7 +368,6 @@ tooltip label {
  *     den Ruhefall gibt es KEINE Gegenklasse: eine Klasse ohne Regel
  *     waere ein Name, den kein Stylesheet liest. */
 #custom-keyboard {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 #custom-keyboard.keyboard-switchable:hover {
@@ -348,7 +376,6 @@ tooltip label {
 }
 
 #custom-date {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 
@@ -356,7 +383,6 @@ tooltip label {
  * alle Zonen: zwei Vorgaenger hatten je eine, was nur so lange eine
  * Unterscheidung ist, wie es genau diese zwei sind. */
 #custom-clocks {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 /* Eine Zone, die die Zeitzonendatenbank dieses Rechners nicht kennt,
@@ -367,7 +393,6 @@ tooltip label {
 }
 
 #custom-weather {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 /* Kein Netz, eine Sperre des Dienstes oder eine unlesbare Antwort sind
@@ -381,7 +406,6 @@ tooltip label {
 }
 
 #custom-hypr-shortcuts {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 
@@ -433,7 +457,6 @@ tooltip label {
  * ===================================================================*/
 
 #custom-floating-layouts {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 
@@ -456,7 +479,6 @@ tooltip label {
 }
 
 #custom-helpers {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 
@@ -485,7 +507,6 @@ tooltip label {
  * fehlt"). Er traegt deshalb den Akzent der Marke. */
 #bar-overflow {
   color: {{STYLE_COLOR_HARDWARE}};
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 /* DER EINE KASTEN, DEN DIE LEISTE NICHT SELBST GEMALT HAT (12.08.2026)
@@ -564,7 +585,6 @@ tooltip label {
  * Zeigereffekt bereits ohne Reset traegt. */
 
 #network {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 #network.network-disconnected {
@@ -572,7 +592,6 @@ tooltip label {
 }
 
 #bluetooth {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 /* Adapter da, aber aus. Dieselbe Abblendung wie beim stummen Ton
@@ -585,7 +604,6 @@ tooltip label {
 }
 
 #custom-hardware {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 /* Die drei Zustaende des Hardwaremoduls - und seit dem 13.08.2026 in
@@ -628,7 +646,6 @@ tooltip label {
 }
 
 #pulseaudio {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 #pulseaudio.audio-muted {
@@ -638,7 +655,6 @@ tooltip label {
 /* Der Name kommt aus "pulseaudio#microphone": die Leiste ersetzt nur den
  * Schraegstrich, das Doppelkreuz bleibt Teil des Namens. */
 #pulseaudio\#microphone {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 #pulseaudio\#microphone.microphone-muted {
@@ -646,7 +662,6 @@ tooltip label {
 }
 
 #battery {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 #battery.battery-warning {
@@ -678,7 +693,6 @@ tooltip label {
  *     ags-tray.template. Eine leere Ablage soll nichts zeigen, auch
  *     kein Glas. */
 #tray {
-  margin-right: {{STYLE_MODULE_SPACING}};
 }
 
 #tray button.tray-item {
@@ -952,4 +966,48 @@ window.dock-window {
 #dock separator.dock-separator {
   background: {{STYLE_DOCK_BORDER_COLOR}};
   margin: {{STYLE_DOCK_PADDING}}px 4px;
+}
+
+/* =====================================================================
+ * Der Abschaltknopf - eine eigene kleine Flaeche neben dem Dock
+ * (Aufgabe 26, Teil 3, 19.08.2026)
+ * ===================================================================*/
+
+/* Derselbe Grund wie window.dock-window oben: der Fenstergrund, den GTK
+ * ohne diese Zeile von sich aus malt, stuende als heller Kasten hinter
+ * der runden Platte. */
+window.power-button-window {
+  background: transparent;
+}
+
+/* Dieselbe Platte wie #dock (Glas, Rahmen, Rundung, Innenabstand), nur
+ * fuer EINEN Knopf statt einer Reihe - bewusst NICHT dieselbe ID: #dock
+ * ist die Reihe der angehefteten Anwendungen, diese Flaeche ist ein
+ * eigenstaendiges zweites Fenster (siehe den Kopf von
+ * ags-power-button.template, "WARUM EINE EIGENE FLAECHE"). */
+#power-button {
+  background: {{STYLE_GLASS_SOLO}};
+  border: 1px solid {{STYLE_DOCK_BORDER_COLOR}};
+  border-radius: {{STYLE_RADIUS_PANEL}};
+  padding: {{STYLE_DOCK_PADDING}}px;
+}
+
+/* Derselbe Knopf-Zuschnitt wie .dock-button (Groesse, Farbe, kein
+ * eigener Rahmen) - eine zweite Klasse und keine geteilte, weil dieser
+ * Knopf keinen Zustandsstrich braucht (running/active gibt es hier
+ * nicht, es ist immer derselbe eine Knopf). */
+#power-button button.power-btn {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  border-radius: {{STYLE_RADIUS_CARD}};
+  padding: {{STYLE_DOCK_PADDING}}px;
+  color: {{STYLE_DOCK_ICON_COLOR}};
+  min-width: {{STYLE_DOCK_ICON_SIZE}}px;
+  min-height: {{STYLE_DOCK_ICON_SIZE}}px;
+}
+
+#power-button button.power-btn:hover {
+  background: {{STYLE_HOVER_BG}};
 }

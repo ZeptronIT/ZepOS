@@ -623,24 +623,16 @@ def test_the_packages_the_smoke_run_calls_are_in_the_image():
     assert len(packages) == len(set(packages)), "duplicate package entries"
 
 
-def test_the_image_installs_the_keyring_and_the_logout_menu():
-    """Two packages that are in this image for reasons a container
-    cannot supply.
+def test_the_image_installs_the_keyring():
+    """zepos-keyring is in this image for a reason a container cannot
+    supply.
 
-    zepos-keyring is the only ZepOS package with an install scriptlet,
-    and the conditions that scriptlet was written for exist during a real
+    It is the only ZepOS package with an install scriptlet, and the
+    conditions that scriptlet was written for exist during a real
     pacstrap and nowhere else: mkarchiso passes -G, so the root being
     built has no pacman keyring at all. The scriptlet has to notice and
     skip - `pacman-key -l` fails on such a root - or this build stops
     with a scriptlet error instead of producing an image.
-
-    zepos-logout is the last of spec §4.3's missing components - ZepOS
-    builds its own since 11.08.2026, because the wlogout that used to
-    stand here measured NEEDED libgtk-3.so.0 and its upstream names GTK4
-    nowhere. hyprland-universal-config.template binds SUPER+M to it
-    unconditionally. There is no failsafe for that key the way §7.4
-    writes one for SUPER+SPACE, so the package being in the image is the
-    only thing that makes the bind live.
     """
     packages = {line.strip() for line in
                 _read(PROFILE / "packages.x86_64").splitlines()
@@ -649,14 +641,49 @@ def test_the_image_installs_the_keyring_and_the_logout_menu():
     assert "zepos-keyring" in packages, (
         "the image does not install zepos-keyring, so its install "
         "scriptlet is never executed against a root with no keyring")
-    assert "zepos-logout" in packages, (
-        "the image does not install zepos-logout; SUPER+M is a dead key")
-    # Und der Vorgaenger ist nicht bloss unerwaehnt, sondern weg. Beide
-    # nebeneinander waeren zwei Abmeldemasken im Bild, von denen die
-    # Bindung eine nennt - und die andere zoege libgtk-3 wieder herein,
-    # gegen die Entscheidung, die zepos-logout ueberhaupt erzeugt hat.
+
+
+def test_the_logout_menu_is_no_longer_a_separate_package():
+    """SUPER+M lived on its own package until Aufgabe 26 (19.08.2026);
+    now it lives inside aylurs-gtk-shell, like every other AGS window.
+
+    BIS ZUM 19.08.2026 stand hier dieselbe Zusicherung umgekehrt:
+    "zepos-logout is ... the last of spec §4.3's missing components" und
+    "the package being in the image is the only thing that makes the
+    bind live". Beides galt fuer das C-Programm - hyprland-universal-
+    config.template band SUPER+M unbedingt darauf, ohne Rueckfall
+    (§7.4 schreibt einen nur fuer SUPER+SPACE vor). Das Programm ist mit
+    Aufgabe 26 geloescht (Regel 14): sein Nachfolger,
+    src/templates/ags-logout.template, ist ein Fenster IM bereits
+    installierten AGS-Prozess - SUPER+M ruft seither `ags request
+    logout` statt `exec zepos-logout` (siehe hyprland-universal-config.
+    template), und aylurs-gtk-shell macht diese Taste schon lebendig -
+    dasselbe Paket, dessen Anwesenheit im Bild
+    test_the_packages_the_smoke_run_calls_are_in_the_image bereits
+    verlangt.
+
+    Und der Vorgaenger ist nicht bloss unerwaehnt, sondern weg. Ein
+    zepos-logout NEBEN dem AGS-Fenster waere die Doppelung, die
+    Aufgabe 26 an vier Stellen desselben Tages abgeraeumt hat - und
+    wlogout bliebe aus demselben Grund verboten, den es schon vor dieser
+    Aufgabe hatte: es zoege libgtk-3 herein.
+    """
+    packages = {line.strip() for line in
+                _read(PROFILE / "packages.x86_64").splitlines()
+                if line.strip() and not line.startswith("#")}
+
+    assert "zepos-logout" not in packages, (
+        "das Bild installiert weiterhin ein zepos-logout-Paket, das es "
+        "nach Aufgabe 26 nicht mehr gibt")
     assert "wlogout" not in packages, (
         "das Bild installiert wlogout weiterhin und damit libgtk-3")
+
+    hypr = _read(ISO.parent / "src" / "templates"
+                / "hyprland-universal-config.template")
+    binds = [line.strip() for line in hypr.splitlines()
+             if line.strip().startswith("bind")]
+    assert "bind = $mainMod, M, exec, ags request logout" in binds, (
+        "SUPER+M ruft nicht mehr das AGS-Fenster auf")
 
     # UND DER SPERRBILDSCHIRM GEHOERT NICHT HIERHER, obwohl dieselbe
     # Vorlage SUPER+L genauso unbedingt darauf bindet.

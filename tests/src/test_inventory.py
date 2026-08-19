@@ -345,8 +345,20 @@ def test_template_count_is_seventy_seven():
     Die neue Vorlage erzeugt ags/utils/kit.ts - Funktionen, die fertige
     Widgets zurueckgeben, damit ein Fenster gar nicht erst in die Lage
     kommt, sich einen eigenen Knopf zu bauen.
+
+    84 STATT 83, am 19.08.2026 (Aufgabe 26): netto plus eins. Der Nutzer
+    wollte einen Knopf unten links am Dock, der ein AGS-Fenster mit
+    Herunterfahren/Abmelden/... oeffnet - und zepos-logout, das C-Programm,
+    das SUPER+M bis dahin dafuer startete, ist mit ihm gefallen (Regel
+    14, "erscheint immer wieder wenn ich super m mache" war ein
+    Prozessstart-Fehler, kein AGS-Fehler). logout-config.template faellt
+    (-1, die erzeugte layout.json gibt es nicht mehr). ags-logout.
+    template kommt dazu (+1, dieselben sechs Aktionen als TypeScript-
+    Literal). ags-power-button.template kommt dazu (+1, der Dock-Knopf
+    selbst, eine eigene kleine Layer-Shell-Flaeche). Die Zwillingszusicherung
+    in tests/src/test_new_templates.py haelt dieselbe Rechnung.
     """
-    assert len(list((SRC / "templates").glob("*.template"))) == 83
+    assert len(list((SRC / "templates").glob("*.template"))) == 84
 
 
 def test_nothing_refers_to_a_deleted_template():

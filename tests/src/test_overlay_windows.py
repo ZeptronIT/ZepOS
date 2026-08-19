@@ -47,6 +47,7 @@ CALENDAR = SRC / "templates" / "ags-calendar.template"
 CONTROL = SRC / "templates" / "ags-control-center.template"
 BAR = SRC / "templates" / "ags-bar.template"
 BLUETOOTH = SRC / "templates" / "ags-bluetooth.template"
+LOGOUT = SRC / "templates" / "ags-logout.template"
 
 
 def _code(path: Path) -> str:
@@ -191,6 +192,11 @@ FENSTER_UND_KASTEN = {
     "ags-wallpaper.template": ".wp-container",
     "ags-style-editor.template": ".se-container",
     "ags-vpn-settings.template": ".vpn-settings-container",
+    # Die Sitzungsmaske, seit Aufgabe 26 (19.08.2026) - der Ersatz fuer
+    # zepos-logout. .lg-container traegt dieselbe min-width/padding-
+    # Rechnung wie jedes andere hier; die Herleitung ihrer 480px steht
+    # am Kopf von ags-logout.template, bei WIN_WIDTH.
+    "ags-logout.template": ".lg-container",
 }
 
 # Die Fenster, deren Kasten mit Absicht keine min-width hat. Der Grund
@@ -552,11 +558,13 @@ def test_the_control_centre_speaks_one_language():
         "SYSTEM SERVICES": "SYSTEMDIENSTE",
         "Helper scripts": "Hilfsskripte",
         "Network watchdog": "Netz-Watchdog",
-        "Shut down": "Herunterfahren",
-        "Restart": "Neustart",
-        "Suspend": "Bereitschaft",
-        "Lock": "Sperren",
-        "Log out": "Abmelden",
+        # "Shut down"/"Restart"/"Suspend"/"Lock"/"Log out" standen hier
+        # bis zum 19.08.2026 (Aufgabe 26, POWER_BUTTONS) - die fuenf
+        # Abschaltknoepfe sind einer einzigen Zeile "Sitzung" gewichen,
+        # die das neue Fenster ags-logout.template oeffnet (siehe dort,
+        # nicht mehr hier). Alle fuenf msgids leben in diesem Fenster
+        # fort, um "Style editor" gleich weiter unten.
+        "Session": "Sitzung",
         "Style editor": "Stil-Editor",
     }
     for msgid, deutsch in ZEILEN.items():
@@ -586,7 +594,7 @@ def test_a_row_with_nothing_in_it_is_not_drawn():
         "gibt")
 
 
-def test_the_five_switches_stand_in_three_columns():
+def test_the_six_switches_stand_in_three_columns():
     """Warum die Sprache das Layout anfassen musste.
 
     GEMESSEN am 12.08.2026: "Herunterfahren" ist bei
@@ -594,11 +602,22 @@ def test_the_five_switches_stand_in_three_columns():
     nebeneinander haetten das Fenster von gemessenen 545 auf ueber 800
     Punkte verbreitert. In drei Spalten misst es 495 - fuenfzig Punkte
     WENIGER als mit den englischen Woertern in einer Reihe.
+
+    FUENF WURDEN SECHS, UND DAS FENSTER WECHSELTE, AM 19.08.2026
+    (Aufgabe 26): die fuenf Schalter standen bis dahin als `powerGrid`
+    direkt in ags-control-center.template (CONTROL) - ags-logout.
+    template ersetzt sie durch ein neues AGS-Fenster mit sechs Aktionen
+    (Ruhezustand kommt dazu, den das Kontrollzentrum nie hatte), das
+    Kontrollzentrum selbst traegt seither nur noch eine Zeile, die
+    dieses Fenster oeffnet. Dieselbe Drei-Spalten-Rechnung gilt
+    unveraendert - "Herunterfahren" ist immer noch das laengste Wort -,
+    nur an einer anderen Datei.
     """
-    code = _code(CONTROL)
-    assert "column_homogeneous: true" in code and "powerGrid.attach(" in code, (
-        "die fuenf Schalter stehen wieder in einer Reihe; mit den "
-        "deutschen Woertern waere das Fenster ueber 800 Punkte breit")
+    code = _code(LOGOUT)
+    assert "column_homogeneous: true" in code and "grid.attach(" in code, (
+        "die sechs Schalter stehen nicht mehr in einem Drei-Spalten-Raster; "
+        "mit den deutschen Woertern in einer Reihe waere das Fenster "
+        "ueber 800 Punkte breit")
 
 
 

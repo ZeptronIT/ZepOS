@@ -128,12 +128,22 @@ RED = "#FF8A8A"          # 5.21:1 on petrol - the red that is READ
 RED_DEEP = "#FF5C5C"     # 3.91:1 - borders and fills only, never text
 YELLOW_DIM = "#C79E00"   # the brand yellow, darkened, for a filled shape
 
-# Backgrounds for the three hardware states. Each is its own status hue
-# taken almost to black, so the status colour on top clears 4.5:1
-# without the row shouting: 8.42:1, 6.80:1 and 5.86:1 respectively.
+# Backgrounds for two states - restart and shutdown, the two costs
+# src/greeter.py's cost ladder still tells apart with a background fill.
+# Each is its own status hue taken almost to black, so the status
+# colour on top clears 4.5:1 without the row shouting: 8.42:1 and
+# 6.80:1 respectively.
+#
+# A THIRD, STATE_OFFLINE_BG, STOOD HERE UNTIL 19.08.2026
+#     It backed the hardware-offline row this project no longer draws
+#     as a filled tile (bar-style.template, #custom-hardware - "ein
+#     Zustand ist eine Farbe und kein Kasten") and, after that,
+#     zepos-logout's "safe" action group - deleted with the program
+#     itself (Aufgabe 26, Regel 14). tests/src/test_theme.py::test_
+#     changing_this_field_moves_a_generated_byte caught it as a field
+#     with no reader left; it is gone rather than kept unused.
 STATE_WARNING_BG = "#3D3100"
 STATE_CRITICAL_BG = "#3D1A1A"
-STATE_OFFLINE_BG = "#16323A"
 
 # The grid overlay, which is drawn on its own black-ish canvas rather
 # than on the desktop. Three of its four colours ARE surfaces named
@@ -399,9 +409,11 @@ def rgba(colour: str, alpha: float) -> str:
 #
 # WHAT IS NOT IN HERE
 #     wofi and wlogout - the launcher and the logout menu that
-#     zepos-menu and zepos-logout replaced - used to carry a verbatim
-#     copy of these eleven values and were dressed as a terminal because
-#     kitty once was.
+#     zepos-menu and zepos-logout replaced (zepos-logout itself was
+#     retired on 19.08.2026, Aufgabe 26, replaced in turn by an AGS
+#     window that never carried a copy of this palette to begin with) -
+#     used to carry a verbatim copy of these eleven values and were
+#     dressed as a terminal because kitty once was.
 #     kitty's own chrome moved to the brand in e1e21cd - its background
 #     is INK #08262C now, not #0c0c0c - so the copies were matching a
 #     look that no longer existed anywhere. They are desktop chrome and

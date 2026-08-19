@@ -1198,5 +1198,16 @@ def test_the_template_count_is_seventy_seven():
     bauen. Die gemessene Ausgangslage (45 Knopfregeln in 41 Klassen,
     keine gemeinsame) steht bei der Zwillingszusicherung in
     tests/src/test_inventory.py; beide muessen zusammen wandern.
+
+    84 STATT 83, am 19.08.2026 (Aufgabe 26): netto plus eins, aus drei
+    Bewegungen. logout-config.template faellt - zepos-logout ist
+    geloescht (Regel 14), seine erzeugte layout.json gibt es nicht
+    mehr. ags-logout.template kommt dazu: dasselbe Fenster, jetzt ein
+    AGS-Fenster aus createOverlayWindow() statt eines eigenen
+    C-Programms, dieselben sechs Aktionen als TypeScript-Literal statt
+    erzeugter JSON. ags-power-button.template kommt ebenfalls dazu: der
+    Dock-Knopf, der SUPER+M's Fenster jetzt auch per Klick oeffnet -
+    eine eigene kleine Layer-Shell-Flaeche, kein Teil von ags-dock.
+    template. -1 + 2 = +1.
     """
-    assert len(list(TEMPLATES.glob("*.template"))) == 83
+    assert len(list(TEMPLATES.glob("*.template"))) == 84

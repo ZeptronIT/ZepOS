@@ -441,25 +441,38 @@ msgstr "Stil-Editor"
 msgid "Appearance and colors - the same window as above"
 msgstr "Aussehen und Farben - dasselbe Fenster wie oben"
 
-#: src/templates/ags-control-center.template:1697
-msgid "Shut down"
-msgstr "Herunterfahren"
+#: src/templates/ags-control-center.template:1708
+#: src/templates/ags-logout.template:183
+msgid "Session"
+msgstr "Sitzung"
 
-#: src/templates/ags-control-center.template:1698
-msgid "Restart"
-msgstr "Neustart"
+#: src/templates/ags-control-center.template:1714
+msgid "Lock, log out, restart, shut down, suspend or hibernate"
+msgstr "Sperren, Abmelden, Neustart, Herunterfahren, Bereitschaft oder Ruhezustand"
 
-#: src/templates/ags-control-center.template:1699
-msgid "Suspend"
-msgstr "Bereitschaft"
-
-#: src/templates/ags-control-center.template:1700
+#: src/templates/ags-logout.template:132
 msgid "Lock"
 msgstr "Sperren"
 
-#: src/templates/ags-control-center.template:1701
+#: src/templates/ags-logout.template:134
 msgid "Log out"
 msgstr "Abmelden"
+
+#: src/templates/ags-logout.template:136
+msgid "Restart"
+msgstr "Neustart"
+
+#: src/templates/ags-logout.template:138
+msgid "Shut down"
+msgstr "Herunterfahren"
+
+#: src/templates/ags-logout.template:140
+msgid "Suspend"
+msgstr "Bereitschaft"
+
+#: src/templates/ags-logout.template:142
+msgid "Hibernate"
+msgstr "Ruhezustand"
 
 #: src/templates/ags-disk.template:144
 msgid "{count} partition"

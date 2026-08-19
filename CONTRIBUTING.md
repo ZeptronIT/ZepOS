@@ -177,9 +177,10 @@ not optional.
 ```
 src/            desktop: templates, the SSOTs, the generator, the zepos-* commands
 installer/      installer: core / gui / tui
-packaging/      20 PKGBUILD recipes, the build container, signing and publishing
+packaging/      19 PKGBUILD recipes, the build container, signing and publishing
 iso/            two archiso profiles and the build that assembles them
-lock/ logout/   zepos-lock, zepos-logout (C, GTK4, gtk4-layer-shell)
+lock/           zepos-lock (C, GTK4, gtk4-layer-shell); the session window
+                that used to live in logout/ is an AGS window in src/ now
 menu/ settings/ zepos-menu, zepos-settings-gui (Python, GTK4)
 plugins/        ZepOS' own patches only. Upstream sources are fetched at
                 build time from a pinned commit, not vendored here -

@@ -254,9 +254,11 @@ package() {
     # und die beim naechsten Python-Wechsel still veraltet.
     rm -rf "$pkgdir/usr/lib/hyprclipx/__pycache__"
 
-    # Zwei Werkzeuge fuer zwei Fragen - die Begruendung steht in
-    # packaging/zepos-logout/PKGBUILD und wortgleich in
-    # packaging/zepos-hyprlaunch/PKGBUILD.
+    # Zwei Werkzeuge fuer zwei Fragen - die Begruendung steht wortgleich
+    # in packaging/zepos-lock/PKGBUILD und in
+    # packaging/zepos-hyprlaunch/PKGBUILD (bis zu seiner Loeschung mit
+    # dem Programm auch in packaging/zepos-logout/PKGBUILD - Aufgabe 26,
+    # 19.08.2026).
     #
     # GEMESSEN am 11.08.2026 an genau diesem Objekt, lokal gebaut:
     #     objdump -p hyprclipx-ui | grep NEEDED | grep gtk

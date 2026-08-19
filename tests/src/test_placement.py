@@ -628,52 +628,75 @@ def test_a_window_is_as_round_as_the_bar():
 # Der Abstand zwischen zwei Kacheln
 # --------------------------------------------------------------------
 
-def test_the_gap_between_two_chips_is_named_after_the_thing_and_not_the_side():
+def test_the_gap_between_two_chips_comes_from_the_general_ladder():
     """Ein Name, der eine Himmelsrichtung nennt, ist bei jeder Drehung
-    wieder falsch.
+    wieder falsch - und ein Regler, den niemand mehr liest, ist schlimmer
+    als ein falscher Name.
 
-    Die Groesse hiess STYLE_MARGIN_TOP, solange die Leiste senkrecht
-    lief: dort lag der Abstand zwischen zwei Kacheln oben. Waagerecht
-    ist derselbe Abstand ein margin-left. Ein Platzhalter mit "TOP" im
-    Namen, der als margin-left gelesen wird, ist genau der Riss
-    zwischen Namen und Sache, den der Kopf von src/sizes.py verbietet.
+    Die Groesse hiess erst STYLE_MARGIN_TOP, solange die Leiste senkrecht
+    lief: dort lag der Abstand zwischen zwei Kacheln oben. Waagerecht ist
+    derselbe Abstand ein margin-left, und ein Platzhalter mit "TOP" im
+    Namen, der als margin-left gelesen wird, ist genau der Riss zwischen
+    Namen und Sache, den der Kopf von src/sizes.py verbietet - deshalb
+    wurde sie am 12.08.2026 zu STYLE_CHIP_GAP.
+
+    STYLE_CHIP_GAP SELBST IST AM 19.08.2026 GEFALLEN (Regel 14), NICHT
+    NUR UMBENANNT
+        .bar-module trug ihn als margin-left UND zaehlte damit denselben
+        Abstand zusammen mit seiner eigenen Polsterung doppelt (GEMESSEN:
+        60px statt der beabsichtigten 28, Bericht der Aufgabe vom
+        19.08.2026 - "sie sind viel zu weit voneinander entfernt und
+        auch nicht zentriert in ihrer box"). Die Behebung stellt
+        .bar-module auf STYLE_SPACE_8 um, eine Sprosse der allgemeinen
+        Abstandsleiter statt einer eigenen Groesse - STYLE_CHIP_GAP hat
+        seither keinen Leser mehr und ist restlos entfernt, nicht durch
+        einen dritten Namen ersetzt.
     """
-    assert "STYLE_CHIP_GAP" in sizes.TABLE
+    assert "STYLE_CHIP_GAP" not in sizes.TABLE, (
+        "STYLE_CHIP_GAP steht wieder in der Tabelle, ohne dass eine "
+        "Vorlage ihn liest - genau der Zustand, den Regel 14 verbietet")
     assert "STYLE_MARGIN_TOP" not in sizes.TABLE, (
         "der alte Name steht noch in der Tabelle - dann gibt es zwei "
         "Regler fuer einen Abstand")
 
     body = _rule(_code(BAR_STYLE, "/*"), ".bar-module")
-    assert "margin-left: {{STYLE_CHIP_GAP}};" in body, (
-        "die Kacheln halten ihren Abstand nicht mehr aus der Tabelle")
+    assert "margin-left: {{STYLE_SPACE_8}};" in body, (
+        "die Kacheln halten ihren Abstand nicht mehr aus der Abstandsleiter")
+    assert "margin-left: {{STYLE_CHIP_GAP}};" not in body, (
+        "die verworfene Groesse steht noch als margin-left in der Regel, "
+        "die sie nicht mehr lesen soll")
 
 
-def test_a_saved_setting_survives_the_rename(monkeypatch):
-    """Wer die Groesse eingestellt hatte, behaelt seine Zahl.
+def test_a_saved_setting_for_the_retired_gap_is_dropped_not_renamed(monkeypatch):
+    """Wer die Groesse eingestellt hatte, verliert die Zahl - und zwar
+    sichtbar, nicht heimlich unter einem dritten Namen.
 
-    Eine Umbenennung ohne Migration ist eine stille Ruecksetzung auf
-    den Vorgabewert - und zwar eine, die in der Einstellungsdatei
-    weiterhin so aussieht, als sei der Wert gesetzt: der alte Schluessel
-    steht darin, und niemand liest ihn mehr.
-
-    Gemessen wird die Migration und nicht die Tabelle: eine Zeile in
-    RENAMED_SIZE_VALUES, die migrate_renamed_size_values() gar nicht
-    anfasst, sieht genauso aus wie eine, die wirkt.
+    BIS ZUM 19.08.2026 stand hier die Gegenrichtung: eine Umbenennung
+    ohne Migration ist eine stille Ruecksetzung auf den Vorgabewert, weil
+    der alte Schluessel in der Datei stehen bleibt, obwohl niemand ihn
+    mehr liest. Das gilt weiter fuer eine ECHTE Umbenennung (RENAMED_KEYS,
+    die Farben) - aber STYLE_MARGIN_TOP/STYLE_CHIP_GAP ist keine mehr:
+    das ZIEL der alten Umbenennung ist selbst gefallen (Regel 14, siehe
+    den Kopf von src/user_settings.py bei RENAMED_SIZE_VALUES), es gibt
+    also nichts mehr, auf das man umbiegen koennte. Beide Namen stehen
+    seither in RETIRED_SIZE_VALUES und werden beim Laden entfernt - das
+    ist keine Regression, sondern die einzig ehrliche Antwort: der
+    Regler, den diese Zahl einmal bediente, existiert nicht mehr.
     """
     monkeypatch.syspath_prepend(str(SRC))
     import user_settings
 
-    document = {"schema_version": 1,
-                "sizes": {"values": {"STYLE_MARGIN_TOP": "42px"}}}
-    user_settings.migrate_renamed_keys(document)
+    for old_name in ("STYLE_MARGIN_TOP", "STYLE_CHIP_GAP"):
+        document = {"schema_version": 1,
+                    "sizes": {"values": {old_name: "42px"}}}
+        user_settings.migrate_renamed_keys(document)
 
-    values = document["sizes"]["values"]
-    assert values.get("STYLE_CHIP_GAP") == "42px", (
-        "die eingestellte Zahl ist bei der Umbenennung verlorengegangen: "
-        f"{values}")
-    assert "STYLE_MARGIN_TOP" not in values, (
-        "der alte Schluessel steht noch daneben - dann bleibt in der Datei "
-        "die Frage stehen, welcher von beiden gilt")
+        values = document["sizes"]["values"]
+        assert old_name not in values, (
+            f"{old_name} steht noch in der Datei - ein Regler ohne Leser")
+        assert values == {}, (
+            f"{old_name} wurde auf einen neuen Schluessel umgebogen statt "
+            f"entfernt zu werden: {values}")
 
 
 # --------------------------------------------------------------------

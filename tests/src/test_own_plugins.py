@@ -822,7 +822,8 @@ def test_the_failsafe_still_covers_both_surfaces():
 def test_both_surfaces_are_written_before_every_session():
     """Der Grund, aus dem die beiden Programme keinen Rueckfallstil in
     /etc brauchen - und der einzige, der es rechtfertigt, keinen zu
-    haben. Wortgleiche Begruendung wie bei zepos-logout.
+    haben. Wortgleiche Begruendung wie beim (mit Aufgabe 26 geloeschten)
+    zepos-logout, siehe tests/src/test_gtk4_only.py.
     """
     status = _uncommented(
         _read(SRC / "templates" / "hyprland-status-config.template"))
@@ -861,7 +862,7 @@ def test_each_recipe_measures_the_toolkit_after_the_build(name, recipe):
     gelinkt ist, kann nur readelf am fertigen Objekt sagen - das tun
     die Rezepte, und hier steht, dass sie es tun. Dieselbe
     Arbeitsteilung wie zwischen tests/src/test_gtk4_only.py und
-    packaging/zepos-logout/PKGBUILD.
+    packaging/zepos-lock/PKGBUILD.
     """
     code = _pkgbuild_code(recipe)
 

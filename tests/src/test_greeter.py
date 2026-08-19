@@ -557,25 +557,38 @@ def test_the_three_cost_levels_are_three_different_grounds(greeter, name):
     }
     assert len(set(grounds.values())) == 3, (
         "zwei der drei Kostenstufen haben denselben Grund")
-    for name, colour in grounds.items():
-        assert colour in css, f"die Stufe {name} kommt im Blatt nicht vor"
+    for ground_name, colour in grounds.items():
+        assert colour in css, (
+            f"die Stufe {ground_name} kommt im Blatt nicht vor")
 
-    # Und sie kommen aus derselben Mitte wie zepos-logout, statt hier neu
-    # gewaehlt zu sein. Ohne diese Zeile koennte die Anmeldung ein
-    # anderes Gelb benutzen als die Abmeldung, und beide waeren "auf der
-    # Marke".
+    # BIS ZUM 19.08.2026 STAND HIER EIN ZUSATZ, DER GAR NICHT LIEF
     #
-    # Gegen das AUSGELIEFERTE Thema, denn style_definition liest das
-    # eingestellte aus /etc/zepos/theme und in einem Testlauf steht dort
-    # nichts. Genau das ist hier die richtige Probe: der Abmeldedialog
-    # und die Anmeldemaske muessen im SELBEN Thema dieselben Gruende
-    # haben, und das ausgelieferte ist das, in dem beide gemessen sind.
-    if name == theme.DEFAULT:
-        from src import style_definition
-        assert style_definition.STYLE_VARIABLES["STYLE_LOGOUT_RESTART_BG"] == \
-            palette.STATE_WARNING_BG
-        assert style_definition.STYLE_VARIABLES["STYLE_LOGOUT_POWEROFF_BG"] == \
-            palette.STATE_CRITICAL_BG
+    #     "Und sie kommen aus derselben Mitte wie zepos-logout, statt
+    #     hier neu gewaehlt zu sein" - geprueft mit
+    #     `style_definition.STYLE_VARIABLES["STYLE_LOGOUT_RESTART_BG"]
+    #     == palette.STATE_WARNING_BG`, hinter `if name ==
+    #     theme.DEFAULT:`. GEFUNDEN bei Aufgabe 26 (die die geprueften
+    #     STYLE_LOGOUT_*-Schluessel mit zepos-logout geloescht hat, und
+    #     damit auf diese Zeile gestossen ist): `name` ist der
+    #     Themenname, den `@pytest.mark.parametrize` uebergibt - und
+    #     die Schleife direkt darueber (`for name, colour in
+    #     grounds.items()`) ueberschrieb ihn NOCH VOR der Bedingung mit
+    #     dem letzten Schluessel von `grounds`, woertlich "ausschalten".
+    #     `"ausschalten" == theme.DEFAULT` ist nie wahr - der Zusatz lief
+    #     also bei KEINEM der Themen je, seit es ihn gab. Ein
+    #     Regressionstest, der nie ausloest, ist gruen wie einer, der
+    #     nichts prueft; siehe die Begruendung fuer PLANTED_WINDOWS in
+    #     tests/src/test_glass.py fuer denselben Fehlermodus anderswo in
+    #     diesem Baum.
+    #
+    #     Er ist mit den geloeschten STYLE_LOGOUT_*-Schluesseln
+    #     ohnehin hinfaellig: ags-logout.template (der Nachfolger von
+    #     zepos-logout) benutzt zepButton()-Rollen statt eigener
+    #     STYLE_LOGOUT_*-Hintergruende - es gibt keine gemeinsame
+    #     Farbzeile mehr, gegen die diese Maske sich haette abgleichen
+    #     koennen. Siehe den Docstring von _cost_ladder() in
+    #     src/greeter.py: zwei eigenstaendige Fassungen derselben Idee,
+    #     keine gemeinsame Quelle mehr.
 
 
 # --------------------------------------------------------------------

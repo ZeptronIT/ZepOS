@@ -26,6 +26,17 @@ import ControlCenter from "./widget/ControlCenter"
 import WallpaperSelector from "./widget/WallpaperSelector"
 import StyleEditor from "./widget/StyleEditor"
 import VpnSettings from "./widget/VpnSettings"
+// Die Sitzungsmaske - der Ersatz fuer zepos-logout (Aufgabe 26,
+// 19.08.2026). Ein Fenster aus createOverlayWindow() wie jedes andere
+// hier, kein eigenes Programm mehr - siehe den Kopf von
+// ags-logout.template.
+import Logout from "./widget/Logout"
+// Der Abschaltknopf am Dock - Aufgabe 26, Teil 3 (19.08.2026). Baut
+// selbst ein Astal.Window je Schirm (wie Bar/Dock, keine Ueberlagerung
+// aus utils/overlay) und liefert keinen Zustand zurueck, den app.ts
+// haette fuehren muessen - siehe den Kopf von
+// ags-power-button.template.
+import PowerButton from "./widget/PowerButton"
 // Zwei Ausfuhren aus EINER Datei, und das ist kein Sparzwang: der
 // Einblendstapel und das Zentrum teilen sich den Verlauf. Die
 // Begruendung steht im Kopf von ags-notifications.template.
@@ -51,6 +62,7 @@ let widgets: Record<string, OverlayWidget | null> = {
   style: null,
   vpnSettings: null,
   notifications: null,
+  logout: null,
 }
 
 let dock: DockHandle | null = null
@@ -253,6 +265,16 @@ app.start({
       console.error("Failed to create VpnSettings:", e)
     }
 
+    // Create the session/logout window - the replacement for the
+    // standalone zepos-logout binary (Aufgabe 26, 19.08.2026). Reached
+    // over SUPER+M (`ags request logout`).
+    try {
+      widgets.logout = Logout()
+      console.log("Logout loaded successfully")
+    } catch (e) {
+      console.error("Failed to create Logout:", e)
+    }
+
     // Create notifications (self-managing, no toggle needed)
     try {
       Notifications()
@@ -299,6 +321,17 @@ app.start({
     } catch (e) {
       console.error("Failed to create Dock:", e)
     }
+
+    // Der Abschaltknopf, NACH dem Dock: er steht daneben, nicht darin
+    // (siehe den Kopf von ags-power-button.template), braucht aber
+    // toggleByName wie jedes andere Bedienelement, das ein anderes
+    // Fenster oeffnet.
+    try {
+      PowerButton(toggleByName)
+      console.log("PowerButton loaded successfully")
+    } catch (e) {
+      console.error("Failed to create PowerButton:", e)
+    }
   },
   requestHandler(request: any, res: (response: any) => void) {
     const reqStr = Array.isArray(request) ? request.join(" ") : String(request)
@@ -344,6 +377,13 @@ app.start({
       toggleWidget(widgets.style).then(r => res(r))
     } else if (reqStr.includes("vpn-settings")) {
       toggleWidget(widgets.vpnSettings).then(r => res(r))
+    } else if (reqStr.includes("logout")) {
+      // SUPER+M (`ags request logout`, hyprland-universal-config.
+      // template) und der Dock-Knopf (PowerButton.tsx). Bis zum
+      // 19.08.2026 startete SUPER+M stattdessen `exec zepos-logout` -
+      // ein neuer Prozess bei jedem Druck. Dieser Zweig toggelt
+      // stattdessen dieselbe Sichtbarkeit wie jedes andere Fenster hier.
+      toggleWidget(widgets.logout).then(r => res(r))
     } else if (reqStr.includes("vpn")) {
       // Seit Aufgabe 9 (18.08.2026) keine eigene widgets.vpn mehr -
       // toggleByName() leitet auf widgets.control.zeigeSeite("vpn") um

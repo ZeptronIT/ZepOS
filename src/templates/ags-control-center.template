@@ -35,7 +35,7 @@ import Pango from "gi://Pango"
 // ShellSeite ist der Typ jeder einzelnen Seite der Seitenleiste.
 import { createShellWindow, ShellSeite, ShellWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
-import { zepButton, ZepRolle, zepStateHeader } from "../utils/kit"
+import { zepButton, zepStateHeader } from "../utils/kit"
 // AUFGABE 7 (18.08.2026): die echte Bluetooth-Seite statt des
 // Umzugshinweises - bluetoothSeite baut sich selbst vollstaendig
 // (Kopf, Geraeteliste, eigener Takt), diese Datei haengt sie nur noch
@@ -130,11 +130,10 @@ const ICONS = {
   vpn: "{{ICON_VPN_CONNECTED}}",
   vpnOff: "{{ICON_VPN_DISCONNECTED}}",
   ip: "{{ICON_IP}}",
-  shutdown: "{{ICON_SHUTDOWN}}",
-  reboot: "{{ICON_REBOOT}}",
-  suspend: "{{ICON_SUSPEND}}",
-  lock: "{{ICON_LOCK}}",
-  logout: "{{ICON_LOGOUT}}",
+  // shutdown/reboot/suspend/lock/logout gingen mit POWER_BUTTONS am
+  // 19.08.2026 (Aufgabe 26) - die Sitzungszeile unten traegt nur noch
+  // ICONS.power (fuer sich selbst) und ICONS.launch (fuer ihren
+  // "still"-Knopf, wie jede andere Navigationszeile hier).
   printer: "{{ICON_PRINTER}}",
   watchdog: "{{ICON_WATCHDOG}}",
   helpers: "{{ICON_HELPERS}}",
@@ -1678,86 +1677,44 @@ export default function ControlCenter(
       const div3 = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL })
       div3.add_css_class("cc-divider")
 
-      // ===== DIE FUENF SCHALTER =====
-      // FUENF KNOEPFE IN ZWEI REIHEN, und die Reihen sind eine
-      // Breitenentscheidung.
+      // ===== SITZUNG: eine Zeile statt eines eigenen Rasters =====
       //
-      // GEMESSEN am 12.08.2026: in einer Reihe ist der Kasten so breit
-      // wie sein laengstes Wort mal fuenf. "Herunterfahren" sind bei
-      // STYLE_FONT_MICRO vierzehn Zeichen, mit dem Rand des Knopfes
-      // rund 150 Punkte - fuenfmal das plus Abstand haetten das Fenster
-      // von gemessenen 545 auf ueber 800 Punkte verbreitert, nur weil
-      // die Beschriftungen jetzt deutsch sind. Ein Fenster, das breiter
-      // wird, weil es die Sprache wechselt, hat das falsche Layout.
+      // BIS ZUM 19.08.2026 STAND HIER EIN FUENFER-RASTER MIT SECHS
+      // BEFEHLEN IN DIESER DATEI SELBST
+      //     POWER_BUTTONS trug fuenf Zeilen (Herunterfahren, Neustart,
+      //     Bereitschaft, Sperren, Abmelden - kein Ruhezustand) mit
+      //     ihren eigenen `execAsync(cmd)`-Aufrufen, DANEBEN die
+      //     Abmeldemaske zepos-logout mit denselben fuenf plus
+      //     Ruhezustand als sechste, in einer ZWEITEN, unabhaengig
+      //     gepflegten layout.json. Zwei Listen derselben Befehle -
+      //     schon damals nicht deckungsgleich (Ruhezustand fehlte hier),
+      //     und der Auftrag, der ein neues AGS-Fenster fuer diese sechs
+      //     Aktionen baut (ags-logout.template, siehe dort), haette
+      //     daraus DREI gemacht.
       //
-      // Drei Spalten, also zwei Reihen und unten rechts ein leeres Feld.
-      // Die Lesereihenfolge bleibt die alte.
-      const powerGrid = new Gtk.Grid({
-        column_homogeneous: true,
-        column_spacing: 8,
-        row_spacing: 8,
-        halign: Gtk.Align.CENTER,
-      })
-      powerGrid.add_css_class("cc-power-grid")
-
-      // zepButton, Rolle je Knopf (Task D, 18.08.2026, siehe
-      // POWER_BUTTONS unten). "" als Beschriftung und set_child(box)
-      // direkt danach: derselbe Kunstgriff wie bei den Profilknoepfen
-      // in ags-battery.template - die eigene, senkrechte Box aus
-      // Zeichen ueber Text ersetzt die einzelne Gtk.Label, die
-      // zepButton selbst erzeugt.
-      const createPowerBtn = (icon: string, label: string, rolle: ZepRolle, cmd: string): Gtk.Button => {
-        const btn = zepButton("", rolle, () => execAsync(cmd))
-        const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-        const iconLbl = new Gtk.Label({ label: icon })
-        iconLbl.add_css_class("cc-power-icon")
-        const textLbl = new Gtk.Label({ label })
-        textLbl.add_css_class("cc-power-label")
-        box.append(iconLbl)
-        box.append(textLbl)
-        btn.set_child(box)
-        return btn
-      }
-
-      // ZUR BREITE, weil der Kopf dieses Blocks mit ihr rechnet:
-      // "Herunterfahren" sind vierzehn Zeichen, "Shut down" neun. Die
-      // englische Fassung ist die KUERZERE - das Gitter wird durch die
-      // Uebersetzung also nicht breiter. Massgeblich bleibt das laengste
-      // Wort ueber alle Sprachen, und das ist weiterhin das deutsche,
-      // fuer das die drei Spalten gebaut sind.
-      //
-      // Diese fuenf Beschriftungen sind der Grund, aus dem
-      // tests/src/test_ags_i18n.py seit dem 17.08.2026 ZWEI Netze
-      // auswirft: sie standen in einer Tabelle von Tupeln, wurden erst
-      // beim Durchlaufen zu einem Argument, und die Suche nach
-      // Eigenschaften und Setzern hat sie deshalb NICHT gesehen. Gefunden
-      // hat sie die zweite Suche - die nach deutschen Woertern.
-      // ROLLEN (Task D, 18.08.2026): Neustart, Herunterfahren und
-      // Abmelden sind die Abschaltknoepfe des Auftrags und tragen
-      // "kritisch" - sie beenden die laufende Sitzung, ungesichertes
-      // geht dabei verloren, und das ist nach dem Muster ("kritisch
-      // nur fuer Zerstoerendes") genau der Fall. Ruhezustand und
-      // Sperren sind beide vollstaendig umkehrbar (nichts geht
-      // verloren, die Sitzung laeuft weiter) und tragen darum
-      // "umrandet" - eine wirkliche Handlung, aber keine zerstoerende.
-      // Die frueheren fuenf verschiedenen Akzentfarben (rot/gelb/
-      // Akzent/Akzent/gedaempft, je Knopf eine andere) sind mit dem
-      // Umbau entfallen: die vier Rollen des Kits sollen genau diese
-      // Art von Uneinheitlichkeit ersetzen (siehe Modul-Docstring von
-      // tests/src/test_button_kit.py, "wirken so billig") - "kritisch"
-      // markiert alle drei Abschaltknoepfe gleich statt jedem eine
-      // eigene Farbe zu geben.
-      const POWER_BUTTONS: Array<[string, string, ZepRolle, string]> = [
-        [ICONS.shutdown, _("Shut down"), "kritisch", "systemctl poweroff"],
-        [ICONS.reboot, _("Restart"), "kritisch", "systemctl reboot"],
-        [ICONS.suspend, _("Suspend"), "umrandet", "systemctl suspend"],
-        [ICONS.lock, _("Lock"), "umrandet", "zepos-lock"],
-        [ICONS.logout, _("Log out"), "kritisch", "hyprctl dispatch exit"],
-      ]
-      POWER_BUTTONS.forEach(([icon, label, rolle, cmd], index) => {
-        powerGrid.attach(createPowerBtn(icon, label, rolle, cmd),
-                         index % 3, Math.floor(index / 3), 1, 1)
-      })
+      //     Aufgabe 26 raeumt das ab, genau wie Aufgabe 7/8/9 es fuer
+      //     Bluetooth/Netzwerk/VPN schon getan haben (siehe die
+      //     Kommentare bei netBtn/vpnBtn/btBtn oben): diese Zeile
+      //     TRAEGT keinen Befehl mehr selbst, sie OEFFNET das eine
+      //     Fenster, das alle sechs kennt - `opens("logout")`, derselbe
+      //     Weg wie styleRow oben. Die Rollenzuordnung ("kritisch" fuer
+      //     Abmelden/Neustart/Herunterfahren, "umrandet" fuer
+      //     Sperren/Bereitschaft/Ruhezustand) lebt jetzt dort, mit der
+      //     ausfuehrlichen Begruendung, die vorher hier stand.
+      const sessionRow = new Gtk.Box({ spacing: 10 })
+      sessionRow.add_css_class("cc-row")
+      const sessionIcon = new Gtk.Label({ label: ICONS.power })
+      sessionIcon.add_css_class("cc-icon")
+      const sessionLabel = ccLabel(_("Session"))
+      // zepButton, Rolle "still" (wie netBtn/vpnBtn/btBtn/styleBtn
+      // oben): Navigation zu einem anderen Fenster, keine eigene
+      // Handlung.
+      const sessionBtn = zepButton(ICONS.launch, "still", opens("logout"))
+      sessionBtn.set_tooltip_text(
+        _("Lock, log out, restart, shut down, suspend or hibernate"))
+      sessionRow.append(sessionIcon)
+      sessionRow.append(sessionLabel)
+      sessionRow.append(sessionBtn)
 
       // ===== ZUSAMMENSETZEN =====
       mainBox.append(privacyBox)
@@ -1787,7 +1744,7 @@ export default function ControlCenter(
       mainBox.append(styleRow)
       mainBox.append(updateRow)
       mainBox.append(div3)
-      mainBox.append(powerGrid)
+      mainBox.append(sessionRow)
 
       // DER TAKT LAEUFT FUER DIE LEBENSDAUER DER SCHALE, NICHT MEHR NUR
       // "SOLANGE DAS FENSTER OFFEN IST" - UND TROTZDEM OHNE DIE 300

@@ -303,7 +303,7 @@ Paket.
 | | Ersetzt | Warum |
 |---|---|---|
 | `zepos-menu` | wofi | GTK3, und sechs erzeugte Aufrufstellen hängen von der Auswahl ab |
-| `zepos-logout` | wlogout | GTK3, Upstream seit 2024 tot |
+| Sitzungsfenster (AGS) | wlogout | GTK3, Upstream seit 2024 tot - war bis zum 19.08.2026 ein eigenes Paket `zepos-logout`, jetzt ein Fenster im AGS-Prozess |
 | `zepos-lock` | hyprlock | Rendert mit GLES und Cairo, seine Farben konnten daher nie aus `brand.py` kommen |
 | AGS-Leiste und -Dock | waybar, nwg-dock-hyprland | waybar ist gtkmm-3; nwg-dock hat keine GTK4-Version |
 | `zepos-settings-gui` | nwg-displays | GTK3, und sein „diese Einstellungen behalten?“-Timer stirbt mit dem Programm, das er schützen soll |
@@ -429,9 +429,10 @@ brauchen, melden sich sichtbar mit `@pytest.mark.allow_subprocess` oder
 ```
 src/            der Desktop: Vorlagen, die zwei SSOTs, der Generator, die zepos-*-Befehle
 installer/      der Installer, in drei Schichten
-packaging/      20 PKGBUILD-Rezepte, der Container, die Signier- und Veroeffentlichungsskripte
+packaging/      19 PKGBUILD-Rezepte, der Container, die Signier- und Veroeffentlichungsskripte
 iso/            zwei archiso-Profile und der Bau, der sie zusammensetzt
-lock/ logout/   zepos-lock und zepos-logout (C, GTK4, gtk4-layer-shell)
+lock/           zepos-lock (C, GTK4, gtk4-layer-shell); das Sitzungsfenster,
+                das frueher in logout/ lag, ist jetzt ein AGS-Fenster in src/
 menu/ settings/ zepos-menu und zepos-settings-gui (Python, GTK4)
 plugins/        nur LICENSE - ZepOS' Patches fuer hyprlaunch und hyprclipx
                 liegen neben ihren Rezepten in packaging/, nicht hier (siehe Lizenz)

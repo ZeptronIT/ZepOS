@@ -1078,12 +1078,14 @@ $overlay-border: $border;
 // ENTFERNT, ebenfalls am 18.08.2026, aus demselben Grund und derselben
 // Pruefung: cc-power-row (die Zeile eines aelteren Abschaltblocks) und
 // cc-pwr-btn (eine der zehn Klassen). NICHT zu verwechseln mit dem
-// HEUTIGEN cc-power-grid/cc-power-btn/cc-power-icon/cc-power-label
-// weiter unten in dieser Datei (der Knoepfe, die ags-control-center.
-// template tatsaechlich noch am 17.08.2026 gebaut hat) - cc-pwr-btn
-// ist ein ANDERER, schon vorher toter Namensvetter mit demselben
-// Fuenferschema (shutdown/reboot/suspend/lock/logout), nicht dieselbe
-// Regel zweimal gemeldet.
+// damals noch lebenden cc-power-grid/cc-power-btn/cc-power-icon/
+// cc-power-label, die ags-control-center.template am 17.08.2026 noch
+// baute - cc-pwr-btn war ein ANDERER, schon vorher toter Namensvetter
+// mit demselben Fuenferschema (shutdown/reboot/suspend/lock/logout),
+// nicht dieselbe Regel zweimal gemeldet. Die vier lebenden sind seither
+// selbst gefallen (Aufgabe 26, 19.08.2026 - siehe die Anmerkung vor
+// ===== NETWORK MANAGER ===== weiter unten), gemeinsam mit dem Raster,
+// das sie trugen.
 //
 // ENTFERNT, ebenfalls am 18.08.2026: cc-toggles (die Reihe, die den
 // Schalter trug) und cc-toggle-btn samt seiner zwei verschachtelten
@@ -1325,36 +1327,17 @@ $overlay-border: $border;
 // zehn Klassen aus dem Auftrag, siehe gruppe-D-report.md),
 // cc-service-icon und cc-service-label.
 
-.cc-power-grid {
-  padding: {{STYLE_SPACE_8}} 0;
-}
-
-// ENTFERNT am 18.08.2026 (Task D, Umbau auf zepButton): cc-power-btn
-// selbst - eine der zehn Klassen des Auftrags, seit createPowerBtn()
-// zepButton mit der Rolle "kritisch" (Neustart/Herunterfahren/
-// Abmelden) bzw. "umrandet" (Ruhezustand/Sperren) benutzt statt der
-// Klasse und einer eigenen Zusatzklasse je Knopf.
-//
-// DIE FUENF VERSCHIEDENEN AKZENTFARBEN (rot/gelb/Akzent/Akzent/
-// gedaempft, je Zustand eine andere Farbe im Rahmen UND im Symbol)
-// sind damit ABSICHTLICH nicht in eine neue, gleichwertige Form
-// ueberfuehrt worden - siehe die Begruendung im Kommentar ueber
-// POWER_BUTTONS in ags-control-center.template: genau diese
-// Uneinheitlichkeit (fuenf verschiedene Knopf-Erscheinungen fuer
-// dieselbe Handlungsart) ist es, die die vier gemeinsamen Rollen
-// (.zep-btn-voll/-umrandet/-still/-kritisch) ersetzen sollen. Die
-// Unterscheidung der fuenf Knoepfe bleibt ueber Symbol und
-// Beschriftung erhalten (cc-power-icon/cc-power-label, unveraendert
-// unten), nur die Farbe ist jetzt einheitlich die der Rolle.
-.cc-power-icon {
-  font-size: {{STYLE_ICON_LEAD}};
-  color: $text;
-}
-
-.cc-power-label {
-  font-size: {{STYLE_FONT_MICRO}};
-  color: $subtext;
-}
+// ENTFERNT am 19.08.2026 (Aufgabe 26): cc-power-grid, cc-power-icon und
+// cc-power-label. Das Fuenferraster im Kontrollzentrum, das diese drei
+// Klassen trugen, ist einer einzelnen Zeile gewichen ("Sitzung",
+// ags-control-center.template), die das neue Fenster
+// ags-logout.template oeffnet, statt die sechs Abschaltbefehle selbst
+// zu kennen - siehe den Kommentar dort. cc-power-btn selbst war schon
+// am 18.08.2026 (Task D) gefallen, als createPowerBtn() auf zepButton
+// umstellte; die verbliebenen drei trugen seither nur noch Groesse und
+// Anordnung des Rasters, das jetzt mit ihm geht. Die sechs Knoepfe des
+// Nachfolgefensters tragen ihre eigenen lg-*-Klassen (Abschnitt SESSION
+// weiter unten).
 
 // ===== NETWORK MANAGER =====
 // NetworkManager (Fensterhuelle) ist am 18.08.2026 (Aufgabe 9) gefallen:
@@ -2525,7 +2508,13 @@ $overlay-border: $border;
 //     kritische Meldung blieb fast schwarz.
 //
 //     Sie kommt jetzt aus THEME.STATE_CRITICAL_BG, derselben Sprosse,
-//     auf der zepos-logout sein "Ausschalten" stellt.
+//     auf der die Hardwarezeilen ihren kritischen Zustand malen. Bis
+//     zum 19.08.2026 stand hier eine DRITTE Stelle - "auf der
+//     zepos-logout sein 'Ausschalten' stellt" -, die mit dem C-Programm
+//     gefallen ist (Aufgabe 26): dessen Nachfolger ags-logout.template
+//     benutzt zepButton() und dessen Rolle "kritisch"
+//     (.zep-btn-kritisch, weiter oben in dieser Datei), keine eigene
+//     Farbe mehr aus dieser Sprosse.
 //
 // WARUM NUR DIE OBERSTE SPROSSE EINEN EIGENEN GRUND HAT
 //     Die drei Dringlichkeiten sind eine Kostenleiter, und ihr Zweck
@@ -2649,6 +2638,60 @@ $overlay-border: $border;
 // Ein Kanal, eine Aussage: der Rand links sagt, wie dringend es ist.
 // Die Tabelle APP_COLORS in ags-notifications.template, aus der die
 // Klassennamen kamen, ist mitgegangen.
+
+// ===== SESSION (die Sitzungsmaske, Aufgabe 26, 19.08.2026) =====
+//
+// DER ERSATZ FUER logout-style.template, DAS MIT zepos-logout GEFALLEN IST
+//     Die alte Datei stylte ein eigenstaendiges GTK4-Fenster ausserhalb
+//     von AGS und trug darum ihre eigene Farbrechnung (drei Zustaende
+//     "sicher/Neustart/Ausschalten", jeder mit eigenem BG/Border/Text).
+//     ags-logout.template ist dagegen ein Fenster wie jedes andere in
+//     diesem Baum - es benutzt zepButton() und dessen vier Rollen
+//     (.zep-btn-voll/-umrandet/-still/-kritisch, ganz oben in dieser
+//     Datei). Diese sechs Knoepfe brauchen darum keine eigene
+//     Hintergrundfarbe mehr, nur noch Groesse und Anordnung.
+.Logout {
+  background: transparent;
+}
+
+.lg-container {
+  padding: {{STYLE_SPACE_16}};
+  // GEMESSEN am 19.08.2026 im verschachtelten Compositor - die
+  // Herleitung der Fensterbreite daraus steht am Kopf von
+  // ags-logout.template, bei WIN_WIDTH.
+  min-width: 480px;
+}
+
+.lg-grid {
+  padding: {{STYLE_SPACE_4}} 0;
+}
+
+// Die Knoepfe selbst tragen KEINE eigene Klasse (kein "lg-btn") - siehe
+// den Kommentar in ags-logout.template, wo zepButton() aufgerufen wird:
+// tests/src/test_button_kit.py haelt die Zahl der Knopf-Klassen in
+// dieser Datei als Ratsche, die nur SINKEN darf. Symbol UND Beschriftung
+// UEBEREINANDER statt nebeneinander (dieselbe Bauweise wie createPowerBtn
+// vorher in ags-control-center.template) braucht dafuer auch kein
+// eigenes `min-width` - die drei Spalten des Rasters
+// (column_homogeneous) werden so breit wie ihre breiteste Zelle, und das
+// ist die laengste Beschriftung ("Herunterfahren", vierzehn Zeichen).
+.lg-icon {
+  font-size: {{STYLE_ICON_LEAD}};
+}
+
+.lg-label {
+  font-size: {{STYLE_FONT_MICRO}};
+}
+
+// Der Buchstabe des Tastenkuerzels, klein und gedaempft - dieselbe
+// Sprache wie `label.keybind` in der gefallenen logout-style.template
+// (STYLE_FONT_CAPTION, halbe Deckkraft), nur ohne eigene Farbrolle: die
+// Farbe kommt von der Rolle des Knopfes (.zep-btn-umrandet/-kritisch),
+// die Deckkraft daempft nur, wie stark sie durchkommt.
+.lg-keybind {
+  font-size: {{STYLE_FONT_CAPTION}};
+  opacity: {{STYLE_OPACITY_DISABLED}};
+}
 
 // ---------------------------------------------------------------------
 // DIE BEWEGUNG

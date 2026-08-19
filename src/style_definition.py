@@ -797,7 +797,11 @@ _FIXED_STYLE_VARIABLES = {
     # COMMON VALUES (fixed - NOT scaled, these affect the bar)
     # ============================================================================
     "STYLE_MARGIN_VERTICAL": "3px 0px",
-    "STYLE_CHIP_GAP": size_value("STYLE_CHIP_GAP"),
+    # STYLE_CHIP_GAP stand hier bis zum 19.08.2026 - .bar-module trug
+    # ihn als margin-left, bis genau diese Zeile hier (STYLE_PADDING_MODULE)
+    # denselben Doppelzaehlungs-Fehler behob und .bar-module auf
+    # STYLE_SPACE_8 umstellte. Die Herleitung und die Loeschung stehen
+    # bei sizes.py, direkt vor STYLE_PADDING_BUTTON (Regel 14).
     # DIESER WERT WAR BIS ZUM 19.08.2026 STYLE_MODULE_SPACING, UND DAS
     # WAR DER GRUND FUER "die icon untereinander komisch viel platz von
     # der margin her" (Nutzer, 19.08.2026)
@@ -998,11 +1002,17 @@ _FIXED_STYLE_VARIABLES = {
     # auffallen muss. Unter "Tageslicht" wurde der ganze Schreibtisch
     # hell und die kritische Meldung blieb fast schwarz.
     #
-    # THEME.STATE_CRITICAL_BG ist derselbe Grund, den zepos-logout unter
-    # "Ausschalten" legt und den die Hardwarezeilen fuer ihren
-    # kritischen Zustand nehmen: ein Rot, so weit zum Grund genommen,
-    # dass die Schrift darauf haelt. Die Leiter hat damit an allen drei
-    # Stellen dieselben drei Sprossen.
+    # THEME.STATE_CRITICAL_BG ist derselbe Grund, den die Hardwarezeilen
+    # fuer ihren kritischen Zustand nehmen: ein Rot, so weit zum Grund
+    # genommen, dass die Schrift darauf haelt.
+    #
+    # BIS ZUM 19.08.2026 (Aufgabe 26) legte auch zepos-logout sein
+    # "Ausschalten" auf diese Sprosse - eine DRITTE Stelle, die mit dem
+    # C-Programm gefallen ist. Sein Nachfolger ags-logout.template
+    # benutzt zepButton() und dessen Rolle "kritisch" (ags-style.
+    # template, .zep-btn-kritisch), keine eigene Farbe mehr aus dieser
+    # Sprosse - die Leiter hat damit an zwei Stellen dieselben Sprossen,
+    # nicht mehr an drei.
     "STYLE_GLASS_NOTIFICATION_CRITICAL": THEME.rgba(THEME.STATE_CRITICAL_BG,
                                                     THEME.GLASS_SOLO_ALPHA),
 
@@ -1990,74 +2000,29 @@ _FIXED_STYLE_VARIABLES = {
     "STYLE_WALLPAPER_CURRENT_HEIGHT": "150px",
 
     # ============================================================================
-    # zepos-logout - the power menu (fixed - NOT scaled)
+    # zepos-logout ist GEFALLEN (Aufgabe 26, 19.08.2026)
     # ============================================================================
     #
-    # It used to carry thirty-five literals and eight different hues: the
-    # lock blue, the logout amber, a cyan, a purple, a magenta, two
-    # oranges and two reds, on a #0c0c0c ground that matched nothing else
-    # on the desktop after kitty's chrome moved to the THEME.
+    # Die einunddreissig STYLE_LOGOUT_*-Schluessel, die hier standen
+    # (Kostenleiter sicher/Neustart/Ausschalten, Maske, Knopf, Masse),
+    # gehoerten dem eigenstaendigen C-Programm logout/zepos-logout.c -
+    # geloescht mit ihm, nach Regel 14 (loeschen statt als veraltet
+    # markieren). Sein Nachfolger, src/templates/ags-logout.template,
+    # liest KEINEN dieser Schluessel: er benutzt zepButton() und dessen
+    # vier Rollen (.zep-btn-voll/-umrandet/-still/-kritisch,
+    # ags-style.template), dieselben, die jedes andere AGS-Fenster
+    # benutzt - keine eigene Farbrechnung mehr fuer sechs Knoepfe.
     #
-    # The hues carried one piece of information worth keeping, and it was
-    # not which action it was - the icon and the label already say that.
-    # It was how much the action COSTS. So it is a ladder of three now,
-    # in the brand's own semantic colours, on the same three state
-    # grounds the hardware modules already use:
-    #
-    #   safe        lock, logout, suspend, hibernate    6.92:1
-    #   restart     reboot                              8.42:1
-    #   power off   shutdown                            6.80:1
-    #
-    # Every one of those is the hover state, which is the only moment the
-    # colour is shown and therefore the only one that has to be readable.
-    # The backdrop is the ink at nine tenths: the desktop stays faintly
-    # visible behind the menu, so it reads as a sheet over the session
-    # rather than a screen that replaced it.
-    #
-    # WARUM DIE SCHLUESSEL STYLE_LOGOUT_ UND NICHT MEHR STYLE_WLOGOUT_
-    #     Weil das Programm nicht mehr wlogout heisst. Die Entscheidung
-    #     vom 11.08.2026 stellt die Oberflaeche durchgehend auf GTK4, und
-    #     wlogout steht gemessen auf libgtk-3.so.0 - der Kopf von
-    #     logout/zepos-logout.c fuehrt die Messung und die drei
-    #     verworfenen Alternativen. Ein Schluessel, der ein Programm
-    #     nennt, das nicht mehr installiert wird, schickt den naechsten
-    #     Leser zu einem Paket, das es nicht gibt.
-    "STYLE_LOGOUT_BACKDROP_RGB": _channels(THEME.INK),
-    "STYLE_LOGOUT_BACKDROP_OPACITY": "0.9",
-    "STYLE_LOGOUT_BUTTON_BG": THEME.PETROL,
-    "STYLE_LOGOUT_BUTTON_TEXT": THEME.TEXT,
-    "STYLE_LOGOUT_BUTTON_BORDER": THEME.SHADE_1,
-    "STYLE_LOGOUT_SAFE_BG": THEME.STATE_OFFLINE_BG,
-    "STYLE_LOGOUT_SAFE_BORDER": THEME.CYAN,
-    "STYLE_LOGOUT_SAFE_TEXT": THEME.CYAN_TEXT,
-    "STYLE_LOGOUT_RESTART_BG": THEME.STATE_WARNING_BG,
-    "STYLE_LOGOUT_RESTART_BORDER": THEME.YELLOW_DIM,
-    "STYLE_LOGOUT_RESTART_TEXT": THEME.YELLOW,
-    "STYLE_LOGOUT_POWEROFF_BG": THEME.STATE_CRITICAL_BG,
-    "STYLE_LOGOUT_POWEROFF_BORDER": THEME.RED_DEEP,
-    "STYLE_LOGOUT_POWEROFF_TEXT": THEME.RED,
-    # Die Masse der Maske. Sie standen bis zum Programmwechsel als
-    # Literale in der Stilvorlage - "margin: 40px" und drei Schriftgroessen
-    # in einer Datei, die sonst nichts hartschreibt -, und dann als
-    # Literale hier.
-    #
-    # 40px Rand ist das Mass, das wlogout mitbrachte und das die
-    # Trefferflaechen voneinander trennt. Das Tastenkuerzel steht auf
-    # halber Deckkraft: es soll gefunden werden, wenn jemand danach
-    # sucht, und nicht mit der Beschriftung um den Blick streiten.
-    #
-    # DIE ZWEI SCHRIFTGROESSEN SIND SEIT DEM 12.08.2026 KEINE MEHR.
-    # Sie standen als "64px" und "20px" da - GEMESSEN am selben Tag die
-    # letzten zwei Schriftliterale des ganzen Baums, nachdem 175 andere
-    # auf die Leiter gezogen waren. Die alte Begruendung ("die Glyphe
-    # traegt die Flaeche, deshalb ist sie das Vielfache der Textgroesse")
-    # bleibt richtig und wird jetzt gerechnet statt behauptet: das
-    # Zeichen ist ICON_HERO, die Beschriftung darunter FONT_TITLE, und
-    # das ist bei jedem Faktor dieselbe Beziehung.
-    "STYLE_LOGOUT_BUTTON_MARGIN": "40px",
-    "STYLE_LOGOUT_ICON_SIZE": size_value(f"{sizes.ICON_PREFIX}HERO"),
-    "STYLE_LOGOUT_TEXT_SIZE": size_value(f"{sizes.FONT_PREFIX}TITLE"),
-    "STYLE_LOGOUT_KEYBIND_OPACITY": "0.5",
+    # WAS AUS DER KOSTENLEITER GEWORDEN IST
+    #     Die Handlungskosten-Idee selbst lebt weiter, nur groeber
+    #     gerastert: statt drei durchgehenden Farbstufen (sicher/
+    #     Neustart/Ausschalten) hat zepButton nur zwei Rollen fuer diese
+    #     sechs Knoepfe - "kritisch" (Abmelden, Neustart, Herunterfahren
+    #     beenden die Sitzung) und "umrandet" (Sperren, Bereitschaft,
+    #     Ruhezustand sind vollstaendig umkehrbar). src/greeter.py
+    #     behaelt seine EIGENE dreistufige Leiter (_cost_ladder) - sie
+    #     ist die Anmeldemaske, kein AGS-Fenster, und kann zepButton
+    #     nicht importieren.
 
     # ============================================================================
     # zepos-lock - der Sperrbildschirm
@@ -2298,6 +2263,14 @@ _FIXED_STYLE_VARIABLES = {
 #     Flaeche sich malt, damit auch die zweite Haelfte geprueft werden
 #     kann.
 #
+#     VON DEN VIER IST NUR NOCH ZEPOS-LOGOUT SELBST GEGANGEN (Aufgabe 26,
+#     19.08.2026): das C-Programm ist geloescht, sein Namensraum "logout"
+#     steht seither weiter unten, als Zeile wie jede andere AGS-
+#     Ueberlagerung - ags-logout.template meldet ihn ueber
+#     `createOverlayWindow({ name: "logout", ... })`, dieselbe vierte
+#     Schreibweise, die tests/src/test_glass.py::_declared_namespaces()
+#     schon fuer "control" kennt.
+#
 #     ACHTUNG BEIM NACHSEHEN: hyprclipx meldet sich NICHT unter seinem
 #     Programmnamen an, sondern als "clipboard-manager". Der Name steht
 #     in der C++-Zeile und nirgends sonst - geraten haette man ihn
@@ -2311,6 +2284,11 @@ _FIXED_STYLE_VARIABLES = {
 GLASS_LAYERS = (
     "zepos-bar",
     "zepos-dock",
+    # Der Abschaltknopf am Dock - Aufgabe 26, Teil 3, 19.08.2026. Eine
+    # eigene Flaeche je Schirm (ags-power-button.template), dieselbe
+    # Glasplatte wie #dock, aber unter einer eigenen ID (#power-button,
+    # styles/bar-style.template) und einem eigenen Namensraum.
+    "zepos-power",
     "notifications",
     # Der Verlauf und "Nicht stoeren", seit dem 12.08.2026. Eine EIGENE
     # Flaeche neben "notifications" und kein Zusatz zu ihr: der
@@ -2340,10 +2318,15 @@ GLASS_LAYERS = (
     # Glasplatte des Namensraums "control". "vpn-settings" bleibt: die
     # VPN-Einstellungen sind ein eigenes Fenster, kein Verbindungsziel.
     "vpn-settings",
+    # Die Sitzungsmaske, seit Aufgabe 26 (19.08.2026) - der Ersatz fuer
+    # zepos-logout (siehe die Anmerkung weiter oben) ist ein Fenster wie
+    # Kalender, Kuerzel und die uebrigen: `createOverlayWindow({name:
+    # "logout", ...})` in ags-logout.template, dieselbe `.overlay-outer`-
+    # Platte wie sie alle.
+    "logout",
     "hyprlaunch",
     "clipboard-manager",
     "zepos-menu",
-    "zepos-logout",
 )
 
 
@@ -2369,9 +2352,14 @@ GLASS_LAYERS = (
 #                                     dreizehn Flaechen am 12.08.2026.
 #     durchsichtig, aber nicht drin   Man sieht den Schreibtisch SCHARF
 #                                     hindurch. Das ist kein Glas,
-#                                     sondern ein Loch - der Zustand von
+#                                     sondern ein Loch - GEMESSEN bis
+#                                     zum 19.08.2026 am Zustand von
 #                                     zepos-logout, dessen Maske seit
-#                                     jeher auf neun Zehnteln steht.
+#                                     jeher auf neun Zehnteln stand
+#                                     (Aufgabe 26 hat das Programm samt
+#                                     seiner Maske entfernt; das Beispiel
+#                                     bleibt stehen, weil es zeigt, WAS
+#                                     diese Tabelle verhindern soll).
 #
 # WAS DIE VIER FELDER BEDEUTEN
 #     stylesheet  unter src/, weil zwei Ordner Stilvorlagen halten:
@@ -2388,17 +2376,25 @@ GLASS_LAYERS = (
 #
 # WARUM covered_by UND NICHT EINFACH EIN LEERES TUPEL
 #     Weil "traegt keine Schrift" sonst die bequemste Antwort waere und
-#     jede Kontrastrechnung abschalten koennte. Zwei Flaechen sagen es
-#     zu Recht, und beide koennen es BELEGEN:
+#     jede Kontrastrechnung abschalten koennte. Ein leeres `text`-Tupel
+#     muss darum BELEGEN, was stattdessen die Schrift traegt.
 #
-#         zepos-bar     ihre Schrift steht auf .bar-module, einer
-#                       zweiten Glasschicht darauf. Der gestapelte Fall
-#                       wird seit dem 11.08.2026 in test_glass.py
-#                       gerechnet, und zwar genau so.
-#         zepos-logout  ihre Schrift steht auf `button`, und der ist
-#                       deckend. Siehe zep_build_grid() in
-#                       logout/zepos-logout.c: jedes Etikett wird in
-#                       einen Knopf gehaengt, keines auf die Maske.
+#     BIS ZUM 19.08.2026 (Aufgabe 26) gab es dafuer zwei Beispiele:
+#     zepos-bar (ihre Schrift stand auf .bar-module, einer zweiten
+#     Glasschicht darauf) und zepos-logout (ihre Schrift stand auf
+#     `button`, und der war deckend - siehe zep_build_grid() im
+#     inzwischen geloeschten logout/zepos-logout.c). Beide sind
+#     inzwischen fort: zepos-bar traegt seine Schrift seit dem
+#     12.08.2026 SELBST (siehe den Eintrag "zepos-bar" unten, `text` ist
+#     dort laengst nicht mehr leer), und zepos-logout ist mit seinem
+#     ganzen Programm gefallen. KEIN aktueller Eintrag in GLASS_PLATES
+#     nutzt `covered_by` mehr - das Feld bleibt trotzdem stehen, mit
+#     derselben Begruendung, aus der "logout" in NAMESPACE_ROOTS
+#     (tests/src/test_glass.py) trotz leerem Verzeichnis bleibt: ein
+#     leerer Fall ist keine Luecke, solange die Pruefung, die ihn
+#     braeuchte, noch existiert (test_a_plate_that_carries_no_text_says_
+#     what_covers_it) und ein zukuenftiges Fenster ohne eigene Schrift
+#     ihn wieder fuellen kann.
 #
 #     Die Pruefung schlaegt den Wahlausdruck nach und verlangt, dass er
 #     wirklich einen Hintergrund malt. Verschwindet er, faellt sie um.
@@ -2422,6 +2418,10 @@ GLASS_PLATES = {
     # bar_text: die Farbe, in der JEDES Modul im Ruhezustand schreibt.
     "zepos-bar": GlassPlate(_BAR, "#bar", ("bar_text",), None),
     "zepos-dock": GlassPlate(_BAR, "#dock", ("dock_icon",), None),
+    # Derselbe Farbwert wie #dock (dock_icon) - visuell dieselbe Familie,
+    # nur eine eigene ID (siehe den Kommentar bei #power-button in
+    # bar-style.template).
+    "zepos-power": GlassPlate(_BAR, "#power-button", ("dock_icon",), None),
     "notifications": GlassPlate(_AGS, ".notif-card", ("overlay_subtext",),
                                 None),
     # Das Zentrum kommt vollstaendig aus createOverlayWindow() und traegt
@@ -2440,6 +2440,12 @@ GLASS_PLATES = {
     "control": _OVERLAY,
     "wallpaper": _OVERLAY,
     "style-editor": _OVERLAY,
+    # Die Sitzungsmaske, seit Aufgabe 26 (19.08.2026) - dieselbe Platte
+    # wie jedes andere Fenster aus createOverlayWindow(). Ihr Vorgaenger
+    # "zepos-logout" trug hier eine eigene Zeile (eigenes Stylesheet,
+    # eigener Wahlausdruck "window", leeres `text` mit `covered_by`
+    # "button") - siehe die Anmerkung bei "WARUM covered_by" oben.
+    "logout": _OVERLAY,
     # "vpn" ist am 18.08.2026 (Aufgabe 9) gefallen - siehe der Kommentar
     # bei GLASS_LAYERS oben. VPN malt sich seither auf der Platte des
     # Namensraums "control".
@@ -2451,8 +2457,6 @@ GLASS_PLATES = {
                                     ".cm-root", ("overlay_subtext",), None),
     "zepos-menu": GlassPlate("styles/zepos-menu-style.template", "#outer-box",
                              ("overlay_subtext",), None),
-    "zepos-logout": GlassPlate("styles/logout-style.template", "window", (),
-                               "button"),
 }
 
 

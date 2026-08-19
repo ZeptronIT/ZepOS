@@ -273,7 +273,7 @@ want it.
 | | Replaces | Why |
 |---|---|---|
 | `zepos-menu` | wofi | GTK3, and six generated call sites depend on the chooser |
-| `zepos-logout` | wlogout | GTK3, upstream dead since 2024 |
+| Session window (AGS) | wlogout | GTK3, upstream dead since 2024 - was its own `zepos-logout` package until 19.08.2026, now a window in the AGS process |
 | `zepos-lock` | hyprlock | Renders with GLES and Cairo, so its colours could never come from `brand.py` |
 | AGS bar and dock | waybar, nwg-dock-hyprland | waybar is gtkmm-3; nwg-dock has no GTK4 version |
 | `zepos-settings-gui` | nwg-displays | GTK3, and its "keep these settings?" timer dies with the program it is protecting |
@@ -383,9 +383,10 @@ opt in visibly with `@pytest.mark.allow_subprocess` or
 ```
 src/            the desktop: templates, the two SSOTs, the generator, zepos-* commands
 installer/      the installer, in three layers
-packaging/      20 PKGBUILD recipes, the container, the signing and publishing scripts
+packaging/      19 PKGBUILD recipes, the container, the signing and publishing scripts
 iso/            two archiso profiles and the build that assembles them
-lock/ logout/   zepos-lock and zepos-logout (C, GTK4, gtk4-layer-shell)
+lock/           zepos-lock (C, GTK4, gtk4-layer-shell); the session window
+                that used to live in logout/ is an AGS window in src/ now
 menu/ settings/ zepos-menu and zepos-settings-gui (Python, GTK4)
 plugins/        LICENCE only - ZepOS's patches for hyprlaunch and hyprclipx
                 live next to their recipes in packaging/, not here (see Licence)

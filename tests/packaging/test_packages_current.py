@@ -430,7 +430,7 @@ def test_a_package_that_still_has_a_recipe_is_not_reported(tmp_path):
     staged = _repo_matching_the_tree(tmp_path)
     for name in ("libastal-4-r912.9dac92f-1-x86_64",
                  "zepos-hyprbars-0.56.0-1-x86_64",
-                 "zepos-logout-0.1.0-1-x86_64"):
+                 "zepos-lock-0.1.0-1-x86_64"):
         (staged / f"{name}.pkg.tar.zst").write_bytes(b"")
 
     assert check_current.check(staged) == []
@@ -442,7 +442,10 @@ def test_the_names_come_from_the_recipes_and_include_the_multi_package_ones():
     names = check_current._built_names()
 
     for expected in ("libastal-io", "libastal-4", "libastal-notifd",
-                     "zepos-config", "zepos-logout", "zepos-menu",
+                     "zepos-config", "zepos-lock", "zepos-menu",
                      "zepos-desktop"):
         assert expected in names, f"{expected} fehlt in {sorted(names)}"
     assert "wlogout" not in names, "das Rezept ist geloescht"
+    assert "zepos-logout" not in names, (
+        "das Rezept ist mit dem Programm geloescht (Aufgabe 26, "
+        "19.08.2026, Regel 14)")

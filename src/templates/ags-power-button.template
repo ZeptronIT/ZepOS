@@ -1,0 +1,131 @@
+// Der Abschaltknopf am Dock (GTK4, Layer-Shell) - Aufgabe 26, Teil 3
+// Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+// Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-power-button.template kopieren
+//
+// DER AUFTRAG, WOERTLICH (19.08.2026)
+//     "ich will das die dock links von der eigentlich dock selbst ganz
+//     links im screen aber noch mit abstand ein menue noch hat um die
+//     aktionen zu machen bei klick kommt ein ags fenster herunterfahren
+//     logout usw" - und, praeziser: "Nicht in die Dock-Box - das Dock
+//     ist inhaltsbemessen und mittig, der Knopf wuerde mitwandern."
+//
+// WARUM EINE EIGENE FLAECHE UND NICHT EIN Kind IN DockContent()
+//     ags-dock.template baut GENAU EINE Astal.Window je Schirm, verankert
+//     nur an BOTTOM (kein LEFT/RIGHT), also horizontal ZENTRIERT und
+//     inhaltsbemessen: die Flaeche ist immer genau so breit wie ihr
+//     Inhalt, egal wie viele angeheftete Anwendungen darin stehen. Ein
+//     Knopf, den man dort ANHAENGT, wandert mit jedem neuen Programm
+//     mit, das der Nutzer anheftet - er stuende nicht "ganz links", er
+//     stuende "links vom jeweils aktuellen Dockinhalt". Nur eine ZWEITE,
+//     UNABHAENGIG verankerte Flaeche steht wirklich fest.
+//
+// WARUM PRO SCHIRM UND NICHT NUR AUF EINEM
+//     Dieselbe Frage hat ags-dock.template schon beantwortet (siehe
+//     dort, Dock()): das Dock selbst zieht eine Flaeche je Monitor auf.
+//     Ein Abschaltknopf, der nur auf einem von mehreren Schirmen steht,
+//     waere auf jedem anderen ein Griff ins Leere - dieselbe Faehigkeit,
+//     nur inkonsequent angewandt.
+//
+// WARUM KEIN eigener Gtk.EventControllerKey UND KEIN OverlayAnchor
+//     Der Knopf ist eine feste Flaeche, kein Aufklappfenster - es gibt
+//     nichts umzuschalten, das er selbst braeuchte (das Fenster, das er
+//     oeffnet, tut das schon selbst, siehe ags-logout.template). Und ein
+//     Klick auf ihn braucht keinen berechneten OverlayAnchor: die
+//     Fabrik faellt ohne `at` auf den MAUSZEIGER zurueck (siehe
+//     OverlayAnchor in ags-overlay-utils.template), und bei einem Klick,
+//     der sofort ausgewertet wird, IST der Zeiger genau dort, wo der
+//     Knopf sitzt - dieselbe Begruendung, die dort fuer "die Maus hat
+//     sich seither nicht bewegt" steht.
+//
+// WARUM KEIN eigener STYLE_*-Platzhalter FUER DEN ABSTAND
+//     Derselbe {{STYLE_GAPS_OUT}}, den DOCK_MARGIN_BOTTOM in
+//     ags-dock.template und EDGE_GAP in ags-kit.template unabhaengig
+//     voneinander lesen - eine Konstante, drei Abdruecke, keine zweite
+//     Zahl. Senkrecht haelt er den Knopf auf derselben Hoehe wie das
+//     Dock (beide anchoren BOTTOM mit demselben Rand); waagerecht haelt
+//     er ihn auf demselben Abstand zum linken Bildschirmrand wie jedes
+//     andere Element dieses Projekts.
+
+import Astal from "gi://Astal?version=4.0"
+import { Gtk, Gdk } from "ags/gtk4"
+import { _ } from "../utils/i18n"
+
+// Dasselbe Zeichen wie der Kopf von ags-logout.template - derselbe
+// Knopf, den dieses Fenster oeffnet, traegt auch sein Symbol.
+const ICON_POWER = "{{ICON_POWER}}"
+
+// Derselbe Rand, den ags-dock.template als DOCK_MARGIN_BOTTOM exportiert
+// und ags-kit.template als EDGE_GAP liest - siehe den Dateikopf, warum
+// hier keine dritte Konstante daraus wird.
+const EDGE_GAP = {{STYLE_GAPS_OUT}}
+
+/** Eine kleine, eigene Flaeche je Schirm, unten links am Rand.
+ *
+ * `toggle` ist dieselbe Funktion, die auch die Leiste und das
+ * Kontrollzentrum bekommen (toggleByName in ags-config.template) - ein
+ * Klick hier geht denselben Weg wie SUPER+M, kein zweiter.
+ */
+export default function PowerButton(toggle: (name: string) => void): void {
+  const display = Gdk.Display.get_default()
+  if (!display) {
+    console.error("Keine Anzeige - es gibt keinen Abschaltknopf")
+    return
+  }
+
+  const monitors = display.get_monitors()
+  for (let index = 0; index < monitors.get_n_items(); index++) {
+    const monitor = monitors.get_item(index) as Gdk.Monitor
+
+    const plate = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
+    plate.set_name("power-button")
+
+    const button = new Gtk.Button({ can_focus: true })
+    button.add_css_class("power-btn")
+    button.set_tooltip_text(_("Session"))
+    button.set_child(new Gtk.Label({ label: ICON_POWER }))
+    button.connect("clicked", () => toggle("logout"))
+    plate.append(button)
+
+    const window = new Astal.Window({
+      namespace: "zepos-power",
+      name: `power-button-${monitor.connector}`,
+      layer: Astal.Layer.TOP,
+      anchor: Astal.WindowAnchor.BOTTOM | Astal.WindowAnchor.LEFT,
+      // Astal.Exclusivity.IGNORE, NICHT die Vorgabe NORMAL - GEMESSEN
+      // am 19.08.2026 im verschachtelten Compositor: mit NORMAL (der
+      // Vorgabe, wenn dieses Feld fehlt) stand die Flaeche bei
+      // y=919..972 auf einem 1080 Zeilen hohen Schirm - 108 Punkte vom
+      // unteren Rand, nicht die bestellten 24. Das Dock ist EXCLUSIVE
+      // (ags-dock.template) und reserviert damit einen Streifen ueber
+      // die GANZE Kante, nicht nur unter sich selbst; eine zweite
+      // Flaeche an derselben Kante ohne IGNORE weicht dieser Reservierung
+      // automatisch aus, komplett unabhaengig davon, ob sie sich
+      // waagerecht ueberhaupt ueberlappen. Mit IGNORE ("stack layers on
+      // top of each other", astal-4.0.d.ts) zaehlt nur noch der eigene
+      // Rand - NACHGEMESSEN mit dieser Zeile: y=1003..1056. Die
+      // Unterkante (1056) ist jetzt DIESELBE wie beim Dock (996..1056,
+      // 24 Punkte vom unteren Bildrand) - die Oberkante unterscheidet
+      // sich nur, weil der Knopf (53 Punkte) niedriger ist als das Dock
+      // (60 Punkte), beide anchoren BOTTOM mit demselben Rand.
+      exclusivity: Astal.Exclusivity.IGNORE,
+      // Wie die Benachrichtigungen (ags-notifications.template): diese
+      // Flaeche nimmt die Tastatur NIE. Sie ist kein Formular und kein
+      // Menue, das man mit Tab erreicht - ein Knopf, den man klickt, und
+      // das Fenster, das er oeffnet, holt sich seinen eigenen Fokus
+      // selbst (createOverlayWindow(), keymode: ON_DEMAND). GEPRUEFT: ein
+      // keymode:NONE-Fenster nimmt Mausklicks weiterhin an - genau das,
+      // was der Meldungsverlauf mit seinen klickbaren Karten schon
+      // beweist. tests/src/test_modal_rule.py verlangt diese Zeile (oder
+      // "exclusivity: EXCLUSIVE") von jedem selbst gebauten Astal.Window
+      // als Beweis, dass es KEIN Modal ist - die Fabrik ist sonst der
+      // einzige Weg.
+      keymode: Astal.Keymode.NONE,
+      gdkmonitor: monitor,
+      visible: true,
+    })
+    window.add_css_class("power-button-window")
+    window.set_margin_bottom(EDGE_GAP)
+    window.set_margin_left(EDGE_GAP)
+    window.set_child(plate)
+  }
+}

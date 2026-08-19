@@ -238,13 +238,19 @@ def test_the_newer_name_wins_over_the_older_one(user_settings, tmp_path):
     assert "waybar_text" not in settings["colors"]
 
 
-def test_a_stored_bar_size_survives_the_rename(user_settings, tmp_path):
-    """Dieselbe Umbenennung, andere Sektion.
+def test_a_stored_bar_size_for_the_retired_gap_is_removed(user_settings,
+                                                          tmp_path):
+    """Dieselbe Umbenennung, andere Sektion - und seit dem 19.08.2026
+    keine Umbenennung mehr, sondern eine Loeschung.
 
     sizes.values wird gegen sizes.TABLE geprueft - anders als die
     Farben -, aber die PRUEFUNG greift nur beim Schreiben. Ein Wert, der
-    vor der Umbenennung in die Datei kam, steht dort weiterhin unter dem
-    alten Namen und wuerde beim Erzeugen einfach nicht gefunden.
+    unter STYLE_MARGIN_TOP in die Datei kam, stand bis zum 19.08.2026
+    unter STYLE_CHIP_GAP weiter zur Verfuegung; seit STYLE_CHIP_GAP
+    selbst gefallen ist (Regel 14 - .bar-module liest die allgemeine
+    Abstandsleiter statt einer eigenen Groesse, siehe src/sizes.py),
+    gibt es keinen Namen mehr, auf den ein alter Wert zeigen koennte -
+    beide werden beim Laden entfernt.
     """
     _write(tmp_path, {"sizes": {"scale": 1.0,
                                 "values": {"STYLE_MARGIN_TOP": "30px"}}})
@@ -252,8 +258,7 @@ def test_a_stored_bar_size_survives_the_rename(user_settings, tmp_path):
     settings = user_settings.load_settings()
     values = settings["sizes"]["values"]
 
-    assert values["STYLE_CHIP_GAP"] == "30px"
-    assert "STYLE_MARGIN_TOP" not in values
+    assert values == {}, values
 
 
 def test_a_size_that_no_longer_exists_is_removed_from_the_document(
@@ -265,6 +270,11 @@ def test_a_size_that_no_longer_exists_is_removed_from_the_document(
     Schirmrand heisst ueberall STYLE_GAPS_OUT. Ein Dokument, das den
     alten Namen behaelt, traegt ihn bei jedem Speichern weiter mit, und
     beim naechsten Lesen haelt ihn jemand fuer eine Einstellung.
+
+    STYLE_CHIP_GAP steht seit dem 19.08.2026 aus demselben Grund hier
+    (Regel 14) und nicht mehr, wie bis dahin, als das einzige
+    ueberlebende Beispiel dieses Tests - siehe den Kopf von
+    src/user_settings.py bei RETIRED_SIZE_VALUES.
     """
     _write(tmp_path, {"sizes": {"scale": 1.0, "values": {
         "STYLE_WAYBAR_EDGE_SPACING": "30px",
@@ -274,7 +284,7 @@ def test_a_size_that_no_longer_exists_is_removed_from_the_document(
 
     values = user_settings.load_settings()["sizes"]["values"]
 
-    assert values == {"STYLE_CHIP_GAP": "12px"}, values
+    assert values == {}, values
     from src import sizes
 
     for gone in user_settings.RETIRED_SIZE_VALUES:

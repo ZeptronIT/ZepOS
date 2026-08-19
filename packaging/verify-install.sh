@@ -319,31 +319,17 @@ PROBE
         echo "no RPATH or RUNPATH in the astal libraries"
 
         echo
-        echo "==> zepos-logout, und das Toolkit, auf dem es steht"
-        # SUPER+M oeffnet die Abmeldemaske. Das Rezept misst das fertige
-        # Objekt zur Paketzeit; hier wird die Datei gemessen, die
-        # tatsaechlich installiert wurde - zwei verschiedene Momente,
-        # zwischen denen ein Paket ausgetauscht worden sein kann.
-        #
-        # Beide Richtungen, und die zweite ist nicht ueberfluessig: ein
-        # Programm kann libgtk-4 UND libgtk-3 laden, wenn eine
-        # Bibliothek dazwischen die alte hereinzieht. Die
-        # Entscheidung vom 11.08.2026 ist damit nicht erfuellt.
-        pacman -S --noconfirm zepos-logout
-        ls -l /usr/bin/zepos-logout
-        if ! readelf -d /usr/bin/zepos-logout | grep -q "libgtk-4"; then
-            echo "FAIL: das installierte zepos-logout ist nicht gegen GTK4 gelinkt"
-            exit 1
-        fi
-        if readelf -d /usr/bin/zepos-logout | grep -q "libgtk-3"; then
-            echo "FAIL: das installierte zepos-logout zieht libgtk-3 herein"
-            exit 1
-        fi
-        if ! readelf -d /usr/bin/zepos-logout | grep -q "gtk4-layer-shell"; then
-            echo "FAIL: das installierte zepos-logout ist nicht gegen gtk4-layer-shell gelinkt"
-            exit 1
-        fi
-        echo "  gegen libgtk-4 und gtk4-layer-shell gelinkt, ohne libgtk-3"
+        echo "==> zepos-logout ist geloescht (Aufgabe 26, 19.08.2026)"
+        # Bis dahin stand hier eine readelf-Messung an /usr/bin/zepos-logout:
+        # gegen libgtk-4 UND gtk4-layer-shell gelinkt, ohne libgtk-3
+        # hereinzuziehen - dieselben drei Fragen, die tests/lock/
+        # test_lock_screen.py::test_the_binary_stands_on_gtk4_and_never_
+        # loads_gtk3 fuer zepos-lock am gebauten Objekt misst. Rezept,
+        # Binary und Paket sind geloescht (Regel 14) - SUPER+M ruft
+        # seither `ags request logout`
+        # (src/templates/hyprland-universal-config.template), denselben
+        # bereits laufenden AGS-Prozess. Es gibt kein zweites Binary
+        # mehr, das dieser Abschnitt noch messen koennte.
 
         echo
         echo "==> the compositor Arch ships does not satisfy them either"
@@ -493,7 +479,7 @@ PROBE
         # first ZepOS package with man pages - Hyprland.1 and hyprctl.1 -
         # which is why this never came up before. Any other alteration
         # is still a failure.
-        pacman -Qkk zepos-config zepos-keyring zepos-logout aylurs-gtk-shell \
+        pacman -Qkk zepos-config zepos-keyring aylurs-gtk-shell \
             libastal-io libastal-4 \
             libastal-notifd zepos-hyprland zepos-hyprbars \
             zepos-borders-plus-plus zepos-hyprlaunch zepos-hyprclipx \
@@ -675,7 +661,7 @@ readonly DESKTOP='
                       zepos-hyprbars zepos-borders-plus-plus zepos-hyprlaunch \
                       zepos-hyprclipx zepos-hyprzones \
                       aylurs-gtk-shell libastal-notifd dart-sass \
-                      kitty zepos-menu zepos-logout zepos-lock; do
+                      kitty zepos-menu zepos-lock; do
             pacman -Qq "$needed" >/dev/null 2>&1 || {
                 echo "FAIL: $needed is missing from a zepos-desktop installation"
                 exit 1

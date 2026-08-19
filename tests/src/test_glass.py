@@ -163,6 +163,14 @@ def _over(top, alpha: float, bottom):
 #     etwas gemerkt haette. Eine Pruefung, die nur eine Sprache liest,
 #     erzeugt genau den Fehler, gegen den sie geschrieben ist.
 #
+#     ZEPOS-LOGOUT IST DAS EINZIGE DER VIER, DAS INZWISCHEN GEFALLEN IST
+#     (Aufgabe 26, 19.08.2026, Regel 14): sein Nachfolger,
+#     ags-logout.template, meldet seinen Namensraum ("logout") wieder
+#     ueber `createOverlayWindow({...})` in src/templates/ - also genau
+#     die Sprache, die diese Datei schon VOR dem 12.08.2026 gelesen hat.
+#     Die anderen drei bleiben die aktuellen Beispiele fuer "meldet sich
+#     woanders an".
+#
 # tests/ steht ABSICHTLICH nicht darin: tests/lock/fake_lock_layer_shell.c
 # meldet einen erfundenen Namensraum an, um zu beweisen, dass der
 # Sperrbildschirm einen zweiten Client abweist. Ein Testhilfsmittel ist
@@ -177,6 +185,16 @@ def _over(top, alpha: float, bottom):
 # SYNTHETISCHEN root, der kein plugins/LICENSE kennt. _namespace_sources()
 # holt die zwei ECHTEN Plugin-Baeume unten gesondert dazu, nur wenn root
 # der echte Arbeitsbaum ist.
+#
+# "logout" bleibt aus demselben Grund, seit demselben Tag: Aufgabe 26
+# hat logout/zepos-logout.c geloescht (Regel 14), root/logout/ existiert
+# seither gar nicht mehr. Ein fehlender root traegt hier ebenso wenig
+# bei wie ein leerer - _namespace_sources() ueberspringt ihn still
+# (`if not directory.is_dir(): continue`) -, und derselbe
+# PLANTED_WINDOWS-Fund unten pflanzt seinen C-Fund weiterhin nach
+# "logout/erfunden.c", gegen denselben synthetischen root. Der C-Zweig
+# des Sniffers bleibt damit geprueft, obwohl kein echtes C-Programm
+# dieses Baums mehr unter diesem Namen etwas anmeldet.
 NAMESPACE_ROOTS = ("src/templates", "plugins", "menu", "logout", "lock")
 
 # Eine Zeile, die einen Namensraum anmeldet - in jeder der vier
@@ -370,8 +388,8 @@ def test_the_namespace_scan_finds_a_window_planted_in_each_language(tmp_path):
             f"davon faellt. Gefunden wurde: {sorted(found)}")
 
 
-def test_the_four_windows_outside_the_ags_templates_are_really_found():
-    """Und die vier echten stehen wirklich drin, mit ihren echten Namen.
+def test_the_three_windows_outside_the_ags_templates_are_really_found():
+    """Und die drei echten stehen wirklich drin, mit ihren echten Namen.
 
     Der hingelegte Fund oben beweist, dass der Sucher jede der vier
     Schreibweisen LESEN kann. Diese Zeile beweist, dass er sie im
@@ -382,13 +400,25 @@ def test_the_four_windows_outside_the_ags_templates_are_really_found():
     "clipboard-manager" steht hier ausgeschrieben, weil genau dieser
     Name die Falle ist: das Programm heisst hyprclipx, und eine
     layerrule auf "hyprclipx" greift lautlos nie.
+
+    DREI UND NICHT MEHR VIER, SEIT AUFGABE 26 (19.08.2026)
+        "zepos-logout" stand hier bis dahin als vierter Name - das
+        C-Programm ist geloescht (Regel 14), sein Nachfolger
+        ags-logout.template meldet "logout" ueber `createOverlayWindow(
+        {...})` an und ist damit keines der drei Programme mehr, die
+        "woanders" (ausserhalb von src/templates/ags-*.template)
+        stehen. test_every_surface_this_project_opens_is_named_in_the_
+        glass_list unten deckt "logout" trotzdem ab - sie prueft ALLE
+        angemeldeten Namensraeume, nicht nur diese drei Ausnahmen.
     """
     declared = _declared_namespaces()
-    for name in ("hyprlaunch", "clipboard-manager", "zepos-menu",
-                 "zepos-logout"):
+    for name in ("hyprlaunch", "clipboard-manager", "zepos-menu"):
         assert name in declared, (
             f"{name} wird von keiner Quelle angemeldet, die dieser Sucher "
             f"liest")
+    assert "zepos-logout" not in declared, (
+        "zepos-logout wird noch irgendwo angemeldet - das Programm sollte "
+        "mit Aufgabe 26 vollstaendig geloescht sein")
 
 
 def test_every_surface_this_project_opens_is_named_in_the_glass_list(

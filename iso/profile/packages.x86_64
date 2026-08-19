@@ -135,18 +135,22 @@ xsettingsd
 numlockx
 brightnessctl
 
-# Die Abmeldemaske, aus dem [zepos]-Repositorium wie die Pakete darueber.
-# hyprland-universal-config.template bindet SUPER+M unbedingt darauf. Im
-# Bild ist sie Beweis und keine Ausstattung - ein hier gebautes Paket,
-# von pacstrap installiert, an genau dem Pfad, den die erzeugte Bindung
-# nennt.
+# DIE ABMELDEMASKE STEHT NICHT MEHR ALS EIGENES PAKET HIER
+#     Bis zum 19.08.2026 (Aufgabe 26) stand hier `zepos-logout`, ein
+#     eigenes gebautes Paket - hyprland-universal-config.template band
+#     SUPER+M unbedingt darauf, und ohne die Zeile waere die Taste auf
+#     dem Medium tot gewesen. Davor, bis zum 11.08.2026, stand hier
+#     `wlogout`, verworfen aus demselben Grund, den logout/zepos-logout.c
+#     einmal fuehrte: gemessen auf libgtk-3.so.0, waehrend die
+#     Entscheidung vom 11.08.2026 die Oberflaeche durchgehend auf GTK4
+#     stellt.
 #
-# Hier stand bis zum 11.08.2026 `wlogout`. Spec §4.3 fuehrte es unter den
-# Bestandteilen, die kein Arch-Repositorium hat, und das stimmt weiter -
-# nur baut ZepOS jetzt sein eigenes, weil wlogout gemessen auf
-# libgtk-3.so.0 steht und der Ursprung (HEAD 350fe88, 26.05.2024) GTK4
-# nirgends nennt. packaging/zepos-logout/PKGBUILD fuehrt die Messung.
-zepos-logout
+#     zepos-logout selbst ist mit Aufgabe 26 geloescht (Regel 14): das
+#     Programm ist einem AGS-Fenster gewichen
+#     (src/templates/ags-logout.template), SUPER+M ruft seither
+#     `ags request logout`. `aylurs-gtk-shell` weiter oben in dieser
+#     Datei installiert dieses Fenster bereits mit - es gibt kein
+#     zweites Paket mehr, das hier zusaetzlich stehen muesste.
 
 # DER SPERRBILDSCHIRM STEHT ABSICHTLICH NICHT HIER
 #     zepos-lock gibt es seit dem 12.08.2026, hyprland-universal-config.

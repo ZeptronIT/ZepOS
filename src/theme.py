@@ -224,7 +224,10 @@ FIELDS: tuple[str, ...] = (
     "CYAN", "CYAN_TEXT", "CYAN_BRIGHT", "CYAN_DIM",
     # -- Was etwas bedeutet ------------------------------------------
     "YELLOW", "YELLOW_DIM", "GREEN", "GREEN_DIM", "RED", "RED_DEEP",
-    "STATE_WARNING_BG", "STATE_CRITICAL_BG", "STATE_OFFLINE_BG",
+    # STATE_OFFLINE_BG stand hier bis zum 19.08.2026 - siehe die
+    # Anmerkung bei STATE_WARNING_BG/STATE_CRITICAL_BG in src/brand.py,
+    # wo dieselben zwei uebrig geblieben sind (Regel 14).
+    "STATE_WARNING_BG", "STATE_CRITICAL_BG",
     "FOOTPRINT_BG",
     # -- Wieviel durchscheint ----------------------------------------
     "GLASS_PANEL_ALPHA", "GLASS_CHIP_ALPHA", "LOCK_SCRIM_ALPHA",
@@ -300,13 +303,12 @@ _TAGESLICHT = {
     "RED": "#A32118",
     "RED_DEEP": "#7E1A13",
 
-    # Die drei Zustandsgruende sind hier blass statt fast schwarz - es
+    # Die zwei Zustandsgruende sind hier blass statt fast schwarz - es
     # ist dieselbe Regel wie im dunklen Thema, nur andersherum: jeder
     # ist sein eigener Statuston, so weit zum GRUND hin genommen, dass
     # die Farbe darauf 4.5:1 haelt, ohne dass die Zeile schreit.
     "STATE_WARNING_BG": "#FCEFC4",
     "STATE_CRITICAL_BG": "#FADEDB",
-    "STATE_OFFLINE_BG": "#DEE9ED",
     "FOOTPRINT_BG": "#CFDFE5",
 
     "GLASS_PANEL_ALPHA": 0.55,

@@ -131,15 +131,19 @@ generate_profile_configs() {
     ./generate_config.sh -vpn-watcher-config
     ./generate_config.sh -ags-bar
     ./generate_config.sh -bar-status-config
-    ./generate_config.sh -logout-config
-    ./generate_config.sh -logout-style
     # Der Sperrbildschirm, und nur sein Stil - er hat kein Layout.
     #
-    # Er steht hier aus demselben Grund wie die Abmeldemaske und mit
-    # einer Umkehrung: zepos-logout BRAUCHT seine erzeugten Dateien und
-    # zeigt ohne sie nichts, zepos-lock braucht seine nicht und sperrt
-    # auch ohne sie (lock/zepos-lock.c liest das Stylesheet VOR dem
-    # Sperren und meldet sein Fehlen auf stderr). Diese Zeile sorgt
+    # BIS ZUM 19.08.2026 stand hier zusaetzlich `-logout-config` und
+    # `-logout-style` fuer zepos-logout, mit einer Umkehrung als
+    # Begruendung fuer diese Zeile: zepos-logout BRAUCHTE seine
+    # erzeugten Dateien und zeigte ohne sie nichts, zepos-lock braucht
+    # seine nicht und sperrt auch ohne sie (lock/zepos-lock.c liest das
+    # Stylesheet VOR dem Sperren und meldet sein Fehlen auf stderr).
+    # Aufgabe 26 hat zepos-logout geloescht (Regel 14); sein Nachfolger
+    # ags-logout.template ist ein AGS-Fenster und wird mit dem Rest von
+    # ags/ gebuendelt, nicht hier pro Sitzung erzeugt - die Umkehrung hat
+    # damit keinen zweiten Fall mehr, den sie umkehren koennte, aber der
+    # Grund fuer DIESE Zeile bleibt unveraendert wahr: diese Zeile sorgt
     # nicht dafuer, dass SUPER+L funktioniert - das tut es immer -,
     # sondern dafuer, dass es dabei nach ZepOS aussieht.
     ./generate_config.sh -lock-style

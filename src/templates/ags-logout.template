@@ -1,0 +1,283 @@
+// Die Sitzungsmaske (AGS v3, GTK4) - der Ersatz fuer zepos-logout
+// Von ZepOS erzeugt
+//
+// AUFTRAG VOM 19.08.2026 (Aufgabe 26), UND WAS IHM VORAUSGING
+//     Der Nutzer, woertlich: "es fehlt by the way unten links eine
+//     weitere doch wo ich den pc auschalten kann logout oder sonstiges
+//     hast du nicht gemacht" - eine Wiederholung seines Auftrags vom
+//     selben Tag ("ich will das die dock links von der eigentlich dock
+//     selbst ganz links im screen aber noch mit abstand ein menue noch
+//     hat um die aktionen zu machen bei klick kommt ein ags fenster
+//     herunterfahren logout usw"), der liegengeblieben war.
+//
+//     Dazwischen stand ein Vorschlag, den neuen Knopf auf das
+//     VORHANDENE zepos-logout zu legen - ein C-Programm, GTK4,
+//     Layer-Shell, dieselben sechs Aktionen. Der Nutzer hat ihn
+//     UEBERSTIMMT, und zu Recht: "super m will ich entfernen das soll
+//     so nicht mehr existieren als komplett ags overlay ausserdem
+//     erscheint er immer wieder wenn ich super m mache". EIN
+//     Werkzeugkasten (AGS) statt zwei (AGS und ein zweites GTK4-
+//     Programm daneben) - und der gemeldete Fehler ("erscheint immer
+//     wieder") verschwindet dabei von selbst: ein C-Programm STARTET
+//     bei jedem SUPER+M einen neuen Prozess, ein AGS-Fenster SCHALTET
+//     UM (siehe toggleWidget() in ags-config.template).
+//
+//     Diese Datei ist der Ersatz. logout/zepos-logout.c,
+//     packaging/zepos-logout/, src/templates/logout-config.template und
+//     src/styles/logout-style.template sind mit ihr GEFALLEN (Regel 14:
+//     loeschen statt als veraltet markieren) - siehe den Bericht dieser
+//     Aufgabe fuer die vollstaendige Liste der Verweise, die mitgehen
+//     mussten.
+//
+// DIE SECHS AKTIONEN SIND WOERTLICH AUS logout-config.template
+// UEBERNOMMEN
+//     zepos-lock, hyprctl dispatch exit, systemctl reboot,
+//     systemctl poweroff, systemctl suspend, systemctl hibernate - in
+//     GENAU dieser Reihenfolge, mit denselben Tastenkuerzeln (l, e, b,
+//     p, u, h). Es gibt damit KEINE zweite Liste dieser sechs Befehle -
+//     die alte lag in einer erzeugten layout.json, diese hier ist die
+//     einzige, die noch existiert.
+//
+// DIE ROLLEN SIND DIESELBEN WIE IM KONTROLLZENTRUM, WEIL ES DIESELBE
+// FRAGE IST
+//     ags-control-center.template hat die Frage "wieviel kostet diese
+//     Handlung" am 18.08.2026 (Task D) schon einmal beantwortet, fuer
+//     fuenf der sechs Aktionen (Ruhezustand fehlte dort): Abmelden,
+//     Neustart und Herunterfahren beenden die laufende Sitzung,
+//     Ungesichertes geht dabei verloren - "kritisch". Sperren und
+//     Bereitschaft sind vollstaendig umkehrbar, nichts geht verloren,
+//     die Sitzung laeuft weiter - "umrandet". Ruhezustand gehoert in
+//     dieselbe Gruppe wie Bereitschaft: die Sitzung wird auf die
+//     Platte geschrieben und nicht beendet, sie kommt beim naechsten
+//     Start unveraendert zurueck.
+//
+//     Mit dem Umbau dieser Aufgabe faellt die Zeile in
+//     ags-control-center.template, die das bisher trug (POWER_BUTTONS,
+//     fuenf Knoepfe direkt im Kontrollzentrum) - sie war die zweite
+//     Stelle, an der dieselben Befehle nochmal standen. Das
+//     Kontrollzentrum bekommt stattdessen EINE Zeile, die dieses
+//     Fenster oeffnet (siehe dort, "Sitzung"), genau wie es fuer den
+//     Stil-Editor, das Netz und Bluetooth schon gilt: eine Zeile im
+//     Kontrollzentrum, die auf EIN Fenster zeigt, statt eine zweite
+//     Kopie der Handlung zu tragen.
+//
+// DIE LOESCHBESTAETIGUNG-REGEL GILT AUCH HIER
+//     Ein Abschaltknopf darf nicht der sein, den ein Druck auf Enter
+//     zufaellig trifft. ags-wallpaper.template loest das fuer seine
+//     Loeschbestaetigung ueber `confirmNoBtn.grab_focus()`: GtkButton
+//     traegt `receives-default: true` als eigenen GTK-Standard (GEPRUEFT
+//     per PyGObject-Introspektion: `Gtk.Button().get_receives_default()`
+//     -> True), und die amtliche Beschreibung von
+//     GtkWidget::receives-default sagt, das FOKUSSIERTE Widget bekomme
+//     die Eingabetaste, unabhaengig von einem gesetzten Standardknopf
+//     des Fensters. Ohne Gegenmassnahme wuerde die Eingabetaste den
+//     Knopf treffen, der zufaellig zuletzt den Fokus hielt - hier
+//     sechs Knoepfe, von denen drei "kritisch" sind.
+//
+//     Dieselbe Gegenmassnahme, hier auf den harmlosesten der sechs
+//     angewandt: `zepButton()` setzt bei jedem Knopf `can_focus: true`,
+//     und onShow() ruft explizit `lockBtn.grab_focus()`. Sperren ist von
+//     allen sechs Handlungen die einzige, die WEDER die Sitzung beendet
+//     NOCH den Rechner in einen anderen Leistungszustand versetzt - ein
+//     versehentlicher Druck auf die Eingabetaste sperrt hoechstens den
+//     Schirm, den ein zweiter Tastendruck (das Passwort) sofort wieder
+//     oeffnet.
+//
+// DIE TASTENKUERZEL SIND EIN ZWEITER ABDRUCK, KEIN NEUER ENTWURF
+//     logout/zepos-logout.c band jeder Aktion einen einzelnen Buchstaben
+//     an eine GtkEventControllerKey und zeigte ihn klein unter der
+//     Beschriftung. Dieselbe Faehigkeit haengt hier an `win` (dem
+//     Astal.Window, das createOverlayWindow() dieser Fabrik uebergibt) -
+//     ein ZWEITER Gtk.EventControllerKey neben dem der Fabrik (der nur
+//     Escape kennt, siehe OverlayConfig.onEscape in
+//     ags-overlay-utils.template), nach demselben Muster, das
+//     ags-network.template fuer seine eigene Zusatztaste schon benutzt:
+//     ein eigener Controller am eigenen Wurzel-Widget statt eines
+//     Zusatzfelds an der Fabrik, die diese eine Sache sonst fuer
+//     niemanden sonst tragen muesste.
+
+import { Gtk, Gdk } from "ags/gtk4"
+import { execAsync } from "ags/process"
+import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
+import { _ } from "../utils/i18n"
+import { zepButton, ZepRolle } from "../utils/kit"
+
+const WINDOW_NAME = "logout"
+
+// Zeichen
+const ICONS = {
+  lock: "{{ICON_LOCK}}",
+  logout: "{{ICON_LOGOUT}}",
+  reboot: "{{ICON_REBOOT}}",
+  shutdown: "{{ICON_SHUTDOWN}}",
+  suspend: "{{ICON_SUSPEND}}",
+  hibernate: "{{ICON_HIBERNATE}}",
+  power: "{{ICON_POWER}}",
+}
+
+interface Aktion {
+  id: string
+  icon: string
+  label: string
+  rolle: ZepRolle
+  cmd: string
+  // Der Kleinbuchstabe, den logout-config.template als "keybind" fuehrte.
+  taste: number
+  tastenname: string
+}
+
+// GENAU DIE SECHS AUS logout-config.template, WOERTLICH UEBERNOMMEN -
+// siehe den Dateikopf.
+const AKTIONEN: Aktion[] = [
+  { id: "lock", icon: ICONS.lock, label: _("Lock"), rolle: "umrandet",
+    cmd: "zepos-lock", taste: Gdk.KEY_l, tastenname: "L" },
+  { id: "logout", icon: ICONS.logout, label: _("Log out"), rolle: "kritisch",
+    cmd: "hyprctl dispatch exit", taste: Gdk.KEY_e, tastenname: "E" },
+  { id: "reboot", icon: ICONS.reboot, label: _("Restart"), rolle: "kritisch",
+    cmd: "systemctl reboot", taste: Gdk.KEY_b, tastenname: "B" },
+  { id: "shutdown", icon: ICONS.shutdown, label: _("Shut down"), rolle: "kritisch",
+    cmd: "systemctl poweroff", taste: Gdk.KEY_p, tastenname: "P" },
+  { id: "suspend", icon: ICONS.suspend, label: _("Suspend"), rolle: "umrandet",
+    cmd: "systemctl suspend", taste: Gdk.KEY_u, tastenname: "U" },
+  { id: "hibernate", icon: ICONS.hibernate, label: _("Hibernate"), rolle: "umrandet",
+    cmd: "systemctl hibernate", taste: Gdk.KEY_h, tastenname: "H" },
+]
+
+// Drei Spalten, zwei Reihen - dieselbe Anordnung, die
+// ags-control-center.template fuer die fuenf Vorgaenger dieser Knoepfe
+// benutzt hat (POWER_BUTTONS, vor dieser Aufgabe).
+const COLUMNS = 3
+
+// GEMESSEN am 19.08.2026 im verschachtelten Compositor (tests/render/),
+// an der Flaeche selbst (`hyprctl layers`, ausgeloest ueber `ags request
+// logout`) und nicht an einer eigenen Handrechnung: createOverlayWindow()
+// nimmt config.width ohnehin nur als DECKEL
+// (`Math.min(naturalWidth + Bildlaufleiste, pos.width)`,
+// ags-overlay-utils.template, `win.set_default_size`) und faellt auf die
+// NATUERLICHE Breite des Inhalts zurueck, wenn die kleiner ist.
+//
+// Mit WIN_WIDTH auf M (660) stand die Flaeche 611x320 (Schirm 1920x1080,
+// Vorgabegroesse, Namensraum "logout") - der Deckel griff NICHT, 611 ist
+// die natuerliche Breite des Rasters selbst (drei Spalten fuer
+// "Herunterfahren", das laengste Wort), ohne Bildlaufleiste in
+// irgendeine Richtung. GEGENGEPRUEFT mit dem Hoehendeckel auf 500 statt
+// 320: die Flaeche blieb bei 611x325 (die 5 Punkte Unterschied liegen in
+// der Schriftrundung, nicht am Deckel) - 320/325 ist also ebenso die
+// NATUERLICHE Hoehe und keine Kappung durch den ersten Versuchswert.
+//
+// S (500, MODAL_WIDTHS in sizes.py) ist damit zu klein - der Deckel
+// laege UNTER den gemessenen 611 und schnitte den Inhalt an (nicht
+// eigens nachgemessen, folgt aber unmittelbar aus der Zahl oben: ein
+// Deckel von 500 auf einen Inhalt von 611 zwingt eine waagerechte
+// Bildlaufleiste). M ist die kleinste Sprosse, unter der der Deckel
+// nicht mehr greift.
+const WIN_WIDTH = {{STYLE_MODAL_WIDTH_M}}
+
+export default function Logout(): OverlayWidget {
+  let lockBtn: Gtk.Button | null = null
+
+  const ausloesen = (aktion: Aktion, closeWindow: () => void) => {
+    execAsync(["bash", "-c", aktion.cmd]).catch((error: unknown) => {
+      console.error(`Sitzungsmaske: ${aktion.cmd} ist fehlgeschlagen:`, error)
+    })
+    closeWindow()
+  }
+
+  return createOverlayWindow({
+    name: WINDOW_NAME,
+    width: WIN_WIDTH,
+    // Auch dies ein DECKEL, kein Versprechen (siehe WIN_WIDTH oben) -
+    // GEMESSEN 320-325 natuerliche Hoehe, 340 laesst etwas Luft, ohne
+    // selbst zum bindenden Deckel zu werden.
+    height: 340,
+    cssClass: "Logout",
+    headerIcon: ICONS.power,
+    headerTitle: _("Session"),
+    // Siehe den Dateikopf: der harmloseste der sechs Knoepfe bekommt den
+    // Fokus, damit eine zufaellige Eingabetaste nicht auf einem
+    // "kritisch"-Knopf landet.
+    onShow: () => lockBtn?.grab_focus(),
+    buildContent: (win, closeWindow) => {
+      const container = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 0,
+      })
+      container.add_css_class("lg-container")
+
+      // Zahlen und keine {{STYLE_SPACE_8}}-Platzhalter: Gtk.Grid nimmt
+      // hier eine reine Punktzahl entgegen, {{STYLE_SPACE_8}} loest
+      // aber immer MIT Einheit auf ("12px") - dieselbe Einheiten-Falle,
+      // vor der ags-overlay-utils.template am Kopf von SHELL_WIDTH warnt
+      // ("const WIN_WIDTH = 500px" war dort der erste Fund). Jedes
+      // andere Fenster dieses Baums schreibt seine `spacing:`/
+      // `column_spacing:`/`row_spacing:` aus demselben Grund als
+      // Literal (siehe z. B. das fruehere createPowerBtn() in
+      // ags-control-center.template, `column_spacing: 8`).
+      const grid = new Gtk.Grid({
+        column_homogeneous: true,
+        row_homogeneous: true,
+        column_spacing: 8,
+        row_spacing: 8,
+        halign: Gtk.Align.CENTER,
+      })
+      grid.add_css_class("lg-grid")
+
+      AKTIONEN.forEach((aktion, index) => {
+        const btn = zepButton("", aktion.rolle,
+                              () => ausloesen(aktion, closeWindow))
+        // KEINE eigene Knopf-Klasse (etwa "lg-btn"): tests/src/
+        // test_button_kit.py haelt die Zahl der eigenen Knopf-Klassen
+        // in ags-style.template als Ratsche, die nur SINKEN darf. Die
+        // drei zusaetzlichen Zeilen (Symbol, Beschriftung, Tastenkuerzel)
+        // brauchen keine eigene Flaeche - .zep-btn traegt sie ueber ihre
+        // Mindesthoehe hinaus genauso, wie es die POWER_BUTTONS in
+        // ags-control-center.template vor dieser Aufgabe schon taten
+        // (auch dort ohne eigene Zusatzklasse).
+
+        const box = new Gtk.Box({
+          orientation: Gtk.Orientation.VERTICAL, spacing: 4,
+        })
+        const iconLbl = new Gtk.Label({ label: aktion.icon })
+        iconLbl.add_css_class("lg-icon")
+        const textLbl = new Gtk.Label({ label: aktion.label })
+        textLbl.add_css_class("lg-label")
+        // Der Buchstabe, ein einzelnes Zeichen und kein Wort - derselbe
+        // Grund, aus dem die Breitenlabels "S"/"M"/"L" des Stil-Editors
+        // keinen Katalogeintrag brauchen: WORT_RE in test_ags_i18n.py
+        // verlangt mindestens zwei Buchstaben.
+        const keyLbl = new Gtk.Label({ label: aktion.tastenname })
+        keyLbl.add_css_class("lg-keybind")
+
+        box.append(iconLbl)
+        box.append(textLbl)
+        box.append(keyLbl)
+        btn.set_child(box)
+
+        if (aktion.id === "lock") lockBtn = btn
+
+        grid.attach(btn, index % COLUMNS, Math.floor(index / COLUMNS), 1, 1)
+      })
+
+      container.append(grid)
+
+      // Die sechs Tastenkuerzel - siehe den Dateikopf. Ein zweiter
+      // Controller neben dem der Fabrik, an `win` selbst: die Fabrik
+      // fragt bei jedem Tastendruck erst `keyval === Gdk.KEY_Escape` und
+      // gibt sonst `false` zurueck (siehe createOverlayWindow()), ein
+      // zweiter Controller auf demselben Widget bekommt das Ereignis
+      // trotzdem.
+      const keyController = new Gtk.EventControllerKey()
+      keyController.connect(
+        "key-pressed",
+        (_controller: Gtk.EventControllerKey, keyval: number) => {
+          const treffer = AKTIONEN.find((aktion) => aktion.taste === keyval)
+          if (!treffer) return false
+          ausloesen(treffer, closeWindow)
+          return true
+        },
+      )
+      win.add_controller(keyController)
+
+      return container
+    },
+  })
+}

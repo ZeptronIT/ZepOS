@@ -694,13 +694,39 @@ bind = $mainMod, G, exec, hyprctl keyword general:layout "$(hyprctl getoption ge
 #     Programmname muss ein Wort DESSELBEN Kommandos sein.
 # @System: Bildschirm sperren
 bind = $mainMod, L, exec, zepos-lock
-# Kein `--protocol layer-shell` mehr, weil zepos-logout keine Wahl hat:
-# logout/meson.build fordert gtk4-layer-shell, statt es wie wlogouts
-# meson.build optional zu lassen. Bei wlogout war die Angabe noetig, weil
-# ein ohne die Bibliothek gebautes Binary den Schalter ANNAHM und still
-# auf xdg zurueckfiel - eine Maske, die der Compositor platziert.
-# @System: Abmelden, neu starten, herunterfahren (zepos-logout)
-bind = $mainMod, M, exec, zepos-logout
+# Sitzung beenden: sperren, abmelden, neu starten, herunterfahren,
+# Bereitschaft, Ruhezustand.
+#
+# BIS ZUM 19.08.2026 STARTETE DIESE TASTE EIN EIGENES PROGRAMM, UND
+# GENAU DAS WAR DER GEMELDETE FEHLER
+#     `bind = $mainMod, M, exec, zepos-logout` - ein C-Programm, das bei
+#     JEDEM Druck einen NEUEN Prozess startete. Der Nutzer, woertlich:
+#     "ausserdem erscheint er immer wieder wenn ich super m mache". Er
+#     hatte recht: ein zweiter Druck auf SUPER+M oeffnete ein zweites
+#     Fenster ueber dem ersten, statt das erste zu schliessen - Astal.
+#     Window kennt kein zweites Exemplar desselben Namensraums, ein
+#     zepos-logout-Prozess kennt den vorigen nicht.
+#
+#     Der Nutzer hat dazu entschieden, das ganze Programm zu entfernen
+#     ("super m will ich entfernen das soll so nicht mehr existieren als
+#     komplett ags overlay"): logout/zepos-logout.c und sein Paket sind
+#     gefallen (Aufgabe 26, Regel 14 - geloescht, nicht als veraltet
+#     markiert), src/templates/ags-logout.template ist der Ersatz.
+#
+#     DIESE TASTE BLEIBT, UND DAS IST EINE EIGENE ENTSCHEIDUNG: der
+#     Nutzer wollte das PROGRAMM weg, nicht die TASTE - seine Meldung
+#     nennt "super m" nur als das, was das alte Verhalten ausloest, und
+#     eine Schnellzugriffstaste fuer "Sitzung beenden" ist unabhaengig
+#     davon sinnvoll (SUPER+B fuer das Dock, SUPER+L fuer Sperren stehen
+#     aus demselben Grund). Sie ruft jetzt `ags request logout` auf -
+#     derselbe Weg wie SUPER+B fuer das Dock (siehe dort): kein
+#     Prozessstart, sondern eine Anfrage an den LAUFENDEN AGS-Prozess,
+#     der das Fenster ein- und ausschaltet (toggleWidget() in
+#     ags-config.template). Der gemeldete Fehler verschwindet damit von
+#     selbst - ein zweiter Druck SCHLIESST das Fenster, statt ein
+#     zweites zu oeffnen.
+# @System: Sitzung beenden - sperren, abmelden, neu starten (ags)
+bind = $mainMod, M, exec, ags request logout
 
 # Screenshots
 # @Bildschirm: Bildschirmfoto vom gewaehlten Bereich (grim, slurp, satty)

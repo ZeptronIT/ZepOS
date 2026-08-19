@@ -28,8 +28,9 @@
  * DAS PROTOKOLL - DIE FRAGE, DIE VOR ALLEM ANDEREN STEHT
  *     Ein Fenster ganz oben ist KEIN Sperrbildschirm. Stirbt das
  *     Programm, ist der Schreibtisch offen; das ist der Unterschied
- *     zwischen zepos-logout, das ein Layer-Shell-Overlay ist und sein
- *     darf, und diesem hier.
+ *     zwischen jeder AGS-Ueberlagerung (der Sitzungsmaske eingeschlossen,
+ *     src/templates/ags-logout.template - ein Layer-Shell-Overlay, das
+ *     sterben darf) und diesem hier.
  *
  *     Das Protokoll, das den Unterschied macht, heisst
  *     ext-session-lock-v1. Der Compositor garantiert damit, dass unter
@@ -39,8 +40,9 @@
  *     Die Vermutung beim Anfangen war, dass GTK4 das nicht hergibt und
  *     dieser Bildschirm deshalb ein anderes Toolkit oder rohes
  *     libwayland braeuchte. SIE WAR FALSCH, und zwar an der Bibliothek,
- *     die zepos-logout ohnehin schon benutzt: gtk4-layer-shell 1.3.0
- *     liefert neben gtk4-layer-shell.h auch gtk4-session-lock.h -
+ *     die aylurs-gtk-shell (und damit jedes AGS-Fenster) ohnehin schon
+ *     benutzt: gtk4-layer-shell 1.3.0 liefert neben gtk4-layer-shell.h
+ *     auch gtk4-session-lock.h -
  *     GtkSessionLockInstance, gtk_session_lock_instance_lock() und
  *     gtk_session_lock_instance_assign_window_to_monitor(). Es ist
  *     dieselbe .so, dasselbe pkg-config-Modul, dieselbe Abhaengigkeit.
@@ -182,17 +184,21 @@ typedef struct {
 /* ------------------------------------------------------------------
    Die Texte
    ------------------------------------------------------------------ */
-/* Sie stehen hier und nicht in einer erzeugten Datei, und das ist bei
- * DIESEM Programm eine andere Entscheidung als bei zepos-logout.
+/* Sie stehen hier und nicht in einer erzeugten Datei - bis zum
+ * 19.08.2026 (Aufgabe 26) war das eine andere Entscheidung als beim
+ * damaligen zepos-logout, das sein Layout aus einer erzeugten
+ * layout.json las, weil dort SECHS Eintraege mit Symbolen,
+ * Beschriftungen, Aktionen und Tastenkuerzeln standen - Inhalt, der sich
+ * aendert. Der Nachfolger, src/templates/ags-logout.template, traegt
+ * dieselben sechs Eintraege inzwischen selbst als TypeScript-Literal,
+ * keine generierte JSON mehr - AGS-Fenster bringen ihren Inhalt aus dem
+ * Bau mit, statt ihn zur Laufzeit nachzuladen.
  *
- * zepos-logout liest sein Layout aus layout.json, weil dort SECHS
- * Eintraege mit Symbolen, Beschriftungen, Aktionen und Tastenkuerzeln
- * stehen - Inhalt, der sich aendert. Hier gibt es vier Zeilen, von denen
- * drei Tatsachen der Maschine sind (Uhrzeit, Datum, Benutzer) und eine
- * ein Wort ist. Eine erzeugte Datei dafuer waere eine Datei, ohne die
- * SUPER+L nicht mehr sperrt - und genau das darf dieser Bildschirm nicht
- * haben. Er braucht ausser seinem Stylesheet nichts, und auch ohne das
- * sperrt er.
+ * Hier gibt es vier Zeilen, von denen drei Tatsachen der Maschine sind
+ * (Uhrzeit, Datum, Benutzer) und eine ein Wort ist. Eine erzeugte Datei
+ * dafuer waere eine Datei, ohne die SUPER+L nicht mehr sperrt - und
+ * genau das darf dieser Bildschirm nicht haben. Er braucht ausser seinem
+ * Stylesheet nichts, und auch ohne das sperrt er.
  *
  * Aus demselben Grund traegt er keine Glyphe aus src/icon_definition.py:
  * die kaemen ueber eine erzeugte Datei herein, und das waere derselbe
@@ -479,8 +485,10 @@ on_key_pressed(GtkEventControllerKey *controller, guint keyval,
 
     /* Escape leert die Eingabe und beendet NICHTS.
      *
-     * Das ist der Unterschied zu zepos-logout, wo Escape die Maske
-     * schliesst. Hier gibt es keinen Weg heraus ausser dem Passwort;
+     * Das ist der Unterschied zu jedem AGS-Fenster (der Sitzungsmaske,
+     * ags-logout.template, eingeschlossen), wo Escape das Fenster
+     * schliesst - createOverlayWindow() haengt das per Vorgabe an jedes
+     * von ihnen. Hier gibt es keinen Weg heraus ausser dem Passwort;
      * eine Taste, die den Sperrbildschirm schliesst, waere kein
      * Sperrbildschirm. */
     if (keyval == GDK_KEY_Escape) {

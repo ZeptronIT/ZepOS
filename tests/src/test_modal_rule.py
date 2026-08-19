@@ -169,14 +169,25 @@ def test_only_the_factory_builds_an_overlay_window():
 
 
 def test_every_self_built_surface_says_what_it_is():
-    """Die Gegenprobe: die drei, die sich selbst bauen duerfen, tun es
-    aus einem Grund, der in ihrem Fenster steht.
+    """Die Gegenprobe: die, die sich selbst bauen duerfen, tun es aus
+    einem Grund, der in ihrem Fenster steht.
 
     Ohne diese Zusicherung koennte der Beweis oben leerlaufen - eine
     Regel, die auf nichts mehr zutrifft, ist gruen und wertlos. Gemessen
-    am 12.08.2026 sind es genau drei: die Leiste und das Dock
+    am 12.08.2026 waren es genau drei: die Leiste und das Dock
     reservieren einen Streifen, die Benachrichtigungen nehmen die
     Tastatur nie.
+
+    VIER STATT DREI, SEIT DEM 19.08.2026 (Aufgabe 26): der Abschaltknopf
+    am Dock (ags-power-button.template) baut ebenfalls sein eigenes
+    Astal.Window je Schirm, aus demselben Grund wie Dock/Bar/Notifications
+    zusammen - eine eigene, feste Layer-Shell-Flaeche, kein Aufklapp-
+    fenster, das die Fabrik liefern koennte (createOverlayWindow() baut
+    ein positioniertes Modal mit Kopf und Bildlaufleiste, keine
+    dauerhafte Ecke am Bildschirmrand). Er reserviert KEINEN Streifen
+    (er soll dem Dock keinen Platz wegnehmen) und nimmt NIE die Tastatur
+    (ein Klick, kein Formular) - dieselbe zweite Begruendung wie bei den
+    Benachrichtigungen, nicht die erste wie bei Leiste und Dock.
     """
     builders = {
         template.name: _code(template)
@@ -184,22 +195,25 @@ def test_every_self_built_surface_says_what_it_is():
         if template != FACTORY and "new Astal.Window(" in _code(template)
     }
     assert set(builders) == {"ags-bar.template", "ags-dock.template",
-                             "ags-notifications.template"}, (
+                             "ags-notifications.template",
+                             "ags-power-button.template"}, (
         f"es bauen sich {sorted(builders)} ihr Fenster selbst - erwartet "
-        f"sind die Leiste, das Dock und die Benachrichtigungen. Kommt "
-        f"eine Flaeche dazu, gehoert sie durch die Fabrik; faellt eine "
-        f"weg, ist diese Aufzaehlung veraltet")
+        f"sind die Leiste, das Dock, die Benachrichtigungen und der "
+        f"Abschaltknopf am Dock. Kommt eine Flaeche dazu, gehoert sie "
+        f"durch die Fabrik; faellt eine weg, ist diese Aufzaehlung "
+        f"veraltet")
 
     for name in ("ags-bar.template", "ags-dock.template"):
         assert NOT_A_MODAL[0] in builders[name], (
             f"{name} reserviert keine exklusive Zone mehr - dann ist es "
             f"kein Streifen, sondern ein Fenster vor der Arbeit")
-    assert NOT_A_MODAL[1] in builders["ags-notifications.template"], (
-        "die Benachrichtigungen nehmen die Tastatur - dann sind sie "
-        "etwas, das man bedient, und gehoeren durch die Fabrik. Diese "
-        "Datei gehoert einem anderen Auftrag; wenn diese Zeile rot ist, "
-        "ist das ein Befund fuer ihn und keine Einladung, hier eine "
-        "Ausnahme einzutragen")
+    for name in ("ags-notifications.template", "ags-power-button.template"):
+        assert NOT_A_MODAL[1] in builders[name], (
+            f"{name} nimmt die Tastatur - dann ist es etwas, das man "
+            f"bedient, und gehoert durch die Fabrik. Diese Datei gehoert "
+            f"einem anderen Auftrag; wenn diese Zeile rot ist, ist das "
+            f"ein Befund fuer ihn und keine Einladung, hier eine "
+            f"Ausnahme einzutragen")
 
 
 def test_there_is_no_side_door_into_the_placement():
@@ -494,24 +508,25 @@ LAYER_SHELL_CALLS = ("gtk_layer_init_for_window", "LayerShell.init_for_window")
 
 # Die Programme, die eine solche Flaeche aufziehen, ohne sich zu
 # deckeln - und was sie stattdessen sind.
-FULL_SCREEN_MASKS = {
-    # Die Abmeldemaske. Sie verankert sich an ALLEN VIER Kanten, deckt
-    # also den Schirm ab, und das ist ihre Aufgabe: sie soll die Sitzung
-    # zuruecknehmen, damit ein Klick neben "Herunterfahren" nichts
-    # anderes trifft. src/styles/logout-style.template legt dafuer neun
-    # Zehntel Deckkraft und eine Unschaerfe darueber.
-    #
-    # WAS AM 12.08.2026 OFFEN GEBLIEBEN IST
-    #     Die MASKE gehoert ueber den ganzen Schirm, die KNOEPFE DARIN
-    #     nicht: zep_build_grid() gibt jeder Schaltflaeche hexpand und
-    #     vexpand, also fuellen sechs Knoepfe den Schirm von Kante zu
-    #     Kante. Ueber CSS ist das nicht zu begrenzen - GEMESSEN mit
-    #     einem GtkCssProvider von GTK 4.22.4: "No property named
-    #     max-width", "No property named max-height", "Percentages are
-    #     not allowed here". Es braucht ein set_size_request auf dem
-    #     Raster in logout/zepos-logout.c.
-    "logout/zepos-logout.c": "gtk_layer_set_anchor",
-}
+#
+# LEER SEIT DEM 19.08.2026 (Aufgabe 26), UND DAS IST DER RICHTIGE STAND
+#     Der einzige Eintrag, den dieses Woerterbuch je hatte, war
+#     "logout/zepos-logout.c": eine Abmeldemaske, die sich an ALLEN VIER
+#     Kanten verankerte, um die Sitzung zurueckzunehmen. Das Programm ist
+#     mit Aufgabe 26 gefallen (Regel 14 - geloescht, nicht als veraltet
+#     markiert); sein Nachfolger, ags-logout.template, ist KEIN eigenes
+#     Layer-Shell-Programm mehr, sondern ein Fenster aus
+#     createOverlayWindow() wie jedes andere - es deckelt sich auf
+#     MEASURE_MODAL_SHARE genau wie die uebrigen elf AGS-Ueberlagerungen
+#     und braucht darum keine Sonderrolle als "Maske ohne Deckel".
+#
+#     Ein leeres Woerterbuch ist hier keine Luecke: es bedeutet wortwoertlich,
+#     dass KEIN eigenes Programm dieses Baums sich mehr unbedeckelt an
+#     alle vier Kanten haengt. test_no_program_opens_a_layer_shell_
+#     window_without_a_rule() unten prueft das GEGEN DEN BAUM (nicht
+#     gegen diese Liste) und faende ein neues full-screen-Programm auch
+#     ohne einen Eintrag hier.
+FULL_SCREEN_MASKS: dict[str, str] = {}
 
 
 def _own_layer_shell_programs() -> set[str]:

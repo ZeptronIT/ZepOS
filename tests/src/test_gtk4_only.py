@@ -13,7 +13,7 @@ WARUM DIESE DATEI EXISTIERT
 WAS SIE NICHT KANN
     Sie misst Text, keine Objekte. Ob das gebaute Binary wirklich gegen
     libgtk-4 gelinkt ist, kann nur `readelf -d` am fertigen Objekt sagen;
-    das tun packaging/zepos-logout/PKGBUILD zur Paketzeit und
+    das tun packaging/zepos-lock/PKGBUILD zur Paketzeit und
     packaging/verify-install.sh an der installierten Datei, und
     tests/packaging/test_recipes.py haelt fest, dass die beiden es
     ueberhaupt tun.
@@ -95,20 +95,51 @@ def _uncommented(text: str, marker: str = "#") -> list[str]:
 
 
 # --------------------------------------------------------------------
-# Die Abmeldemaske
+# Die Sitzungsmaske
 # --------------------------------------------------------------------
+#
+# BIS ZUM 19.08.2026 HIESS DIESER ABSCHNITT "Die Abmeldemaske" UND
+# PRUEFTE EIN EIGENES C-PROGRAMM
+#     zepos-logout war ein eigenstaendiges GTK4-Binary neben AGS - und
+#     gehoerte damit in DIESE Datei, deren ganzer Zweck ist, dass ein
+#     Programm nicht STILL auf GTK3 zurueckfaellt (siehe den Dateikopf).
+#     Aufgabe 26 hat es entfernt (Regel 14 - geloescht, nicht als
+#     veraltet markiert) und durch src/templates/ags-logout.template
+#     ersetzt: ein Fenster IM LAUFENDEN AGS-Prozess, der ohnehin schon
+#     auf GTK4 steht. Ein eigener Regressionstest "faellt es auf GTK3
+#     zurueck" ergibt fuer diesen Nachfolger keinen Sinn mehr - AGS ist
+#     bereits gepruefter GTK4-Bestand (test_the_bar_and_the_dock_are_
+#     astal_windows_on_gtk4 unten).
+#
+#     Was bleibt UND WEITERHIN HIERHIN GEHOERT: dass wlogout nirgends
+#     mehr installiert wird (der eigentliche GTK3-Regressionsfall), und
+#     dass SUPER+M wirklich das neue Fenster erreicht - nicht mehr, weil
+#     ein Rueckfall auf GTK3 drohte, sondern weil eine stumme Taste
+#     derselbe Fehler waere, den dieser ganze Baum an keiner Stelle
+#     duldet.
 
-def test_super_m_calls_the_gtk4_logout_menu():
-    """SUPER+M muss die Taste bleiben, und sie muss auf das eigene
-    Programm zeigen."""
+def test_super_m_toggles_the_ags_logout_window():
+    """SUPER+M muss die Taste bleiben, und sie muss das AGS-Fenster
+    erreichen - nicht mehr ein eigenes Programm starten.
+
+    `ags request logout` und nicht `exec zepos-logout`: derselbe Weg wie
+    `ags request dock` fuer SUPER+B (siehe test_super_b_toggles_the_
+    gtk4_dock unten). Der Nutzer hatte gemeldet, SUPER+M oeffne bei
+    jedem Druck ein neues Fenster ueber dem alten - genau der Unterschied
+    zwischen einem PROZESSSTART (zepos-logout) und einer ANFRAGE an den
+    laufenden Prozess, der die Sichtbarkeit umschaltet (toggleWidget()
+    in ags-config.template).
+    """
     lines = _uncommented(
         _read(SRC / "templates" / "hyprland-universal-config.template"))
     binds = [line for line in lines if line.startswith("bind")]
 
-    assert "bind = $mainMod, M, exec, zepos-logout" in binds, (
-        "SUPER+M ruft zepos-logout nicht auf")
+    assert "bind = $mainMod, M, exec, ags request logout" in binds, (
+        "SUPER+M erreicht das AGS-Fenster nicht")
     assert not any("wlogout" in line for line in binds), (
         "eine Bindung ruft weiterhin wlogout auf")
+    assert not any(re.search(r"\bzepos-logout\b", line) for line in binds), (
+        "eine Bindung ruft weiterhin das entfernte zepos-logout auf")
 
 
 def test_nothing_in_the_tree_still_installs_wlogout():
@@ -135,77 +166,30 @@ def test_nothing_in_the_tree_still_installs_wlogout():
     assert offenders == [], f"installieren weiterhin wlogout: {offenders}"
 
 
-def test_the_logout_menu_is_generated_before_every_session():
-    """Der Grund, aus dem zepos-logout kein Rueckfall-Layout in /etc
-    braucht - und der einzige, der es rechtfertigt, keins zu haben.
+def test_nothing_in_the_tree_still_installs_zepos_logout():
+    """Und der EIGENE Vorgaenger ist ebenso weg - Regel 14, keine
+    veraltete Datei stehengelassen.
 
-    Ein zweites Layout waere eine zweite Quelle fuer Symbole und
-    Aktionen. Es ist nur dann entbehrlich, wenn die erste auf einem
-    laufenden Desktop nicht fehlen kann, und das haengt an genau diesen
-    zwei Zeilen: start-hyprland ruft `hyprland-status generate` vor jedem
-    Sitzungsstart, und die Funktion dort erzeugt beide Dateien.
+    Beide nebeneinander (das alte C-Programm und das neue AGS-Fenster)
+    waeren die Doppelung, die Aufgabe 26 an vier Stellen desselben
+    Projekttags abgeraeumt hat.
     """
-    status = _uncommented(
-        _read(SRC / "templates" / "hyprland-status-config.template"))
-    assert "./generate_config.sh -logout-config" in status, (
-        "das Layout wird beim Sitzungsstart nicht erzeugt")
-    assert "./generate_config.sh -logout-style" in status, (
-        "der Stil wird beim Sitzungsstart nicht erzeugt")
+    assert not (Path(__file__).resolve().parents[2]
+                / "logout").exists(), (
+        "logout/ steht noch da - zepos-logout.c ist nicht wirklich weg")
+    assert not (PACKAGING / "zepos-logout").exists(), (
+        "packaging/zepos-logout/ steht noch da und wird von build.sh "
+        "gebaut")
+    assert not (SRC / "templates" / "logout-config.template").exists(), (
+        "logout-config.template steht noch da")
+    assert not (SRC / "styles" / "logout-style.template").exists(), (
+        "logout-style.template steht noch da")
 
-    # Zeilengenau UND ohne Einrueckung, und beides ist noetig.
-    #
-    # Gemessen: die erste Fassung dieser Zusicherung fragte
-    # `any('"$HYPR_DIR/hyprland-status" generate' in line ...)` und
-    # ueberlebte die Mutation, die den Aufruf vor dem Sitzungsstart
-    # loeschte. start-hyprland ruft hyprland-status zweimal - einmal
-    # eingerueckt in der Erstinstallation, mit `2>/dev/null || true`
-    # abgedaempft, und einmal auf oberster Ebene unmittelbar vor dem
-    # `exec`. Nur der zweite laeuft bei jeder Anmeldung, und die
-    # Teilzeichenkette fand den ersten.
-    start = _read(SRC / "templates" / "start-hyprland-config.template")
-    toplevel = [line for line in start.splitlines()
-                if line == '"$HYPR_DIR/hyprland-status" generate']
-    assert len(toplevel) == 1, (
-        "start-hyprland ruft hyprland-status generate nicht unbedingt vor "
-        f"dem Sitzungsstart auf (gefunden: {len(toplevel)} Zeilen)")
-
-
-def test_the_logout_style_has_no_colour_of_its_own():
-    """Die Kostenleiter kommt aus brand.py, nicht aus dieser Datei.
-
-    Der Vorgaenger trug fuenfunddreissig Farbliterale in acht Toenen.
-    Ein Hex, das hier wieder auftaucht, ist eine Farbe, die brand.py
-    nicht kennt und die bei der naechsten Aenderung der Marke stehen
-    bleibt.
-    """
-    text = _read(SRC / "styles" / "logout-style.template")
-    body = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-    literals = re.findall(r"#[0-9A-Fa-f]{3,8}\b", body)
-    # Die Knotennamen sind CSS-Selektoren wie button#lock, keine Farben.
-    literals = [lit for lit in literals if re.fullmatch(r"#[0-9A-Fa-f]{3,8}", lit)]
-    assert literals == [], f"Farbliterale in der Stilvorlage: {literals}"
-
-    # Und die Gegenrichtung, denn "keine Literale" ist auch wahr fuer
-    # eine leere Datei: die drei Sprossen muessen benannt sein.
-    for rung in ("SAFE", "RESTART", "POWEROFF"):
-        assert f"{{{{STYLE_LOGOUT_{rung}_BG}}}}" in body, (
-            f"die Sprosse {rung} der Kostenleiter fehlt")
-
-
-def test_the_logout_layout_takes_its_icons_from_the_icon_ssot():
-    """Die sechs Symbole sind Platzhalter, keine Zeichen.
-
-    Der Vorgaenger zeichnete sechs PNG aus /usr/share/wlogout/icons -
-    Dateien aus einem fremden Paket, neben der Symbolquelle dieses
-    Projekts statt darin. Mit dem Paket waeren sie verschwunden.
-    """
-    text = _read(SRC / "templates" / "logout-config.template")
-    for icon in ("LOCK", "LOGOUT", "REBOOT", "SHUTDOWN",
-                 "SUSPEND", "HIBERNATE"):
-        assert f"{{{{ICON_{icon}}}}}" in text, (
-            f"ICON_{icon} steht nicht in der Layout-Vorlage")
-    assert "/usr/share/wlogout" not in text, (
-        "die Vorlage zeigt weiterhin in ein Verzeichnis von wlogout")
+    generator = "\n".join(_uncommented(_read(SRC / "generate_config.sh")))
+    assert "logout-config" not in generator, (
+        "der Generator hat weiterhin eine Route fuer logout-config")
+    assert "logout-style" not in generator, (
+        "der Generator hat weiterhin eine Route fuer logout-style")
 
 
 # --------------------------------------------------------------------
@@ -287,25 +271,32 @@ def test_nothing_in_the_tree_still_installs_hyprlock():
 
 
 def test_the_lock_screen_replaced_hyprlock_everywhere_it_was_called():
-    """Nicht nur die Taste. hyprlock stand an drei Stellen.
+    """Nicht nur die Taste. hyprlock stand an mehreren Stellen.
 
-    Die Abmeldemaske hat einen `lock`-Knopf, das Kontrollzentrum von AGS
-    auch, und beide riefen `pidof hyprlock || hyprlock`. Eine Taste
-    umzustellen und zwei Knoepfe stehen zu lassen, waere ein Desktop mit
-    zwei Sperrbildschirmen, von denen einer nicht mehr installiert ist -
-    also ein Knopf, der nichts tut.
+    BIS ZUM 19.08.2026 WAREN ES DREI: die Taste, ein `lock`-Knopf in
+    logout-config.template (dem alten zepos-logout) und einer im
+    Kontrollzentrum von AGS - beide riefen `pidof hyprlock || hyprlock`.
+    Aufgabe 26 hat logout-config.template mit zepos-logout geloescht und
+    das Kontrollzentrum umgebaut: sein "Sitzung"-Knopf oeffnet seither
+    NUR NOCH das AGS-Fenster (ags-logout.template), statt selbst einen
+    Befehl zu kennen - siehe opens("logout") dort. Es bleibt also EINE
+    Stelle neben der Taste, die "zepos-lock" wirklich noch kennen muss:
+    das neue Fenster selbst.
     """
-    # Das Kommentarzeichen je Format, weil _uncommented() eines braucht
-    # und die beiden Vorlagen verschiedene haben: die eine ist JSON (gar
-    # keine Kommentare, also ein Zeichen, das nie vorkommt), die andere
-    # ist JavaScript.
-    for where, marker in ((SRC / "templates" / "logout-config.template", "\0"),
-                          (SRC / "templates" / "ags-control-center.template",
-                           "//")):
-        body = "\n".join(_uncommented(_read(where), marker))
-        assert "hyprlock" not in body, f"{where.name} ruft weiterhin hyprlock"
-        assert "zepos-lock" in body, (
-            f"{where.name} kennt den Sperrbildschirm nicht mehr")
+    body = "\n".join(_uncommented(
+        _read(SRC / "templates" / "ags-logout.template")))
+    assert "hyprlock" not in body, "ags-logout.template ruft weiterhin hyprlock"
+    assert "zepos-lock" in body, (
+        "ags-logout.template kennt den Sperrbildschirm nicht mehr")
+
+    # Und das Kontrollzentrum ruft "zepos-lock" NICHT MEHR SELBST - tut
+    # es das doch, ist die Doppelung zurueck, die dieser Umbau gerade
+    # abgeraeumt hat.
+    control = "\n".join(_uncommented(
+        _read(SRC / "templates" / "ags-control-center.template")))
+    assert "zepos-lock" not in control, (
+        "ags-control-center.template ruft zepos-lock wieder selbst auf, "
+        "statt das Sitzungsfenster zu oeffnen")
 
 
 def test_the_lock_screen_stylesheet_is_generated_before_every_session():

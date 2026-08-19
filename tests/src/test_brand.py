@@ -316,27 +316,38 @@ def test_the_terminals_active_tab_reads_both_ways(palette):
                     "an inactive kitty tab")
 
 
-def test_the_three_state_backgrounds_read_against_their_own_text(palette):
-    """Die drei Zustandsgruende, und was auf ihnen steht.
+def test_the_two_state_backgrounds_read_against_their_own_text(palette):
+    """Die zwei Zustandsgruende, und was auf ihnen steht.
 
     DER NAME HAT SICH AM 13.08.2026 GEAENDERT, weil sich der Leser
-    geaendert hat. Die drei Paare hiessen "hardware warning/critical/
-    offline", und das Hardwaremodul der Leiste hat sie wirklich benutzt -
-    als deckende Kaesten auf dem Glas. Diese Regel ist an dem Tag
-    gefallen (siehe #custom-hardware in src/styles/bar-style.template:
-    ein Zustand ist eine Farbe und kein Kasten), und mit ihr die sieben
-    STYLE_HARDWARE_*-Platzhalter.
+    geaendert hat. Die drei Paare hiessen damals "hardware warning/
+    critical/offline", und das Hardwaremodul der Leiste hat sie
+    wirklich benutzt - als deckende Kaesten auf dem Glas. Diese Regel
+    ist an dem Tag gefallen (siehe #custom-hardware in
+    src/styles/bar-style.template: ein Zustand ist eine Farbe und kein
+    Kasten), und mit ihr die sieben STYLE_HARDWARE_*-Platzhalter.
 
-    Die drei Gruende bleiben, denn sie haben andere Leser -
-    STYLE_LOGOUT_RESTART_BG, STYLE_LOGOUT_SAFE_BG,
-    STYLE_GLASS_NOTIFICATION_CRITICAL und die Abmeldemaske in
-    src/greeter.py. Geprueft wird unveraendert dasselbe: dass auf jedem
+    Zwei der drei Gruende blieben zunaechst, weil sie andere Leser
+    hatten - STYLE_GLASS_NOTIFICATION_CRITICAL (STATE_CRITICAL_BG),
+    STYLE_LOGOUT_RESTART_BG (STATE_WARNING_BG) und STYLE_LOGOUT_SAFE_BG
+    (STATE_OFFLINE_BG, der dritte). Geprueft wurde, dass auf jedem
     dieser Gruende die Schrift lesbar ist, die dort steht.
+
+    DREI WURDEN ZWEI, AM 19.08.2026 (Aufgabe 26)
+        zepos-logout ist geloescht (Regel 14) - mit ihm STYLE_LOGOUT_
+        SAFE_BG, der letzte Leser von STATE_OFFLINE_BG. GEMESSEN:
+        `grep -rn STATE_OFFLINE_BG src/` fand danach nur noch seine
+        eigene Definition in brand.py/theme.py, keinen Verbraucher mehr
+        - tests/src/test_theme.py::test_changing_this_field_moves_a_
+        generated_byte haelt genau das fest ("ein Themenfeld ohne Leser
+        ist ein Regler, der nichts tut") und hat sie durchfallen
+        lassen. STATE_OFFLINE_BG ist darum aus theme.FIELDS und beiden
+        Paletten gestrichen (Regel 14 - kein "vielleicht spaeter
+        wieder"), nicht als ungenutzte Option stehen geblieben.
     """
     for colour, background, what in (
         (palette.YELLOW, palette.STATE_WARNING_BG, "der warnende Grund"),
         (palette.RED, palette.STATE_CRITICAL_BG, "der kritische Grund"),
-        (palette.TEXT_MUTED, palette.STATE_OFFLINE_BG, "der ruhende Grund"),
     ):
         assert_readable(colour, background, what)
 

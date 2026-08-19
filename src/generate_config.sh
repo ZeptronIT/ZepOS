@@ -547,30 +547,23 @@ case "$CONFIG_NAME" in
     # kein GTK-Programm war und kein Stylesheet nehmen konnte. Das
     # Programm ist weg, die Route mit ihm.
     #
-    # WARUM ES HIER KEIN GEGENSTUECK ZU logout-config GIBT
-    #     zepos-logout liest zwei erzeugte Dateien, layout.json und
-    #     style.css, weil sein Inhalt - sechs Aktionen mit Symbolen und
-    #     Tastenkuerzeln - erzeugter Inhalt IST. Der Sperrbildschirm hat
-    #     vier Zeilen, von denen drei Tatsachen der Maschine sind
-    #     (Uhrzeit, Datum, Benutzer). Eine Layout-Datei dafuer waere eine
-    #     Datei, ohne die SUPER+L nicht mehr sperrt, und das ist der eine
-    #     Handel, den dieser Bildschirm nicht eingehen darf.
+    # WARUM DIESER BILDSCHIRM KEINE eigene Layout-Datei BRAUCHT
+    #     Der Sperrbildschirm hat vier Zeilen, von denen drei Tatsachen
+    #     der Maschine sind (Uhrzeit, Datum, Benutzer). Eine Layout-Datei
+    #     dafuer waere eine Datei, ohne die SUPER+L nicht mehr sperrt,
+    #     und das ist der eine Handel, den dieser Bildschirm nicht
+    #     eingehen darf.
+    #
+    #     BIS ZUM 19.08.2026 stand hier ein Gegenbeispiel: logout-config
+    #     und logout-style erzeugten layout.json und style.css fuer
+    #     zepos-logout, weil dessen Inhalt - sechs Aktionen mit Symbolen
+    #     und Tastenkuerzeln - erzeugter Inhalt WAR. Aufgabe 26 hat das
+    #     Programm geloescht (Regel 14); sein Nachfolger,
+    #     ags-logout.template, ist ein AGS-Fenster wie jedes andere und
+    #     braucht keine eigene erzeugte Datei - es wird zusammen mit dem
+    #     Rest von ags/ gebuendelt (siehe die Route "ags-logout" unten).
     lock-style)
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/zepos-lock"
-        CONFIG_FILE="style.css"
-        ZEPOS_TEMPLATE_SUBDIR="styles"
-        ;;
-    logout-config)
-        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/zepos-logout"
-        # Mit Endung, im Gegensatz zu wlogouts "layout": src/
-        # validate_output.py laesst jede erzeugte .json durch
-        # json.loads() laufen, bevor sie veroeffentlicht wird. Ohne
-        # Endung faende ein Tippfehler in der Vorlage niemand beim
-        # Erzeugen - sondern der Nutzer beim Druecken von SUPER+M.
-        CONFIG_FILE="layout.json"
-        ;;
-    logout-style)
-        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/zepos-logout"
         CONFIG_FILE="style.css"
         ZEPOS_TEMPLATE_SUBDIR="styles"
         ;;
@@ -769,6 +762,13 @@ case "$CONFIG_NAME" in
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
         CONFIG_FILE="Dock.tsx"
         ;;
+    # Der Abschaltknopf am Dock - Aufgabe 26, Teil 3 (19.08.2026). Eine
+    # eigene, kleine Layer-Shell-Flaeche neben dem Dock, kein Teil davon
+    # - siehe den Kopf von ags-power-button.template.
+    ags-power-button)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
+        CONFIG_FILE="PowerButton.tsx"
+        ;;
     # Der Stil der Leiste. Nicht style.scss, sondern eine zweite Datei,
     # die app.ts ueber app.apply_css() nachlaedt - siehe dort, und siehe
     # den Kopf von src/styles/bar-style.template.
@@ -840,6 +840,14 @@ case "$CONFIG_NAME" in
     ags-shortcuts)
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
         CONFIG_FILE="Shortcuts.tsx"
+        ;;
+    # Die Sitzungsmaske - der Ersatz fuer zepos-logout, seit Aufgabe 26
+    # (19.08.2026). Ein Fenster wie jedes andere hier: kein eigenes
+    # Paket, keine eigene erzeugte Datei ausserhalb von ags/, siehe den
+    # Kommentar bei lock-style oben.
+    ags-logout)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
+        CONFIG_FILE="Logout.tsx"
         ;;
     ags-battery)
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"

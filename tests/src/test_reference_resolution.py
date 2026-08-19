@@ -671,16 +671,15 @@ def test_the_helper_menu_lists_the_helpers_the_run_generated(tree):
 # stops being true silently.
 READ_BY_CONVENTION = {
     "zepos-menu/style.css": "zepos-menu",
-    "zepos-logout/style.css": "zepos-logout",
-    # Und das Layout dazu. Sein Vorgaenger, wlogout/layout, stand nicht in
-    # dieser Liste und kam trotzdem durch - "layout" ist eine
-    # Teilzeichenkette, die in floating-layouts-style.template und in
-    # einem halben Dutzend anderer Dateien vorkommt. Die Endung .json ist
-    # der Grund, aus dem er jetzt hier stehen MUSS: sie macht den Namen
-    # spezifisch genug, dass ihn nichts mehr zufaellig nennt, und
-    # gleichzeitig laesst src/validate_output.py die Datei durch
-    # json.loads() laufen, bevor sie veroeffentlicht wird.
-    "zepos-logout/layout.json": "zepos-logout, das es an seinem eigenen Pfad sucht",
+    # "zepos-logout/style.css" and "zepos-logout/layout.json" stood here
+    # until 19.08.2026 (Aufgabe 26): zepos-logout itself is deleted
+    # (Regel 14), and generate_config.sh no longer has a -logout-config
+    # or -logout-style route to produce either file - see
+    # test_the_convention_list_does_not_outlive_its_files, which would
+    # fail on a stale entry naming a file nothing generates any more.
+    # The replacement, src/templates/ags-logout.template, writes no
+    # generated file of its own; it is bundled straight into ags/app.ts
+    # like every other AGS window.
     "ags/bar.css": "app.ts, das sie ueber app.apply_css() nachlaedt",
     # "starship.toml": "starship, via STARSHIP_CONFIG's default" stand
     # hier bis zum 12.08.2026, und der Eintrag war genau die Art

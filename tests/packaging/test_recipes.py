@@ -1189,96 +1189,44 @@ def test_the_iso_and_the_keyring_ship_the_same_bytes():
 
 
 # --------------------------------------------------------------------
-# zepos-logout, und das Toolkit, das die Entscheidung vom 11.08.2026 fordert
+# zepos-logout IST GEFALLEN (Aufgabe 26, 19.08.2026) - drei Pruefungen
+# sind mit ihm gegangen
 # --------------------------------------------------------------------
 #
-# Hier stand test_wlogout_is_checked_for_the_protocol_the_bind_asks_for.
-# Es hielt fest, dass das Rezept nach dem Bau `readelf -d` fragt, weil
-# wlogouts meson.build gtk-layer-shell optional machte und ein Bau ohne
-# die Bibliothek still auf das xdg-Protokoll zurueckfiel. Diese Frage
-# bleibt und ist unten die dritte; dazu kommen die zwei, um die es bei
-# dem Wechsel ging.
-
-def test_the_logout_menu_is_measured_against_gtk4_after_the_build():
-    """Der Bau darf nicht bloss GTK4 WOLLEN, er muss es geliefert haben.
-
-    logout/meson.build fordert `dependency('gtk4')`, und das ist eine
-    Zusicherung im Bauskript. Was das fertige Objekt dem Linker
-    tatsaechlich abverlangt hat, steht nur im Objekt. Beide Richtungen
-    werden gefragt: dass libgtk-4 da ist UND dass libgtk-3 es nicht ist.
-    Die zweite ist nicht ueberfluessig - ein Programm kann beide laden,
-    wenn eine Bibliothek dazwischen die alte hereinzieht, und dann ist
-    die erste Antwort ja und der Bildschirm trotzdem halb GTK3.
-    """
-    text = _code(_pkgbuild("zepos-logout"))
-    assert re.search(r'grep -q "libgtk-4"', text), (
-        "nichts misst, ob das gebaute Objekt gegen GTK4 gelinkt ist")
-    assert "readelf -d" in text, (
-        "die Messung liest nicht das Objekt, sondern etwas anderes")
-
-    # Und die Seitentuer wird mit ldd gemessen, nicht mit readelf.
-    #
-    # GEMESSEN, und die erste Fassung hatte es falsch: ein
-    # logout/meson.build mit zusaetzlichem `dependency('gtk+-3.0')`
-    # erzeugte ein Paket, das eine readelf-Pruefung auf libgtk-3
-    # BESTAND - Archs `-Wl,--as-needed` traegt kein DT_NEEDED fuer eine
-    # Bibliothek ein, aus der kein Symbol benutzt wird. readelf sieht
-    # deshalb genau den Fall nicht, um den es geht: die Bibliothek, die
-    # ihrerseits GTK3 mitbringt.
-    assert re.search(r'ldd "\$binary"', text), (
-        "die Seitentuer wird nicht mit ldd gemessen")
-    assert re.search(r'grep -q "libgtk-3" <<<"\$loaded"', text), (
-        "nichts misst, ob libgtk-3 beim Start geladen wuerde")
-
-
-def test_the_logout_menu_is_checked_for_the_layer_shell_it_needs():
-    """Die Frage, die zepos-logout von wlogout geerbt hat.
-
-    wlogouts meson.build hatte `required : false` fuer gtk-layer-shell;
-    ein Bau ohne die Bibliothek uebersetzte weiter, nahm `--protocol
-    layer-shell` an und fiel still auf xdg zurueck - die Maske wurde ein
-    gewoehnliches Fenster. logout/meson.build macht die GTK4-Entsprechung
-    erforderlich, sodass der Bau ausfaellt; das Rezept misst trotzdem am
-    Ergebnis nach.
-    """
-    text = _code(_pkgbuild("zepos-logout"))
-    assert "'gtk4-layer-shell'" in text, (
-        "zepos-logout haengt nicht an gtk4-layer-shell")
-    assert re.search(r'grep -q "gtk4-layer-shell"', text), (
-        "nichts prueft, ob das gebaute Objekt wirklich dagegen gelinkt hat")
-
-    meson = _read(ROOT / "logout" / "meson.build")
-    # Zeilengenau und ohne Kommentare, weil der Kopf dieser Datei
-    # ERKLAERT, dass wlogout die Abhaengigkeit optional hatte. Ein
-    # Teilzeichenketten-Test ueber die ganze Datei waere von dieser
-    # Erklaerung wahr geworden.
-    lines = [line.strip() for line in meson.splitlines()
-             if not line.lstrip().startswith("#")]
-    assert "layershell = dependency('gtk4-layer-shell-0')" in lines, (
-        "gtk4-layer-shell ist im Bauskript nicht unbedingt erforderlich")
-
-
-def test_the_bind_the_logout_package_exists_for_names_it():
-    """Ein Rezept fuer ein Programm, das keine Taste mehr aufruft, ist
-    ein Rezept, das nichts mehr absichert."""
-    hypr = _read(ROOT / "src" / "templates" / "hyprland-universal-config.template")
-    # Zeilengenau: `zepos-logout` steht in dieser Vorlage auch im
-    # Kommentar ueber der Bindung, und der wuerde einen
-    # Teilzeichenketten-Test bestehen lassen, nachdem jemand die Bindung
-    # geloescht hat.
-    binds = [line.strip() for line in hypr.splitlines()
-             if line.strip().startswith("bind")]
-    assert "bind = $mainMod, M, exec, zepos-logout" in binds, (
-        "SUPER+M ruft die Abmeldemaske nicht mehr auf")
+# Hier standen bis zum 19.08.2026 drei Zusicherungen:
+# test_the_logout_menu_is_measured_against_gtk4_after_the_build (readelf/
+# ldd am gebauten Objekt), test_the_logout_menu_is_checked_for_the_
+# layer_shell_it_needs (die geerbte wlogout-Frage: haengt gtk4-layer-
+# shell zwingend statt optional?) und test_the_bind_the_logout_package_
+# exists_for_names_it (SUPER+M ruft das Programm noch auf). Alle drei
+# lasen packaging/zepos-logout/PKGBUILD, logout/meson.build oder die
+# `zepos-logout`-Bindung in hyprland-universal-config.template - alle
+# drei Dateien/Zeilen sind mit dem Programm geloescht (Regel 14: nicht
+# als veraltet markiert, sondern entfernt).
+#
+# Die letzte der drei war selbst die Begruendung fuer die Loeschung, im
+# Wortlaut, den sie ueber sich selbst trug: "Ein Rezept fuer ein
+# Programm, das keine Taste mehr aufruft, ist ein Rezept, das nichts
+# mehr absichert." SUPER+M ruft seit Aufgabe 26 `ags request logout`
+# (dasselbe hyprland-universal-config.template, siehe dort) - ein
+# AGS-Fenster im ohnehin laufenden AGS-Prozess, kein eigenes Binary
+# mehr, das ein eigenes Rezept braeuchte.
+#
+# Die readelf/ldd-Methode selbst ist nicht verloren: zepos-lock hat sie
+# schon vor dieser Aufgabe geerbt (siehe die naechste Pruefung unten) und
+# bleibt ihr einziger verbliebener Leser in diesem Baum.
 
 
 def test_the_lock_screen_is_measured_against_gtk4_and_pam_after_the_build():
     """Drei Fragen am fertigen Objekt, und die dritte gibt es nur hier.
 
-    Die ersten beiden erbt dieses Rezept von zepos-logout, samt
-    Begruendung: readelf sagt, was DIESES Objekt angefordert hat, ldd
-    sagt, was beim Start wirklich geladen wird, und nur ldd sieht ein
-    libgtk-3, das eine Bibliothek dazwischen hereinzieht.
+    Die ersten beiden erbte dieses Rezept ursprünglich von zepos-logout,
+    das dieselbe readelf/ldd-Methode zuerst trug und mit Aufgabe 26
+    (19.08.2026) geloescht wurde (siehe den Abschnitt oben) - die
+    Begruendung bleibt unveraendert: readelf sagt, was DIESES Objekt
+    angefordert hat, ldd sagt, was beim Start wirklich geladen wird, und
+    nur ldd sieht ein libgtk-3, das eine Bibliothek dazwischen
+    hereinzieht.
 
     Die dritte ist libpam. Ohne sie waere zepos-lock ein Bildschirm, der
     ein Passwortfeld ZEIGT - und das ist der eine Fehler dieses

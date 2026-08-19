@@ -8,10 +8,9 @@ producing eighteen packages, and that is all of them.
 | `zepos-config` | `zepos-config` | The core. Everything depends on it and nothing can be tested without it. |
 | `zepos-keyring` | `zepos-keyring` | The package that makes `SigLevel = Required` mean something. Without it every signature in the repository is a signature from a key the machine has never been told to trust. |
 | `zepos-installer` | `zepos-installer`, `zepos-installer-gui`, `zepos-installer-tui` | One source tree, three packages, so that the text interface §8.5 falls back to does not carry the toolkit whose absence it exists to survive. |
-| `aylurs-gtk-shell` | `aylurs-gtk-shell` | Fifteen templates generate AGS widgets and AGS is in no Arch repository (spec §4.3), so until now not one of them had ever been executed by the program it is written for. |
+| `aylurs-gtk-shell` | `aylurs-gtk-shell` | Sixteen templates generate AGS widgets - including the session window and the dock's power button, both added 19.08.2026 when the standalone `zepos-logout` package was deleted - and AGS is in no Arch repository (spec §4.3), so until now not one of them had ever been executed by the program it is written for. |
 | `astal` | `libastal-io`, `libastal-4`, `libastal-notifd` | Not optional. `ags run` bundles TypeScript whose first lines are `import Astal from "gi://Astal"`; without these typelibs AGS installs, starts and dies on the first import. |
-| `zepos-logout` | `zepos-logout` | ZepOS's own logout menu, on GTK4 and gtk4-layer-shell. It replaced a packaged `wlogout` on 11.08.2026: SUPER+M binds to it unconditionally, and `wlogout` was measured on `libgtk-3.so.0` with no GTK4 anywhere in its upstream. |
-| `zepos-lock` | `zepos-lock` | ZepOS's own lock screen, on GTK4 and `ext-session-lock-v1`. It replaced a packaged `hyprlock` on 12.08.2026: SUPER+L binds to it unconditionally, and `hyprlock` renders itself with GLES and Cairo (`objdump -p` names `libEGL`, `libGLESv2`, `libcairo` and no `gtk`), so its colours could never come from `brand.py`. The protocol reaches GTK4 through `gtk4-session-lock.h`, which ships in the same `gtk4-layer-shell` the logout menu already needs. |
+| `zepos-lock` | `zepos-lock` | ZepOS's own lock screen, on GTK4 and `ext-session-lock-v1`. It replaced a packaged `hyprlock` on 12.08.2026: SUPER+L binds to it unconditionally, and `hyprlock` renders itself with GLES and Cairo (`objdump -p` names `libEGL`, `libGLESv2`, `libcairo` and no `gtk`), so its colours could never come from `brand.py`. The protocol reaches GTK4 through `gtk4-session-lock.h`, which ships in the same `gtk4-layer-shell` `aylurs-gtk-shell` already needs. |
 | `zepos-hyprland` | `zepos-hyprland` | Hyprland 0.56.1 (§4.3). Five packages are compiled against its headers, so it cannot be a package somebody else's release schedule moves. The longest build in the project by a wide margin. |
 | `zepos-hyprlaunch` | `zepos-hyprlaunch` | ZepOS's own launcher plugin, and the one whose absence §7.4 works hardest to survive: SUPER+SPACE. |
 | `zepos-hyprclipx` | `zepos-hyprclipx` | ZepOS's own clipboard plugin. |
@@ -190,11 +189,15 @@ top of the recipe:
 
 That rule comes from §7.4 rather than from taste. `src/plugins.py` can
 drop a plugin block when the object is missing; nothing does the
-equivalent for `bind = $mainMod, M, exec, zepos-logout`. A key that silently
+equivalent for `bind = $mainMod, L, exec, zepos-lock`. A key that silently
 does nothing is the worst outcome this project can produce, because
 nothing reports it — so every program a shipped bind names is in the
 list, including `slurp`, `satty` and `wf-recorder`, which are one
-screenshot bind and one recording bind between them.
+screenshot bind and one recording bind between them. `bind = $mainMod, M,
+exec, zepos-logout` used to be the same kind of example until 19.08.2026:
+SUPER+M now runs `ags request logout` (a window inside the already-listed
+`aylurs-gtk-shell`), so the standalone package this list once had to name
+for it is gone.
 
 Applied the other way it is just as sharp. `thunar`, `firefox` and
 `blueman` appear in the templates too — a notification colour, a
@@ -240,10 +243,10 @@ that declares it obsolete. `tests/packaging/test_recipes.py` asserts the
 recipe stays absent and that `zepos-hyprland` keeps the dependency, so
 the next reader of §4.3 finds the answer rather than the table.
 
-That leaves the logout menu as the one genuinely missing component, and
-it is genuinely missing: nothing in `core` or `extra` at the snapshot is
+That left the logout menu as the one genuinely missing component, and
+it was genuinely missing: nothing in `core` or `extra` at the snapshot is
 called `wlogout` or provides it. ZepOS packaged upstream's until
-11.08.2026 and now builds its own, `zepos-logout`, from `logout/` in this
+11.08.2026 and then built its own, `zepos-logout`, from `logout/` in this
 tree — the decision that day was that the surface is GTK4 throughout, and
 `wlogout` measured `NEEDED libgtk-3.so.0` with `gtk+-wayland-3.0` in its
 `meson.build` and no mention of GTK4 anywhere in the tree.
@@ -252,12 +255,19 @@ Its trap came along with it. Upstream made `gtk-layer-shell` an
 *optional* build dependency, so a build without it produced a `wlogout`
 that accepted `--protocol layer-shell`, printed "Falling back to xdg
 protocol", and became an ordinary window the compositor places and
-focuses. Nothing failed. `logout/meson.build` makes the GTK4 equivalent
-`required`, so that build stops instead; the recipe still asks
+focuses. Nothing failed. `logout/meson.build` made the GTK4 equivalent
+`required`, so that build stopped instead; the recipe asked
 `readelf -d` afterwards whether the binary really linked against it, and
-`verify-install.sh` asks the installed file the same question. Both also
-ask whether `libgtk-3` came in through a side door, because a program
+`verify-install.sh` asked the installed file the same question. Both also
+asked whether `libgtk-3` came in through a side door, because a program
 that loads both toolkits answers the GTK4 question with yes.
+
+`zepos-logout` itself is gone as of 19.08.2026: SUPER+M now opens a
+window inside the already-running AGS process (`ags request logout`,
+see `src/templates/ags-logout.template`) instead of starting a separate
+binary, so there is no second GTK4 toolkit left in this list to build,
+sign or verify a linkage for. `logout/`, `packaging/zepos-logout/` and
+the recipe row above are deleted with it, not archived.
 
 ### The plugin ABI is a fact about the headers, not about the version
 

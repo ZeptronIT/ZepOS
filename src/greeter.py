@@ -605,11 +605,23 @@ modelbutton:checked, modelbutton:selected {{
 
 
 def _cost_ladder(palette: theme.Palette) -> str:
-    """Was die Aktion KOSTET, in drei Stufen - wie in zepos-logout.
+    """Was die Aktion KOSTET, in drei Stufen - derselbe Gedanke, den
+    zepos-logout bis zum 19.08.2026 in seinem eigenen Stylesheet fasste:
+    das Wort auf dem Knopf sagt schon, WELCHE Aktion es ist; wofuer die
+    Farbe gut ist, ist wieviel sie kostet.
 
-    Die Begruendung steht in src/styles/logout-style.template und gilt
-    hier woertlich: das Wort auf dem Knopf sagt schon, WELCHE Aktion es
-    ist; wofuer die Farbe gut ist, ist wieviel sie kostet.
+    ZWEI EIGENSTAENDIGE FASSUNGEN DERSELBEN IDEE, NICHT MEHR EINE
+        zepos-logout ist mit Aufgabe 26 gefallen (Regel 14 - geloescht,
+        nicht als veraltet markiert); sein Nachfolger,
+        src/templates/ags-logout.template, druckt dieselbe Idee jetzt
+        GROEBER: zepButton() kennt nur zwei Rollen fuer diese sechs
+        Knoepfe (kritisch/umrandet), keine drei durchgehenden
+        Farbstufen. Diese Funktion hier bleibt trotzdem dreistufig - der
+        Anmeldebildschirm ist kein AGS-Fenster, kann zepButton nicht
+        importieren, und seine eigene Begruendung (unten) haengt an
+        NICHTS aus der gefallenen Datei. Es gibt also keine gemeinsame
+        Quelle mehr, aus der beide dieselbe Rechnung lesen - nur denselben
+        PRINZIP, unabhaengig zweimal angewandt.
 
     WAS REGREET SELBST TUT UND WARUM DAS ZU WENIG IST
         src/gui/templates.rs gibt BEIDEN Endknoepfen dieselbe Klasse:

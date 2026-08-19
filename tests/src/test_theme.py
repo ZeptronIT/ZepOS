@@ -379,7 +379,12 @@ CHANGES_WITH_THE_THEME = {
     "styles-hyprclipx-style",
     "styles-hyprlaunch-style",
     "styles-lock-style",
-    "styles-logout-style",
+    # "styles-logout-style" stand hier bis zum 19.08.2026 (Aufgabe 26) -
+    # zepos-logout und sein Stylesheet sind geloescht (Regel 14). Sein
+    # Nachfolger, ags-logout.template, braucht keinen eigenen Eintrag:
+    # er liest seine Farben ueber zepButton() aus derselben Datei wie
+    # jedes andere AGS-Fenster, "templates-ags-style" unten deckt ihn
+    # damit schon ab.
     "styles-zepos-menu-style",
     "templates-ags-style",
     "templates-ags-style-editor",
@@ -416,8 +421,9 @@ def test_switching_the_theme_rewrites_every_surface_that_carries_a_colour(
     Geprueft wird deshalb NAMENTLICH - jede Oberflaeche, die ein Thema
     tragen muss, steht in der Liste darueber:
 
-      die Leiste, die Ueberlagerungen, der Starter, die Zwischenablage,
-      der Sperrbildschirm, das Abmeldefenster, das Menue, der
+      die Leiste, die Ueberlagerungen (die Sitzungsmaske eingeschlossen,
+      seit Aufgabe 26 eine von ihnen statt eines eigenen Programms), der
+      Starter, die Zwischenablage, der Sperrbildschirm, das Menue, der
       Stil-Editor, das Rasterbild, GTK4 fuer die fremden Fenster,
       Hyprland samt Fensterleisten und Glasregeln, kitty und die
       Benachrichtigungen.

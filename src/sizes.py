@@ -1372,7 +1372,22 @@ TABLE: dict[str, Size] = {
     #
     # Nebenbei ist es die billigste Breite, die auf dieser Leiste zu
     # holen war: 62 px, ohne dass ein Modul verschwindet.
-    "STYLE_CHIP_GAP": Size(10, PX, SCALED),
+    #
+    # STYLE_CHIP_GAP stand hier bis zum 19.08.2026 (Regel 14 - geloescht,
+    # nicht als veraltet markiert). .bar-module (bar-style.template) trug
+    # ihn als margin-left, GEMESSEN als Teil derselben Doppelzaehlung, die
+    # STYLE_PADDING_MODULE gleich unterhalb behebt (siehe dort, "DIESER
+    # WERT WAR BIS ZUM 19.08.2026 STYLE_MODULE_SPACING"): padding-right
+    # (aus STYLE_PADDING_MODULE) UND margin-right/-left (aus
+    # STYLE_MODULE_SPACING bzw. STYLE_CHIP_GAP) trennten zwei Module
+    # gleichzeitig, macht 60px statt der beabsichtigten 28. .bar-module
+    # traegt seither nur noch EINEN waagerechten Rand, aus der
+    # Abstandsleiter (STYLE_SPACE_8) statt aus einer eigenen Groesse -
+    # STYLE_CHIP_GAP hatte damit keinen Leser mehr
+    # (tests/src/test_sizes.py::test_every_settable_size_is_named_by_a_
+    # template haelt das fest). src/user_settings.py fuehrt
+    # "STYLE_MARGIN_TOP" seither direkt unter RETIRED_SIZE_VALUES statt
+    # es auf diesen inzwischen selbst geloeschten Namen umzubiegen.
     "STYLE_PADDING_BUTTON": Size(5, PX, SCALED),
 
     # NACHGETRAGEN am 19.08.2026 (Aufgabe 19). GEMELDET: "die icon im

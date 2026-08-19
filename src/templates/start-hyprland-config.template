@@ -248,7 +248,7 @@ echo "{{ICON_SETTINGS}} Generating Hyprland configuration..."
 # zepos-generate.
 ./generate_config.sh -hyprland-plugins-config
 
-# Generate profile-specific configs (ags, zepos-logout, etc.)
+# Generate profile-specific configs (ags, zepos-lock, etc.)
 echo "{{ICON_WRITE}} Generating profile-specific configs..."
 "$HYPR_DIR/hyprland-status" generate
 

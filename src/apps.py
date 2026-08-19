@@ -91,9 +91,12 @@ DIE ZWEITE HAELFTE DER FRAGE, UND SIE HAT EIN DATUM
 
     Ein Programm, das ZepOS selbst baut und fuer das es einen Eintrag im
     Anwendungsverzeichnis ausliefert, IST eine Anwendung dieses Systems.
-    Ein Programm ohne diese Zeile - zepos-menu, zepos-lock,
-    zepos-logout - ist eine Taste und gehoert auf kein Dock, und diese
-    Unterscheidung muss niemand pflegen: sie steht schon da.
+    Ein Programm ohne diese Zeile - zepos-menu, zepos-lock - ist eine
+    Taste und gehoert auf kein Dock, und diese Unterscheidung muss
+    niemand pflegen: sie steht schon da. zepos-logout gehoerte bis zum
+    19.08.2026 (Aufgabe 26) in dieselbe Reihe; sein Nachfolger ist ein
+    AGS-Fenster und baut ueberhaupt kein eigenes Programm mehr, das hier
+    fehlen koennte.
 
     Auch hier zwei Abdruecke derselben Zeile. Im Checkout werden die
     Rezepte gelesen; auf einer Installation liegt

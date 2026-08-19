@@ -75,7 +75,6 @@ readonly PACKAGES=(
     zepos-config
     zepos-keyring
     zepos-installer
-    zepos-logout
     zepos-lock
     zepos-menu
     zepos-settings-gui
@@ -298,13 +297,16 @@ else
 fi
 
 # --------------------------------------------------------------------
-# The four sources that are ours
+# The three sources that are ours
 # --------------------------------------------------------------------
 # zepos-config packages this repository's own src/, zepos-installer
-# packages installer/, zepos-logout packages logout/ and zepos-lock
-# packages lock/, so their source tarballs are made here rather than
-# downloaded. Made from the WORKING TREE, not from git: a developer who
-# has just edited a template and runs
+# packages installer/ and zepos-lock packages lock/, so their source
+# tarballs are made here rather than downloaded. zepos-logout packaged
+# logout/ the same way until Aufgabe 26 (19.08.2026) deleted the whole
+# program (Regel 14) - its AGS replacement, ags-logout.template, needs
+# no tarball of its own, it is bundled with the rest of ags/. Made from
+# the WORKING TREE, not from git: a developer who has just edited a
+# template and runs
 # this expects to get that template, and a build that silently packages
 # the last commit instead is a build that tests the wrong thing.
 #
@@ -436,24 +438,8 @@ if selected_holds zepos-installer; then
     pack_stage zepos-installer "zepos-installer-$version"
 fi
 
-# logout/ behaelt sein Verzeichnis wie installer/, und aus einem
-# handfesten Grund: logout/meson.build liest die Projektversion mit
-# `cat ../VERSION`, also einen Pfad NEBEN dem Verzeichnis. Flach
-# ausgepackt gaebe es dieses Neben nicht und meson broeche beim Setup ab.
-# VERSION kommt deshalb mit, und das ist keine zweite Kopie der Zahl -
-# es ist dieselbe Datei, aus der auch $version oben gelesen wurde.
-if selected_holds zepos-logout; then
-    step "Source tarball for zepos-logout"
-    stage="$PACKAGING/zepos-logout/.stage/zepos-logout-$version"
-    rm -rf "$PACKAGING/zepos-logout/.stage"
-    mkdir -p "$stage"
-    rsync -a "$REPO/logout" "$stage"/
-    rsync -a "$REPO/VERSION" "$stage/VERSION"
-    rsync -a "$REPO/LICENSE" "$stage/LICENSE"
-    pack_stage zepos-logout "zepos-logout-$version"
-fi
-
-# lock/ genauso, und aus demselben Grund: lock/meson.build liest die
+# lock/ behaelt sein Verzeichnis wie installer/, und aus einem
+# handfesten Grund: lock/meson.build liest die
 # Projektversion mit `cat ../VERSION`, also aus dem Verzeichnis DANEBEN.
 if selected_holds zepos-lock; then
     step "Source tarball for zepos-lock"
@@ -470,8 +456,8 @@ fi
 #
 # Vom 11.08. bis zum 19.08.2026 stand an dieser Stelle eine Schleife, die
 # aus plugins/hyprlaunch/ und plugins/hyprclipx/ einen lokalen
-# Quelltarball baute - dieselbe Bauart wie zepos-config und
-# zepos-logout. Die Sicherheitspruefung vor der Veroeffentlichung
+# Quelltarball baute - dieselbe Bauart wie zepos-config und zepos-lock.
+# Die Sicherheitspruefung vor der Veroeffentlichung
 # (.superpowers/sdd/2026-08-18-ags-schale-und-breitenleiter/
 # sicherheitsanalyse.md, Abschnitt 6) hat benannt, warum das falsch war:
 # die beiden Quellbaeume tragen keine Lizenz, und eine bearbeitete Kopie

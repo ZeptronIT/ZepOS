@@ -355,12 +355,24 @@ RENAMED_KEYS = {
 
 # Und dasselbe fuer die Groessen, deren Name nicht mehr stimmte.
 #
-# STYLE_MARGIN_TOP ist am 12.08.2026 dazugekommen. Der Abstand zwischen
-# zwei Kacheln der Leiste lag oben, solange die Leiste senkrecht lief;
-# seit sie wieder waagerecht liegt, ist derselbe Abstand ein
-# margin-left. Ein Name, der eine Himmelsrichtung nennt, ist damit bei
-# jeder Drehung wieder falsch - STYLE_CHIP_GAP nennt die Sache. Wer die
-# Groesse eingestellt hat, behaelt seine Zahl.
+# STYLE_MARGIN_TOP -> STYLE_CHIP_GAP stand hier vom 12.08.2026 bis zum
+# 19.08.2026: der Abstand zwischen zwei Kacheln der Leiste lag oben,
+# solange sie senkrecht lief, und ein Name, der eine Himmelsrichtung
+# nennt, ist bei jeder Drehung wieder falsch - STYLE_CHIP_GAP nannte die
+# Sache statt der Richtung.
+#
+# BEIDE NAMEN SIND SEIT DEM 19.08.2026 UNTEN, NICHT MEHR HIER
+#     .bar-module (bar-style.template) trug STYLE_CHIP_GAP als
+#     margin-left und zaehlte damit denselben Abstand doppelt mit der
+#     Polsterung (siehe die Herleitung in src/sizes.py, direkt vor
+#     STYLE_PADDING_BUTTON) - behoben durch Umstellung auf
+#     STYLE_SPACE_8, die Sprosse der allgemeinen Abstandsleiter statt
+#     einer eigenen Groesse. STYLE_CHIP_GAP hat damit keinen Leser mehr
+#     und ist mit STYLE_MARGIN_TOP zusammen unten gelandet, aus
+#     demselben Grund wie STYLE_WAYBAR_EDGE_SPACING gleich darunter: eine
+#     Umbenennung auf einen Namen, den die Tabelle nicht mehr kennt,
+#     waere eine Migration, die einen Wert in die Datei schreibt, den
+#     niemand mehr liest.
 #
 # STYLE_WAYBAR_EDGE_SPACING stand hier und zeigte auf
 # STYLE_BAR_EDGE_SPACING. Diese Groesse gibt es seit dem 12.08.2026
@@ -369,9 +381,7 @@ RENAMED_KEYS = {
 # nicht kennt, waere eine Migration, die einen Wert in die Datei
 # schreibt, den niemand mehr liest. Der alte Name faellt jetzt unter
 # RETIRED_SIZE_VALUES und wird beim Laden weggeraeumt.
-RENAMED_SIZE_VALUES = {
-    "STYLE_MARGIN_TOP": "STYLE_CHIP_GAP",
-}
+RENAMED_SIZE_VALUES: dict[str, str] = {}
 
 # Groessen, die es nicht mehr gibt. Ein Einzelwert dafuer in der Datei
 # des Nutzers ist ein Regler ohne Leser - genau das, wogegen
@@ -381,6 +391,12 @@ RETIRED_SIZE_VALUES = (
     "STYLE_WAYBAR_EDGE_SPACING",
     "STYLE_BAR_EDGE_SPACING",
     "STYLE_DOCK_MARGIN_BOTTOM",
+    # Beide am 19.08.2026: siehe den Absatz "BEIDE NAMEN SIND SEIT DEM
+    # 19.08.2026 UNTEN" oben. STYLE_CHIP_GAP steht hier zusaetzlich zu
+    # STYLE_MARGIN_TOP, damit auch eine Datei, die die erste Umbenennung
+    # (vom 12.08.2026) bereits durchlaufen hat, sauber wird.
+    "STYLE_MARGIN_TOP",
+    "STYLE_CHIP_GAP",
 )
 
 

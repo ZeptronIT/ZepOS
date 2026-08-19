@@ -1632,9 +1632,27 @@ COMMON_NOTEBOOK = 1366
 # Regel sie abgibt. Vier waren es vorher; die ganze Rechnung dazu steht
 # oben bei COMPLETE_FROM. custom-hardware ist NICHT mehr dabei - es steht
 # jetzt links und bleibt deshalb stehen.
+# NACHGEZOGEN am 19.08.2026, und die Liste ist KUERZER geworden.
+#
+#     Sechs Module klappten hier ein, jetzt sind es vier. Die Zahl
+#     hat sich an diesem Tag ZWEIMAL bewegt: erst auf drei, als der
+#     doppelte Rand fiel, dann zurueck auf vier, als STYLE_CHIP_GAP
+#     ganz durch die Abstandssprosse ersetzt wurde und die Polsterung
+#     ihren eigenen Wert bekam. Beide Male gemessen, nicht geschaetzt. Der Grund ist
+#     keine Verschlechterung, sondern die Behebung einer Doppelzaehlung:
+#     jedes Modul trug einen linken Rand aus .bar-module UND einen
+#     rechten aus seiner eigenen Regel, beide 15 Punkte. Zwischen zwei
+#     Symbolen lagen damit 46 Punkte statt heute 28.
+#
+#     GEMELDET vom Nutzer als "sie sind viel zu weit voneinander
+#     entfernt und auch nicht zentriert in ihrer box" - das Ungleiche
+#     kam daher, dass nicht jedes Modul die zweite Regel trug.
+#
+#     Die Zusicherung bleibt, was sie war: nicht "es klappt etwas ein",
+#     sondern "es klappt GENAU das ein". Dass die Liste schrumpft, ist
+#     der messbare Gewinn - auf demselben Schirm passt jetzt mehr.
 FOLDED_ON_COMMON_NOTEBOOK = ("custom-disk", "network", "bluetooth",
-                             "pulseaudio", "pulseaudio#microphone",
-                             "battery")
+                             "pulseaudio")
 
 # Die Groessenfaktoren, ueber die die Dicke geprueft wird.
 #
