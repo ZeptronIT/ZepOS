@@ -283,7 +283,8 @@ def _unknown(key: str) -> int:
 def _update_setting(command: str, arguments: list[str]) -> int:
     """`zepos-settings get/set update.*`, an der Maschinendatei.
 
-    Und danach `zepos-update --apply`, was der eigentliche Punkt ist: die
+    Und danach update.apply(), was der eigentliche Punkt ist - auf der
+    Befehlszeile heisst dasselbe `zepos-update --apply-schedule`: die
     Datei allein waere ein Wert in einem JSON. Erst der Aufruf schreibt
     die Zeitgeber-Ergaenzung und sagt systemd Bescheid - ohne ihn wuerde
     `zepos-settings set update.enabled false` melden, dass es

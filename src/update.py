@@ -50,14 +50,15 @@ LAEUFT
     Das ist die Frage, an der eine Selbstaktualisierung einen Arbeitstag
     kosten kann, und die Antwort steht hier und in perform():
 
-      * Dieses Modul erzeugt NICHTS neu und startet NICHTS neu. Kein
-        `zepos-generate`, kein `systemctl restart`, kein `pkill waybar`,
-        kein `ags quit`. FORBIDDEN_PROGRAMS haelt das fest, und ein Test
-        misst es an den Befehlen, die ein vollstaendiger Lauf wirklich
-        abgesetzt hat. Der Grund ist gemessen worden, und zwar am
-        11.08.2026 an der Maschine des Entwicklers: ein Generatorlauf im
-        Hintergrund beendet Waybar und AGS des Nutzers, mitten in seiner
-        Sitzung, ohne dass er etwas angefasst hat.
+      * Ein UNBEAUFSICHTIGTER Lauf erzeugt NICHTS neu und startet NICHTS
+        neu. Kein `zepos-generate`, kein `systemctl restart`, kein
+        `pkill waybar`, kein `ags quit`. FORBIDDEN_PROGRAMS haelt das
+        fest, und ein Test misst es an den Befehlen, die ein
+        vollstaendiger Lauf wirklich abgesetzt hat. Der Grund ist
+        gemessen worden, und zwar am 11.08.2026 an der Maschine des
+        Entwicklers: ein Generatorlauf im Hintergrund beendet Waybar und
+        AGS des Nutzers, mitten in seiner Sitzung, ohne dass er etwas
+        angefasst hat.
       * Die laufende Sitzung behaelt darum ihre erzeugte Konfiguration in
         ~/.config. Ein ausgetauschtes /usr/share/zepos aendert an einem
         bereits laufenden Compositor nichts: der haelt seine geoeffneten
@@ -70,6 +71,31 @@ LAEUFT
         Stelle, an der das keine laufende Sitzung trifft.
       * Die Benachrichtigung sagt genau das: es ist eingespielt, sichtbar
         wird es nach der naechsten Anmeldung.
+
+UND WAS PASSIERT, WENN EIN MENSCH DEN LAUF SELBST ANSTOESST (19.08.2026)
+    GEMELDET vom Nutzer: "bei einem update --apply wird auch alles
+    generiert und neue angezeigt sodass alle update direkt aktiv sind".
+    Er will nach einem Lauf, den er selbst gestartet hat, keinen zweiten
+    Handgriff und keine Neuanmeldung.
+
+    Der Absatz darueber sagt selbst, wo der Unterschied liegt: "Das ist
+    richtig, wenn ein Mensch den Generator ruft, und falsch, wenn ein
+    Zeitgeber es tut." Bis heute wurde dieser Unterschied nicht gemacht -
+    BEIDE Faelle wurden behandelt wie der Zeitgeber. caller() macht ihn
+    jetzt, und die Sperre bleibt genau da, wo sie war:
+
+      Zeitgeber   kein Terminal, kein sudo, kein Sitzplatz -> Marke,
+                  sonst nichts. Unveraendert.
+      Mensch      Terminal UND ein benennbares Konto UND eine
+                  angemeldete grafische Sitzung dieses Kontos -> der
+                  Generator laeuft im Vordergrund, als dieses Konto, und
+                  der Nutzer sieht ihn laufen.
+
+    Die drei Bedingungen stehen mit UND und nicht mit ODER da, und die
+    Begruendung dafuer ist die Kostenverteilung: eine falsch NICHT
+    erkannte Sitzung kostet eine Neuanmeldung, eine falsch ERKANNTE
+    reisst dem Nutzer die Leiste unter den Haenden weg - das ist der
+    Fehler vom 11.08. Im Zweifel wird deshalb nicht neu erzeugt.
 
 WAS EIN FEHLSCHLAG TUN MUSS
     Reden. `SigLevel = Required` heisst, dass eine Datenbank oder ein
@@ -169,6 +195,16 @@ REPOSITORY = "zepos"
 # neue Konfiguration greift. Das ist richtig, wenn ein Mensch den
 # Generator ruft, und falsch, wenn ein Zeitgeber es tut: der Nutzer sieht
 # seine Leiste verschwinden, ohne etwas getan zu haben.
+#
+# SEIT DEM 19.08.2026 IST DAS EINE GRENZE UND KEIN VERBOT MEHR
+#     perform() und announce() - alles, was ein Zeitgeber ausfuehrt -
+#     setzen weiterhin keinen einzigen dieser Befehle ab, und
+#     test_an_unattended_run_never_regenerates_and_never_restarts_anything
+#     misst das an den wirklich abgesetzten Argumenten. Neu ist nur, dass
+#     regenerate() daneben steht: dieselben Programme, aber ausschliesslich
+#     hinter caller().human, also hinter einem Terminal, einem sudo und
+#     einer angemeldeten Sitzung. Diese Liste wird deshalb nie kuerzer -
+#     sie beschreibt den Zeitgeber, und der darf nach wie vor nichts davon.
 FORBIDDEN_PROGRAMS = (
     "zepos-generate", "generate_config.sh",
     "pkill", "killall", "kill",
@@ -275,6 +311,23 @@ class Session:
     uid: int
     user: str
     seat: str
+
+
+@dataclass(frozen=True)
+class Invocation:
+    """Wer diesen Lauf angestossen hat - ein Mensch oder der Zeitgeber.
+
+    `reason` ist kein Protokolltext, sondern die Zeile, die main() dem
+    Nutzer druckt, wenn NICHT neu erzeugt wird. Ein Programm, das eine
+    Entscheidung trifft und sie fuer sich behaelt, sieht fuer den
+    Nutzer aus wie ein Programm, das nichts getan hat.
+    """
+
+    human: bool
+    uid: int | None
+    user: str
+    elevated: bool
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -635,8 +688,8 @@ def timer_dropin(config: dict[str, Any]) -> str:
         die letzte Zuweisung gilt. Sie brauchen die Ruecksetzung nicht.
     """
     lines = [
-        "# Erzeugt von zepos-update --apply aus den Einstellungen unter",
-        f"# {config_path()}. Nicht von Hand aendern - der naechste",
+        "# Erzeugt von zepos-update --apply-schedule aus den Einstellungen",
+        f"# unter {config_path()}. Nicht von Hand aendern - der naechste",
         "# `zepos-settings set update.schedule.*` schreibt sie neu.",
         "[Timer]",
     ]
@@ -845,7 +898,267 @@ def graphical_sessions(*, runner: Runner | None = None) -> list[Session]:
     return parse_sessions(result.stdout or "")
 
 
-def notification(outcome: Outcome, config: dict[str, Any]) -> Notification | None:
+# --------------------------------------------------------------------
+# Mensch oder Zeitgeber - und was der Mensch danach bekommt
+# --------------------------------------------------------------------
+
+# Die beiden Umgebungsvariablen, an denen ein root-Prozess erfaehrt, WER
+# ihn gestartet hat. sudo setzt SUDO_UID/SUDO_USER, pkexec PKEXEC_UID -
+# und kein Zeitgeber setzt eines von beiden, weil systemd den Dienst
+# direkt als root startet und keinen Menschen dazwischen hat.
+SUDO_UID_ENV = "SUDO_UID"
+SUDO_USER_ENV = "SUDO_USER"
+PKEXEC_UID_ENV = "PKEXEC_UID"
+
+
+def _at_a_terminal() -> bool:
+    """Haengt an diesem Lauf ein Terminal?
+
+    Das ist das einzige der drei Merkmale, das ein Zeitgeber nicht
+    versehentlich erfuellen kann. src/system/zepos-update.service ist ein
+    Type=oneshot ohne TTY-Angabe: systemd gibt ihm das Journal als
+    Ausgabe und /dev/null als Eingabe, und weder das eine noch das andere
+    ist jemals ein Terminal. Ein Mensch, der `sudo zepos-update` tippt -
+    in kitty oder auf einer Konsole -, hat beides.
+
+    BEIDE Seiten werden gefragt. `zepos-update | tee protokoll` haette
+    eine Eingabe am Terminal und eine Ausgabe in einer Roehre; die
+    Erzeugung dauert eine halbe Minute und schreibt in dieser Zeit
+    Fortschritt, den dann niemand sieht. Wer sie trotzdem will, sagt es
+    mit --regenerate.
+
+    Eine geschlossene Standardeingabe wirft ValueError statt False zu
+    liefern; das ist dann eben kein Terminal.
+    """
+    try:
+        return bool(sys.stdin.isatty() and sys.stdout.isatty())
+    except (ValueError, AttributeError):
+        return False
+
+
+def _euid() -> int:
+    """Als wen dieser Prozess laeuft.
+
+    Eine eigene Funktion und kein os.geteuid() an der Aufrufstelle, damit
+    ein Test die Rechtelage setzen kann, ohne os selbst zu verbiegen -
+    dieselbe Naht wie runner= bei allem anderen in dieser Datei.
+    """
+    return os.geteuid()
+
+
+def _invoking_account() -> tuple[int | None, str]:
+    """uid und Name des Menschen hinter diesem Prozess.
+
+    Drei Faelle, in dieser Reihenfolge:
+
+      sudo/pkexec   SUDO_UID bzw. PKEXEC_UID. Der Prozess ist root, das
+                    Konto, dessen Schreibtisch gemeint ist, steht in der
+                    Umgebung.
+      root ohne     Kein Konto. AUSDRUECKLICH kein Raten: ein root, das
+      beides        sich den Benutzer aus loginctl aussucht, erzeugt auf
+                    einer Maschine mit zwei Anmeldungen in ein fremdes
+                    Heimatverzeichnis - und startet die Schale dessen
+                    neu, der nichts getan hat. Genau der Fehler vom
+                    11.08., nur mit einer anderen uid.
+      kein root     Wir selbst. Ein Lauf ohne Rechte kommt zwar an
+                    pacman nicht vorbei, aber die Erkennung soll nicht
+                    davon abhaengen, wer sie fragt.
+    """
+    for name in (SUDO_UID_ENV, PKEXEC_UID_ENV):
+        raw = os.environ.get(name)
+        if raw and raw.isdigit():
+            uid = int(raw)
+            user = os.environ.get(SUDO_USER_ENV) or ""
+            if not user:
+                try:
+                    import pwd
+
+                    user = pwd.getpwuid(uid).pw_name
+                except (ImportError, KeyError):
+                    return None, ""
+            return uid, user
+
+    if _euid() != 0:
+        uid = _euid()
+        try:
+            import pwd
+
+            return uid, pwd.getpwuid(uid).pw_name
+        except (ImportError, KeyError):
+            return None, ""
+    return None, ""
+
+
+def caller(sessions: Iterable[Session], *, force: bool | None = None
+           ) -> Invocation:
+    """Hat ein Mensch das hier angestossen, in seiner eigenen Sitzung?
+
+    DREI MERKMALE, MIT UND VERKNUEPFT, UND WARUM GERADE DIESE DREI
+
+      1. Ein Terminal haengt am Lauf (_at_a_terminal). Das ist der
+         strukturelle Unterschied: der Dienst hat keins und kann keins
+         bekommen. Allein reicht es nicht - eine root-Schale ueber SSH
+         hat auch eins, und dort gibt es keinen Schreibtisch, den ein
+         Neuerzeugen erreichen wuerde.
+
+      2. Ein benennbares Konto (_invoking_account). Ohne uid weiss ein
+         root-Prozess nicht, WESSEN ~/.config er erzeugen soll, und die
+         Antwort darf nicht geraten werden.
+
+      3. Dieses Konto ist gerade an einem Sitzplatz angemeldet
+         (parse_sessions verlangt seat). Das ist die Bedingung, die den
+         Fall vom 11.08. ausschliesst und zugleich die einzige, unter
+         der ein Neustart der Schale ueberhaupt etwas bewirkt: ohne
+         laufende Sitzung gibt es nichts neu zu starten, und die naechste
+         Anmeldung erzeugt ohnehin neu.
+
+    Die Liste der Sitzungen wird HEREINGEREICHT und nicht hier geholt.
+    perform() hat loginctl bereits gefragt, vor der ersten veraendernden
+    Handlung; eine zweite Frage haette eine zweite Antwort sein koennen,
+    und dann waere die Entscheidung an einer anderen Messung getroffen
+    worden als die Benachrichtigung.
+
+    `force` ist der ausdrueckliche Schalter (--regenerate/--no-regenerate).
+    Er ueberstimmt Merkmal 1 und 3, NICHT Merkmal 2: ein root ohne
+    SUDO_UID kann auch auf Zuruf nicht wissen, wem der Schreibtisch
+    gehoert.
+    """
+    uid, user = _invoking_account()
+    elevated = _euid() == 0
+
+    if force is False:
+        return Invocation(False, uid, user, elevated,
+                          "Nicht neu erzeugt: --no-regenerate.")
+
+    if uid is None or not user:
+        return Invocation(
+            False, uid, user, elevated,
+            "Nicht neu erzeugt: dieser Lauf gehoert zu keinem Konto "
+            f"({SUDO_UID_ENV} ist nicht gesetzt), und welcher Schreibtisch "
+            "gemeint ist, wird nicht geraten.")
+
+    if force is True:
+        return Invocation(True, uid, user, elevated, "")
+
+    if not _at_a_terminal():
+        return Invocation(
+            False, uid, user, elevated,
+            "Nicht neu erzeugt: an diesem Lauf haengt kein Terminal - "
+            "so ruft der Zeitgeber. `--regenerate` erzwingt es.")
+
+    if uid not in {session.uid for session in sessions}:
+        return Invocation(
+            False, uid, user, elevated,
+            f"Nicht neu erzeugt: fuer {user} ist gerade keine grafische "
+            "Sitzung an einem Sitzplatz angemeldet.")
+
+    return Invocation(True, uid, user, elevated, "")
+
+
+# Was im Vordergrund wirklich laeuft. Eine Zeichenkette und kein
+# zusammengesetzter Befehl, damit nichts, was von aussen kommt, je in
+# eine Schale gerat: der Kontoname geht als ARGUMENT an runuser, nicht in
+# dieses Skript.
+#
+# WARUM DIE UMGEBUNG HIER ERGAENZT WIRD
+#     sudo setzt die Umgebung zurueck (env_reset ist die Vorgabe), und
+#     runuser setzt HOME/USER/SHELL/PATH neu. Was dabei verloren geht,
+#     ist genau das, was den Generator mit der laufenden Sitzung
+#     verbindet: ohne XDG_RUNTIME_DIR, Sitzungsbus und WAYLAND_DISPLAY
+#     erzeugt er zwar jede Datei richtig, aber `ags quit` und der
+#     Neustart der Schale gehen ins Leere - und dann waere "direkt aktiv"
+#     eine Behauptung.
+#
+#     /run/user/<uid>/bus ist derselbe Pfad, aus demselben Grund, den
+#     notify_commands() weiter oben ausschreibt. Die Wayland-Steckdose
+#     wird nicht geraten, sondern GESUCHT: im Laufzeitverzeichnis liegt
+#     sie unter ihrem Namen, und -S nimmt die Steckdose und nicht die
+#     Sperrdatei daneben (wayland-1 gegen wayland-1.lock).
+#
+# WARUM DER ZEITSTEMPEL HIER GESETZT WIRD UND NICHT IN PYTHON
+#     Er gehoert dem KONTO und liegt in dessen Heimatverzeichnis. Ein
+#     root, das ihn schreibt, hinterlaesst dort eine Datei, die dem Konto
+#     nicht gehoert - und src/bin/zepos-session macht bei der naechsten
+#     Anmeldung `: >"$GENERATED_STAMP"`, was daran scheitert. Hier laeuft
+#     er als das Konto selbst und mit derselben Aufloesung von
+#     XDG_STATE_HOME wie zepos-session, weil beide dieselbe Zeile tragen.
+#
+# UND WARUM NUR NACH EINEM ERFOLG
+#     Ein gescheiterter Generatorlauf hat nichts erzeugt. Bliebe der
+#     Zeitstempel trotzdem stehen, waere die Marke aus mark_regeneration()
+#     entwertet - und die naechste Anmeldung, die den Fehlschlag heilen
+#     wuerde, uebersaehe ihn.
+REGENERATE_SCRIPT = r"""set -u
+zustand="${XDG_STATE_HOME:-$HOME/.local/state}/zepos"
+
+: "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+export XDG_RUNTIME_DIR
+: "${DBUS_SESSION_BUS_ADDRESS:=unix:path=$XDG_RUNTIME_DIR/bus}"
+export DBUS_SESSION_BUS_ADDRESS
+if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    for steckdose in "$XDG_RUNTIME_DIR"/wayland-*; do
+        [ -S "$steckdose" ] || continue
+        WAYLAND_DISPLAY="${steckdose##*/}"
+        export WAYLAND_DISPLAY
+        break
+    done
+fi
+
+zepos-generate --all
+rc=$?
+if [ "$rc" -eq 0 ]; then
+    mkdir -p "$zustand"
+    : >"$zustand/generated-at"
+    rm -f "$zustand/regenerate-required"
+fi
+exit "$rc"
+"""
+
+
+def regenerate_command(invocation: Invocation) -> list[str]:
+    """Der Befehl, der die Konfiguration im Vordergrund neu erzeugt.
+
+    Als Argumentliste und nicht als Aufruf, aus demselben Grund wie bei
+    systemd_actions(): so ist im Testbericht zu lesen, WAS abgesetzt
+    wird, statt dass jemand es glauben muss.
+
+    runuser und nicht `su -c`: dieselbe Ueberlegung wie bei
+    notify_commands() - kein Anmeldevorgang, keine Kennwortabfrage, und
+    keine Zeichenkette, die eine zweite Schale noch einmal liest.
+    Laeuft der Aufruf ohnehin schon als das gemeinte Konto (also nicht
+    als root), faellt runuser weg: sich selbst zu werden, kostet nur
+    einen Prozess.
+    """
+    argv = ["bash", "-c", REGENERATE_SCRIPT]
+    if invocation.elevated:
+        return ["runuser", "-u", invocation.user, "--", *argv]
+    return argv
+
+
+def regenerate(invocation: Invocation, *, runner: Runner | None = None) -> int:
+    """Neu erzeugen und die Schale neu starten, sichtbar.
+
+    OHNE capture_output, und das ist der Unterschied zu jedem anderen
+    Aufruf in dieser Datei: `zepos-generate --all` braucht auf einer
+    frischen Maschine rund 30 Sekunden und schreibt in dieser Zeit, was
+    es tut. Ein Mensch, der gerade `sudo zepos-update` getippt hat, soll
+    das sehen und nicht auf eine stumme halbe Minute schauen.
+
+    Der Rueckgabewert ist der des Generators; 127 steht fuer "gar nicht
+    erst gestartet" (dieselbe Zahl, die eine Schale fuer einen fehlenden
+    Befehl liefert), damit der Aufrufer beide Faelle gleich behandeln
+    kann - in beiden ist nichts erzeugt worden.
+    """
+    runner = runner or subprocess.run
+    try:
+        result = runner(regenerate_command(invocation), timeout=1800)
+    except (OSError, subprocess.SubprocessError):
+        return 127
+    return result.returncode
+
+
+def notification(outcome: Outcome, config: dict[str, Any], *,
+                 regenerated: bool = False) -> Notification | None:
     """Was dem Nutzer gesagt wird - oder nichts.
 
     Drei Faelle und drei Einstellungen:
@@ -879,7 +1192,14 @@ def notification(outcome: Outcome, config: dict[str, Any]) -> Notification | Non
 
     names = ", ".join(change.name for change in outcome.upgraded)
     body = f"{names}."
-    if outcome.sessions:
+    if regenerated:
+        # Der Fall, den ein Mensch selbst angestossen hat. Der Satz
+        # darunter waere hier schlicht falsch - es IST neu erzeugt
+        # worden, und die Schale, die diese Nachricht anzeigt, ist
+        # gerade deswegen neu gestartet.
+        body += (" Die Konfiguration ist neu erzeugt und die Schale neu "
+                 "gestartet.")
+    elif outcome.sessions:
         # Die Antwort auf "was passiert mit meinem laufenden
         # Schreibtisch": nichts, bis zur naechsten Anmeldung.
         body += (" Die laufende Sitzung bleibt, wie sie ist; die neue "
@@ -1120,9 +1440,15 @@ def perform(config: dict[str, Any], *, runner: Runner | None = None,
 
 
 def announce(outcome: Outcome, config: dict[str, Any], *,
-             runner: Runner | None = None) -> list[list[str]]:
-    """Die Benachrichtigung absetzen, wenn es eine gibt."""
-    note = notification(outcome, config)
+             runner: Runner | None = None,
+             regenerated: bool = False) -> list[list[str]]:
+    """Die Benachrichtigung absetzen, wenn es eine gibt.
+
+    `regenerated` steht auf der Vorgabe False, weil das der Fall des
+    Zeitgebers ist - und weil ein Vorgabewert, der die seltenere Haelfte
+    beschreibt, jeden Aufrufer zwingt, an sie zu denken.
+    """
+    note = notification(outcome, config, regenerated=regenerated)
     if note is None:
         return []
     runner = runner or subprocess.run
@@ -1139,10 +1465,31 @@ def announce(outcome: Outcome, config: dict[str, Any], *,
 # Befehlszeile
 # --------------------------------------------------------------------
 
-USAGE = """usage: zepos-update            aktualisieren, was aus [zepos] kommt
-       zepos-update --check    nur nachsehen und berichten
-       zepos-update --status   was der letzte Lauf getan hat
-       zepos-update --apply    systemd auf die Einstellungen bringen
+USAGE = """usage: zepos-update  [--now] [--regenerate|--no-regenerate]
+                            EINSPIELEN, was aus [zepos] kommt, und danach
+                            neu erzeugen, wenn ein Mensch am Terminal
+                            sitzt und angemeldet ist
+       zepos-update --check           nur nachsehen und berichten
+       zepos-update --status          was der letzte Lauf getan hat
+       zepos-update --apply-schedule  NUR den Zeitgeber auf die
+                            Einstellungen bringen - es wird dabei NICHTS
+                            eingespielt und nichts erzeugt (--apply ist
+                            derselbe Befehl unter seinem alten Namen; der
+                            ALPM-Haken ruft ihn so)
+
+DER UNTERSCHIED, DEN NIEMAND ERRATEN MUSS
+    Was Pakete austauscht, ist `zepos-update` OHNE Argument, oder
+    gleichbedeutend `zepos-update --now`. `--apply-schedule` stellt nur
+    systemd ein - wann der Zeitgeber feuert und ob ueberhaupt.
+
+WAS NACH EINEM LAUF NEU ERZEUGT WIRD
+    Hat der Lauf Pakete getauscht UND haengt ein Terminal daran UND ist
+    das aufrufende Konto (SUDO_USER) gerade grafisch angemeldet, dann
+    laeuft `zepos-generate --all` gleich hinterher, als dieses Konto: die
+    Konfiguration ist neu, die Schale startet neu, und es braucht keine
+    Neuanmeldung. Fehlt eine der drei Bedingungen - so ruft der
+    Zeitgeber -, bleibt es bei der Marke, und die naechste Anmeldung
+    erzeugt neu. --regenerate/--no-regenerate entscheiden es ausdruecklich.
 
 Was, wann und ob ueberhaupt entscheidet {config}; geschrieben wird das
 mit `zepos-settings set update.<name> <wert>`:
@@ -1159,13 +1506,143 @@ def usage_text() -> str:
         keys="\n".join(f"    update.{name}" for name in known_keys()))
 
 
+# Die Namen fuer die eine Handlung, die nur den Zeitgeber einstellt.
+#
+# WARUM ES ZWEI SIND, OBWOHL EINER GENUEGEN WUERDE
+#     GEMELDET am 19.08.2026: der Nutzer hat in dieser Sitzung gefragt,
+#     ob er "apply versuchen" solle, um Aktualisierungen einzuspielen.
+#     Es haette nichts getan - "--apply" liest sich wie "spiel es ein",
+#     und der Befehl schreibt eine systemd-Ergaenzung. Das ist ein Mangel
+#     der Benennung und kein Missverstaendnis.
+#
+#     Der sprechende Name ist deshalb --apply-schedule, und er steht in
+#     der Hilfe an erster Stelle. --apply bleibt trotzdem gueltig, weil
+#     es nicht nur ein Tippweg ist: /usr/share/libalpm/hooks/
+#     90-zepos-update.hook ruft `/usr/bin/zepos-update --apply`, und ein
+#     Haken, der auf der Platte liegt, wird von der Aktualisierung
+#     gerufen, die ihn gerade ersetzt. Ein ersatzlos geloeschter Aufruf
+#     waere eine Maschine, die genau bei DEM pacman-Lauf ihren Zeitgeber
+#     verliert, mit dem sie den neuen Namen bekommt.
+SCHEDULE_FLAGS = ("--apply-schedule", "--apply")
+
+# Der Hinweis, den ein MENSCH bekommt, der --apply getippt hat. Der Haken
+# bekommt ihn nicht: an ihm haengt kein Terminal, und eine Zeile Prosa in
+# jeder pacman-Transaktion ist Laerm, den niemand bestellt hat.
+APPLY_NOTE = (
+    "Hinweis: das hat nur den Zeitgeber eingestellt - es wurde nichts "
+    "eingespielt.\n"
+    "         Was Pakete austauscht, ist `sudo zepos-update` (oder "
+    "`sudo zepos-update --now`).\n"
+    "         Der sprechende Name dieses Befehls ist --apply-schedule.")
+
+
+def aftermath(outcome: Outcome, invocation: Invocation,
+              regeneration: int | None, *, dry: bool = False) -> list[str]:
+    """Was nach dem Lauf gilt - und was NICHT gilt.
+
+    Die eigentliche Bestellung des Nutzers steckt in diesen Zeilen: "und
+    neue angezeigt sodass alle update direkt aktiv sind". Er will nach
+    einem Lauf wissen, was er bekommen hat und ob er noch etwas tun muss.
+
+    JEDE ZEILE HIER MUSS WAHR SEIN, AUCH DIE UNBEQUEME
+        `zepos-generate --all` erzeugt die Konfiguration neu und startet
+        AGS neu (siehe den Abschnitt "Start/restart AGS" in
+        src/generate_config.sh). Hyprland startet es NICHT neu und laedt
+        es auch nicht neu - es schreibt am Ende nur "Info: Run 'hyprctl
+        reload'". Und `plugin=`-Zeilen liest Hyprland ausschliesslich
+        beim Parsen, also beim Start (src/plugins.py). "Fertig, alles
+        aktiv" waere darum in zwei Punkten gelogen, und der Nutzer merkte
+        es erst, wenn er sich fragt, warum eine geaenderte Tastenbelegung
+        nicht greift.
+
+    `regeneration` ist None, wenn gar nicht erzeugt wurde, sonst der
+    Rueckgabewert des Generators. `dry` ist der Probelauf: dann ist noch
+    nichts geschehen, und jeder Satz steht im Konjunktiv - "erzeugt" zu
+    drucken, wo nichts erzeugt wurde, waere dieselbe Unwahrheit wie
+    "fertig" zu drucken, wo eine Neuanmeldung fehlt.
+    """
+    lines: list[str] = []
+
+    if outcome.failed:
+        return ["Es wurde nichts eingespielt. Der Wortlaut oben ist "
+                "pacmans eigener; `zepos-update --status` zeigt ihn "
+                "wieder."]
+
+    if outcome.base_available:
+        lines.append(f"{len(outcome.base_available)} Arch-Aktualisierungen "
+                     f"liegen bereit und werden nicht angefasst - "
+                     f"`sudo pacman -Syu` spielt sie ein.")
+
+    if not outcome.changed:
+        return lines
+
+    if dry:
+        if invocation.human:
+            lines.append(f"Ein Lauf ohne --check wuerde danach "
+                         f"`zepos-generate --all` als {invocation.user} "
+                         f"ausfuehren; eine Neuanmeldung waere nicht noetig.")
+        else:
+            lines.append(invocation.reason)
+            lines.append("Ein Lauf ohne --check wuerde nur die Marke "
+                         "setzen; erzeugt wuerde bei der naechsten "
+                         "Anmeldung.")
+        return lines
+
+    if regeneration is None:
+        lines.append(invocation.reason)
+        lines.append("Die laufende Sitzung behaelt ihre erzeugte "
+                     "Konfiguration; die neue Fassung erscheint nach der "
+                     "naechsten Anmeldung.")
+        return lines
+
+    if regeneration != 0:
+        lines.append(f"Das Neuerzeugen ist gescheitert (rc={regeneration}). "
+                     f"Es gilt weiter die alte Konfiguration; die naechste "
+                     f"Anmeldung versucht es erneut, oder "
+                     f"`zepos-generate --all` von Hand.")
+        return lines
+
+    lines.append("Neu erzeugt und die Schale (AGS) neu gestartet - dafuer "
+                 "ist keine Neuanmeldung noetig.")
+    lines.append("Hyprland selbst laeuft weiter mit der Konfiguration, mit "
+                 "der es gestartet ist: geaenderte Regeln uebernimmt "
+                 "`hyprctl reload`, geaenderte Plugins erst die naechste "
+                 "Anmeldung.")
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv in (["-h"], ["--help"]):
         print(usage_text())
         return 0
-    if len(argv) > 1 or (argv and argv[0] not in
-                         ("--check", "--status", "--apply")):
+
+    # Handgeschrieben und nicht argparse, aus demselben Grund wie im Rest
+    # dieses Baums: argparse haette fuer --apply eine eigene Fehlermeldung
+    # gedruckt statt der Hilfe, die den Unterschied zwischen den beiden
+    # Befehlen erklaert - und genau dieser Unterschied ist das Problem,
+    # das hier behoben wird.
+    action = ""
+    force: bool | None = None
+    for argument in argv:
+        if argument in SCHEDULE_FLAGS or argument in ("--check", "--status",
+                                                      "--now"):
+            if action:
+                print(usage_text(), file=sys.stderr)
+                return 2
+            action = argument
+        elif argument == "--regenerate":
+            force = True
+        elif argument == "--no-regenerate":
+            force = False
+        else:
+            print(usage_text(), file=sys.stderr)
+            return 2
+
+    if force is not None and action not in ("", "--now", "--check"):
+        # Ein Schalter, der auf die gewaehlte Handlung nicht wirkt, ist
+        # eine Anweisung, die ins Leere geht. Sie wird abgelehnt statt
+        # uebergangen.
         print(usage_text(), file=sys.stderr)
         return 2
 
@@ -1175,32 +1652,59 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{exc}\nNichts getan.", file=sys.stderr)
         return 1
 
-    if argv == ["--status"]:
+    if action == "--status":
         print(describe(read_state()))
         return 0
 
-    if argv == ["--apply"]:
+    if action in SCHEDULE_FLAGS:
         for command in apply(config):
             print(" ".join(command))
+        if action == "--apply" and _at_a_terminal():
+            print(APPLY_NOTE)
         return 0
 
-    outcome = perform(config, check_only=argv == ["--check"])
+    check_only = action == "--check"
+    outcome = perform(config, check_only=check_only)
     print(f"zepos-update: {outcome.result}")
     for change in outcome.upgraded:
+        # Fassung vorher und nachher - Change.__str__ schreibt
+        # "name alt -> neu". Das ist der Unterschied zwischen "es hat
+        # sich etwas geaendert" und "DAS hat sich geaendert".
         print(f"  {change}")
-    if outcome.base_available:
-        print(f"  {len(outcome.base_available)} Arch-Aktualisierungen "
-              f"bereit, nicht angefasst")
     if outcome.message:
         print(outcome.message)
 
-    if argv == ["--check"]:
+    invocation = caller(outcome.sessions, force=force)
+
+    if check_only:
+        # Auch der Probelauf sagt, was DANACH passieren wuerde. Bis heute
+        # war das die eine Frage, die man nur durch Ausfuehren beantworten
+        # konnte - und Ausfuehren ist genau das, was ein --check vermeidet.
+        for line in aftermath(outcome, invocation, None, dry=True):
+            print(line)
         return 0
 
     write_state(outcome, config)
+
+    regeneration: int | None = None
     if outcome.changed:
+        # Die Marke wird IMMER gesetzt, auch wenn gleich im Vordergrund
+        # erzeugt wird. Sie gilt der MASCHINE und damit jedem Konto: wer
+        # hier nicht angemeldet ist, bekommt sein Neuerzeugen bei seiner
+        # naechsten Anmeldung. Der Vordergrundlauf entwertet sie nur fuer
+        # SICH, indem er den Zeitstempel dieses Kontos danach neu setzt -
+        # siehe REGENERATE_SCRIPT.
         mark_regeneration()
-    announce(outcome, config)
+        if invocation.human:
+            print("")
+            print(f"zepos-generate --all (als {invocation.user}) - "
+                  f"das dauert einen Moment.")
+            regeneration = regenerate(invocation)
+
+    announce(outcome, config, regenerated=regeneration == 0)
+
+    for line in aftermath(outcome, invocation, regeneration):
+        print(line)
     return 1 if outcome.failed else 0
 
 

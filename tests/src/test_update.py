@@ -22,6 +22,7 @@ WARUM DIE VERGLEICHE ZEILENGENAU UND OHNE KOMMENTARE SIND
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -547,6 +548,339 @@ def test_a_run_that_changed_nothing_leaves_no_mark(update, monkeypatch):
 
     assert update.main([]) == 0
     assert not update.marker_path().exists()
+
+
+# --------------------------------------------------------------------
+# Und was ein Lauf, den ein MENSCH angestossen hat, tun DARF
+# (19.08.2026)
+# --------------------------------------------------------------------
+#
+# GEMELDET: "bei einem update --apply wird auch alles generiert und neue
+# angezeigt sodass alle update direkt aktiv sind". Bis zu diesem Datum
+# wurden beide Faelle behandelt wie der Zeitgeber - der Nutzer musste
+# sich nach jeder Aktualisierung neu anmelden, um sie zu sehen.
+#
+# Die Sperre darueber bleibt Wort fuer Wort stehen. Diese Haelfte misst
+# das Gegenstueck: dass der Mensch bekommt, was der Zeitgeber nicht darf.
+
+
+def _human(monkeypatch, *, terminal: bool = True, uid: str | None = "1000",
+           user: str = "zep", root: bool = True) -> None:
+    """Die drei Merkmale aus caller() setzen, einzeln abschaltbar.
+
+    _at_a_terminal und _euid sind in update.py eigene Funktionen, damit
+    genau das hier geht, ohne sys oder os zu verbiegen - dieselbe Naht
+    wie runner= ueberall sonst in diesem Modul.
+    """
+    import update as module
+
+    monkeypatch.setattr(module, "_at_a_terminal", lambda: terminal)
+    monkeypatch.setattr(module, "_euid", lambda: 0 if root else 1000)
+    monkeypatch.delenv("SUDO_UID", raising=False)
+    monkeypatch.delenv("PKEXEC_UID", raising=False)
+    monkeypatch.delenv("SUDO_USER", raising=False)
+    if uid is not None:
+        monkeypatch.setenv("SUDO_UID", uid)
+        monkeypatch.setenv("SUDO_USER", user)
+
+
+def _forbidden_hits(update, commands: list[list[str]]) -> list[tuple]:
+    """Jedes Wort in jedem Argument gegen FORBIDDEN_PROGRAMS.
+
+    WORTWEISE UND NICHT ARGUMENTWEISE, und das ist der Unterschied zu der
+    Pruefung weiter oben: die Vordergrund-Erzeugung reicht ein ganzes
+    Skript als EIN Argument an `bash -c`, und "zepos-generate --all"
+    steht darin mitten in einer Zeile. Eine Pruefung, die nur ganze
+    Argumente vergleicht, saehe davon nichts - und genau das waere die
+    Luecke, durch die die Erzeugung in den unbeaufsichtigten Lauf
+    zurueckkaeme, ohne dass ein Test es merkt.
+    """
+    hits = []
+    for command in commands:
+        for part in command:
+            for word in re.split(r"[\s;|&()]+", part):
+                if word and Path(word).name in update.FORBIDDEN_PROGRAMS:
+                    hits.append((word, command))
+    return hits
+
+
+def test_the_whole_unattended_command_still_calls_nothing_forbidden(
+        update, monkeypatch):
+    """Dieselbe Messung wie oben, aber am ganzen main() und wortweise.
+
+    Der Test darueber misst perform() und announce(). Seit es daneben
+    einen Weg gibt, der erzeugen DARF, muss auch der Weg gemessen werden,
+    auf dem main() sich zwischen beiden entscheidet - sonst bewiese die
+    Sperre nur noch etwas ueber zwei Funktionen und nichts mehr ueber den
+    Befehl, den der Zeitgeber wirklich startet.
+    """
+    _human(monkeypatch, terminal=False, uid=None)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+
+    assert _forbidden_hits(update, machine.commands) == []
+    assert machine.called("runuser") == []
+    # Und die Marke liegt, wie eh und je: der Zeitgeberweg ist derselbe.
+    assert update.marker_path().is_file()
+
+
+def test_a_run_a_human_started_in_his_own_session_regenerates_at_once(
+        update, monkeypatch, capsys):
+    """Die neue Haelfte, an den wirklich abgesetzten Befehlen gemessen.
+
+    Ohne diesen Test waere die Aenderung eine Behauptung: dass die
+    Sperre nicht mehr greift, ist an ihrem eigenen Test nicht zu sehen -
+    der bliebe auch dann gruen, wenn hier gar nichts erzeugt wuerde.
+    """
+    _human(monkeypatch)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+
+    assert machine.called("runuser") == [[
+        "runuser", "-u", "zep", "--", "bash", "-c", update.REGENERATE_SCRIPT]]
+    assert "zepos-generate --all" in update.REGENERATE_SCRIPT
+
+    text = capsys.readouterr().out
+    assert "zepos-config 0.1.0-1 -> 0.1.1-1" in text
+    assert "Neu erzeugt" in text
+    # Und der eine Satz, der nicht "fertig" sagt: Hyprland selbst hat
+    # der Generator nicht neu geladen, und Plugins liest es nur beim
+    # Start (src/plugins.py).
+    assert "hyprctl reload" in text
+    assert "Anmeldung" in text
+
+
+@pytest.mark.parametrize("fehlt,merkmale", [
+    ("kein Terminal", {"terminal": False}),
+    ("kein Konto", {"uid": None}),
+])
+def test_a_missing_signal_alone_falls_back_to_the_marker(update, monkeypatch,
+                                                         fehlt, merkmale):
+    """Drei Merkmale mit UND, und das UND wird gemessen.
+
+    Die Kostenverteilung steht im Kopf von src/update.py: eine falsch
+    NICHT erkannte Sitzung kostet eine Neuanmeldung, eine falsch ERKANNTE
+    reisst dem Nutzer die Leiste weg. Also faellt jedes einzelne fehlende
+    Merkmal auf den Zeitgeberweg zurueck.
+    """
+    _human(monkeypatch, **merkmale)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+
+    assert machine.called("runuser") == [], fehlt
+    assert _forbidden_hits(update, machine.commands) == [], fehlt
+    assert update.marker_path().is_file()
+
+
+def test_a_human_without_a_graphical_session_gets_the_marker(update,
+                                                             monkeypatch,
+                                                             capsys):
+    """Das dritte Merkmal, und es braucht eine eigene Maschine.
+
+    root ueber SSH hat ein Terminal und ein SUDO_UID und trotzdem keinen
+    Schreibtisch, den ein Neuerzeugen erreichen wuerde: `ags quit` ginge
+    ins Leere, und der Zeitstempel dieses Kontos stuende danach auf
+    "erzeugt", ohne dass etwas erzeugt worden waere.
+    """
+    _human(monkeypatch)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions="[]")
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+
+    assert machine.called("runuser") == []
+    text = capsys.readouterr().out
+    assert "keine grafische Sitzung" in text
+    assert "naechsten Anmeldung" in text
+
+
+def test_the_explicit_switches_beat_the_detection_in_both_directions(
+        update, monkeypatch):
+    """--regenerate und --no-regenerate, und warum beide noetig sind.
+
+    --no-regenerate, weil ein Mensch am Terminal sonst keinen Weg haette,
+    die halbe Minute Generatorlauf zu vermeiden. --regenerate, weil eine
+    Oberflaeche, die den Lauf ohne Terminal startet, sonst keinen haette,
+    ihn zu bekommen.
+    """
+    _human(monkeypatch)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+    assert update.main(["--no-regenerate"]) == 0
+    assert machine.called("runuser") == []
+
+    _human(monkeypatch, terminal=False)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions="[]")
+    monkeypatch.setattr(update.subprocess, "run", machine)
+    assert update.main(["--now", "--regenerate"]) == 0
+    assert len(machine.called("runuser")) == 1
+
+
+def test_even_a_forced_run_refuses_to_guess_whose_desktop_it_is(update,
+                                                                monkeypatch):
+    """--regenerate ueberstimmt Terminal und Sitzung, NICHT das Konto.
+
+    Ein root ohne SUDO_UID weiss nicht, in wessen ~/.config es erzeugen
+    soll. Sich den Benutzer aus loginctl auszusuchen, waere auf einer
+    Maschine mit zwei Anmeldungen genau der Fehler vom 11.08.2026, nur
+    mit einer anderen uid.
+    """
+    _human(monkeypatch, uid=None)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main(["--regenerate"]) == 0
+    assert machine.called("runuser") == []
+
+
+def test_the_foreground_run_dates_this_account_and_leaves_the_marker(
+        update, monkeypatch):
+    """Sonst erzeugt die naechste Anmeldung ein zweites Mal.
+
+    src/bin/zepos-session vergleicht die Marke unter /var/lib mit
+    ~/.local/state/zepos/generated-at DIESES Kontos. Der Vordergrundlauf
+    setzt deshalb den Zeitstempel und laesst die Marke stehen: sie gehoert
+    der Maschine, und ein zweites Konto auf derselben Maschine braucht
+    sein eigenes Neuerzeugen noch.
+
+    Und er setzt ihn NUR nach einem Erfolg - ein gescheiterter Generator
+    hat nichts erzeugt, und ein Zeitstempel darueber entwertete die Marke.
+    """
+    _human(monkeypatch)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+    assert update.marker_path().is_file()
+
+    skript = update.REGENERATE_SCRIPT
+    assert 'generated-at' in skript
+    assert 'rc" -eq 0' in skript
+    # Dieselbe Aufloesung wie in src/bin/zepos-session, Zeile fuer Zeile:
+    # ein zweiter Ort fuer denselben Pfad waere ein Pfad, der auseinander
+    # laeuft.
+    assert '${XDG_STATE_HOME:-$HOME/.local/state}/zepos' in skript
+    # Und die Bitte der Einstellungs-Anwendung ist mit demselben Lauf
+    # erfuellt (paths.SESSION_REGENERATE_MARKER).
+    assert 'rm -f "$zustand/regenerate-required"' in skript
+
+
+def test_a_failed_regeneration_says_so_instead_of_saying_done(update,
+                                                              monkeypatch,
+                                                              capsys):
+    """Was gedruckt wird, muss wahr sein - auch, wenn es unbequem ist."""
+    _human(monkeypatch)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions=SESSION,
+                      codes={"runuser": 3})
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+
+    text = capsys.readouterr().out
+    assert "gescheitert (rc=3)" in text
+    assert "Neu erzeugt" not in text
+
+
+def test_the_notification_after_a_foreground_run_promises_no_new_login(
+        update):
+    """Der Satz "erscheint nach der naechsten Anmeldung" ist im
+    Vordergrundfall schlicht falsch - die Schale, die diese Nachricht
+    anzeigt, ist gerade deswegen neu gestartet worden."""
+    outcome = update.Outcome(
+        result=update.Outcome.OK,
+        upgraded=(update.Change("zepos-config", "0.1.0-1", "0.1.1-1"),),
+        sessions=(update.Session(1000, "zep", "seat0"),))
+
+    davor = update.notification(outcome, update.defaults())
+    danach = update.notification(outcome, update.defaults(), regenerated=True)
+
+    assert "naechsten Anmeldung" in davor.body
+    assert "naechsten Anmeldung" not in danach.body
+    assert "neu erzeugt" in danach.body
+
+
+def test_the_dry_run_says_what_a_real_one_would_do_in_the_subjunctive(
+        update, monkeypatch, capsys):
+    """--check ist der Probelauf. Ob danach erzeugt wuerde, war bis heute
+    die eine Frage, die man nur durch Ausfuehren beantworten konnte - und
+    Ausfuehren ist genau das, was ein --check vermeidet."""
+    _human(monkeypatch)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main(["--check"]) == 0
+
+    text = capsys.readouterr().out
+    assert "wuerde" in text
+    assert "Neu erzeugt" not in text
+    assert machine.called("runuser") == []
+    assert not update.marker_path().exists()
+
+
+# --------------------------------------------------------------------
+# --apply heisst nicht, was es zu heissen scheint
+# --------------------------------------------------------------------
+
+def test_apply_sets_the_timer_and_tells_a_human_that_it_installed_nothing(
+        update, monkeypatch, capsys):
+    """GEMELDET am 19.08.2026: der Nutzer hat gefragt, ob er "apply
+    versuchen" solle, um Aktualisierungen einzuspielen. Es haette nichts
+    getan.
+
+    Der Hinweis geht an den MENSCHEN und nicht an den ALPM-Haken: an dem
+    haengt kein Terminal, und eine Zeile Prosa in jeder pacman-
+    Transaktion ist Laerm, den niemand bestellt hat.
+    """
+    machine = Machine()
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    _human(monkeypatch, terminal=True)
+    assert update.main(["--apply"]) == 0
+    am_terminal = capsys.readouterr().out
+    assert "es wurde nichts eingespielt" in am_terminal
+    assert "sudo zepos-update" in am_terminal
+    assert "--apply-schedule" in am_terminal
+
+    _human(monkeypatch, terminal=False)
+    assert update.main(["--apply"]) == 0
+    im_haken = capsys.readouterr().out
+    assert "eingespielt" not in im_haken
+
+    # Und der sprechende Name tut dasselbe. Beide schreiben die
+    # Ergaenzung; keiner von beiden ruft pacman.
+    assert update.dropin_path().is_file()
+    _human(monkeypatch, terminal=True)
+    assert update.main(["--apply-schedule"]) == 0
+    assert "pacman" not in machine.programs
+
+
+def test_the_help_separates_installing_from_setting_the_timer(update):
+    """`usage_text()` ist die Stelle, an der ein Mensch den Unterschied
+    heute lesen koennte. Er stand dort - als "systemd auf die
+    Einstellungen bringen", was die Frage "spielt das etwas ein?" nicht
+    beantwortet."""
+    text = update.usage_text()
+
+    assert "--apply-schedule" in text
+    assert "--now" in text
+    assert "NICHTS" in text
+    assert "--regenerate" in text
+
+
+def test_a_switch_that_cannot_work_is_refused_rather_than_ignored(update):
+    """`zepos-update --status --regenerate` waere eine Anweisung, die ins
+    Leere geht. Ein Programm, das sie schluckt, laesst den Nutzer glauben,
+    sie habe gewirkt."""
+    assert update.main(["--status", "--regenerate"]) == 2
+    assert update.main(["--apply", "--no-regenerate"]) == 2
+    assert update.main(["--check", "--now"]) == 2
+    assert update.main(["--unfug"]) == 2
 
 
 # --------------------------------------------------------------------

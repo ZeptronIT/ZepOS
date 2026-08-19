@@ -24,6 +24,15 @@
 #     `systemctl disable` und keinen wiederauferstandenen Zeitgeber. Der
 #     Schalter ist die Einstellung, nicht der Symlink; src/update.py sagt,
 #     warum das die einzige Stelle sein darf.
+#
+# WARUM HIER --apply UND NICHT DER SPRECHENDE NAME --apply-schedule
+#     Seit dem 19.08.2026 heisst diese Handlung --apply-schedule, weil
+#     "--apply" sich liest wie "spiel die Aktualisierungen ein" und genau
+#     das NICHT tut (src/update.py, SCHEDULE_FLAGS). Beide Namen gelten.
+#     Hier steht der alte, denn dieser Haken liegt auf der Platte und
+#     wird von derselben Transaktion gerufen, die ihn austauscht - ein
+#     Haken mit dem neuen Namen wuerde bei genau der Aktualisierung
+#     laufen, die den neuen Namen erst mitbringt.
 [Trigger]
 Type = Path
 Operation = Install

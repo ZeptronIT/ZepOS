@@ -619,8 +619,9 @@ def check_update(config: dict[str, Any] | None, state: dict[str, Any] | None,
                    "aus wie eine, die auf dem Stand ist, und bleibt auf dem "
                    "Stand des Tages, an dem der Zeitgeber abgeschaltet "
                    "wurde - auch fuer Sicherheitskorrekturen."),
-            fix=("`sudo zepos-update --apply` bringt systemd auf die "
-                 "Einstellungen. Wenn die Aktualisierung wirklich aus sein "
+            fix=("`sudo zepos-update --apply-schedule` bringt systemd auf "
+                 "die Einstellungen (der Befehl hiess frueher --apply und "
+                 "spielt NICHTS ein). Wenn die Aktualisierung wirklich aus sein "
                  "soll, gehoert das in die Einstellung: `sudo "
                  "zepos-settings set update.enabled false`."),
         ))
