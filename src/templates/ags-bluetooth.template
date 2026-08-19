@@ -365,7 +365,7 @@ export const bluetoothSeite: ShellSeite = {
   symbol: ICONS.bluetooth,
   gruppe: _("CONNECTIONS"),
 
-  bauen: (win, schliessen) => {
+  bauen: (win, schliessen, istAktiv) => {
     // Die Widgets, die spaeter beschrieben werden. Sie stehen hier und
     // nicht weiter unten im Rueckgabewert, weil updateDisplay() sie von
     // aussen erreichen muss - dieselbe Aufteilung wie im Netzfenster.
@@ -662,8 +662,15 @@ export const bluetoothSeite: ShellSeite = {
     // NICHT AM ECHTEN COMPOSITOR NACHGEMESSEN: tests/render/ ist fuer
     // diese Aufgabe verboten (Blattkopf). Dieselbe, in Aufgabe 6 bereits
     // angewandte Lesart der GTK4-Dokumentation, keine neue Messung.
-    interval(UPDATE_INTERVAL, () => { if (win.visible) updateDisplay() })
-    win.connect("notify::visible", () => { if (win.visible) updateDisplay() })
+    //
+    // NUR WENN DIESE SEITE AUCH DIE AKTIVE IST (repariert 19.08.2026,
+    // Bericht Aufgabe 15/16, Fund 1.3): dieselbe Reparatur wie in
+    // ags-network.template und ags-vpn.template, an derselben Stelle -
+    // siehe die Begruendung dort. Vorher lief updateDisplay() (ein
+    // Geraete-Suchlauf) bei jedem Oeffnen der Schale, auch wenn
+    // Bluetooth gar nicht die gezeigte Seite war.
+    interval(UPDATE_INTERVAL, () => { if (win.visible && istAktiv()) updateDisplay() })
+    win.connect("notify::visible", () => { if (win.visible && istAktiv()) updateDisplay() })
 
     return container
   },

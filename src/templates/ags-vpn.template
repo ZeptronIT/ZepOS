@@ -125,12 +125,22 @@
 //     `onShow` setzte Knopf-Sensitivitaet zurueck, las die Einstellungen
 //     neu, aktualisierte die Statusanzeige und fuellte/fokussierte das
 //     Formular vor. `win.connect("notify::visible", ...)` auf Ebene der
-//     GANZEN Schale ist die naechstbeste Entsprechung - sie laeuft bei
-//     jedem Oeffnen der Schale, unabhaengig davon, ob VPN gerade die
-//     aktive Seite ist (harmlos: das Formular ist nur sichtbar, wenn man
-//     tatsaechlich zur VPN-Seite wechselt; `grab_focus()` auf einem
-//     Feld, das gerade nicht angezeigt wird, ist in GTK4 ein
-//     wirkungsloser Aufruf und kein Fehler).
+//     GANZEN Schale ist die naechstbeste Entsprechung.
+//
+//     BERICHTIGT am 19.08.2026 (Bericht Aufgabe 15/16, Fund 1.3): hier
+//     stand bis dahin, der Rueckruf laufe "unabhaengig davon, ob VPN
+//     gerade die aktive Seite ist" und das sei harmlos, weil
+//     `grab_focus()` auf einem nicht gezeigten Feld in GTK4 wirkungslos
+//     ist. Das GTK4-Verhalten stimmt (GEPRUEFT, und NACHGEMESSEN: sieben
+//     saubere Laeufe im verschachtelten Compositor zeigten dadurch keine
+//     Verzoegerung) - aber "harmlos" war trotzdem die falsche Schluss-
+//     folgerung: derselbe Rueckruf las auch user-settings.json neu und
+//     fragte den VPN-Status ab (ein eigener Unterprozess), bei JEDEM
+//     Oeffnen der Schale, ganz gleich welche Seite gezeigt wurde. Der
+//     Rueckruf laeuft seither nur noch, wenn `istAktiv()`
+//     (ags-overlay-utils.template) sagt, dass VPN auch die gezeigte
+//     Seite ist - siehe die Zeile bei `win.connect("notify::visible", ...)`
+//     weiter unten fuer die genaue Begruendung.
 //
 //     DER TAKT: `updateTimer` (roh `setInterval`/`clearInterval`, NICHT
 //     `interval()` aus "ags/time" wie bei Bluetooth/Netzwerk) BLEIBT
@@ -445,7 +455,7 @@ export const vpnSeite: ShellSeite = {
   symbol: ICONS.vpn,
   gruppe: _("CONNECTIONS"),
 
-  bauen: (win, schliessen) => {
+  bauen: (win, schliessen, istAktiv) => {
     // Connect to VPN
     async function connectVpn() {
       const username = usernameEntry.get_text()
@@ -838,8 +848,9 @@ export const vpnSeite: ShellSeite = {
     // statt `interval()` aus "ags/time", weil `disconnectVpn()` ihn
     // gezielt anhalten und neu anstossen muss (Racebedingung waehrend
     // einer laufenden Trennung).
-    updateTimer = setInterval(() => { if (win.visible) updateStatusDisplay() },
-                              UPDATE_INTERVAL)
+    updateTimer = setInterval(
+      () => { if (win.visible && istAktiv()) updateStatusDisplay() },
+      UPDATE_INTERVAL)
 
     // UND DER ERSATZ FUER onShow (siehe Kopf der Datei): bei jedem
     // Sichtbarwerden der Schale werden Knopf-Sensitivitaet, Einstellungen
@@ -848,8 +859,36 @@ export const vpnSeite: ShellSeite = {
     // selbst wird HIER NICHT neu gestartet (anders als im alten
     // `onShow`) - er laeuft seit dem Bau der Seite ohnehin durch (siehe
     // oben), ein zweiter Start waere ein zweiter Takt.
+    //
+    // NUR WENN VPN AUCH DIE AKTIVE SEITE IST - REPARIERT 19.08.2026
+    // (Bericht Aufgabe 15/16, Fund 1.3)
+    //     Der Kommentar oben ("harmlos: das Formular ist nur sichtbar,
+    //     wenn man tatsaechlich zur VPN-Seite wechselt; grab_focus() auf
+    //     einem Feld, das gerade nicht angezeigt wird, ist in GTK4 ein
+    //     wirkungsloser Aufruf und kein Fehler") stimmt fuer grab_focus()
+    //     - GEPRUEFT gegen die GTK4-Dokumentation zu
+    //     gtk_widget_grab_focus() (liefert FALSE und tut nichts auf
+    //     einem nicht abgebildeten Widget) UND NACHGEMESSEN: sieben
+    //     saubere Laeufe dieser Seite (und der anderen drei) im
+    //     verschachtelten Compositor zeigten dabei keinen einzigen
+    //     verzoegerten oder ausbleibenden Aufbau der Flaeche 'control'.
+    //     Der Verdacht aus dem Bericht dieser Aufgabe ist damit NICHT
+    //     bestaetigt.
+    //
+    //     Repariert wird hier trotzdem, aus einem eigenen, unabhaengig
+    //     davon gueltigen Grund: der Rueckruf tat bisher IMMER etwas,
+    //     auch wenn VPN gar nicht die gezeigte Seite war - las
+    //     user-settings.json neu, fragte den VPN-Status ab (ein eigener
+    //     Unterprozess), setzte zwei Knoepfe auf sensitiv und griff
+    //     unbedingt nach der Tastatur (usernameEntry/passwordEntry). Das
+    //     ist unnoetige Arbeit bei JEDEM Oeffnen der Schale, unabhaengig
+    //     von der Seite - und das Fokusgreifen auf ein Feld einer nicht
+    //     gezeigten Seite ist falsch, selbst wenn es folgenlos bleibt.
+    //     `istAktiv()` (ags-overlay-utils.template) macht daraus das,
+    //     was der Name onShow immer versprochen hat: etwas, das nur
+    //     laeuft, wenn DIESE Seite auch erscheint.
     win.connect("notify::visible", () => {
-      if (!win.visible) return
+      if (!win.visible || !istAktiv()) return
       connectBtn.set_sensitive(true)
       disconnectBtn.set_sensitive(true)
       vpnSettings = loadVpnSettings()

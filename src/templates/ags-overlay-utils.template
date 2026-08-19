@@ -742,8 +742,26 @@ export interface ShellSeite {
    * Vorgabe an das, was bauen() zurueckgibt, nicht an createShellWindow():
    * die Schale zeigt nur, was bauen() liefert, und baut nichts Eigenes
    * darueber (siehe headerTitle/headerIcon unten).
+   *
+   * `istAktiv`, NACHGETRAGEN am 19.08.2026 (Bericht Aufgabe 15/16): der
+   * ERSATZ FUER onShow, den Bluetooth/Netzwerk/VPN sich fuer ihr
+   * `win.connect("notify::visible", ...)` gebaut haben (siehe die drei
+   * Vorlagen), feuert bei JEDEM Oeffnen der Schale - unabhaengig davon,
+   * welche Seite gerade sichtbar ist, weil `win` das GEMEINSAME Fenster
+   * aller Seiten ist und `notify::visible` keine Kenntnis von `aktivId`
+   * hat. Am deutlichsten bei VPN: `passwordEntry.grab_focus()` lief
+   * bisher auch dann, wenn "general" die gezeigte Seite war und die
+   * VPN-Seite im Gtk.Stack gar nicht sichtbar ist. `istAktiv()` gibt
+   * jeder Seite die Antwort, die ihr fehlte - sie ruft sie in ihrem
+   * eigenen notify::visible-Rueckruf und tut nur dann etwas, wenn sie
+   * es auch ist. Optional aus Sicht des Typs (jede bestehende
+   * zweiparametrige bauen()-Funktion, etwa generalSeite, bleibt gueltig
+   * - TypeScript erlaubt einer Funktion mit weniger Parametern, den Platz
+   * einer mit mehr einzunehmen), aber verbindlich fuer eine Seite, die
+   * beim Oeffnen der Schale etwas tut, das nur fuer sie selbst gilt.
    */
-  bauen: (win: Astal.Window, schliessen: () => void) => Gtk.Widget
+  bauen: (win: Astal.Window, schliessen: () => void,
+         istAktiv: () => boolean) => Gtk.Widget
 }
 
 export interface ShellConfig {
@@ -940,7 +958,14 @@ export function createShellWindow(config: ShellConfig): ShellWidget {
     // gegenpruefen.
     buildContent: (win, schliessen) => {
       for (const seite of config.seiten) {
-        seitenStapel.add_named(seite.bauen(win, schliessen), seite.id)
+        // Eine Schliessung UEBER `aktivId`, nicht der Wert selbst: seite.id
+        // steht fest (je Seite ihre eigene), `aktivId` aendert sich bei
+        // jedem wechsleSeite() - eine Kopie zum Zeitpunkt dieses Aufrufs
+        // waere fuer immer "general" (der Startwert), eine Schliessung
+        // liest den AKTUELLEN Wert bei jedem Aufruf. Siehe ShellSeite.bauen
+        // (istAktiv) fuer den Grund.
+        const istAktiv = () => aktivId === seite.id
+        seitenStapel.add_named(seite.bauen(win, schliessen, istAktiv), seite.id)
       }
       seitenStapel.set_visible_child_name(aktivId)
       zeichneSidebar()
