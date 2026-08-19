@@ -147,7 +147,8 @@ $overlay-border: $border;
 
 // NACHGETRAGEN am 18.08.2026, task-4 (die Schale, Stufe 3): Seitenleiste
 // und Zustandskopf, aus zepSidebar/zepStateHeader in ags-kit.template.
-// Nur diese drei Regeln - siehe Aufgabenblatt.
+// Drei Regeln aus dem Aufgabenblatt, eine vierte (.zep-shell-page) am
+// 19.08.2026 dazugekommen - siehe dort.
 
 // 208px steht in der Spezifikation, Abschnitt 2.2, GEMESSEN (nicht
 // gerechnet) - der einzige Ort, an dem die Zahl stehen darf
@@ -200,6 +201,52 @@ $overlay-border: $border;
   // (.zep-btn) in einem neuen Kontext, derselbe Kunstgriff wie
   // ".vpn-tab-bar .zep-btn.active" weiter unten.
   .zep-btn { font-weight: normal; }
+}
+
+// DER BODEN, DER DEN VERBINDUNGSSEITEN FEHLTE - NACHGETRAGEN am
+// 19.08.2026 (Bericht Aufgabe 15/16, Fund "es fehlt irgendwie mehr
+// breite oder so").
+//
+// SHELL_WIDTH (ags-overlay-utils.template) ist STYLE_MODAL_WIDTH_L
+// (880), EINMAL fuer alle Seiten der Schale gesetzt - aber
+// createOverlayWindow() laesst den Inhalt durch eine Gtk.ScrolledWindow
+// mit propagate_natural_width laufen, und ein Gtk.Window wird nie
+// breiter als sein Inhalt verlangt. Die Seitenleiste ist FEST 208px
+// (.zep-sidebar oben); es bleiben also 672 fuer die SEITE SELBST, damit
+// die Summe 880 erreicht - GENAU die Rechnung, mit der
+// ags-control-center.template (generalSeite) schon seit Aufgabe 6
+// argumentiert ("880 minus 208 Seitenleiste = 672px fuer diese Seite"),
+// aber nur als ERWARTUNG, nie erzwungen.
+//
+// GEMESSEN am 19.08.2026 (Bericht Aufgabe 15, echter Compositor,
+// 1920x1080): general erreicht 672+ von selbst (sein Inhalt ist breiter
+// als noetig), aber keine der drei Verbindungsseiten tut es - jede war
+// als EIGENSTAENDIGES Fenster mit einer eigenen, kleineren Breite
+// entworfen (VPN 642, Netzwerk/Bluetooth aehnlich - siehe die
+// Breitenleiter, src/sizes.py) und wurde nie auf die Breite gebracht,
+// die sie jetzt als Seite der Schale braucht:
+//
+//     Netzwerk    775   statt 880   (-105)
+//     Bluetooth   794   statt 880   (-86)
+//     VPN         829   statt 880   (-51)
+//
+// Drei VERSCHIEDENE Fehlbetraege - jede Seite verliert ihre Breite auf
+// eigene Weise (verschiedener Inhalt, verschiedene alte Fensterbreite),
+// nicht EINE gemeinsame Ursache. Die REPARATUR ist trotzdem an allen
+// drei Stellen dieselbe Form: ein Mindestbreiten-Boden auf der Seite
+// selbst (dem Wurzel-Widget, das ihr bauen() zurueckgibt), der sie nie
+// schmaler natuerlich messen laesst als der Platz, den die Schale fuer
+// sie freihaelt. Keine Zeile darin wird dadurch breiter gezwungen, als
+// sie ist - der Boden wirkt nur, wenn der Inhalt selbst darunter bliebe.
+//
+// 672 UND NICHT calc(880px - 208px): eine Rechnung im CSS ist kein Mass
+// (dieselbe Haltung wie bei STYLE_CONTROL_HEIGHT/STYLE_ROW_HEIGHT,
+// src/sizes.py, "zweimal Abstand 12 plus Rand ... eine Rechnung im CSS
+// kein Mass ist") - GEPRUEFT `grep -rn "calc(" src/templates/
+// src/styles/`, 19.08.2026: kein einziger Treffer im ganzen Baum, dieser
+// Baustil wird hier nicht neu erfunden.
+.zep-shell-page {
+  min-width: 672px;
 }
 
 // ===== SHARED OVERLAY STYLES (Muted Dark / HyprLaunch / HyprClipX) =====

@@ -839,6 +839,10 @@ export const vpnSeite: ShellSeite = {
     // ================================================================
     const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
     mainBox.add_css_class("vpn-container")
+    // Der Mindestbreiten-Boden der Schale (.zep-shell-page,
+    // ags-style.template) - siehe dort fuer die Rechnung und die
+    // Messung (829 statt 880 vor dieser Zeile, 19.08.2026).
+    mainBox.add_css_class("zep-shell-page")
     mainBox.append(connectedView)
     mainBox.append(formView)
 

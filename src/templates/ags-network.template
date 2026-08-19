@@ -804,6 +804,10 @@ export const networkSeite: ShellSeite = {
 
     // ----- Die drei Ansichten untereinander, immer genau eine sichtbar -----
     const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
+    // Der Mindestbreiten-Boden der Schale (.zep-shell-page,
+    // ags-style.template) - siehe dort fuer die Rechnung und die
+    // Messung (775 statt 880 vor dieser Zeile, 19.08.2026).
+    container.add_css_class("zep-shell-page")
     container.append(passwordBox)
     container.append(detailBox)
     container.append(mainContent)

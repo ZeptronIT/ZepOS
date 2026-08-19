@@ -537,6 +537,10 @@ export const bluetoothSeite: ShellSeite = {
     const container = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL, spacing: 12,
     })
+    // Der Mindestbreiten-Boden der Schale (.zep-shell-page,
+    // ags-style.template) - siehe dort fuer die Rechnung und die
+    // Messung (794 statt 880 vor dieser Zeile, 19.08.2026).
+    container.add_css_class("zep-shell-page")
 
     // ----- Der Zustand des Adapters, mit dem Schalter daneben -----
     //
