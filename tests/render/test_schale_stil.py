@@ -84,12 +84,32 @@ def _modal_width_l() -> int:
         sys.path.remove(str(ROOT / "src"))
 
 
-# Die Sidebar-Breite steht als Literal in ags-style.template (.zep-
-# sidebar, min-width: 208px) - NICHT hinter einem {{STYLE_*}}-Platz-
-# halter und darum auch nicht ueber einen Skalierungsfaktor erreichbar.
-# tests/src/test_schale.py haelt genau diese Zahl gegen den Quelltext;
-# hier ist sie die Erwartung fuer das BILD.
+# Die Sidebar-Breite ist das GESCHUETZTE Ziel (tests/src/test_schale.py
+# haelt "208px" als Zeichenkette gegen den Quelltext), aber seit Aufgabe
+# 27 (19.08.2026, Musterblatt "Die Schale") keine simple Literal-Regel
+# mehr: .zep-sidebar traegt jetzt `padding: {{STYLE_SPACE_8}}` UND
+# `min-width: 208px - (2 * {{STYLE_SPACE_8}})` - die Polsterung, die dem
+# Nutzer fehlte ("die sidebar hat kein außen padding da fehlt so viel"),
+# minus zweimal herausgerechnet, damit die SUMME bei jedem sizes.scale
+# wieder 208 ergibt (siehe der Kommentar dort: "GTK rechnet Polster
+# IMMER oben auf eine gesetzte min-width drauf"). Die 208 hier bleibt
+# darum weiterhin die Erwartung fuer die GESAMTE Spaltenbreite.
 SIDEBAR_BREITE_SOLL = 208
+
+
+# Wieviel Sass STYLE_SPACE_8 bei DIESEM Lauf ausrechnet - dieselbe
+# Sprosse, die .zep-sidebar (Polsterung) und .zep-row-nav (Polsterung +
+# Symbolabstand) jetzt teilen. Ueber sizes.value_of() und nicht
+# abgeschrieben, aus demselben Grund wie _modal_width_l() oben: die
+# Erwartung soll aus DERSELBEN Quelle kommen wie die erzeugte Datei, bei
+# JEDEM sizes.scale, nicht nur beim ausgelieferten Faktor.
+def _px(name: str) -> int:
+    sys.path.insert(0, str(ROOT / "src"))
+    try:
+        import sizes
+        return int(sizes.value_of(name, {}).removesuffix("px"))
+    finally:
+        sys.path.remove(str(ROOT / "src"))
 
 
 @pytest.fixture(scope="module")
@@ -425,16 +445,36 @@ def test_die_seitenleiste_bemalt_208_punkte(schale):
     _spaltengrenze()), nicht mehr ueber eine Randlinie zwischen zwei
     Eintraegen, die es seit 74008b5 nicht mehr gibt.
 
+    ANGEPASST am 19.08.2026 (Aufgabe 27, Musterblatt "Die Schale"), UND
+    EINMAL GEGEN DIE ALTE ZAHL FALLEN GELASSEN, WIE VERLANGT
+        Vor dieser Aufgabe reichte die Hervorhebung randgleich bis an
+        .zep-sidebar heran (208, siehe die alte Toleranz-Begruendung
+        unten), weil .zep-row-nav die volle Sidebar-Breite ausfuellte.
+        Die neue Polsterung auf .zep-sidebar selbst (siehe dort) zieht
+        die Hervorhebung jetzt auf allen vier Seiten INNERHALB dieser
+        Polsterung zusammen - GENAU das Bild des Musterblatts ("keinen
+        eigenen Kasten"). GEMESSEN, gegen die alte Erwartung (208): der
+        Waechter fiel wie vorhergesagt, mit `{'general': 196, 'network':
+        196, 'bluetooth': 196, 'vpn': 196}` - deterministisch auf allen
+        vier Seiten, keine Streuung wie bei der alten 208/209-Rundung
+        unten. 196 ist keine neue Handzahl: die Hervorhebung beginnt bei
+        SPACE_8 (links) und reicht bis SPACE_8 vor der rechten Kante,
+        die Erwartung ist darum SIDEBAR_BREITE_SOLL minus einmal SPACE_8
+        (208 - 12 = 196) - dieselbe Sprosse, mit der .zep-sidebar seine
+        eigene Polsterung bekommen hat.
+
     TOLERANZ VON 1 PUNKT, UND SIE IST GEMESSEN, NICHT GERATEN
-        Die rechte Kante der Hervorhebung liegt GENAU auf der 1px
-        Randlinie von .zep-sidebar (border-right) - derselbe Bildpunkt
-        traegt beides. Ob DIESER eine Bildpunkt (halb Hervorhebungs-,
-        halb Randfarbe durch Antialiasing) die Schwelle _SCHWELLE
-        ueberschreitet, haengt vom exakten Farbmix ab: GEMESSEN (Bericht
-        dieser Aufgabe, alle vier Seiten desselben Laufs) ergab general/
-        network/bluetooth exakt 208, vpn 209 - derselbe Sachverhalt, ein
-        Bildpunkt anders gerundet. Eine Zusicherung, die diesen einen
-        Bildpunkt nicht zulaesst, verwechselt Rundung mit einem Fehler.
+        Vor der Polsterung lag die rechte Kante der Hervorhebung GENAU
+        auf der 1px Randlinie von .zep-sidebar (border-right), und ob
+        dieser eine Bildpunkt (halb Hervorhebungs-, halb Randfarbe durch
+        Antialiasing) die Schwelle _SCHWELLE ueberschritt, schwankte
+        zwischen 208 (general/network/bluetooth) und 209 (vpn) - derselbe
+        Sachverhalt, ein Bildpunkt anders gerundet. Mit der Polsterung
+        endet die Hervorhebung nicht mehr AN einer Randlinie, sondern
+        mitten im $bg-Grund der Seitenleiste - GEMESSEN (dieser Lauf):
+        alle vier Seiten treffen exakt 196, keine Streuung mehr. Die
+        Toleranz bleibt trotzdem stehen, aus demselben Vorsichtsgrund wie
+        vorher: eine einzelne Bildpunkt-Rundung ist kein Fehler.
     """
     ergebnisse: dict[str, int | None] = {}
     for name, info in schale["seiten"].items():
@@ -453,11 +493,15 @@ def test_die_seitenleiste_bemalt_208_punkte(schale):
         f"Eintrags gar nicht finden: {sorted(fehlend)} - siehe die "
         "Bilder aus dieser Aufgabe")
 
+    hervorhebung_soll = SIDEBAR_BREITE_SOLL - _px("STYLE_SPACE_8")
+
     falsch = {name: grenze for name, grenze in ergebnisse.items()
-             if abs(grenze - SIDEBAR_BREITE_SOLL) > 1}
+             if abs(grenze - hervorhebung_soll) > 1}
     assert not falsch, (
-        f"die Seitenleiste soll {SIDEBAR_BREITE_SOLL}px breit bemalen "
-        f"(.zep-sidebar, ags-style.template), gemessen: {falsch}")
+        f"die Hervorhebung des aktiven Eintrags soll {hervorhebung_soll}px "
+        f"weit reichen (.zep-sidebar Breite {SIDEBAR_BREITE_SOLL}px minus "
+        f"einmal STYLE_SPACE_8 Polsterung, ags-style.template), gemessen: "
+        f"{falsch}")
 
 
 def test_ein_seitenleisten_eintrag_ist_nicht_die_knopfhoehe_hoch(schale):
@@ -515,14 +559,10 @@ def test_ein_seitenleisten_eintrag_ist_nicht_die_knopfhoehe_hoch(schale):
     # STYLE_NAV_ROW_HEIGHT (PX, siehe TABLE in src/sizes.py) haengt
     # value_of() ein "px" an, und int("49px") wirft. GEMESSEN am
     # 19.08.2026 beim ersten Lauf dieser Datei.
-    def _px(name: str) -> int:
-        sys.path.insert(0, str(ROOT / "src"))
-        try:
-            import sizes
-            return int(sizes.value_of(name, {}).removesuffix("px"))
-        finally:
-            sys.path.remove(str(ROOT / "src"))
-
+    #
+    # NACH AUFGABE 27 (19.08.2026) STEHT _px() OBEN, MODULWEIT: die
+    # Sidebar-Polsterung braucht denselben Kunstgriff jetzt auch fuer
+    # STYLE_SPACE_8 - keine zweite Kopie derselben vier Zeilen.
     zeilenhoehe = _px("STYLE_NAV_ROW_HEIGHT")
 
     info = schale["seiten"]["general"]

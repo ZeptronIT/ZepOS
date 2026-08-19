@@ -114,8 +114,34 @@ $overlay-border: $border;
   // gegen .zep-shell-page (Bericht Aufgabe 17/18): zwei Regeln gleicher
   // Spezifitaet lassen die spaeter geschriebene gewinnen, eine Klassen-
   // Verbindung mit hoeherer Spezifitaet gewinnt unabhaengig davon.
+  //
+  // NACHGETRAGEN am 19.08.2026 (Aufgabe 27, Musterblatt "Die Schale"):
+  // min-height war schon richtig, aber Radius und Polsterung fielen
+  // weiter auf die Regel von .zep-row oben zurueck - RADIUS_CARD (12px)
+  // und SPACE_12 (18px), die Masse einer Inhaltskarte (Zeile, 74px
+  // hoch), nicht die eines einzeiligen Navigationseintrags (49px). Die
+  // aeussere Knopfhuelle ist mit 74008b5 schon gefallen, diese Kartenmasse
+  // waren der Rest derselben Wurzel. GEMESSEN gegen das Musterblatt
+  // (Abschnitt "Die Schale"): Radius 8, Polsterung 0 12px - das ist
+  // RADIUS_CONTROL und SPACE_8, dieselbe kleinere Sprosse, die
+  // .zep-sidebar unten fuer ihre eigene Polsterung bekommt.
+  //
+  // Der Abstand Symbol-zu-Text (.zep-row-texts, margin-left) folgt
+  // demselben Fund: das Musterblatt zeichnet ihn mit 10px, aber KEINE
+  // Sprosse der Abstandsleiter trifft diese Zahl exakt - GEPRUEFT gegen
+  // jeden Eintrag von sizes.TABLE bei Vorgabegroesse (Bericht dieser
+  // Aufgabe), kein einziger ergibt "10px". SPACE_8 (12px, Abstand 2) ist
+  // die naechstliegende Sprosse, klar naeher als SPACE_4 (6px, Abstand
+  // 4) - und dieselbe Sprosse, die diese Regel gerade fuer die eigene
+  // Polsterung gewaehlt hat: ein Navigationseintrag traegt jetzt EINE
+  // Sprosse (SPACE_8) fuer Polsterung UND Symbolabstand, nicht mehr die
+  // groessere SPACE_12 der Karte.
   &.zep-row-nav {
     min-height: {{STYLE_NAV_ROW_HEIGHT}};
+    border-radius: {{STYLE_RADIUS_CONTROL}};
+    padding: 0 {{STYLE_SPACE_8}};
+
+    .zep-row-texts { margin-left: {{STYLE_SPACE_8}}; }
   }
 }
 
@@ -214,9 +240,54 @@ $overlay-border: $border;
 // Leiste links vom Inhalt steht - die erste ihrer Art in dieser Datei
 // (GEPRUEFT `grep -c border-right` = 0 vor dieser Zeile), kein
 // Widerspruch zum Bestand, nur die erste Gelegenheit dafuer.
+// POLSTERUNG NACHGETRAGEN am 19.08.2026 (Aufgabe 27, Musterblatt "Die
+// Schale"): bis hierher trug diese Regel NUR min-width und
+// border-right - die Eintraege klebten damit an der Fensterkante und an
+// der Trennlinie. GEMELDET vom Nutzer: "die sidebar hat kein außen
+// padding da fehlt so viel". Das Musterblatt zeichnet die Seitenleiste
+// mit `padding: 12px`, und das trifft SPACE_8 (12px bei Vorgabegroesse)
+// exakt - nicht SPACE_12 (18px, trotz des Namens: eine Sprosse heisst
+// nach ihrem UNSKALIERTEN Rohwert, SPACE_12 skaliert auf 18px, waehrend
+// SPACE_8 auf die gesuchten 12px skaliert). Dieselbe Sprosse, mit der
+// .zep-row-nav unten jetzt seine eigene Polsterung und seinen
+// Symbolabstand bekommt - ein Regler fuer die ganze kompakte
+// Seitenleiste.
+//
+// WIRKUNG AUF DEN AKTIVEN EINTRAG, GEPRUEFT VOR DER AENDERUNG: der
+// ausgewaehlte Zustand (.zep-row.active oben) malt seinen Grund/Streifen
+// auf der Flaeche von .zep-row selbst, die jetzt INNERHALB dieser
+// Polsterung liegt statt bis an die Fensterkante zu reichen - GENAU das
+// Bild des Musterblatts ("keinen eigenen Kasten"), aber
+// tests/render/test_schale_stil.py::test_die_seitenleiste_bemalt_208_punkte
+// hat diese Flaeche bisher als Stellvertreter fuer die Sidebar-BREITE
+// gemessen (sie reichte vorher randgleich bis 208). Mit der Polsterung
+// endet sie fruehzeitiger - der Test ist entsprechend angepasst, siehe
+// dort.
+//
+// 184 STATT 208 ALS MIN-WIDTH, UND DAS IST KEINE ZWEITE ZAHL - GEFUNDEN
+// BEIM ERSTEN RENDER-LAUF DIESER AUFGABE, NICHT VORHER GESEHEN: ein
+// blosses `min-width: 208px` NEBEN dem neuen `padding` haette die Regel
+// in genau die Falle laufen lassen, die diese Datei bei
+// `.zep-shell-page` (weiter oben, Aufgabe 23) schon einmal ausgeschrieben
+// hat: "GTK rechnet Polster IMMER oben auf eine gesetzte min-width
+// drauf" - GEMESSEN (dieser Lauf, vor der Korrektur hier): die Schale
+// meldete testKeineSeiteScrollt/notify::upper 51px statt der vorher
+// bekannten ~27px Ueberlauf, ein Sprung von genau 24 = zweimal SPACE_8.
+// Die Seitenleiste waere damit 232px statt 208 breit geworden - genau
+// die 208 plus die neue Polsterung obendrauf, nicht ANSTATT eines
+// Teils davon.
+//
+// Die Rechnung zieht die Polsterung darum VON der geschuetzten 208
+// wieder ab: 208px - (2 * SPACE_8) = 184px, per Sass-Arithmetik und
+// nicht als zweite Handzahl, damit die Summe bei JEDEM sizes.scale
+// wieder 208 ergibt, nicht nur beim ausgelieferten Faktor (GEPRUEFT,
+// `sass` direkt: `208px - (2 * 12px)` -> `184px`). 208 bleibt die
+// einzige Zahl, die die Spezifikation nennt (siehe der Kommentar
+// oben) - hier steht sie unveraendert, nur einmal umgestellt.
 .zep-sidebar {
-  min-width: 208px;
+  min-width: 208px - (2 * {{STYLE_SPACE_8}});
   border-right: 1px solid $border;
+  padding: {{STYLE_SPACE_8}};
 }
 
 // Abstand zwischen zwei Gruppen (VERBINDUNGEN/SYSTEM/EINSTELLUNGEN).
