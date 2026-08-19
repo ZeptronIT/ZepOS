@@ -157,7 +157,7 @@ class SettingsWindow(Adw.ApplicationWindow):
                 "Groesse davor."))
 
         self.scale_row = Adw.SpinRow(
-            title="Groesse des Schreibtischs",
+            title=model.LABEL_SCALE,
             adjustment=Gtk.Adjustment(
                 lower=model.SCALE_MINIMUM, upper=model.SCALE_MAXIMUM,
                 step_increment=model.SCALE_STEP,
@@ -198,7 +198,7 @@ class SettingsWindow(Adw.ApplicationWindow):
                 "Sie folgen dem Faktor NICHT: wer die Schrift verdoppelt, "
                 "will groesser lesen und nicht laenger warten."))
         self.motion_row = Adw.SwitchRow(
-            title="Bewegung zeigen",
+            title=model.LABEL_MOTION,
             subtitle=(
                 "Aus heisst wirklich aus - der Compositor und die fremden "
                 "GTK4-Fenster gehen mit. Bewegte Flaechen loesen bei einer "
@@ -369,7 +369,7 @@ class SettingsWindow(Adw.ApplicationWindow):
                 "und nur dann erfaehrt wttr.in nicht, wo diese Maschine "
                 "steht. Der Ort geht bei jeder Auffrischung dorthin."))
 
-        self.weather_row = Adw.EntryRow(title="Ort")
+        self.weather_row = Adw.EntryRow(title=model.LABEL_WEATHER)
         self.weather_row.set_text(self.draft.current_weather())
         self.weather_row.connect("changed", self._on_weather)
         group.add(self.weather_row)
@@ -411,7 +411,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         current = model.current_theme()
         self.theme_names = names
         self.theme_row = Adw.ComboRow(
-            title="Thema dieses Rechners",
+            title=model.LABEL_THEME,
             subtitle=model.THEME_TIMING,
             model=Gtk.StringList.new(
                 [f"{model.theme_label(name)} - "
@@ -467,7 +467,7 @@ class SettingsWindow(Adw.ApplicationWindow):
                    "und dafuer wird nach Rechten gefragt.")))
 
         enabled = Adw.SwitchRow(
-            title="Automatisch aktualisieren",
+            title=model.UPDATE_LABELS[model.UPDATE_ENABLED],
             subtitle="Aus heisst: systemd haelt den Zeitgeber gar nicht "
                      "erst.",
             active=bool(config.get(model.UPDATE_ENABLED)))
@@ -477,14 +477,14 @@ class SettingsWindow(Adw.ApplicationWindow):
         self.update_rows[model.UPDATE_ENABLED] = enabled
 
         group.add(self._update_choice(
-            model.UPDATE_SCOPE, "Umfang",
+            model.UPDATE_SCOPE, model.UPDATE_LABELS[model.UPDATE_SCOPE],
             "Nur ZepOS laesst die Arch-Basis in Ruhe. Ein "
             "unbeaufsichtigtes Vollupgrade auf einem Rolling Release ist "
             "ein Rechner, der eines Morgens nicht mehr startet.",
             model.UPDATE_SCOPE_LABELS, config.get(model.UPDATE_SCOPE)))
 
         group.add(self._update_choice(
-            model.UPDATE_NOTIFY, "Melden",
+            model.UPDATE_NOTIFY, model.UPDATE_LABELS[model.UPDATE_NOTIFY],
             "Ein Fehlschlag meldet sich immer, ausser bei \"Nie\" - eine "
             "abgelehnte Unterschrift darf nicht wie \"schon eine Weile "
             "nichts Neues\" aussehen.",
@@ -493,7 +493,8 @@ class SettingsWindow(Adw.ApplicationWindow):
         schedule = config.get("schedule")
         interval = schedule.get("interval") if isinstance(schedule, dict) else None
         group.add(self._update_choice(
-            model.UPDATE_INTERVAL, "Wie oft", "",
+            model.UPDATE_INTERVAL, model.UPDATE_LABELS[model.UPDATE_INTERVAL],
+            "",
             model.UPDATE_INTERVAL_LABELS, interval))
 
         page.add(group)

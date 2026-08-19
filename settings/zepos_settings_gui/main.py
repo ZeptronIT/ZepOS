@@ -18,6 +18,28 @@ WARUM DER IMPORT VON app.py ERST HIER PASSIERT
     eine unlesbare Einstellungsdatei soll nicht an einem fehlenden
     python-gobject scheitern - die Meldung waere dann ueber das
     Falsche.
+
+DER SCHALTER --json, UND WARUM ER GANZ OBEN STEHT
+    Seit dem 19.08.2026 ist dieser Befehl nicht nur ein Fenster: mit
+    `--json` schreibt er den Zustand aller sieben Seiten als ein
+    Dokument heraus und nimmt Aenderungen als eines entgegen. Der Kopf
+    von bridge.py fuehrt aus, wofuer - kurz: das AGS-Einstellungsfenster
+    zeichnet, model.py bleibt das Hirn, und beide duerfen nicht zwei
+    Antworten auf dieselbe Frage haben.
+
+    Er wird VOR page_of() und VOR settings_file.load() abgefangen, aus
+    zwei Gruenden. Erstens ist `--page` ein Schalter fuer die
+    .desktop-Datei und `--json` einer fuer ein anderes Programm; sie
+    haben nichts gemeinsam ausser dem Befehl, an dem sie haengen.
+    Zweitens meldet bridge.py eine unlesbare Einstellungsdatei als JSON
+    und nicht als Satz auf stderr - ein Fenster, das deutsche Prosa aus
+    einem Fehlerstrom fischt, liest beim naechsten Wortlaut das
+    Falsche.
+
+    Und wie der Fehlerweg oben kommt er ohne `gi` aus. Das ist keine
+    Sparsamkeit: `--json get` ist der Weg, auf dem man diese
+    Einstellungen auf einer Maschine ohne GTK4 noch lesen kann, also
+    genau dort, wo man sie zum Reparieren braucht.
 """
 from __future__ import annotations
 
@@ -27,7 +49,7 @@ from typing import Callable
 import paths
 import settings as settings_file
 
-from . import model
+from . import bridge, model
 
 
 def page_of(arguments: list[str]) -> str | None:
@@ -62,6 +84,7 @@ def page_of(arguments: list[str]) -> str | None:
         return arguments[1]
     raise ValueError(
         f"usage: zepos-settings-gui [{model.PAGE_OPTION} SEITE]\n"
+        f"       zepos-settings-gui {bridge.OPTION} get|set|apply\n"
         f"`{' '.join(arguments)}` ist keiner der Schalter dieser "
         f"Anwendung.\n"
         f"Seiten: {', '.join(model.PAGE_NAMES)}\n"
@@ -81,6 +104,9 @@ def main(argv: list[str] | None = None, *,
     pruefbare Aussage, dass die Anwendung startet.
     """
     arguments = list(sys.argv[1:] if argv is None else argv)
+
+    if arguments and arguments[0] == bridge.OPTION:
+        return bridge.main(arguments[1:], runner=runner)
 
     try:
         page = page_of(arguments)

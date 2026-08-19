@@ -339,6 +339,31 @@ def size_text(name: str, value: float) -> str:
     return f"{value:g}{_unit(name)}"
 
 
+# Die Beschriftungen der vier Bedienelemente, die keine eigene Tabelle
+# haben - die fuenf Ausnahmen tragen ihre in DIALS, die Farben in
+# brand.COLOR_GROUPS, die Leistenhaelften in BAR_SIDES, die
+# Aktualisierung in UPDATE_LABELS weiter unten.
+#
+# WARUM SIE HIER STEHEN UND NICHT IN app.py, WO SIE HERKOMMEN
+#     Seit dem 19.08.2026 gibt es einen zweiten Leser: bridge.py
+#     schreibt dieselben Bedienelemente als JSON heraus, damit das
+#     AGS-Fenster sie zeichnen kann, ohne sie noch einmal zu
+#     definieren. Eine Beschriftung, die in app.py steht, muesste dort
+#     abgeschrieben werden - und ab dem ersten Umformulieren hiesse
+#     derselbe Regler in zwei Fenstern verschieden.
+#
+#     Die langen BESCHREIBUNGEN daneben sind nicht mitgekommen, und das
+#     ist kein Versehen: sie sind an libadwaitas Gruppen und Zeilen
+#     gebunden (Adw.PreferencesGroup description, ActionRow subtitle),
+#     also an eine Aufteilung, die ein anderes Fenster nicht hat. Wer
+#     sie dort braucht, hebt sie einzeln hierher - eine Zeile, die
+#     nichts als ihren Ort aendert.
+LABEL_SCALE = "Groesse des Schreibtischs"
+LABEL_MOTION = "Bewegung zeigen"
+LABEL_WEATHER = "Ort"
+LABEL_THEME = "Thema dieses Rechners"
+
+
 # Die Seiten dieses Fensters, in der Reihenfolge, in der sie im
 # Umschalter stehen: Kennung, Beschriftung, Symbol.
 #
@@ -990,6 +1015,13 @@ UPDATE_ENABLED = "enabled"
 UPDATE_SCOPE = "scope"
 UPDATE_NOTIFY = "notify"
 UPDATE_INTERVAL = "schedule.interval"
+
+UPDATE_LABELS = {
+    UPDATE_ENABLED: "Automatisch aktualisieren",
+    UPDATE_SCOPE: "Umfang",
+    UPDATE_NOTIFY: "Melden",
+    UPDATE_INTERVAL: "Wie oft",
+}
 
 UPDATE_SCOPE_LABELS = {
     update.SCOPE_ZEPOS: "Nur ZepOS",
