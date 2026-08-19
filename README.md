@@ -1,14 +1,18 @@
 # ZepOS
 
+*[Deutsch lesen →](README.de.md)*
+
 ZepOS is an Arch-based Linux distribution with a Hyprland/Wayland desktop,
 shipped as a bootable live medium with its own graphical installer. Everything
 on the screen — installer, login screen, bar, dock, launcher, lock screen,
 logout menu, settings — is written for this project, is GTK4, and takes its
 colours, spacing and type scale from one file.
 
-**Language note:** this README, the build scripts and the developer
-documentation are English; source comments and the design documents in `docs/`
-are largely German. The shipped user interface is English and German.
+**Language note:** this file and [`README.de.md`](README.de.md) are the same
+document in two languages; keep both in sync when either changes. The build
+scripts and the developer documentation are English; source comments and the
+design documents in `docs/` are largely German. The shipped user interface is
+English and German.
 
 ---
 
@@ -18,15 +22,20 @@ ZepOS boots, installs, and comes up as a working desktop. It is not yet
 something you should put on a machine you care about, and these are the
 specific reasons:
 
-- **The packages are signed with a throwaway key.** Its user id is literally
-  `ZepOS TEST KEY - DO NOT TRUST`, it has no passphrase, and it expires 90 days
-  after it is generated. `packaging/publish.sh` refuses to publish a repository
-  signed with it, and there is no override flag.
-- **The update channel is built but not live.** Every installed system gets a
-  `[zepos]` repository pointing at `https://zeptronit.github.io/ZepOS/$arch`.
-  Nothing is published there yet, so the first `pacman -Syu` of an installed
-  ZepOS reaches a 404. The self-update mechanism itself is finished and
-  measured — it is the repository behind it that is missing.
+- **A local build is signed with a throwaway key; a published release is
+  not.** `packaging/build.sh` still needs a key nobody should trust —
+  `packaging/make-test-key.sh` makes one exactly as before, user id
+  `ZepOS TEST KEY - DO NOT TRUST`, no passphrase, 90-day expiry — because the
+  real signing key never leaves the machine it was generated on and never
+  enters a contributor's checkout. What the real key actually signs is
+  described under [Packages](#packages).
+- **The update channel is live, but only proven in a container.** The
+  `[zepos]` repository at `https://zeptronit.github.io/ZepOS/$arch` is public
+  and answers. Today's test installed a package from it into a clean
+  container with real `pacman` and real signature verification against the
+  release key, and it succeeded. What that does not yet cover: a machine
+  nobody is watching, running the scheduled update timer unattended, on real
+  hardware.
 - **Secure Boot does not work.** Measured: the boot chain carries no
   signatures, and firmware with Secure Boot enabled rejects the loader. You
   have to turn Secure Boot off.
@@ -61,12 +70,17 @@ remaining work.
 
 These are stated non-goals, not omissions:
 
-- **Architectures other than x86_64.**
+- **Architectures other than x86_64.** Arch Linux itself officially ships
+  x86_64 only — ARM has its own, separate distribution, not this one — and
+  ZepOS builds directly on Arch's own tooling and package archive, so it
+  inherits that boundary rather than choosing it independently. To name the
+  one CPU people sometimes ask about explicitly: an AMD Ryzen is x86_64.
+  Nothing about it needs ARM support.
 - **Migration of an existing installation.** ZepOS is installed, not converted.
 - **Desktop choice.** There is one desktop, and it is Hyprland. That is the
   point of the project.
-- **Anyone who needs Secure Boot, an offline install, or a signed update
-  channel today.** See the status section.
+- **Anyone who needs Secure Boot or an offline install today.** See the
+  status section.
 
 ---
 
@@ -87,9 +101,10 @@ disabled, and the medium starts the installer. There is no live desktop to try
 first — the release medium boots into the installer and nothing else.
 
 Two things to know before you download: a published image lags `main` by
-however long it has been since the last one, and it is signed with the
-throwaway key described above. Building the medium yourself is the only way to
-get today's tree.
+however long it has been since the last one, and its packages are signed with
+ZepOS's real key, not the throwaway one a local build makes for itself — see
+[Packages](#packages). Building the medium yourself is the only way to get
+today's tree.
 
 ### Build a medium yourself
 
@@ -218,6 +233,20 @@ says.*
 
 The private signing key never enters the build container. Packages are built
 there; signing happens on the host afterwards.
+
+**As of 19.08.2026, that key is real.** The published repository and every
+package in it are signed with `FF2EB06C08A57FEA9E33FC46157C1725A578B80C`,
+user id `LeonMarzollDev (ZepOS Release)`, expiring 18.08.2028. The primary
+key can only certify (`[C]`); a dedicated subkey (`[S]`) does the actual
+signing — the usual split between the key that vouches for the others and
+the key that gets used every day. Its public half is published at
+[`zeptronit.github.io/ZepOS/zepos-repo.pub`](https://zeptronit.github.io/ZepOS/zepos-repo.pub);
+the `zepos-keyring` package carries the same file, which is what makes a
+freshly installed system trust it without anyone typing a fingerprint by
+hand — `packaging/README.md` has the mechanics. Building locally is
+unaffected by any of this: `./packaging/make-test-key.sh` still makes you a
+throwaway key, because the real one is not something a build script — or
+this repository — could ever hand you.
 
 ### What you get on a fresh installation
 
