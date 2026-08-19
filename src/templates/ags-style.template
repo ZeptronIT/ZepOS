@@ -104,6 +104,19 @@ $overlay-border: $border;
     background: rgba($accent, 0.15);
     border-left-color: $accent;
   }
+
+  // NACHGETRAGEN am 19.08.2026 (Aufgabe 19): der Modifikator, den
+  // zepSidebar() setzt (`navEintrag`, ags-kit.template) - siehe die
+  // Herleitung bei STYLE_NAV_ROW_HEIGHT in sizes.py. `&.zep-row-nav`
+  // compiliert zu `.zep-row.zep-row-nav` (Spezifitaet 0,2,0), schlaegt
+  // die einfache `.zep-row`-Regel oben (0,1,0) also UNABHAENGIG von der
+  // Reihenfolge im Stylesheet - dieselbe Lehre wie bei .cc-container
+  // gegen .zep-shell-page (Bericht Aufgabe 17/18): zwei Regeln gleicher
+  // Spezifitaet lassen die spaeter geschriebene gewinnen, eine Klassen-
+  // Verbindung mit hoeherer Spezifitaet gewinnt unabhaengig davon.
+  &.zep-row-nav {
+    min-height: {{STYLE_NAV_ROW_HEIGHT}};
+  }
 }
 
 .zep-row-icon { font-size: {{STYLE_ICON_CAPTION}}; color: $subtext; }

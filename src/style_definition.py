@@ -857,6 +857,9 @@ _FIXED_STYLE_VARIABLES = {
     # Wert, und die Vorlage scheitert mit UnresolvedPlaceholders.
     "STYLE_CONTROL_HEIGHT": size_value("STYLE_CONTROL_HEIGHT"),
     "STYLE_ROW_HEIGHT": size_value("STYLE_ROW_HEIGHT"),
+    # Fuer .zep-row-nav aus ags-style.template (Aufgabe 19, 19.08.2026).
+    # Herleitung bei STYLE_NAV_ROW_HEIGHT in src/sizes.py.
+    "STYLE_NAV_ROW_HEIGHT": size_value("STYLE_NAV_ROW_HEIGHT"),
 
     # ============================================================================
     # DIE BREITENLEITER - drei Sprossen fuer alle Aufklappfenster

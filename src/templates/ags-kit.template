@@ -120,18 +120,45 @@ export function zepRow(opts: {
   //     durchsichtig - GENAU EINE Flaeche malt noch etwas: .zep-row
   //     selbst, unveraendert.
   aktion?: () => void
+  // NACHGETRAGEN am 19.08.2026 (Aufgabe 19, Nutzermeldung "die sidebar
+  // items nav links sind viel zu hoch"): eine Seitenleiste braucht eine
+  // ANDERE Zeilenhoehe als eine Inhaltskarte - siehe die Herleitung von
+  // STYLE_NAV_ROW_HEIGHT in sizes.py. `navEintrag` ist die Ausnahme wie
+  // `ausgewaehlt`/`vollerText`: keine zweite Zeilenform, nur ein
+  // zusaetzlicher CSS-Modifikator auf DERSELBEN Zeile (Klasse
+  // `zep-row-nav`, ags-style.template) - genau die Faehigkeit, die
+  // `aktion` schon vorgemacht hat.
+  navEintrag?: boolean
 }): Gtk.Widget {
   const zeile = new Gtk.Box({ spacing: 0 })
   zeile.add_css_class("zep-row")
   if (opts.ausgewaehlt) zeile.add_css_class("active")
+  if (opts.navEintrag) zeile.add_css_class("zep-row-nav")
 
-  const symbol = new Gtk.Label({ label: opts.symbol })
+  // AUFGABE 19, NUTZERMELDUNG ("das icon im navlink sollte links sein
+  // und rechts davon der text aber aktuell steht der text oben und das
+  // icon in der mitte"): GEMESSEN (Bildlauf dieser Aufgabe, Debug-Bau
+  // mit rot/gruen eingefaerbten Testkindern) - Symbol und `texte`
+  // STANDEN bereits nebeneinander in `zeile` (Gtk.Orientation.HORIZONTAL
+  // ist die GTK4-Vorgabe fuer Gtk.Box, unveraendert), aber `texte` ist
+  // selbst eine Box mit VERTICAL-Orientierung, und OHNE `valign` fuellt
+  // sie (Vorgabe FILL) die ganze Zeilenhoehe und packt ihr einziges Kind
+  // (den Titel) an ihren eigenen ANFANG - waehrend `symbol` (ein Label,
+  // kein Behaelter) unter FILL auf sein Zentrum abbildet. Ergebnis: der
+  // Titel sitzt am oberen Rand der Zeile, das Symbol in ihrer Mitte -
+  // "Text oben, Symbol darunter", exakt die Meldung. Isoliert bestaetigt:
+  // dieselbe Zeile OHNE den texte-Umbau (Titel direkt in `zeile`) zeigte
+  // beide nebeneinander; der `texte`-Umbau MIT `valign: CENTER` ebenso.
+  // Betrifft jeden Aufrufer von zepRow (Kartenzeilen wie Seitenleiste),
+  // darum hier behoben und nicht nur fuer `navEintrag`.
+  const symbol = new Gtk.Label({ label: opts.symbol, valign: Gtk.Align.CENTER })
   symbol.add_css_class("zep-row-icon")
   zeile.append(symbol)
 
   const texte = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
     spacing: 0,
+    valign: Gtk.Align.CENTER,
   })
   texte.add_css_class("zep-row-texts")
 
@@ -262,6 +289,11 @@ export function zepSidebar(
         titel: eintrag.titel,
         ausgewaehlt: eintrag.id === aktiv,
         aktion: () => aufSeite(eintrag.id),
+        // Ein Navigationseintrag ist einzeilig (Symbol, Beschriftung,
+        // sonst nichts) und braucht darum STYLE_NAV_ROW_HEIGHT statt der
+        // Kartenhoehe STYLE_ROW_HEIGHT - siehe die Begruendung bei
+        // `navEintrag` oben und bei STYLE_NAV_ROW_HEIGHT in sizes.py.
+        navEintrag: true,
       }))
     }
 

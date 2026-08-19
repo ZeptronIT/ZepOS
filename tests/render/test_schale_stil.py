@@ -280,10 +280,15 @@ def schale(tmp_path_factory):
 _AKTIV_X_VERSATZ = 50  # GEMESSEN: liegt auf allen vier Seiten sicher
                        # innerhalb des Zeilengrundes, rechts vom Symbol
                        # (Symbole liegen bei x_offset 22-38).
-_HALT_PUNKTE = 37      # STYLE_ROW_HEIGHT (74) // 2 - klar ueber jedem
-                       # Buchstaben-/Symbol-Ausschlag (hoechstens ein
-                       # paar Bildpunkte lang), klar unter der echten
-                       # Hervorhebung (74 Punkte).
+_HALT_PUNKTE = 24      # AUFGABE 19 (19.08.2026): war 37 (STYLE_ROW_HEIGHT
+                       # 74 // 2), bevor zepSidebar() auf
+                       # STYLE_NAV_ROW_HEIGHT umstellte - siehe dort in
+                       # sizes.py. Neu STYLE_NAV_ROW_HEIGHT (49) // 2,
+                       # kaufmaennisch abgerundet auf 24: klar ueber jedem
+                       # Buchstaben-/Symbol-Ausschlag (GEMESSEN hoechstens
+                       # 6 Bildpunkte lang), klar unter der echten
+                       # Hervorhebung (GEMESSEN 49 Punkte auf allen vier
+                       # Seiten).
 _SCHWELLE = 15         # GEMESSEN (Bericht dieser Aufgabe): zwischen zwei
                        # BENACHBARTEN Eintraegen blutet der Weichzeichner
                        # ein paar Bildpunkte lang mit einem Sprung von
@@ -441,12 +446,35 @@ def test_die_seitenleiste_bemalt_208_punkte(schale):
 
 
 def test_ein_seitenleisten_eintrag_ist_nicht_die_knopfhoehe_hoch(schale):
-    """Die Kehrseite von tests/src/test_kit_nesting.py, als Zahl:
-    zepButton("umrandet") behauptet STYLE_CONTROL_HEIGHT (49px bei
-    Vorgabegroesse), aber sein Kind zepRow verlangt STYLE_ROW_HEIGHT
-    (74px) - und weil der Knopf keine senkrechte Polsterung traegt,
-    gewinnt das Kind. Diese Zusicherung haelt die Kit-Regel ("ein Knopf
-    ist 32/49px hoch") gegen das BILD und nicht gegen die Behauptung.
+    """UMGESCHRIEBEN am 19.08.2026 (Aufgabe 19). GEMELDET: "die sidebar
+    items nav links sind viel zu hoch und nicht zu gebaut". zepSidebar()
+    baute ihre Eintraege bis dahin aus zepRow OHNE Modifikator und bekam
+    darum STYLE_ROW_HEIGHT (74px) - die Hoehe einer INHALTSKARTE, nicht
+    eines einzeiligen Navigationseintrags. zepRow traegt seither die
+    Option `navEintrag` (ags-kit.template), zepSidebar setzt sie, und die
+    Zeile bekommt STYLE_NAV_ROW_HEIGHT statt STYLE_ROW_HEIGHT - siehe die
+    Herleitung dort in src/sizes.py.
+
+    DIESE ZUSICHERUNG HIESS URSPRUENGLICH ANDERS UND PRUEFTE ETWAS
+    ANDERES, UND DAS IST HIER OFFEN AUFGESCHRIEBEN, NICHT STILL GEAENDERT
+        Sie verglich bis hierher gegen STYLE_ROW_HEIGHT (74px) und
+        verlangte ZUSAETZLICH `eintrag_hoehe != STYLE_CONTROL_HEIGHT`,
+        um die "Kasten in Kasten"-Regression zu fangen: zepButton als
+        aeussere Huelle traegt keine senkrechte Polsterung, ein
+        Rueckfall auf diese Huelle haette die Zeile also auf
+        Knopfhoehe (49px) zusammenfallen lassen. GEMESSEN mit der neuen
+        Sprosse: STYLE_NAV_ROW_HEIGHT ist bei Vorgabegroesse EBENFALLS
+        49px - dieselbe Zahl wie STYLE_CONTROL_HEIGHT, aus derselben
+        Rechnung (Zeileninhalt + 2x SPACE_8), aber unabhaengig benannt
+        (siehe der Kommentar bei STYLE_NAV_ROW_HEIGHT). Ein `!=`-Vergleich
+        gegen die Knopfhoehe koennte damit nie mehr etwas finden - er
+        WUERDE JETZT IMMER FEHLSCHLAGEN, ohne dass ein Fehler vorliegt.
+        Die eigentliche Kasten-in-Kasten-Regression bleibt bewacht: auf
+        Quelltextebene durch tests/src/test_kit_nesting.py (unveraendert),
+        und auf Bildebene dadurch, dass diese Zusicherung weiterhin genau
+        EINEN erwarteten Wert verlangt (STYLE_NAV_ROW_HEIGHT) statt eines
+        Bereichs - eine zurueckgekehrte Knopfhuelle mit eigener
+        Mindesthoehe wuerde die Zeile wieder ueber diesen Wert heben.
 
     GEMESSEN UEBER DIE HERVORHEBUNG, NICHT MEHR UEBER RANDLINIEN
         Die fruehere Fassung suchte den Abstand zwischen zwei
@@ -464,14 +492,14 @@ def test_ein_seitenleisten_eintrag_ist_nicht_die_knopfhoehe_hoch(schale):
         auch die Spaltenbreite findet.
 
     Gemessen auf "general" (wie vorher) - der aktive Eintrag ist dort
-    "Control", per Messung dieser Aufgabe 74 Bildpunkte hoch, mit
+    "Control", per Messung dieser Aufgabe 49 Bildpunkte hoch, mit
     derselben 1-Punkt-Toleranz wie oben.
     """
     # NICHT size_of() aus desktop_session.py: das dortige int(...) setzt
     # voraus, dass value_of() OHNE Einheit zurueckkommt (BARE) - fuer
-    # STYLE_CONTROL_HEIGHT/STYLE_ROW_HEIGHT (beide PX, siehe TABLE in
-    # src/sizes.py) haengt value_of() ein "px" an, und int("49px") wirft.
-    # GEMESSEN am 19.08.2026 beim ersten Lauf dieser Datei.
+    # STYLE_NAV_ROW_HEIGHT (PX, siehe TABLE in src/sizes.py) haengt
+    # value_of() ein "px" an, und int("49px") wirft. GEMESSEN am
+    # 19.08.2026 beim ersten Lauf dieser Datei.
     def _px(name: str) -> int:
         sys.path.insert(0, str(ROOT / "src"))
         try:
@@ -480,8 +508,7 @@ def test_ein_seitenleisten_eintrag_ist_nicht_die_knopfhoehe_hoch(schale):
         finally:
             sys.path.remove(str(ROOT / "src"))
 
-    knopfhoehe = _px("STYLE_CONTROL_HEIGHT")
-    zeilenhoehe = _px("STYLE_ROW_HEIGHT")
+    zeilenhoehe = _px("STYLE_NAV_ROW_HEIGHT")
 
     info = schale["seiten"]["general"]
     zeile = _aktive_zeile(info["bild"], info["platte"])
@@ -496,11 +523,4 @@ def test_ein_seitenleisten_eintrag_ist_nicht_die_knopfhoehe_hoch(schale):
         f"der aktive Eintrag der Seitenleiste ('Control') ist "
         f"{eintrag_hoehe}px hoch (gemessen zwischen y={oben} und y={unten}, "
         f"bezogen auf die Fensteroberkante), erwartet wird "
-        f"STYLE_ROW_HEIGHT={zeilenhoehe}px.")
-    assert eintrag_hoehe != knopfhoehe, (
-        f"der aktive Eintrag ist {eintrag_hoehe}px hoch - genau "
-        f"STYLE_CONTROL_HEIGHT={knopfhoehe}px, die Knopfhoehe. zepButton "
-        "(die aeussere Huelle) hat wieder die Zeilenhoehe zu ihrer "
-        "eigenen gemacht - genau der Fehler, den "
-        "tests/src/test_kit_nesting.py als Quelltext-Ursache haelt. "
-        "(.zep-btn { padding: 0 SPACE_16 }, keine senkrechte Polsterung.)")
+        f"STYLE_NAV_ROW_HEIGHT={zeilenhoehe}px.")

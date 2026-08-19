@@ -1298,6 +1298,54 @@ TABLE: dict[str, Size] = {
     "STYLE_CONTROL_HEIGHT": Size(32, PX, SCALED),
     "STYLE_ROW_HEIGHT": Size(48, PX, SCALED),
 
+    # NACHGETRAGEN am 19.08.2026 (Aufgabe 19). GEMELDET: "die sidebar
+    # items nav links sind viel zu hoch und nicht zu gebaut". GEMESSEN:
+    # STYLE_ROW_HEIGHT (74px bei Vorgabegroesse) auf jedem der acht
+    # Seitenleisten-Eintraege ergibt 592 Punkte Seitenleiste, weil
+    # zepSidebar() seine Eintraege bis hierher aus zepRow baute - dem
+    # Bauteil fuer INHALTSKARTEN (Symbol, Titel, Nebenzeile, Bedien-
+    # element). Ein Navigationseintrag ist keine Karte: er ist einzeilig
+    # - Symbol, Beschriftung, sonst nichts - und braucht seine eigene
+    # Sprosse, genau wie STYLE_ROW_HEIGHT selbst eine eigene Sprosse
+    # bekam, statt eine der Knopf-Hoehen zu leihen.
+    #
+    # HERGELEITET, NICHT GEGRIFFEN, nach demselben Verfahren wie
+    # STYLE_CONTROL_HEIGHT/STYLE_ROW_HEIGHT direkt darueber:
+    #
+    #     Inhalt   Symbol (STYLE_ICON_CAPTION) und Titel (STYLE_FONT_BODY)
+    #              sind BEIDE auf BASE_PX verankert (13 roh) - icon_px(-1)
+    #              rundet auf denselben Wert, den font_px(0) traegt (eine
+    #              Uebereinstimmung, keine Ableitung - siehe der Kommentar
+    #              bei LINE_HEIGHT oben). Die natuerliche Hoehe EINER
+    #              Zeile aus Symbol+Titel ist damit exakt die Zeilenhoehe
+    #              einer BODY-Sprosse: icon_px(0) = STYLE_ICON_BODY = 16.
+    #              Kein neuer Platzhalter - die Sprosse gibt es schon,
+    #              genau fuer diese Bedeutung ("Symbolgroesse derselben
+    #              Sprosse: ihre Zeilenhoehe", siehe icon_px()).
+    #     Polster  Zweimal STYLE_SPACE_8 (8), dieselbe Sprosse, mit der
+    #              STYLE_CONTROL_HEIGHT oben rechnet - ein Navigations-
+    #              eintrag ist ein einzeiliges Bedienelement wie ein
+    #              Knopf, keine Karte mit Rand auf allen vier Seiten
+    #              (zepRow traegt fuer "aktiv" nur einen linken 3px-
+    #              Streifen, keinen umlaufenden Rand - "Rand" bei
+    #              STYLE_CONTROL_HEIGHT zaehlt darum hier nicht mit).
+    #
+    #     16 + 2*8 = 32.
+    #
+    # DASS DAS DIESELBE ZAHL WIE STYLE_CONTROL_HEIGHT IST, IST EIN BEFUND
+    # UND KEIN GRUND, SIE ZU TEILEN: ein Navigationseintrag ist strukturell
+    # dasselbe wie ein Knopf (ein Bedienelement, eine Zeile Inhalt, dieselbe
+    # Polsterung) - aber ein ANDERES Bauteil (zepRow, nicht zepButton), mit
+    # eigener Rolle und eigenem CSS-Modifikator (`.zep-row-nav`, siehe
+    # ags-style.template). Ein eigener Name haelt beide unabhaengig
+    # aenderbar, falls sich Knopf- und Zeilenpolsterung einmal trennen.
+    #
+    # ERGEBNIS GEGENGEPRUEFT: 8 Eintraege * 49px (Vorgabegroesse) = 392px
+    # Seitenleiste statt 592 - 200 Punkte weniger, ohne dass Symbol oder
+    # Beschriftung beschnitten werden (Zeileninhalt bleibt 16 unskaliert /
+    # 25 skaliert hoch, die Polsterung traegt den Rest).
+    "STYLE_NAV_ROW_HEIGHT": Size(32, PX, SCALED),
+
     # STYLE_BAR_EDGE_SPACING stand hier, mit dem Grundwert 20 - also 31
     # px bei der ausgelieferten Groesse, links vor dem ersten und rechts
     # hinter dem letzten Modul, ZUSAETZLICH zu dem Rand, den die Platte
