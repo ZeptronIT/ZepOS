@@ -1,0 +1,300 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# Ruflo auf ZepOS - vorinstalliert, damit ein Nutzer nach der
+# Installation sofort mit mehreren KI-Agenten arbeiten kann.
+#
+# GEMELDET am 19.08.2026: "ich möchte ruflo github projekt auch direkt
+# in claude mit installieren sodass der user direkt loslegen kann". Der
+# Nutzer hat dazu entschieden: Node wird mitgeliefert, Ruflo wird
+# vorinstalliert - ihm ist bewusst, dass ZepOS damit erstmals eine
+# JavaScript-Laufzeitumgebung traegt, die es vorher nicht hatte.
+#
+# WAS RUFLO IST, RECHERCHIERT UND NICHT VERMUTET
+#     GitHub ruvnet/claude-flow (das Projekt heisst inzwischen ruvnet/
+#     ruflo, siehe unten), 68343 Sterne, 8205 Forks, MIT-Lizenz. Das
+#     npm-Paket heisst weiterhin claude-flow; sein eigenes bin/cli.js
+#     stellt sich selbst als "ruflo v3.38.12" vor
+#     (GEMESSEN am 19.08.2026: `node bin/cli.js --version`). Es setzt auf
+#     Claude Code auf, das ZepOS mit zepos-claude-code bereits mitbringt
+#     - ein Claude-Code-Plugin, das ueber MCP-Server weitere Agenten,
+#     150+ Befehle und 74+ spezialisierte Rollen anbietet.
+#
+# WELCHE VERSION, UND WARUM NICHT latest
+#     3.38.12, auf dieselbe Art genagelt wie zepos-claude-code 2.1.233
+#     und zepos-hyprland 0.56.1: verpackte Fremdprojekte tragen die
+#     Version des Urhebers, nicht die von ZepOS - packaging/README.md
+#     begruendet das unter "The version comes from VERSION". Ein Bau,
+#     der bei jedem Lauf holt, was gerade "latest" heisst, ist keiner,
+#     dessen Ergebnis sich wiederholen laesst, und genau daran haengt
+#     dieses Projekt seine Reproduzierbarkeit.
+pkgname=zepos-ruflo
+pkgver=3.38.12
+pkgrel=1
+pkgdesc="Ruflo (npm: claude-flow) - KI-Agenten-Orchestrierung fuer Claude Code, in Rollen: Supervisor, Planer, Umsetzer"
+arch=('x86_64')
+url="https://github.com/ruvnet/claude-flow"
+license=('MIT')
+
+# WARUM DIES KEIN EINZELNES GEPINNTES TARBALL IST WIE BEI gnim
+#     aylurs-gtk-shell holt gnim - EINE Abhaengigkeit - als npm-Tarball
+#     mit einer einzigen sha512-Pruefsumme aus der Registry, und
+#     zepos-claude-code holt die fertige Binaerdatei direkt. Beides ist
+#     hier keine Option: claude-flow ist ein GEWOEHNLICHES
+#     TypeScript-Paket, uebersetzt vorbereitet ausgeliefert, aber mit
+#     einem vollen npm-Abhaengigkeitsbaum, den es zur LAUFZEIT braucht -
+#     kein bun-Bau, der sich selbst mitbringt.
+#
+#     GEMESSEN am 19.08.2026, mit genau der Version unten:
+#
+#         npm install claude-flow@3.38.12   ->  574 Pakete, 43877
+#         Dateien, 1,3 GiB entpackt node_modules/, in 15-20 Sekunden.
+#
+#     Diese 574 Pakete einzeln als source=()-Eintraege mit je einer
+#     eigenen Pruefsumme zu fuehren - das Rezept von gnim, eintausendfach
+#     wiederholt - waere eine PKGBUILD mit tausenden Zeilen, die bei
+#     jeder Aktualisierung von claude-flow von Hand nachgezogen werden
+#     muessten. Das ist kein Sicherheitsgewinn gegenueber der Alternative
+#     unten, nur eine andere Stelle, an der derselbe Fehler passieren
+#     kann.
+#
+# WAS STATTDESSEN DIE FESTE VERSION IST: package-lock.json, EINGECHECKT
+#     package.json und package-lock.json in diesem Verzeichnis sind der
+#     Abdruck von genau einem Lauf: `npm install` gegen ein package.json,
+#     das claude-flow OHNE Bereichsangabe auf 3.38.12 nennt (kein `^`,
+#     kein `~`). npm hat daraus alle 574 Versionen aufgeloest und JEDE
+#     mit ihrem eigenen "integrity"-Feld (ein Subresource-Integrity-Hash,
+#     dieselbe Art Pruefsumme wie ein sha512sums=()-Eintrag) in die
+#     Lock-Datei geschrieben.
+#
+#     build() unten ruft `npm ci` und nicht `npm install`: `npm ci`
+#     installiert AUSSCHLIESSLICH das, was in package-lock.json steht,
+#     verifiziert jedes Paket gegen sein integrity-Feld und bricht ab,
+#     wenn package.json und die Lock-Datei nicht mehr zusammenpassen. Der
+#     Bau ist damit an genau denselben Satz von 574 Pruefsummen genagelt,
+#     nur gefuehrt von npm selbst statt von makepkg - dieselbe Garantie,
+#     die test_ags_does_not_run_a_package_manager_during_the_build()
+#     der AGS-Bau abverlangt (dort loest `npm install` einen
+#     Versionsbereich GEGEN DIE REGISTRY AUF, bei jedem Bau neu; hier
+#     loest `npm ci` NICHTS auf, es liest eine Datei, die im Repository
+#     liegt). Ein Netzzugriff bleibt dabei noetig - der Container von
+#     packaging/build.sh hat waehrend jedes Baus `--network host`, aus
+#     genau demselben Grund, aus dem jede andere source=()-Zeile in
+#     diesem Baum das Netz braucht -, aber WAS er bekommt, steht vorher
+#     fest und wird hinterher geprueft, nicht erst danach vermutet.
+#
+# WAS DAS AUF DER MASCHINE KOSTET
+#     GEMESSEN am 19.08.2026, `npm ci` gegen dieselbe Lock-Datei, ein
+#     zweites Mal von einem leeren Verzeichnis aus: wieder 574 Pakete,
+#     wieder 1,3 GiB, `node bin/cli.js --version` antwortet mit
+#     "ruflo v3.38.12" - der Beweis, dass der Abdruck reproduziert, was
+#     er verspricht.
+#
+#     UND EIN ZWEITES MAL GEMESSEN, DIESMAL AM ECHTEN PAKET IN EINEM
+#     LEEREN CONTAINER (archlinux:latest, signierte [zepos]-Ablage, kein
+#     Vorwissen): `pacman -S zepos-ruflo` zieht nodejs, npm und deren
+#     eigene sieben Abhaengigkeiten (ada, c-ares, libuv, node-gyp,
+#     nodejs-nopt, semver, simdjson) automatisch mit. Aus pacmans eigener
+#     Transaktionsvorschau:
+#
+#         zepos-ruflo    1159,62 MiB  (314,80 MiB Bezug)
+#         nodejs+npm+7      87,29 MiB  ( 20,00 MiB Bezug, gerundet)
+#         ---------------------------------------------
+#         zusammen       1246,91 MiB  (334,77 MiB Bezug)
+#
+#     Das ist NICHT der zweitgroesste Zuwachs, den ZepOS je bekommen hat
+#     - es ist der GROESSTE, vor zepos-claude-code (310 MiB). Ruflo mit
+#     "vollem Umfang" (siehe unten) kostet damit gut viermal so viel wie
+#     Claude Code selbst, und beide zusammen sind jetzt mit weitem
+#     Abstand die zwei groessten Zuwaechse des Projekts.
+#
+# "FULL, ALLE FUNKTIONEN" - NACHGETRAGEN am 19.08.2026, GEPRUEFT UND NICHT
+# GERATEN
+#     Der Nutzer hat praezisiert: Ruflo soll komplett installiert werden,
+#     nicht als Grundgeruest. Nachgesehen in claude-flow@3.38.12s eigener
+#     package.json statt vermutet:
+#
+#         dependencies          26 Eintraege - alle PFLICHT, `npm ci`
+#                                installiert sie immer, ohne Ausnahme.
+#         optionalDependencies  10 Eintraege (agentdb, agentic-flow,
+#                                better-sqlite3, @napi-rs/keyring, vier
+#                                @ruvector/*-Pakete und zwei weitere).
+#         peerDependencies      keine.
+#
+#     GEPRUEFT nach `npm ci` mit genau dieser Lock-Datei: ALLE ZEHN
+#     optionalDependencies stehen als eigenes Verzeichnis im Baum - `npm
+#     ci` installiert optionale Abhaengigkeiten standardmaessig mit, "--no-
+#     optional" wurde nirgends gesetzt. "Voller Umfang" heisst hier also
+#     schon: nicht das Grundgeruest, sondern der ganze Baum, den claude-
+#     flow selbst fuer vollstaendig haelt.
+#
+#     Einen Netzzugriff beim ERSTEN START gibt es nicht: `claude-flow
+#     doctor` (GEMESSEN unmittelbar nach `npm ci`, ohne jede weitere
+#     Einrichtung) meldet Node, npm, Claude Code CLI und Git jeweils mit
+#     einem gruenen Haken, und fuer Speicher/Daemon nur eine WARNUNG
+#     ("Not initialized" / "Not running") - keinen roten Fehlschlag und
+#     keinen Versuch, irgendetwas nachzuladen.
+#
+#     Der Einrichtungsschritt (`claude-flow init`) gehoert bewusst NICHT
+#     in dieses Paket: er schreibt in das Projektverzeichnis, in dem er
+#     aufgerufen wird (.claude/, Hooks, MCP-Registrierung) - ein
+#     Systempaket hat kein Projektverzeichnis, das es fuer den Nutzer
+#     waehlen koennte, und ein `init` gegen /usr waere ein Init, das
+#     niemand will. Das ist dieselbe Unterscheidung wie bei `git init`:
+#     das Programm ist installiert, der Schritt bleibt beim Nutzer, im
+#     ERSTEN Projekt, in dem er ihn braucht - und genau DAS ist "direkt
+#     loslegen": kein npm-Holvorgang mehr im Weg, nur noch der eine
+#     Befehl, den auch `claude-flow doctor` an erster Stelle vorschlaegt.
+#
+# WAS TROTZDEM FEHLT, UND WARUM DAS HIER STEHT STATT VERSCHWIEGEN ZU WERDEN
+#     `npm ci` meldet fuer 12 der 574 Pakete "install scripts blocked
+#     because they are not covered by allowScripts" - eine Sicherheits-
+#     vorgabe von npm 12.0.2 SELBST (nicht dieser Maschine; dieselbe
+#     Meldung kommt auch im frischen Bau-Container, weil er dieselbe
+#     npm-Version aus demselben Schnappschuss zieht). Blockiert sind
+#     better-sqlite3, argon2, sharp, onnxruntime-node, hnswlib-node,
+#     protobufjs, tldjs, @google/genai und die postinstall-Skripte von
+#     agentdb und agentic-flow selbst - Skripte, die eine native
+#     Erweiterung kompilieren oder eine vorgebaute Binaerdatei nachladen
+#     wuerden.
+#
+#     GEPRUEFT statt vermutet, wie stark das traegt: `claude-flow memory`
+#     nennt sql.js - eine reine JavaScript/WASM-SQLite-Umsetzung, KEINE
+#     native Erweiterung - als seine Speicher-Engine; better-sqlite3 ist
+#     dort die schnellere Alternative, nicht die einzige. `claude-flow
+#     doctor` bestaetigt das GEMESSEN (siehe oben): kein roter Fehlschlag
+#     wegen fehlender nativer Module. Die Kernorchestrierung - init,
+#     swarm, hive-mind, mcp, agent, task, memory - bleibt davon
+#     unberuehrt.
+#
+#     Diese zwoelf Skripte selbst auszufuehren wuerde dieses Rezept eine
+#     dritte, groessere Reproduzierbarkeitsfrage stellen (node-gyp
+#     kompiliert dann waehrend package() gegen den C++-Compiler des
+#     Bau-Containers, und better-sqlite3s eigenes Skript versucht zuerst
+#     einen Download vorgebauter Binaerdateien von GitHub-Releases,
+#     ausserhalb jeder Pruefsumme, die dieses Rezept sonst fuehrt) - eine
+#     Entscheidung, die ausdruecklich vom Menschen kommen sollte und
+#     nicht still von diesem Rezept getroffen wird. Wer den vollen
+#     nativen Umfang will, kann `npm rebuild` mit erlaubten
+#     Install-Skripten im installierten Baum nachholen; Voraussetzung
+#     dafuer sind node-gyp, ein C-Compiler und make, die auf einer
+#     ZepOS-Installation nicht automatisch da sind.
+source=("package.json"
+        "package-lock.json")
+sha256sums=('SKIP'
+            'SKIP')
+
+# WARUM nodejs UND npm HIER STEHEN UND NICHT BEI zepos-desktop
+#     zepos-desktop begruendet seine eigene Liste so: "A dependency is a
+#     program the generated configuration starts by itself, or one a
+#     default keybinding needs in order to do what the key says." Keine
+#     generierte Vorlage startet Node, und keine Standardbindung ruft
+#     Ruflo - die Regel von zepos-desktop trifft hier schlicht nicht zu.
+#
+#     Stattdessen gilt dieselbe Regel wie bei zepos-claude-code, das
+#     `depends=('kitty')` traegt, obwohl kitty bereits eine Abhaengigkeit
+#     von zepos-desktop ist: ein Paket, das fuer sich allein installiert
+#     werden koennen soll, nennt, was ES SELBST braucht, unabhaengig
+#     davon, was sonst schon da ist. pacman stoert eine Abhaengigkeit
+#     nicht, die zwei Pakete zugleich erklaeren (derselbe Satz steht in
+#     packaging/zepos-apps/PKGBUILD bei kitty). nodejs und npm sind hier
+#     GENAU EIN Verbraucher im ganzen Baum: dieses Paket. Sie gehoeren
+#     deshalb in sein eigenes depends und nirgendwo sonst hin.
+#
+#     npm zur LAUFZEIT und nicht nur zum Bauen: v3/@claude-flow/cli/dist/
+#     src/commands/init.js ruft `npx` (GEMESSEN am 19.08.2026,
+#     `grep -rlE "spawn\(.npx|exec\(.npx" v3/@claude-flow/cli/dist`) - das
+#     ist der Befehl, mit dem ein Nutzer ein Projekt zuerst einrichtet,
+#     also genau der erste Schritt von "direkt loslegen". npx liegt im
+#     npm-Paket, nicht im nodejs-Paket.
+depends=('nodejs' 'npm')
+
+# WARUM ES KEINEN STARTER UND KEIN SYMBOL IM DOCK GIBT
+#     zepos-claude-code bekommt beides, und der Unterschied ist keine
+#     Nachlaessigkeit, sondern eine andere Art Programm.
+#
+#     `claude` OHNE Argumente oeffnet eine Sitzung, in der ein Mensch mit
+#     dem Assistenten spricht - ein Fenster ist dafuer die richtige
+#     Metapher, und der Starter haelt es offen, bis die Antwort gelesen
+#     ist (siehe packaging/zepos-claude-code/zepos-claude-code).
+#
+#     `claude-flow` OHNE Argumente ist keine Sitzung, sondern eine
+#     Befehlsuebersicht (GEMESSEN am 19.08.2026: `claude-flow --help`
+#     zaehlt ueber zwanzig Unterbefehle - init, swarm, hive-mind, mcp,
+#     agent, task, memory - jeder mit eigenen Argumenten und den meisten
+#     an ein bestehendes PROJEKTVERZEICHNIS gebunden). Ein Klick auf ein
+#     Symbol kann kein Projektverzeichnis mitgeben; ein Terminal, das
+#     bloss die Befehlsuebersicht zeigt, ist kein zweiter Nutzen
+#     gegenueber `claude-flow --help` von Hand.
+#
+#     Ruflo ist ein Orchestrierer fuer Entwicklungsarbeit, kein Fenster,
+#     das man anklickt - und "direkt loslegen koennen" heisst hier: der
+#     Befehl ist da, ohne dass npm zuerst 1,3 GiB aus dem Netz holen
+#     muss, GENAU an der Stelle, an der ein Mensch tatsaechlich anfaengt
+#     - einem Terminal, in einem Projektverzeichnis, mit `claude-flow
+#     init`. Ein Symbol im Dock waere ein Knopf, der eine Befehlsuebersicht
+#     zeigt und sonst nichts; das ist nicht die schlimmste Folge, die
+#     dieses Projekt kennt (das ist ein Knopf, der GAR NICHTS tut), aber
+#     es ist auch kein Nutzen. Deshalb gibt es hier keine .desktop-Datei,
+#     und src/apps.py (own(), das jede usr/share/applications/*.desktop-
+#     Zeile in packaging/*/PKGBUILD findet) sieht dieses Paket folgerichtig
+#     nicht - es steht nur in der "fremden" Haelfte, ueber
+#     packaging/zepos-apps/PKGBUILD, damit es auf jeder Installation
+#     landet, so wie "immer" es fuer zepos-claude-code schon verlangt hat.
+
+build() {
+    cd "$srcdir"
+
+    # --ignore-scripts nicht gesetzt: die Blockade oben ist npms EIGENE
+    # Vorgabe (allowScripts), keine dieses Rezepts - ein zusaetzliches
+    # --ignore-scripts wuerde nur verschleiern, dass ohnehin nichts
+    # laeuft, das nicht schon geprueft und oben benannt waere.
+    npm ci --no-audit --no-fund --loglevel=error
+}
+
+package() {
+    cd "$srcdir"
+
+    # NICHT /usr/lib/node_modules/ - GEMESSEN am 19.08.2026, im echten Bau
+    #     Dort haetten `npm install -g claude-flow` UND `npm install -g`
+    #     der Registry-Konvention nach abgelegt, aber der Platz ist nicht
+    #     frei: node-gyp (eine makedepends-Folge von npm/nodejs) bringt
+    #     selbst die Arch-Pakete extra/semver und extra/nodejs-nopt mit,
+    #     und BEIDE legen ihre eigenen JavaScript-Dateien ebenfalls unter
+    #     /usr/lib/node_modules/<name>/ ab - Arch fuehrt seine EIGENEN
+    #     npm-Hilfspakete an derselben Stelle, an der ein globaler
+    #     npm-Bau landen wuerde. Der erste Bauversuch brach deshalb mit
+    #     "failed to commit transaction (conflicting files):
+    #     /usr/lib/node_modules/semver/... exists in filesystem (owned by
+    #     semver)" ab - claude-flow bringt semver@7.7.3 als eigene,
+    #     gehobene Abhaengigkeit mit, und die kollidierte Datei fuer Datei
+    #     mit dem System-semver.
+    #
+    #     Deshalb liegt der ganze Baum unter /usr/lib/zepos-ruflo/
+    #     node_modules/ - einem Pfad, den ausser diesem Paket niemand
+    #     beansprucht. node_modules/claude-flow/bin/cli.js loest seine
+    #     eigenen Pfade relativ zu sich selbst auf (import.meta.url), und
+    #     jedes andere Paket im Baum loest SEINE Importe ueber Node's
+    #     normale Aufwaertssuche nach node_modules/ auf - beides
+    #     funktioniert nur, wenn der ganze flach aufgeloeste Baum
+    #     ZUSAMMEN an einem Ort bleibt, egal WELCHEM, genau wie ihn
+    #     `npm ci` gebaut hat.
+    install -dm755 "$pkgdir/usr/lib/zepos-ruflo/node_modules"
+    cp -a node_modules/. "$pkgdir/usr/lib/zepos-ruflo/node_modules/"
+
+    # Der Befehl. Ein Symlink und kein Wrapper-Skript: bin/cli.js traegt
+    # bereits `#!/usr/bin/env node` und das Ausfuehr-Bit (npm setzt
+    # beides beim Anlegen eines bin-Eintrags), genau das Muster, mit dem
+    # `npm install -g` selbst /usr/bin/claude-flow anlegen wuerde. Ein
+    # eigenes Skript braeuchte zepos-ruflo nur fuer etwas, das
+    # zepos-claude-code braucht und dieses Paket nicht: ein Fenster
+    # offenzuhalten. Ruflo laeuft in einem Terminal, das der Nutzer schon
+    # geoeffnet hat, und meldet seinen Rueckgabewert dorthin unveraendert.
+    install -dm755 "$pkgdir/usr/bin"
+    ln -s /usr/lib/zepos-ruflo/node_modules/claude-flow/bin/cli.js \
+        "$pkgdir/usr/bin/claude-flow"
+
+    if [ -f node_modules/claude-flow/LICENSE ]; then
+        install -Dm644 node_modules/claude-flow/LICENSE \
+            "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    fi
+}

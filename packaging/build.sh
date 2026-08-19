@@ -91,6 +91,9 @@ readonly PACKAGES=(
     # dessen Abhaengigkeit noch nicht im Repo liegt, laesst sich beim
     # Bauen nicht aufloesen.
     zepos-claude-code
+    # Aus demselben Grund direkt daneben: zepos-apps nennt seit dem
+    # 19.08.2026 auch zepos-ruflo in seinen depends.
+    zepos-ruflo
     zepos-apps
     zepos-apps-office
     zepos-apps-devel

@@ -1,0 +1,8 @@
+{
+  "name": "zepos-ruflo",
+  "private": true,
+  "description": "npm-Abdruck fuer packaging/zepos-ruflo/PKGBUILD - kein eigenes Programm.",
+  "dependencies": {
+    "claude-flow": "3.38.12"
+  }
+}

@@ -234,6 +234,26 @@ depends=(
     # den ZepOS bisher bekommen hat.
     'zepos-claude-code'
 
+    # --- der Orchestrator ----------------------------------------------
+    # zepos-ruflo (npm: claude-flow, stellt sich selbst als "ruflo" vor).
+    # GEMELDET am 19.08.2026: "ich möchte ruflo github projekt auch
+    # direkt in claude mit installieren sodass der user direkt loslegen
+    # kann". Dieselbe Regel wie bei zepos-claude-code direkt darueber:
+    # "immer" heisst nicht optdepends, sonst installiert pacman es nicht.
+    #
+    # Es setzt auf zepos-claude-code auf - ein Claude-Code-Plugin fuer
+    # KI-Agenten in Rollen (Supervisor, Planer, Umsetzer), genau der
+    # Wunsch, den der Nutzer am selben Tag schon einmal geaeussert hatte.
+    #
+    # Das Rezept daneben begruendet, warum es kein eigenes Symbol im Dock
+    # bekommt (ein Orchestrierer fuer ein Projektverzeichnis, kein
+    # Fenster zum Anklicken), und was es kostet: 574 npm-Pakete, dazu
+    # nodejs und npm selbst - GEMESSEN am gebauten Paket in einem leeren
+    # Container: 1246,91 MiB installiert, 334,77 MiB Bezug. Das ist der
+    # GROESSTE einzelne Zuwachs, den ZepOS bisher bekommen hat, vor
+    # zepos-claude-code (310 MiB).
+    'zepos-ruflo'
+
     # --- der Rechner --------------------------------------------------
     # gnome-calculator 50.0-1. GEMELDET am 13.08.2026: "es fehlt ein
     # calculator".
