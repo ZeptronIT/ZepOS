@@ -202,6 +202,42 @@ window.bar-window * {
   border-radius: {{STYLE_RADIUS_CARD}};
 }
 
+/* DER ZEIGEREFFEKT GILT FUER JEDES MODUL, UND ZWAR AN EINER STELLE
+ *
+ *     GEMELDET am 19.08.2026: "im header sehe ich immer noch icon die
+ *     bei hover nicht das background verändern mache das richtig".
+ *
+ *     Er hatte schon einmal recht damit, und beim ersten Mal habe ich
+ *     nur die vier Module repariert, die er beim Namen nannte -
+ *     Netzwerk, Bluetooth, Lautstaerke, Mikrofon. GEZAEHLT beim zweiten
+ *     Mal: ACHT von achtzehn Modulen hatten keinen, darunter Hardware,
+ *     Wetter, Weltzeiten, Meldungen, Medien, Datenschutz und
+ *     Aktualisierungen.
+ *
+ *     Die Ursache war nicht, dass acht Regeln fehlten, sondern dass es
+ *     ueberhaupt Einzelregeln waren: sieben Stueck, alle mit demselben
+ *     Inhalt, und wer ein Modul hinzufuegte, musste daran denken. Das
+ *     ist dieselbe Vervielfaeltigung, die dieser Datei ihren Kopf
+ *     gegeben hat ("fuenfzehn @import ... ohne dass irgendwo stand,
+ *     warum").
+ *
+ *     Jetzt traegt sie jedes Modul, weil jedes .bar-module traegt. Ein
+ *     neues Modul bekommt den Effekt, ohne dass jemand daran denkt.
+ *
+ * DIE ABLAGE IST AUSGENOMMEN, und das ist kein Vergessen: #tray ist ein
+ * BEHAELTER fremder Symbole, keine Schaltflaeche. Seine Eintraege heben
+ * sich einzeln hervor (#tray button.tray-item:hover, weiter unten) -
+ * den ganzen Behaelter zu faerben hiesse, auf ein Symbol zu zeigen und
+ * fuenf hervorzuheben. */
+.bar-module:hover {
+  background: {{STYLE_HOVER_BG}};
+  color: {{STYLE_HOVER_COLOR}};
+}
+
+#tray.bar-module:hover {
+  background: transparent;
+}
+
 /* Ein Modul, dessen Skript kein JSON geschrieben hat. Es zeigt dann die
  * Zeile, die stattdessen kam - und faellt auf, damit sie jemand liest. */
 .bar-module.broken {
@@ -315,10 +351,6 @@ tooltip label {
   margin-right: {{STYLE_MODULE_SPACING}};
 }
 
-#custom-date:hover {
-  background: {{STYLE_HOVER_BG}};
-  color: {{STYLE_HOVER_COLOR}};
-}
 
 /* Ein Modul fuer alle Zusatzuhren, nicht eines je Land. Eine Farbe fuer
  * alle Zonen: zwei Vorgaenger hatten je eine, was nur so lange eine
@@ -352,10 +384,6 @@ tooltip label {
   margin-right: {{STYLE_MODULE_SPACING}};
 }
 
-#custom-hypr-shortcuts:hover {
-  background: {{STYLE_HOVER_BG}};
-  color: {{STYLE_HOVER_COLOR}};
-}
 
 #workspaces {
   margin-right: {{STYLE_GROUP_INTERNAL}};
@@ -408,10 +436,6 @@ tooltip label {
   margin-right: {{STYLE_MODULE_SPACING}};
 }
 
-#custom-floating-layouts:hover {
-  background: {{STYLE_HOVER_BG}};
-  color: {{STYLE_HOVER_COLOR}};
-}
 
 #custom-floating-layouts.no-layouts {
   color: {{STYLE_COLOR_OFFLINE}};
@@ -435,10 +459,6 @@ tooltip label {
   margin-right: {{STYLE_MODULE_SPACING}};
 }
 
-#custom-helpers:hover {
-  background: {{STYLE_HOVER_BG}};
-  color: {{STYLE_HOVER_COLOR}};
-}
 
 #custom-helpers.no-scripts {
   color: {{STYLE_COLOR_OFFLINE}};
@@ -542,13 +562,6 @@ tooltip label {
  * ags-bar.template), keine GTK-eigene Kachel wie der MenuButton hinter
  * #bar-overflow - derselbe Bau wie #battery, das denselben
  * Zeigereffekt bereits ohne Reset traegt. */
-#network:hover,
-#bluetooth:hover,
-#pulseaudio:hover,
-#pulseaudio\#microphone:hover {
-  background: {{STYLE_HOVER_BG}};
-  color: {{STYLE_HOVER_COLOR}};
-}
 
 #network {
   margin-right: {{STYLE_MODULE_SPACING}};
@@ -644,10 +657,6 @@ tooltip label {
   color: {{STYLE_COLOR_CRITICAL}};
 }
 
-#battery:hover {
-  background: {{STYLE_HOVER_BG}};
-  color: {{STYLE_HOVER_COLOR}};
-}
 
 /* Die Ablage.
  *
@@ -733,13 +742,6 @@ tooltip label {
   color: {{STYLE_WALLPAPER_COLOR_LANDSCAPE}};
 }
 
-#custom-disk:hover,
-#custom-wallpaper:hover,
-#custom-theme:hover,
-#custom-system:hover {
-  background: {{STYLE_HOVER_BG}};
-  color: {{STYLE_HOVER_COLOR}};
-}
 
 /* =====================================================================
  * Das Dock - dieselbe Leiste noch einmal, an der unteren Kante
