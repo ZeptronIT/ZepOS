@@ -798,12 +798,49 @@ _FIXED_STYLE_VARIABLES = {
     # ============================================================================
     "STYLE_MARGIN_VERTICAL": "3px 0px",
     "STYLE_CHIP_GAP": size_value("STYLE_CHIP_GAP"),
-    # Der seitliche Anteil ist derselbe Abstand wie zwischen zwei
-    # Modulen und wird deshalb aus derselben Groesse gebaut. Er stand
-    # hier als zweite 10 daneben, so dass ein groesserer Modulabstand
-    # die Innenabstaende der Module unberuehrt liess und die Leiste bei
-    # grosser Schrift auseinanderfiel statt mitzuwachsen.
-    "STYLE_PADDING_MODULE": f'0px {size_value("STYLE_MODULE_SPACING")}',
+    # DIESER WERT WAR BIS ZUM 19.08.2026 STYLE_MODULE_SPACING, UND DAS
+    # WAR DER GRUND FUER "die icon untereinander komisch viel platz von
+    # der margin her" (Nutzer, 19.08.2026)
+    #
+    #     Der Kommentar, der hier stand, war einmal richtig und dann
+    #     nicht mehr: "Der seitliche Anteil ist derselbe Abstand wie
+    #     zwischen zwei Modulen und wird deshalb aus derselben Groesse
+    #     gebaut" - geschrieben, als .bar-module noch eine Kachel mit
+    #     eigenem Grund war und die Polsterung MITBESTIMMTE, wie breit
+    #     diese Kachel aussah. Der Umbau vom 12.08.2026 hat die Kachel
+    #     abgeschafft (".bar-module ... GEMELDET: 'die icon sollen im
+    #     header nicht nochmal ein element haben'") und dabei selbst
+    #     festgehalten, was seither gilt: "margin ... der Abstand
+    #     zwischen zwei Modulen. Er ist seit heute das EINZIGE, was sie
+    #     trennt" (siehe .bar-module, bar-style.template). Die
+    #     Polsterung blieb stehen, aber nur noch als "die FLAECHE, die
+    #     der Zeigereffekt bemalt" - eine Klickflaeche, kein zweiter
+    #     Abstand. Ihre GROESSE wurde bei diesem Rollenwechsel nicht
+    #     nachgezogen.
+    #
+    #     GEMESSEN (Bericht der Aufgabe vom 19.08.2026): ein Modul, das
+    #     .bar-module traegt UND STYLE_MODULE_SPACING als eigenen
+    #     margin-right setzt (die grosse Mehrheit), stand seinem
+    #     Nachbarn padding-right(15) + margin-right(15) + margin-left
+    #     (STYLE_CHIP_GAP, 15) + padding-left(15) = 60px entfernt, bei
+    #     Vorgabegroesse - der Zeigergrund zaehlte doppelt mit, einmal
+    #     als eigene Polsterung, einmal (unter anderem Namen) als
+    #     Modulabstand. Ein Modulpaar mit margin-right:
+    #     STYLE_GROUP_INTERNAL (0px, "zusammengehoerige Module") kam
+    #     trotzdem nur auf 45px - die Polsterung allein war schon fast
+    #     so breit wie der ganze beabsichtigte Abstand zwischen
+    #     ZUSAMMENGEHOERIGEN Modulen.
+    #
+    #     STYLE_PADDING_BUTTON ist die Groesse, die dieses Projekt
+    #     bereits fuer eine reine Klickflaeche ohne Trennfunktion
+    #     benutzt (#tray button.tray-item, tooltip label - siehe
+    #     bar-style.template) - genau die Rolle, die die Polsterung
+    #     seit dem 12.08.2026 hat. Beide sind SCALED (src/sizes.py),
+    #     folgen also weiterhin gemeinsam dem Groessenregler - die
+    #     Sorge, derentwegen der alte Kommentar padding und Modulabstand
+    #     an dieselbe Zahl gebunden hat (das Auseinanderfallen bei
+    #     grosser Schrift), gilt unveraendert nicht mehr.
+    "STYLE_PADDING_MODULE": f'0px {size_value("STYLE_PADDING_BUTTON")}',
     "STYLE_PADDING_BUTTON": size_value("STYLE_PADDING_BUTTON"),
 
     # ============================================================================
