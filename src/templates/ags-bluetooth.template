@@ -480,12 +480,18 @@ export const bluetoothSeite: ShellSeite = {
 
     /** Eine Zeile: Zeichen, Name, Zustand - und ein Klick, der etwas tut.
      *
-     * zepButton fuer den Klick und die Rolle "umrandet" (siehe die
-     * Rollen-Zuteilung im Aufgabenbrief), zepRow fuer den Inhalt - eine
-     * Zusammensetzung, kein neues Bauteil. Verbunden bekommt "ausgewaehlt"
-     * an zepRow statt einer eigenen Klasse (task-5, 18.08.2026).
+     * zepRow mit `aktion` fuer Inhalt UND Klick - eine Zeile, keine
+     * zweite Huelle darum. BERICHTIGT am 19.08.2026 (Bericht Aufgabe
+     * 15/16, "Kasten in Kasten"): hier stand bis dahin `zepButton
+     * ("umrandet")` um eine zepRow - beide malen ihre eigene Flaeche,
+     * verschachtelt eine sichtbare Doppel-Rundung (Zahlen im Bericht
+     * dieser Aufgabe). zepRow traegt die Klickbarkeit seither selbst
+     * (siehe `aktion` in ags-kit.template); createNetworkRow() in
+     * ags-network.template traegt dieselbe Reparatur. Verbunden bekommt
+     * weiter "ausgewaehlt" an zepRow statt einer eigenen Klasse (task-5,
+     * 18.08.2026).
      */
-    const createDeviceRow = (device: Device): Gtk.Button => {
+    const createDeviceRow = (device: Device): Gtk.Widget => {
       // Der Zustand IN WORTEN und die Adresse daneben. Die Adresse ist
       // das, was zwei gleich benannte Kopfhoerer unterscheidet, und der
       // Zustand das, was der Klick gleich aendert.
@@ -495,7 +501,11 @@ export const bluetoothSeite: ShellSeite = {
       // zepRow nimmt die Nebenzeile nur als Text entgegen - eine frische
       // Zeile je Aufruf ist darum der einzige Weg, sie spaeter zu aendern
       // (waehrend des Klicks, siehe unten), derselbe Kunstgriff wie beim
-      // Zustandskopf in updateDisplay().
+      // Zustandskopf in updateDisplay(). OHNE `aktion`: eine reine
+      // Inhalts-Zeile (Gtk.Box), die `row.set_child()` unten als NEUEN
+      // Inhalt der aeusseren Huelle einsetzt - dieselbe Rolle wie vorher,
+      // nur dass die Huelle jetzt zu zepRow selbst gehoert statt zu einem
+      // danebengesetzten zepButton.
       const rowContent = (unterzeile: string) => zepRow({
         symbol: device.connected ? ICONS.connected : ICONS.bluetooth,
         titel: device.name,
@@ -503,30 +513,41 @@ export const bluetoothSeite: ShellSeite = {
         ausgewaehlt: device.connected,
       })
 
-      const row = zepButton("", "umrandet", async () => {
-        // Waehrend der Aufruf laeuft, sagt die Zeile es. Ein Knopf, der
-        // nach dem Klick zwei Sekunden lang aussieht wie vorher, sieht aus
-        // wie einer, der nichts tut.
-        row.set_child(rowContent(
-          device.connected ? _("Disconnecting …") : _("Connecting …")))
-        row.set_sensitive(false)
-        try {
-          // `connect`/`disconnect` warten auf die Gegenstelle. Die Frist
-          // ist hier laenger als bei einer Abfrage: ein Kopfhoerer, der
-          // aus der Tasche geholt wird, braucht mehr als drei Sekunden.
-          await execAsync(["bash", "-c",
-            `timeout 15 bluetoothctl ${device.connected ? "disconnect" : "connect"} `
-            + `${device.address}`])
-        } catch (e) {
-          console.error("Bluetooth:", device.address, e)
-          row.set_child(rowContent(device.connected
-            ? _("Disconnecting failed")
-            : _("Connecting failed - is it paired?")))
-        }
-        row.set_sensitive(true)
-        updateDisplay()
-      })
-      row.set_child(rowContent(`${zustand} • ${device.address}`))
+      // MIT `aktion`: zepRow liefert hier ihre eigene Huelle (ein
+      // Gtk.Button ohne eigene Flaeche, siehe .zep-row-click,
+      // ags-style.template) - `row` IST diese Huelle, `row.set_child()`
+      // tauscht ihren Inhalt aus, genau wie vorher bei der
+      // zepButton-Huelle.
+      const row = zepRow({
+        symbol: device.connected ? ICONS.connected : ICONS.bluetooth,
+        titel: device.name,
+        unterzeile: `${zustand} • ${device.address}`,
+        ausgewaehlt: device.connected,
+        aktion: async () => {
+          // Waehrend der Aufruf laeuft, sagt die Zeile es. Ein Knopf, der
+          // nach dem Klick zwei Sekunden lang aussieht wie vorher, sieht
+          // aus wie einer, der nichts tut.
+          row.set_child(rowContent(
+            device.connected ? _("Disconnecting …") : _("Connecting …")))
+          row.set_sensitive(false)
+          try {
+            // `connect`/`disconnect` warten auf die Gegenstelle. Die
+            // Frist ist hier laenger als bei einer Abfrage: ein
+            // Kopfhoerer, der aus der Tasche geholt wird, braucht mehr
+            // als drei Sekunden.
+            await execAsync(["bash", "-c",
+              `timeout 15 bluetoothctl ${device.connected ? "disconnect" : "connect"} `
+              + `${device.address}`])
+          } catch (e) {
+            console.error("Bluetooth:", device.address, e)
+            row.set_child(rowContent(device.connected
+              ? _("Disconnecting failed")
+              : _("Connecting failed - is it paired?")))
+          }
+          row.set_sensitive(true)
+          updateDisplay()
+        },
+      }) as Gtk.Button
       row.set_tooltip_text(device.connected
         ? format(_("Disconnect {device}"), { device: device.name })
         : format(_("Connect to {device}"), { device: device.name }))

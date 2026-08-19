@@ -111,6 +111,29 @@ $overlay-border: $border;
 .zep-row-title { font-size: {{STYLE_FONT_BODY}}; color: $text; }
 .zep-row-sub { font-size: {{STYLE_FONT_CAPTION}}; color: $subtext; }
 
+// Die Huelle, die zepRow() (ags-kit.template) um sich selbst legt, wenn
+// `aktion` gesetzt ist - NACHGETRAGEN am 19.08.2026 (Bericht Aufgabe
+// 15/16, Fund "Kasten in Kasten"). Sie ist ein Gtk.Button (fuer Fokus
+// und Tastaturbedienung), traegt aber KEINE der vier zepButton-Rollen -
+// derselbe Kunstgriff wie .overlay-close-btn (background: transparent;
+// border: none), dazu Polsterung UND Mindestmasse auf 0, damit die
+// Huelle dem Kind (.zep-row) keine eigene Groesse aufzwingt. GENAU EINE
+// Flaeche malt danach noch etwas: .zep-row selbst, mit seinem eigenen
+// Zeigergrund und seinem "ausgewaehlt"-Randstreifen - beide bleiben
+// unveraendert und wirken unter der durchsichtigen Huelle genauso wie
+// vorher direkt auf dem Fenstergrund.
+.zep-row-click {
+  background: transparent;
+  border: none;
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+
+  &:hover, &:active, &:focus, &:checked {
+    background: transparent;
+  }
+}
+
 .zep-section {
   font-size: {{STYLE_FONT_CAPTION}};
   color: $subtext;

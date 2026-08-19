@@ -462,11 +462,18 @@ export const networkSeite: ShellSeite = {
       }
     }
 
-    /** Eine WLAN-Zeile: zepButton(umrandet) um eine zepRow, dieselbe
-     * Zusammensetzung wie createDeviceRow() in ags-bluetooth.template
-     * (18.08.2026, task-C). Das verbundene Netz hebt sich ueber
-     * "ausgewaehlt" an zepRow ab statt ueber eine eigene .active-Klasse. */
-    const createNetworkRow = (network: WifiNetwork): Gtk.Button => {
+    /** Eine WLAN-Zeile: eine zepRow mit `aktion`, keine zweite Huelle
+     * darum - BERICHTIGT am 19.08.2026 (Bericht Aufgabe 15/16, "Kasten
+     * in Kasten"). Hier stand bis dahin `zepButton(umrandet)` um eine
+     * zepRow, "dieselbe Zusammensetzung wie createDeviceRow()" - beide
+     * Bauteile malen ihre eigene Flaeche, verschachtelt eine sichtbare
+     * Doppel-Rundung (Zahlen im Bericht dieser Aufgabe). zepRow traegt
+     * die Klickbarkeit seither selbst (siehe `aktion` in
+     * ags-kit.template); createDeviceRow() in ags-bluetooth.template
+     * traegt dieselbe Reparatur. Das verbundene Netz hebt sich weiter
+     * ueber "ausgewaehlt" an zepRow ab statt ueber eine eigene
+     * .active-Klasse. */
+    const createNetworkRow = (network: WifiNetwork): Gtk.Widget => {
       // Zeilenende: Haekchen bei Verbindung, Schloss bei Sicherung ohne
       // Verbindung, sonst nichts - unveraendert gegenueber vorher, nur
       // jetzt als `ende` an zepRow statt direkt in einer eigenen Box.
@@ -481,19 +488,11 @@ export const networkSeite: ShellSeite = {
         ende = lockIcon
       }
 
-      const row = zepButton("", "umrandet", async () => {
-        if (network.active) { await disconnect(); setTimeout(updateDisplay, 1000) }
-        else if (network.security) {
-          const success = await connectToNetwork(network.ssid)
-          if (!success) showPassword(network.ssid)
-          else setTimeout(updateDisplay, 1000)
-        } else { await connectToNetwork(network.ssid); setTimeout(updateDisplay, 1000) }
-      })
       // Der Netzname kommt von einem fremden Router und ist beliebig lang;
       // zepRow kuerzt Titel und Nebenzeile selbst (STYLE_MEASURE_LINE aus
       // ags-kit.template) - keine eigene ellipsize/max_width_chars-Stuetze
       // mehr noetig.
-      row.set_child(zepRow({
+      return zepRow({
         symbol: getSignalIcon(network.signal),
         titel: network.ssid,
         unterzeile: format(_("{signal}% • {security}"), {
@@ -502,9 +501,15 @@ export const networkSeite: ShellSeite = {
         }),
         ausgewaehlt: network.active,
         ende,
-      }))
-
-      return row
+        aktion: async () => {
+          if (network.active) { await disconnect(); setTimeout(updateDisplay, 1000) }
+          else if (network.security) {
+            const success = await connectToNetwork(network.ssid)
+            if (!success) showPassword(network.ssid)
+            else setTimeout(updateDisplay, 1000)
+          } else { await connectToNetwork(network.ssid); setTimeout(updateDisplay, 1000) }
+        },
+      })
     }
 
     const updateDisplay = async () => {

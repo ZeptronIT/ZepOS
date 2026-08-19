@@ -78,7 +78,49 @@ export function zepRow(opts: {
   // KUERZEN (also `false`/nicht gesetzt); nur ein Fenster, das
   // ausdruecklich den vollen Text braucht, setzt hier `true`.
   vollerText?: boolean
-}): Gtk.Box {
+  // NACHGETRAGEN am 19.08.2026 (Bericht Aufgabe 15/16, Fund "Kasten in
+  // Kasten"): eine anklickbare Zeile, ohne eine zweite Huelle darueber.
+  //
+  // WAS VORHER STAND, UND WARUM DAS FALSCH WAR
+  //     Drei Fundstellen (zepSidebar hier, createNetworkRow in
+  //     ags-network.template, createDeviceRow in ags-bluetooth.template)
+  //     loesten "eine Zeile, die man anklicken kann" alle gleich:
+  //     `zepButton("", "umrandet", aktion)`, dann `.set_child(zepRow(...))`
+  //     hineingesteckt. BEIDE Bauteile malen ihre EIGENE Flaeche
+  //     (background/border/border-radius, ags-style.template)  - GEMESSEN
+  //     bei Vorgabegroesse: Knopf 49px hoch, Radius 8, Rand IMMER
+  //     sichtbar; Zeile 74px hoch, Radius 12, Randstreifen nur "aktiv" -
+  //     GROESSER als der Knopf und nicht konzentrisch zu ihm (25px
+  //     waagerechter, 0px senkrechter Abstand zwischeneinander). Weil der
+  //     Knopf keine senkrechte Polsterung traegt, gewann ohnehin die
+  //     Zeile die tatsaechliche Hoehe - die aeussere Huelle malte nur
+  //     noch eine zweite, kleiner gerundete Flaeche INNERHALB der
+  //     ersten, sichtbar genau dort, wo die Zeile ihre Farbe wechselt
+  //     (Zeigergrund, "ausgewaehlt").
+  //
+  // WARUM EINE OPTION AN ZEPROW UND KEIN DRITTES BAUTEIL
+  //     Die Vorgabe, die zu dieser Verschachtelung gefuehrt hat, war
+  //     selbst der Fehler: "zepSidebar baut seine Eintraege aus zepRow,
+  //     bau keine zweite Zeilenform daneben" - richtig fuer den INHALT
+  //     (Symbol, Titel, Nebenzeile, ausgewaehlt-Zustand ist ueberall
+  //     derselbe), aber sie hat uebersehen, dass die KLICKBARKEIT eine
+  //     eigene Faehigkeit ist, keine eigene Zeilenform. zepRow bekommt
+  //     die Faehigkeit darum HIER dazu, statt dass ein zweites Bauteil
+  //     neben ihr entsteht - dieselbe Zeile bleibt in allen drei
+  //     Fundstellen dieselbe Zeile, nur ihre Huelle aendert sich.
+  //
+  // WIE DIE HUELLE OHNE EIGENE FLAECHE AUSKOMMT
+  //     `new Gtk.Button(...)` DIREKT, nicht `zepButton()`: ein Knopf
+  //     braucht seine Tastaturbedienung und seinen Fokus (die
+  //     Klickbarkeit, wegen der die alte Fassung ueberhaupt eine Huelle
+  //     brauchte - "der Umsetzer brauchte fuer die Klickbarkeit eine
+  //     Huelle und bekam so zwei", Bericht dieser Aufgabe), aber KEINE
+  //     der vier Rollen von zepButton (die tragen alle eine eigene
+  //     Flaeche). `.zep-row-click` (ags-style.template) macht die Huelle
+  //     durchsichtig - GENAU EINE Flaeche malt noch etwas: .zep-row
+  //     selbst, unveraendert.
+  aktion?: () => void
+}): Gtk.Widget {
   const zeile = new Gtk.Box({ spacing: 0 })
   zeile.add_css_class("zep-row")
   if (opts.ausgewaehlt) zeile.add_css_class("active")
@@ -114,7 +156,16 @@ export function zepRow(opts: {
   zeile.append(luecke)
 
   if (opts.ende) zeile.append(opts.ende)
-  return zeile
+
+  if (!opts.aktion) return zeile
+
+  // Eine einzige Huelle, ohne eigene Flaeche - siehe die Begruendung am
+  // Funktionskopf (`aktion`).
+  const knopf = new Gtk.Button({ can_focus: true })
+  knopf.add_css_class("zep-row-click")
+  knopf.set_child(zeile)
+  knopf.connect("clicked", opts.aktion)
+  return knopf
 }
 
 // Der Schalter. Gtk.Switch und kein selbstgebauter Knopf: er bringt
@@ -176,6 +227,16 @@ export interface ZepNavGruppe {
 //     genau die Doppelung, die dieses Vorhaben gerade fuer Knoepfe
 //     abgeraeumt hat (sieben Auftraege, siehe test_button_kit.py) - hier
 //     also keine.
+//
+//     BERICHTIGT am 19.08.2026 (Bericht Aufgabe 15/16, "Kasten in
+//     Kasten"): "gebaut wie jede anklickbare Zeile" war genau das
+//     Problem - zepButton("umrandet") und zepRow malen BEIDE ihre eigene
+//     Flaeche, verschachtelt ergibt das zwei Kaesten uebereinander
+//     (Zahlen im Bericht dieser Aufgabe). Die Vorgabe "keine dritte
+//     Zeilenform" bleibt richtig; falsch war, sie mit einer zweiten
+//     HUELLE statt einer Faehigkeit von zepRow selbst umzusetzen. zepRow
+//     traegt seither ihr eigenes `aktion` (siehe dort) - der Eintrag
+//     bleibt eine Zeile, nicht zwei.
 export function zepSidebar(
   gruppen: ZepNavGruppe[],
   aktiv: string,
@@ -196,13 +257,12 @@ export function zepSidebar(
     block.append(zepSectionLabel(gruppe.titel))
 
     for (const eintrag of gruppe.eintraege) {
-      const knopf = zepButton("", "umrandet", () => aufSeite(eintrag.id))
-      knopf.set_child(zepRow({
+      block.append(zepRow({
         symbol: eintrag.symbol,
         titel: eintrag.titel,
         ausgewaehlt: eintrag.id === aktiv,
+        aktion: () => aufSeite(eintrag.id),
       }))
-      block.append(knopf)
     }
 
     leiste.append(block)
