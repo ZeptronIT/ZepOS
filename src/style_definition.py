@@ -1883,14 +1883,50 @@ _FIXED_STYLE_VARIABLES = {
     # ============================================================================
     # Hyprbars - Window Titlebars (fixed - NOT scaled, colors user-configurable)
     # ============================================================================
+    # DIE TITELLEISTE TRUG BIS ZUM 19.08.2026 CATPPUCCIN, NICHT ZEPOS
+    #
+    #     GEMELDET: "der header alle seiten ist immernoch in der alten
+    #     hintergrund farbe ... ich meine hyprbars bitte stelle diese
+    #     farbe auch auf die hintergrund farbe des headers dunkle
+    #     petrol".
+    #
+    #     Er hat recht, und es betraf nicht nur den Grund. ALLE FUENF
+    #     Vorgaben hier waren Catppuccin Mocha, aus der Zeit vor der
+    #     Marke:
+    #
+    #         Grund        1e1e2e   Mocha base
+    #         Text         cdd6f4   Mocha text
+    #         Schliessen   f38ba8   Mocha red
+    #         Minimieren   f9e2af   Mocha yellow
+    #         Maximieren   a6e3a1   Mocha green
+    #
+    #     Warum es niemandem auffiel: hyprbars zeichnet auf NORMALEN
+    #     Fenstern (Browser, Dateien, Einstellungen, Kitty), und die
+    #     AGS-Flaechen sind Layer-Shell - sie bekommen nie eine
+    #     hyprbars-Leiste. Die ganze Arbeit an den Fenstern dieses
+    #     Projekts konnte an dieser Leiste vorbeigehen.
+    #
+    #     Der Grund ist jetzt overlay_surface, also GENAU die Farbe, mit
+    #     der der Kopf eines AGS-Fensters malt ($surface in
+    #     ags-style.template) - darum ging es dem Nutzer. Die uebrigen
+    #     vier folgen derselben Zuordnung: Text auf overlay_text,
+    #     Schliessen auf critical, Minimieren auf warning, Maximieren
+    #     auf success.
+    #
+    #     KONTRAST NACHGERECHNET (WCAG 2.1, dieselbe Formel wie
+    #     tests/src/test_brand.py): #DCEEF4 auf #0D3D47 = 9,90:1.
+    #
+    #     Die Namen bleiben eigene Regler - wer eine andere Titelleiste
+    #     will, stellt sie weiterhin um. Geaendert hat sich nur, worauf
+    #     sie zeigen, wenn niemand etwas eingestellt hat.
     "STYLE_HYPRBARS_HEIGHT": size_value("STYLE_HYPRBARS_HEIGHT"),
-    "STYLE_HYPRBARS_BG_COLOR": f"rgb({get_user_color('hyprbar_bg', '#1e1e2e')[1:]})",
-    "STYLE_HYPRBARS_TEXT_COLOR": f"rgb({get_user_color('hyprbar_text', '#cdd6f4')[1:]})",
+    "STYLE_HYPRBARS_BG_COLOR": f"rgb({get_user_color('hyprbar_bg', get_user_color('overlay_surface'))[1:]})",
+    "STYLE_HYPRBARS_TEXT_COLOR": f"rgb({get_user_color('hyprbar_text', get_user_color('overlay_text'))[1:]})",
     "STYLE_HYPRBARS_TEXT_SIZE": size_value("STYLE_HYPRBARS_TEXT_SIZE"),
     "STYLE_HYPRBARS_BUTTON_SIZE": size_value("STYLE_HYPRBARS_BUTTON_SIZE"),
-    "STYLE_HYPRBARS_BUTTON_CLOSE_COLOR": f"rgb({get_user_color('hyprbar_close', '#f38ba8')[1:]})",
-    "STYLE_HYPRBARS_BUTTON_MINIMIZE_COLOR": f"rgb({get_user_color('hyprbar_minimize', '#f9e2af')[1:]})",
-    "STYLE_HYPRBARS_BUTTON_MAXIMIZE_COLOR": f"rgb({get_user_color('hyprbar_maximize', '#a6e3a1')[1:]})",
+    "STYLE_HYPRBARS_BUTTON_CLOSE_COLOR": f"rgb({get_user_color('hyprbar_close', get_user_color('critical'))[1:]})",
+    "STYLE_HYPRBARS_BUTTON_MINIMIZE_COLOR": f"rgb({get_user_color('hyprbar_minimize', get_user_color('warning'))[1:]})",
+    "STYLE_HYPRBARS_BUTTON_MAXIMIZE_COLOR": f"rgb({get_user_color('hyprbar_maximize', get_user_color('success'))[1:]})",
 
     # ============================================================================
     # Der Starter und der Zwischenablage-Verlauf (plugins/)
