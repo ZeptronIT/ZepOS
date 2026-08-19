@@ -300,74 +300,100 @@ $overlay-border: $border;
 // kein Mass ist") - GEPRUEFT `grep -rn "calc(" src/templates/
 // src/styles/`, 19.08.2026: kein einziger Treffer im ganzen Baum, dieser
 // Baustil wird hier nicht neu erfunden.
+//
+// NACHGETRAGEN am 19.08.2026 (Aufgabe 23, Bericht dieser Aufgabe):
+// 672 WAR DIE RECHNUNG, ABER NICHT DIE GANZE RECHNUNG.
+//
+//     672 nimmt an, dass der Seite die VOLLE Differenz 880-208 zur
+//     Verfuegung steht. Sie steht es nicht: createOverlayWindow()
+//     (ags-overlay-utils.template) setzt `overlay_scrolling: false` -
+//     die senkrechte Bildlaufleiste liegt NEBEN dem Inhalt und nimmt
+//     echten Platz, keinen schwebenden (derselbe Grund, aus dem sie
+//     ueberhaupt so gesetzt ist - siehe dort). JEDE Seite der Schale
+//     ist hoch genug, um sie zu brauchen (SHELL_HEIGHT ist ein Wunsch,
+//     MEASURE_MODAL_SHARE deckelt auf die halbe Bildschirmhoehe lange
+//     bevor der Inhalt zu Ende ist) - die Leiste ist darum nicht der
+//     Ausnahmefall, sie ist der Normalfall.
+//
+//     GEMESSEN (Bericht dieser Aufgabe, echter Compositor, 1920x1080,
+//     Netzwerk-Seite - ihr Inhalt liegt WEIT unter 672, der Boden allein
+//     entscheidet): `hadj.get_upper()` (die tatsaechlich verlangte
+//     Breite des Inhalts, Seitenleiste plus Seite) stand bei 881, `hadj.
+//     get_page_size()` (die WIRKLICH sichtbare Breite, also NACH Abzug
+//     der Bildlaufleiste) bei 854 - 27 Punkte Differenz, obwohl die
+//     Seite selbst genau auf ihrem 672px-Boden lag und keine Zeile
+//     darueber hinausging. `scroller.get_vscrollbar()?.measure(...)`
+//     nannte zur selben Zeit 24 - dieselbe Groessenordnung, der Rest
+//     sind Rundung/Rahmen (.overlay-outer traegt 1px). Der Boden allein
+//     REICHT ALSO NICHT, selbst wenn jede Seite ihn exakt trifft.
+//
+//     672 BLEIBT DENNOCH UNVERAENDERT - AUSPROBIERT UND WIEDER
+//     VERWORFEN, NICHT UEBERSEHEN.
+//
+//     Eine gesenkte Zahl HIER (fuer alle sechs Seiten ueber diese
+//     geteilte Klasse) brachte general (die `startSeite`, die die
+//     Fenstergroesse beim ERSTEN show() fuer die gesamte Sitzung
+//     festlegt - die Layer-Shell-Flaeche laesst sich danach nicht mehr
+//     umsetzen, siehe der Kommentar bei set_default_size() in
+//     ags-overlay-utils.template, show()) unter den 880px-Deckel (875
+//     statt 880, test_die_schale_haelt_ihre_breite_ueber_die_seiten).
+//     Eine ZWEITE, engere Klasse NUR fuer Netzwerk/Bluetooth (per
+//     eigener CSS-Klasse UND per `container.set_size_request()` in der
+//     jeweiligen Vorlage, beides ausprobiert) liess general unangetastet
+//     bei 880, aenderte aber am gemeldeten Ueberlauf NICHTS (Gtk.Stack
+//     scheint sein eigenes Mindestmass ueber ALLE Kinder zu bilden,
+//     nicht nur das sichtbare - eine einzelne engere Seite senkt das
+//     Mindestmass des STAPELS nicht) UND loeste einen ZWEITEN,
+//     unerklaerten Fehler aus: die Seitenleiste bemalte auf JEDER Seite
+//     220 statt 208 Punkte (test_die_seitenleiste_bemalt_208_punkte),
+//     reproduzierbar bei jedem Versuch, aber die Ursache blieb in der
+//     verbleibenden Zeit dieser Aufgabe ungeklaert.
+//
+//     NICHT BEHOBEN: der verbleibende Ueberlauf von Netzwerk (27px) und
+//     der Rest von Bluetooth nach dessen VPN-Fix (ebenfalls ~27px,
+//     siehe .vpn-container weiter unten) - eine Reparatur, die einen
+//     zweiten, schlechter verstandenen Fehler eintauscht, ist keine.
+//     Siehe der Bericht dieser Aufgabe und die ausfuehrlichen Kommentare
+//     bei `container.add_css_class("zep-shell-page")` in
+//     ags-network.template/ags-bluetooth.template.
 .zep-shell-page {
   min-width: 672px;
 }
 
-// UEBERSTIMMT .cc-container'S EIGENEN BODEN, WENN BEIDE ZUSAMMEN STEHEN -
-// GEFUNDEN am 19.08.2026 (Aufgabe 17, echter Compositor)
+// ENTFERNT am 19.08.2026 (Aufgabe 23, Bericht dieser Aufgabe):
+// `.cc-container.zep-shell-page` UND `.vpn-container.zep-shell-page`.
 //
-//     .cc-container (weiter unten, "CONTROL CENTER (COMPACT)") traegt
-//     seit jeher ein EIGENES `min-width: 320px` - ein Rest aus der Zeit,
-//     als das Kontrollzentrum sein eigenes, kleineres Fenster war (vor
-//     Aufgabe 6). ags-notifications.template (Meldungszentrum, KEINE
-//     Seite der Schale - siehe Bericht Aufgabe 11, "Notifications ist
-//     NICHT Teil der Schale, es bleibt ein eigenstaendiges
-//     createOverlayWindow-Fenster") traegt dieselbe Klasse und braucht
-//     diesen Boden weiterhin - er wird HIER bewusst NICHT geloescht.
+//     Vom 19.08.2026 (Aufgabe 17) bis heute standen hier zwei
+//     Verbundregeln, weil general/sound/display UND VPN ihren
+//     Mindestbreiten-Boden auf DEMSELBEN Wurzel-Widget trugen wie ihr
+//     eigenes Polster (`.cc-container`/`.vpn-container`, beide mit
+//     eigenem `padding`) - zwei Klassenregeln gleicher Spezifitaet auf
+//     einem Element, bei denen die Reihenfolge im Stylesheet entschied.
+//     Die Verbundregel loeste GENAU DIESES Problem (welche der beiden
+//     min-width-Werte gewinnt), aber nicht das NAECHSTE: GTK rechnet
+//     Polster IMMER oben auf eine gesetzte min-width drauf, auch auf
+//     die der Verbundregel - GEMESSEN (Bericht Aufgabe 23): general
+//     708px statt 672, VPN 722px statt 672, exakt die 672 plus zweimal
+//     das jeweils eigene Polster.
 //
-//     general/sound/display (ags-control-center.template) tragen seit
-//     Aufgabe 6/17 BEIDE Klassen auf demselben Wurzel-Widget
-//     (`.cc-container.zep-shell-page`). Bei zwei Klassenregeln mit
-//     GLEICHER Spezifitaet (0,1,0 je Regel) entscheidet die
-//     REIHENFOLGE im Stylesheet, nicht die groessere Zahl - `.cc-
-//     container` steht SPAETER in dieser Datei und gewann darum bisher
-//     IMMER, gleich welche der beiden Klassen zuerst geschrieben stand.
-//     GEMESSEN, echter Compositor, 1920x1080: general 852 statt 880
-//     (-28, nachdem Aufgabe 17 drei Zeilen von "general" abgezogen hat
-//     und sein natuerlicher Inhalt zum ersten Mal unter 672 fiel), sound/
-//     display 637 statt 880 (-243, volle Wirkung - ihr Inhalt ist von
-//     Anfang an schmal).
+//     Die Reparatur trennt die beiden Zustaendigkeiten auf ZWEI
+//     Widgets statt einer Verbundregel: `.zep-shell-page` sitzt seither
+//     auf einer eigenen, polsterlosen Huelle OHNE `.cc-container`/
+//     `.vpn-container` (mitSeitenboden() in ags-control-center.
+//     template, derselbe Kunstgriff von Hand in ags-vpn.template) -
+//     mainBox bleibt DARIN, mit ihrem eigenen Polster, unveraendert.
+//     Keine Klassenkombination `.cc-container.zep-shell-page` oder
+//     `.vpn-container.zep-shell-page` kommt im Baum mehr vor (GEPRUEFT
+//     `grep -rn 'add_css_class("cc-container")\|add_css_class("vpn-
+//     container")\|add_css_class("zep-shell-page")' src/templates/`,
+//     19.08.2026) - die beiden Verbundregeln traefen also nichts mehr
+//     und sind darum geloescht, nicht nur auskommentiert (Regel 14).
 //
-//     Die Antwort ist eine Verbundregel: `.cc-container.zep-shell-page`
-//     hat Spezifitaet (0,2,0), schlaegt also JEDE der beiden einzelnen
-//     Regeln unabhaengig von der Reihenfolge - und trifft NUR Widgets,
-//     die wirklich beide Klassen tragen. `.cc-container` allein (also
-//     Notifications) bleibt bei seinen 320px, unveraendert.
-.cc-container.zep-shell-page {
-  min-width: 672px;
-}
-
-// DERSELBE ZUSAMMENSTOSS, EINE ZEILE TIEFER IM BAUM - GEFUNDEN am
-// 19.08.2026 (Bericht dieser Aufgabe, echter Compositor)
-//
-//     ags-vpn.template setzt auf mainBox (der Ruecknahme von bauen())
-//     seit jeher BEIDE Klassen, "vpn-container" UND "zep-shell-page"
-//     (Zeilen 841/845 dort) - `.vpn-container` (weiter unten, "VPN
-//     MANAGER") traegt aus der Zeit VOR der Schale (das eigene, kleinere
-//     Fenster) ein EIGENES `min-width: 400px`, genau derselbe Rest wie
-//     `.cc-container`s 320px oben. Zwei Klassenregeln GLEICHER
-//     Spezifitaet (0,1,0 je Regel) - die REIHENFOLGE im Stylesheet
-//     entscheidet, nicht die groessere Zahl, und `.vpn-container` steht
-//     SPAETER in dieser Datei, gewann also immer.
-//
-//     GEMESSEN, echter Compositor, 1920x1080, VOR dieser Zeile: VPN 731
-//     statt 880 (-149) - der 672px-Boden griff nie, VPNs eigener,
-//     natuerlicher Inhalt (523px) blieb unter 672 und damit unter der
-//     Sprosse, die die Schale fuer sie vorsieht. Netzwerk/Bluetooth/
-//     general erreichten an derselben Messung alle 880 - nur VPN traegt
-//     die zweite, kollidierende Klasse mit einem EIGENEN Boden.
-//
-//     Dieselbe Antwort wie bei `.cc-container.zep-shell-page`: eine
-//     Verbundregel mit Spezifitaet (0,2,0), schlaegt beide Einzelregeln
-//     unabhaengig von der Reihenfolge. `.vpn-container` allein (kein
-//     Leser mehr - ags-vpn.template ist die einzige Vorlage, die diese
-//     Klasse traegt, siehe der Kommentar dort) bliebe ohnehin bei
-//     seinen 400px, aber die Verbundregel ist der klare Ausdruck der
-//     Absicht und nicht auf Zufall angewiesen.
-.vpn-container.zep-shell-page {
-  min-width: 672px;
-}
+//     `.cc-container` und `.vpn-container` behalten ihre EIGENEN,
+//     einfachen `min-width`-Regeln weiter unten (320px/400px) -
+//     Notifications braucht die eine weiterhin, die andere hat keinen
+//     Leser mehr (siehe der Kommentar dort), aber keine der beiden
+//     kollidiert mehr mit `.zep-shell-page`.
 
 // ===== SHARED OVERLAY STYLES (Muted Dark / HyprLaunch / HyprClipX) =====
 //

@@ -561,6 +561,19 @@ export const bluetoothSeite: ShellSeite = {
     // Der Mindestbreiten-Boden der Schale (.zep-shell-page,
     // ags-style.template) - siehe dort fuer die Rechnung und die
     // Messung (794 statt 880 vor dieser Zeile, 19.08.2026).
+    //
+    // NACHGETRAGEN am 19.08.2026 (Aufgabe 23, Bericht dieser Aufgabe):
+    // Bluetooth meldete trotz dieses Bodens 77px waagerechten Ueberlauf
+    // - davon waren 50 ein UNABHAENGIGER zweiter Fehler (.vpn-container
+    // in ags-style.template traegt selbst dasselbe Polster-auf-Boden-
+    // Problem wie general/sound/display, siehe dort - Gtk.Stack hat
+    // dessen aufgeblaehte Breite zeitweise fuer die ganze Schale
+    // gemeldet, waehrend bluetooth aktiv war), BEHOBEN mit dem VPN-Fix.
+    // Die restlichen ~27px sind derselbe, NICHT behobene Fehlbetrag wie
+    // bei Netzwerk (dieselbe senkrechte Bildlaufleiste, derselbe
+    // Boden) - siehe der ausfuehrliche Kommentar dort
+    // (ags-network.template) fuer das, was ausprobiert wurde und warum
+    // es nicht uebernommen wurde.
     container.add_css_class("zep-shell-page")
 
     // ----- Der Zustand des Adapters, mit dem Schalter daneben -----

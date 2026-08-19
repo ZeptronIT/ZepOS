@@ -637,6 +637,48 @@ export default function ControlCenter(
   // (24 Knoepfe + 0 Regler auf "general", 2 Knoepfe + 2 Regler auf
   // "sound", 0 Knoepfe + 1 Regler auf "display" - 24+4+1 = 29). Es
   // verschwindet nichts, nur der Ort aendert sich.
+  // NACHGETRAGEN am 19.08.2026 (Aufgabe 23). GEMELDET: "ich will auch
+  // nicht horizontal scrollen in diesem ags fenster" (Nutzer, zweimal
+  // in dieser Sitzung - siehe der Bericht dieser Aufgabe) - general
+  // meldete trotz des 672px-Bodens (.zep-shell-page, ags-style.
+  // template) 63px waagerechten Ueberlauf.
+  //
+  // DER FEHLER: .zep-shell-page (min-width: 672px) sass auf DERSELBEN
+  // Box wie .cc-container's EIGENES Polster (padding, ags-style.
+  // template) - GTKs CSS-Boxmodell rechnet Polster IMMER OBEN AUF eine
+  // gesetzte min-width drauf (Content-Box, wie im gewoehnlichen
+  // CSS-Boxmodell auch), statt es DARIN unterzubringen. GEMESSEN
+  // (Debug-Bau dieser Aufgabe, `mainBox.measure(HORIZONTAL)` nach
+  // `map`): 708px statt 672 - genau 672 plus zweimal .cc-container's
+  // Polster (STYLE_SPACE_12, bei 1920x1080 auf 18px skaliert:
+  // 672 + 2*18 = 708). Die senkrechte Bildlaufleiste
+  // (overlay_scrolling: false, ags-overlay-utils.template - sie nimmt
+  // echten Platz, keinen schwebenden) zieht von der verbleibenden
+  // Breite zusaetzlich ab; zusammen ergibt das den gemeldeten
+  // Ueberlauf.
+  //
+  // DIE REPARATUR: eine eigene, polsterlose Huelle traegt den Boden;
+  // die eigentliche Seite (mainBox, mit .cc-container und dessen
+  // Polster) bleibt DARIN unveraendert. Die Huelle bekommt den Boden
+  // aus .zep-shell-page zugewiesen (ags-style.template, unveraendert
+  // 672px - siehe dort: ein zweiter, unabhaengiger Fehlbetrag durch die
+  // senkrechte Bildlaufleiste wurde in dieser Aufgabe GEFUNDEN, aber
+  // NICHT behoben, siehe der lange Kommentar dort) - kein fremdes
+  // Polster addiert sich mehr dazu, und mainBox verteilt ihr eigenes
+  // Polster INNERHALB davon.
+  //
+  // DREI VERBRAUCHER, EINE STELLE: general, sound UND display trugen
+  // alle drei ".cc-container zep-shell-page" auf DERSELBEN Box (jetzt
+  // nicht mehr - mainBox traegt nur noch ".cc-container", die Huelle
+  // nur noch ".zep-shell-page", siehe unten) - derselbe Fehler an drei
+  // Stellen braucht eine gemeinsame Reparatur, keine drei einzelnen.
+  const mitSeitenboden = (inhalt: Gtk.Widget): Gtk.Widget => {
+    const huelle = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    huelle.add_css_class("zep-shell-page")
+    huelle.append(inhalt)
+    return huelle
+  }
+
   const soundSeite: ShellSeite = {
     id: "sound",
     titel: _("Sound"),
@@ -653,7 +695,11 @@ export default function ControlCenter(
       // ags-style.template) - dieselbe Rechnung wie bei Netzwerk/
       // Bluetooth/VPN (Aufgabe 15/16): SHELL_WIDTH (880) minus die
       // 208px feste Seitenleiste = 672 fuer den Seiteninhalt selbst.
-      mainBox.add_css_class("zep-shell-page")
+      // NICHT MEHR AUF mainBox SELBST (Aufgabe 23, siehe
+      // mitSeitenboden() oben) - der Boden sitzt seit dieser Aufgabe
+      // auf einer eigenen, polsterlosen Huelle, die return mitSeiten
+      // boden(mainBox) unten baut, sonst rechnet GTK .cc-container's
+      // eigenes Polster oben auf die 672px drauf.
 
       headerWrap = new Gtk.Box({})
       mainBox.append(headerWrap)
@@ -746,7 +792,7 @@ export default function ControlCenter(
         if (win.visible && istAktiv()) updateSound()
       })
 
-      return mainBox
+      return mitSeitenboden(mainBox)
     },
   }
 
@@ -761,7 +807,8 @@ export default function ControlCenter(
 
       const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
       mainBox.add_css_class("cc-container")
-      mainBox.add_css_class("zep-shell-page")
+      // Der Boden sitzt seit Aufgabe 23 NICHT mehr hier - siehe
+      // mitSeitenboden() oben (derselbe Grund wie bei soundSeite).
 
       headerWrap = new Gtk.Box({})
       mainBox.append(headerWrap)
@@ -808,7 +855,7 @@ export default function ControlCenter(
         if (win.visible && istAktiv()) updateBrightness()
       })
 
-      return mainBox
+      return mitSeitenboden(mainBox)
     },
   }
 
@@ -938,9 +985,16 @@ export default function ControlCenter(
       // echter Compositor, 852 statt 880 (-28) OHNE diese Klasse. Mit
       // ihr - und der Verbundregel `.cc-container.zep-shell-page` in
       // ags-style.template, die .cc-container's eigenes 320px-Minimum
-      // fuer Notifications unangetastet laesst - erreicht general
+      // fuer Notifications unangetastet laesst - erreichte general
       // wieder verlaesslich die vollen 880, wie Netzwerk/Bluetooth/VPN.
-      mainBox.add_css_class("zep-shell-page")
+      //
+      // NICHT MEHR AUF mainBox SELBST (Aufgabe 23): genau DIESE
+      // Verbundregel war der naechste Fehler - sie sass auf derselben
+      // Box wie .cc-container's EIGENES Polster und GTK rechnet das
+      // Polster oben auf die 672px drauf statt es darin unterzubringen
+      // (GEMESSEN 708px statt 672 fuer general). Der Boden sitzt seit
+      // dieser Aufgabe auf einer eigenen, polsterlosen Huelle - siehe
+      // mitSeitenboden() oben und return mitSeitenboden(mainBox) unten.
 
       /** Die Beschriftung einer Zeile - die, die den Text traegt.
        *
@@ -1781,7 +1835,7 @@ export default function ControlCenter(
         if (win.visible) updateDisplay()
       })
 
-      return mainBox
+      return mitSeitenboden(mainBox)
     },
   }
 

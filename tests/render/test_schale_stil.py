@@ -41,6 +41,7 @@ DER PREIS
 """
 from __future__ import annotations
 
+import re
 import sys
 import time
 from pathlib import Path
@@ -235,7 +236,21 @@ def schale(tmp_path_factory):
             sitzung.request(anfrage)
             time.sleep(1.0)
 
-    return {"vorher": vorher, "seiten": ergebnis}
+        # NACHGETRAGEN am 19.08.2026 (Aufgabe 23). GELESEN, SOLANGE DIE
+        # SITZUNG NOCH STEHT: Session.__exit__ (stop()) raeumt
+        # self.runtime per shutil.rmtree ab, und shell_log liegt DARIN -
+        # ausserhalb dieses `with`-Blocks gelesen waere die Datei schon
+        # weg. createOverlayWindow() (ags-overlay-utils.template,
+        # notify::upper, Aufgabe 19/d766b7a) schreibt genau dann eine
+        # Zeile, wenn eine Seite mehr Breite verlangt, als das Fenster
+        # ihr laesst - derselbe Fall, unter dem Gtk.PolicyType.AUTOMATIC
+        # ueberhaupt erst eine waagerechte Bildlaufleiste einblendet
+        # (siehe der Kommentar dort). Der volle Log ueber alle vier
+        # Seiten hinweg ist damit ein direkter Nachweis "Leiste
+        # sichtbar" bzw. ihr Fehlen ein Nachweis "keine Leiste".
+        schalen_log = sitzung.read_shell_log()
+
+    return {"vorher": vorher, "seiten": ergebnis, "schalen_log": schalen_log}
 
 
 # DIE ZWEI FUNKTIONEN UNTEN ERSETZEN _sidebar_grenze() UND DIE
@@ -524,3 +539,50 @@ def test_ein_seitenleisten_eintrag_ist_nicht_die_knopfhoehe_hoch(schale):
         f"{eintrag_hoehe}px hoch (gemessen zwischen y={oben} und y={unten}, "
         f"bezogen auf die Fensteroberkante), erwartet wird "
         f"STYLE_NAV_ROW_HEIGHT={zeilenhoehe}px.")
+
+
+# Die Zeile, die createOverlayWindow() (ags-overlay-utils.template,
+# notify::upper, Aufgabe 19/d766b7a) NUR dann schreibt, wenn der Inhalt
+# einer Seite tatsaechlich mehr Breite verlangt als das Fenster ihr
+# laesst - siehe der Kommentar dort. `[^"]*` statt "control", weil
+# config.name der Schale gehoert (ShellConfig, ags-control-center.
+# template) und diese Datei ihn nicht abschreiben soll, nur die Zahl
+# dahinter.
+_UEBERLAUF_ZEILE = re.compile(
+    r'Ueberlagerung "[^"]*": Inhalt (\d+)px breiter als das Fenster erlaubt')
+
+
+def test_keine_seite_der_schale_scrollt_waagerecht(schale):
+    """"ich will auch nicht horizontal scrollen in diesem ags fenster" -
+    diese Meldung zweimal in dieser Sitzung (Blattkopf Aufgabe 23),
+    zuerst schon ganz am Anfang ("die ags fenster ... sind so
+    eingequetscht das man nach rechts und nach unten scrollen muss").
+
+    WARUM DER LOG UND KEIN BILDPUNKT-ABGLEICH
+        `overlay_scrolling: false` (ags-overlay-utils.template) laesst
+        die waagerechte Leiste, sobald sie erscheint, echten Platz
+        einnehmen statt zu schweben - sie waere also grundsaetzlich im
+        Bild zu finden. Aber `notify::upper` feuert GENAU dann, wenn
+        Gtk.PolicyType.AUTOMATIC dieselbe Leiste einblendet (derselbe
+        Vergleich upper > page_size, den GTK selbst fuer die
+        Sichtbarkeit einer AUTOMATIC-Leiste anstellt) - der Log ist
+        damit kein Naeherungswert fuer "Leiste sichtbar", sondern
+        derselbe Bedingungsausdruck, nur mitgeschrieben. Eine
+        Bildpunktsuche muesste zusaetzlich raten, welche Farbe/Zeile die
+        Leiste auf JEDER der vier Seiten traegt; der Log braucht das
+        nicht.
+
+    GEMESSEN (Bericht Aufgabe 19, d766b7a, VOR der Reparatur dieser
+    Aufgabe): general 63px, network 27px, bluetooth 77px zu breit fuer
+    ihre Seite der Schale - drei Zeilen in `schalen_log`, eine je Seite.
+    Dieser Waechter ist an genau diesem Baum (vor der Reparatur) einmal
+    gefallen, mit denselben drei Zeilen (siehe der Bericht dieser
+    Aufgabe) - der Beweis, dass er ueberhaupt etwas findet, nicht nur
+    dass er nie ausloest.
+    """
+    treffer = [int(m) for m in _UEBERLAUF_ZEILE.findall(schale["schalen_log"])]
+    assert not treffer, (
+        "die Schale meldet waagerechten Ueberlauf (createOverlayWindow(), "
+        "notify::upper) auf mindestens einer Seite: "
+        + ", ".join(f"{px}px" for px in treffer) + "\n\nVoller Log:\n"
+        + schale["schalen_log"])
