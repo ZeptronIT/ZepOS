@@ -834,8 +834,11 @@ const OVERFLOW_ICON = "{{ICON_LIST}}"
 // Versehen: beides handelt von der Tastatur, es gibt in
 // icon_definition.py genau ein Tastaturzeichen, und ein zweites dafuer
 // zu erfinden hiesse, dieselbe Sache zweimal zu benennen. Die beiden
-// stehen ausserdem nie nebeneinander - die Tastenkuerzel-Anzeige ist
-// zuschaltbar und gehoert nicht zur Vorgabe (siehe _bar_optional in
+// stehen ausserdem nie nebeneinander in der ausgelieferten Leiste -
+// bis zum 19.08.2026 war die Tastenkuerzel-Anzeige die zuschaltbare,
+// jetzt ist es umgekehrt: custom/keyboard gehoert nicht mehr zur
+// Vorgabe und ist nur noch ueber bar.modules_left in
+// user-settings.json erreichbar (siehe _bar_optional in
 // style_definition.py).
 const KEYBOARD_ICON = "{{ICON_KEYBOARD}}"
 

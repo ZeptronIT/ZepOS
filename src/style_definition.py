@@ -2662,9 +2662,50 @@ _FIXED_STYLE_VARIABLES["STYLE_GLASS_LAYERRULES"] = _glass_layerrules()
 # tests/src/test_bar_headless.py, Vorgabegroesse, zehn Arbeitsbereichen:
 # die Zahl steht dort bei COMPLETE_FROM und FOLDED_ON_COMMON_NOTEBOOK,
 # weil sie dort auch gehalten wird.
-_modules_left = ["custom/date", "custom/keyboard", "custom/hardware"]
+_modules_left = ["custom/date", "custom/hardware"]
 _modules_left += ["custom/weather", "custom/clocks"]
 _modules_left += ["custom/notifications"]
+
+# DIE KUERZEL-ZAHL STAND IN KEINER DER BEIDEN HAELFTEN
+#
+#     GEMELDET am 19.08.2026: "ich sehe im header aber immernoch nicht
+#     die keybind anzahl und bei klick erscheint die ganzen keybinds
+#     warum nicht?"
+#
+#     Weil sie hier fehlte, und nur hier. Alles andere war fertig und
+#     wurde nie gezeigt: ags-bar.template hat den Zweig
+#     `case "custom/hypr-shortcuts"` mit `toggles: "shortcuts"`,
+#     hypr-shortcuts-config.template zaehlt die Kuerzel und gibt
+#     ICON_KEYBOARD plus die Zahl aus, dazu die ganze Liste als Tooltip,
+#     und ags-shortcuts.template baut das Fenster dahinter. Ein Modul,
+#     das gebaut wird und in keiner Belegung steht, ist unsichtbar -
+#     ohne Fehlermeldung, ohne Luecke in der Leiste, ohne dass irgendein
+#     Test es merkt.
+#
+#     WARUM ANS INNERE ENDE: die Reihenfolge IST die
+#     Einklappreihenfolge, und der linke Kasten geht von innen nach
+#     aussen. Was hier zuletzt steht, verschwindet auf einem engen
+#     Schirm zuerst. Die Kuerzel-Zahl ist die entbehrlichste der
+#     Anzeigen - man schlaegt Kuerzel nach, man beobachtet sie nicht -,
+#     also traegt sie diesen Platz zu Recht.
+#
+#     UND WARUM custom/keyboard DAFUER WEICHT, statt die Zusage zu
+#     senken: gemessen am 19.08.2026 passte die Leiste mit einem Modul
+#     mehr auf einem 1680er Schirm nicht mehr - vier andere klappten
+#     ein, darunter die LAUTSTAERKE. Die Zusage COMPLETE_FROM = 1680
+#     ("ab hier zeigt die Leiste alles") zu erhoehen waere gewesen, den
+#     Waechter an den Code anzupassen statt umgekehrt. Vor die Wahl
+#     gestellt hat der Nutzer am selben Tag entschieden: "in die leiste
+#     und keyboard icon mit de oder us weg".
+#
+#     Die Belegungsanzeige war am 17.08.2026 auf seinen Wunsch
+#     hinzugekommen ("die tastatur icon fehlt auch noch links neben dem
+#     datum") - sie faellt jetzt auf seinen Wunsch wieder weg. Das
+#     Modul selbst bleibt gebaut; nur diese Liste nennt es nicht mehr.
+#
+#     Wer es anders will, braucht keinen Codewechsel: bar.modules_left
+#     in user-settings.json ueberschreibt diese Liste.
+_modules_left += ["custom/hypr-shortcuts"]
 
 # Die Reihenfolge ist zugleich die EINKLAPPREIHENFOLGE (siehe `order` in
 # ags-bar.template): der rechte Kasten geht von innen nach aussen. Was
@@ -2738,7 +2779,19 @@ _modules_right += ["custom/privacy", "custom/updates",
 #     Listenplatz. Sie in eine Haelfte zu stellen hiesse, sie zweimal
 #     zu bauen - der `case`-Zweig gibt beide Male dasselbe Widget
 #     zurueck, und ein Widget hat einen Elternteil.
-_bar_optional = ["hyprland/window", "custom/hypr-shortcuts",
+#
+#     GETAUSCHT am 19.08.2026: custom/hypr-shortcuts steht jetzt in
+#     _modules_left (siehe dort) und damit nicht mehr hier - es ist
+#     ausgeliefert und nicht mehr bloss moeglich. An seiner Stelle steht
+#     custom/keyboard: sein `case`-Zweig in ags-bar.template bleibt
+#     (der Nutzer wollte nur das ZEICHEN von der Leiste, nicht die
+#     Faehigkeit geloescht haben), aber es traegt keine der beiden
+#     Haelften mehr. Ohne diesen Eintrag waere es der sechste tote
+#     Zweig aus dem Absatz oben, unerreichbar auch fuer
+#     bar.modules_left in user-settings.json. Die Liste bleibt fuenf
+#     Eintraege lang - der Tausch aendert die Zahl nicht, nur den
+#     Namen.
+_bar_optional = ["hyprland/window", "custom/keyboard",
                  "custom/floating-layouts", "custom/helpers",
                  "custom/wallpaper"]
 

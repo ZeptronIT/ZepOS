@@ -349,21 +349,34 @@ def _marke(modul: str) -> str:
 
 
 BAR_EVERYTHING = {"bar": {
-    # custom/keyboard und custom/hardware stehen links, seit dem
-    # 17.08.2026 - in derselben Nachbarschaft wie in der Vorgabe (siehe
-    # _modules_left in src/style_definition.py). Diese Liste soll jeden
-    # Zweig EINMAL aufstellen; wo ein Modul dabei steht, wird von der
-    # Vorgabe abgelesen, damit die beiden Laeufe dieselbe Leiste messen.
+    # custom/hardware steht links, seit dem 17.08.2026 - in derselben
+    # Nachbarschaft wie in der Vorgabe (siehe _modules_left in
+    # src/style_definition.py). Diese Liste soll jeden Zweig EINMAL
+    # aufstellen; wo ein Modul dabei steht, wird von der Vorgabe
+    # abgelesen, damit die beiden Laeufe dieselbe Leiste messen. Was die
+    # Vorgabe nicht aufstellt - hier custom/keyboard und
+    # hyprland/window -, steht am Ende, in keiner besonderen Ordnung
+    # zueinander: fuer sie gibt es keine Vorgabe-Nachbarschaft, von der
+    # abzulesen waere.
     #
     # DASS DAS SO BLEIBT, HAELT test_die_nachbarschaft_ist_die_der_vorgabe
     # weiter unten. Am 17.08.2026 hat der Nutzer die Reihenfolge von
     # custom/keyboard und custom/date getauscht, die Vorgabe wanderte, und
     # diese Kopie blieb stehen - 31 Tests blieben gruen und massen dabei
     # eine Leiste, die es nicht mehr gab. Genau dafuer gibt es den Test.
-    "modules_left": ["custom/date", "custom/keyboard", "custom/hardware",
+    #
+    # GEAENDERT am 19.08.2026: custom/hypr-shortcuts stand hier bereits
+    # (es war zuschaltbar), und ist jetzt zusaetzlich in der Vorgabe -
+    # es bleibt deshalb stehen, nur seine Nachbarschaft ist jetzt die
+    # von _modules_left. custom/keyboard war Teil der Vorgabe und ist
+    # es nicht mehr ("in die leiste und keyboard icon mit de oder us
+    # weg", woertlich) - sein Zweig bleibt aber gebaut (siehe
+    # _bar_optional in src/style_definition.py), also bleibt es auch
+    # hier stehen, jetzt am Ende bei den anderen Nicht-Vorgabe-Modulen.
+    "modules_left": ["custom/date", "custom/hardware",
                      "custom/weather", "custom/clocks",
                      "custom/notifications", "custom/hypr-shortcuts",
-                     "hyprland/window"],
+                     "custom/keyboard", "hyprland/window"],
     "modules_right": ["custom/media",
                       "custom/floating-layouts", "custom/helpers",
                       "network", "bluetooth",
@@ -2116,15 +2129,26 @@ def test_the_bar_holds_every_module_on_the_common_screen(fit):
     #     dieser Zeile.
     #
     #     Gehalten wird deshalb, was er ZULETZT bestellt hat: die linke
-    #     Haelfte steht auch auf dem schmalen Schirm vollstaendig - die
-    #     Belegung, das Datum und die Hardwareanzeige nebeneinander. Ohne
-    #     diese Zeilen waere die Zusicherung darueber auch mit einer
-    #     Leiste erfuellt, die stattdessen links kuerzt.
+    #     Haelfte steht auch auf dem schmalen Schirm vollstaendig - das
+    #     Datum und die Hardwareanzeige nebeneinander. Ohne diese Zeilen
+    #     waere die Zusicherung darueber auch mit einer Leiste erfuellt,
+    #     die stattdessen links kuerzt.
+    #
+    #     GEAENDERT am 19.08.2026: die Belegungsanzeige (custom/keyboard)
+    #     ist aus der Vorgabe genommen ("in die leiste und keyboard icon
+    #     mit de oder us weg", woertlich) und wird deshalb auf keiner
+    #     Breite mehr gebaut - auch nicht hier. An ihrer alten Stelle
+    #     steht seither die Tastenkuerzel-Anzeige (custom/hypr-shortcuts,
+    #     siehe _modules_left in src/style_definition.py), und sie
+    #     GEMESSEN heute genauso breit wie vorher die Belegung: 92 px.
+    #     Die Tabelle bei COMPLETE_FROM und FOLDED_ON_COMMON_NOTEBOOK
+    #     oben aendert sich dadurch nicht - nachgemessen mit genau
+    #     diesem Testlauf, gruen ohne eine einzige Zahl anzufassen.
     on_notebook = _placed(fit, COMMON_NOTEBOOK)
-    for name in ("custom-keyboard", "custom-date", "custom-hardware"):
+    for name in ("custom-hypr-shortcuts", "custom-date", "custom-hardware"):
         assert name in on_notebook, (
             f"auf {COMMON_NOTEBOOK} px liegt {name} hinter dem Knopf - "
-            "die drei stehen seit dem 17.08.2026 nebeneinander links, "
+            "die drei stehen seit dem 19.08.2026 nebeneinander links, "
             "und genau so hat der Nutzer sie bestellt:\n" + fit["report"])
 
 
