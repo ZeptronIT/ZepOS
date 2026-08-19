@@ -306,6 +306,37 @@ $overlay-border: $border;
   min-width: 672px;
 }
 
+// DERSELBE ZUSAMMENSTOSS, EINE ZEILE TIEFER IM BAUM - GEFUNDEN am
+// 19.08.2026 (Bericht dieser Aufgabe, echter Compositor)
+//
+//     ags-vpn.template setzt auf mainBox (der Ruecknahme von bauen())
+//     seit jeher BEIDE Klassen, "vpn-container" UND "zep-shell-page"
+//     (Zeilen 841/845 dort) - `.vpn-container` (weiter unten, "VPN
+//     MANAGER") traegt aus der Zeit VOR der Schale (das eigene, kleinere
+//     Fenster) ein EIGENES `min-width: 400px`, genau derselbe Rest wie
+//     `.cc-container`s 320px oben. Zwei Klassenregeln GLEICHER
+//     Spezifitaet (0,1,0 je Regel) - die REIHENFOLGE im Stylesheet
+//     entscheidet, nicht die groessere Zahl, und `.vpn-container` steht
+//     SPAETER in dieser Datei, gewann also immer.
+//
+//     GEMESSEN, echter Compositor, 1920x1080, VOR dieser Zeile: VPN 731
+//     statt 880 (-149) - der 672px-Boden griff nie, VPNs eigener,
+//     natuerlicher Inhalt (523px) blieb unter 672 und damit unter der
+//     Sprosse, die die Schale fuer sie vorsieht. Netzwerk/Bluetooth/
+//     general erreichten an derselben Messung alle 880 - nur VPN traegt
+//     die zweite, kollidierende Klasse mit einem EIGENEN Boden.
+//
+//     Dieselbe Antwort wie bei `.cc-container.zep-shell-page`: eine
+//     Verbundregel mit Spezifitaet (0,2,0), schlaegt beide Einzelregeln
+//     unabhaengig von der Reihenfolge. `.vpn-container` allein (kein
+//     Leser mehr - ags-vpn.template ist die einzige Vorlage, die diese
+//     Klasse traegt, siehe der Kommentar dort) bliebe ohnehin bei
+//     seinen 400px, aber die Verbundregel ist der klare Ausdruck der
+//     Absicht und nicht auf Zufall angewiesen.
+.vpn-container.zep-shell-page {
+  min-width: 672px;
+}
+
 // ===== SHARED OVERLAY STYLES (Muted Dark / HyprLaunch / HyprClipX) =====
 //
 // DIE PLATTE ALLER ELF UEBERLAGERUNGEN

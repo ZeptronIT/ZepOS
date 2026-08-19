@@ -176,11 +176,56 @@ def schale(tmp_path_factory):
                 if platte:
                     break
                 time.sleep(0.3)
-            time.sleep(POPOVER_SETTLE)
             assert platte, (
                 f"'{name}': keine Flaeche 'control' auf dem Schirm nach "
                 f"'ags request {anfrage}' (Antwort: {antwort!r}):\n"
                 + sitzung.read_shell_log())
+
+            # DIE ERSTE ANTWORT IST OFT EIN PLATZHALTER, UND SIE WURDE HIER
+            # BIS ZUM 19.08.2026 STEHENGELASSEN, OBWOHL DAS BILD LAENGST
+            # ETWAS ANDERES ZEIGT
+            #
+            #     GEMESSEN (Bericht dieser Aufgabe, zwei eigene Sonden
+            #     ausserhalb des Baums): beim ALLERERSTEN "ags request" in
+            #     einem frischen Prozess meldet hyprctl fuer 'control' fast
+            #     immer zuerst eine reine Buchfuehrungs-Geometrie -
+            #     GEMESSEN (0, 84, 200, 200) -, Millisekunden bevor die
+            #     echte Flaeche committet. An GENAU dieser Stelle (0,84
+            #     plus 5px Rand) ist im FERTIGEN Bild - egal wie lange
+            #     spaeter geschossen - NICHTS gemalt: kein 200x200-Fenster,
+            #     kein Ausschnitt davon, nur Tapete. Der Nutzer sieht dieses
+            #     Fenster nie; nur hyprctl kennt es kurz.
+            #
+            #     Der alte Code oben brach die Warteschleife beim ERSTEN
+            #     nicht-leeren Treffer ab (oft schon dieser Platzhalter,
+            #     denn "ags request" selbst braucht ~40-50ms und der
+            #     Platzhalter steht da schon), wartete danach
+            #     POPOVER_SETTLE (2.5s) und schoss DANN erst das Bild - aber
+            #     fragte "platte" fuer die Koordinaten nie erneut. Damit
+            #     zeigte "bild" die laengst eingeschwungene, richtige
+            #     Geometrie, waehrend "platte" (und jede Messung, die sich
+            #     darauf stuetzt - Breite, Seitenleistengrenze,
+            #     Zeilenhoehe) noch den Platzhalter oder eine andere
+            #     Zwischengeometrie eines Seitenwechsels trug (dieselbe
+            #     Racelage, aber irgendeine der 2-3 Zwischenwerte, die JEDER
+            #     Seitenwechsel laut Bericht der vorigen Aufgabe durchlaeuft
+            #     - nicht nur der allererste). Das war der ganze Grund fuer
+            #     "general: 200 statt 880" UND fuer "auf diesen Seiten liess
+            #     sich gar keine Grenze finden" auf allen vier Seiten
+            #     gleichzeitig: eine Koordinate, die zum Bild nicht mehr
+            #     passt, findet im Bild folgerichtig nichts oder das
+            #     Falsche.
+            #
+            #     Die Reparatur: NACH dem Settle noch einmal fragen, direkt
+            #     bevor das Bild entsteht - "platte" und "bild" stammen
+            #     danach aus DEMSELBEN Moment. Der `or platte`-Rueckfall ist
+            #     dieselbe Vorsicht wie beim urspruenglichen `assert
+            #     platte` oben: sollte die Flaeche ausgerechnet in der einen
+            #     hyprctl-Abfrage kurz nichts melden, bleibt der vorherige,
+            #     schon bestaetigt nicht-leere Wert stehen, statt eine
+            #     KeyError-Kaskade auszuloesen.
+            time.sleep(POPOVER_SETTLE)
+            platte = sitzung.layers().get("control") or platte
             bild = measure.read_png(sitzung.shoot(bilder / f"schale-{name}.png"))
             ergebnis[name] = {"platte": platte, "bild": bild, "antwort": antwort}
             # zu, bevor die naechste Seite angefragt wird - sonst zeigt
