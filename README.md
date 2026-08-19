@@ -35,9 +35,11 @@ specific reasons:
   the network, so an installation without a network fails.
 - **Hardware coverage is one machine plus QEMU.** There is no hardware matrix.
 - **Two languages only:** German and English.
-- **Two bundled plugins have no upstream licence.** See
-  [Licence](#licence) — ZepOS has permission to use them; you do not
-  automatically inherit one.
+- **Two of ZepOS's own plugins patch upstream trees that have no licence.**
+  See [Licence](#licence) — ZepOS has permission to build and patch them; you
+  do not automatically inherit one. Their unmodified source is not part of
+  this repository; the two recipes fetch it themselves, from the author's
+  own repository, at a pinned commit.
 
 What is proven, and where the evidence is: `iso/README.md` records what each
 boot and each installation actually did, `packaging/README.md` records what has
@@ -246,7 +248,7 @@ want it.
 | `zepos-lock` | hyprlock | Renders with GLES and Cairo, so its colours could never come from `brand.py` |
 | AGS bar and dock | waybar, nwg-dock-hyprland | waybar is gtkmm-3; nwg-dock has no GTK4 version |
 | `zepos-settings-gui` | nwg-displays | GTK3, and its "keep these settings?" timer dies with the program it is protecting |
-| `hyprlaunch`, `hyprclipx` | — | Forked from [azzuriel](https://github.com/azzuriel)'s plugins; 116 lines of hardcoded CSS replaced by generated stylesheets |
+| `hyprlaunch`, `hyprclipx` | — | Built from [azzuriel](https://github.com/azzuriel)'s plugins, patched by ZepOS; 116 lines of hardcoded CSS replaced by generated stylesheets. See [Licence](#licence) |
 
 GTK4 throughout is a hard rule, not a preference: a GTK3 component is a
 component whose colours and spacing cannot come from the same source as
@@ -356,7 +358,8 @@ packaging/      20 PKGBUILD recipes, the container, the signing and publishing s
 iso/            two archiso profiles and the build that assembles them
 lock/ logout/   zepos-lock and zepos-logout (C, GTK4, gtk4-layer-shell)
 menu/ settings/ zepos-menu and zepos-settings-gui (Python, GTK4)
-plugins/        hyprlaunch and hyprclipx, forked and rehomed
+plugins/        LICENCE only - ZepOS's patches for hyprlaunch and hyprclipx
+                live next to their recipes in packaging/, not here (see Licence)
 po/             gettext catalogues: zepos-installer and zepos-desktop
 tests/          110 test files and one isolation guard
 docs/specs/     the design document and the roadmap (German)
@@ -378,16 +381,59 @@ problem.
 
 ## Licence
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+GPL-3.0-or-later for ZepOS's own code. See [LICENSE](LICENSE).
 
-**One exception, and it is unresolved.** `plugins/hyprlaunch` and
-`plugins/hyprclipx` are forks of two upstream trees that carry **no licence
-file and no copyright notice** — GitHub's API reports `"license": null` for
-both. ZepOS uses them with the author's spoken permission, which is recorded
-verbatim in [`plugins/LICENSE`](plugins/LICENSE) together with the exact
-upstream revisions. That is a permission, not a licence: it says what *we* may
-do, and it does not tell you what *you* may do with the copy you receive. The
-recipes therefore declare `license=('custom')` rather than assert a licence
-that does not exist. Closing this needs one commit in the upstream
-repositories, and it should be closed. ZepOS's own changes to those trees are
-named in the file headers and are GPL-3.0-or-later like the rest.
+ZepOS's desktop depends on five compositor plugins it does not itself hold
+the copyright to. Their situations are not the same, and this table exists
+so a reader can tell them apart without reading five PKGBUILDs:
+
+| Plugin | Author | Origin | Licence | What ZepOS does with it |
+|---|---|---|---|---|
+| `hyprbars` | [hyprwm](https://github.com/hyprwm) (the Hyprland project) | [hyprwm/hyprland-plugins](https://github.com/hyprwm/hyprland-plugins), tag-pinned commit | BSD-3-Clause, real `LICENSE` file | Built unmodified; configured with ZepOS's own colours and icons at the config layer only |
+| `borders-plus-plus` | [hyprwm](https://github.com/hyprwm) (the Hyprland project) | [hyprwm/hyprland-plugins](https://github.com/hyprwm/hyprland-plugins), tag-pinned commit | BSD-3-Clause, real `LICENSE` file | Built unmodified, loaded with no settings of its own |
+| `hyprzones` | Jan Ohlmann ([azzuriel](https://github.com/azzuriel)) | [azzuriel/hyprzones](https://github.com/azzuriel/hyprzones), commit-pinned | **None** — GitHub reports `license: null`; no `LICENSE` file, no copyright notice anywhere in the tree | Built unmodified, no ZepOS changes |
+| `hyprlaunch` | Jan Ohlmann ([azzuriel](https://github.com/azzuriel)) | [azzuriel/hyprlaunch](https://github.com/azzuriel/hyprlaunch), commit-pinned | **None** — same as above | Fetched and patched at build time (see below); the patch is ZepOS's own work |
+| `hyprclipx` | Jan Ohlmann ([azzuriel](https://github.com/azzuriel)) | [azzuriel/hyprclipx](https://github.com/azzuriel/hyprclipx), commit-pinned | **None** — same as above | Fetched and patched at build time (see below); the patch is ZepOS's own work |
+
+`hyprbars` and `borders-plus-plus` are unremarkable: a serious upstream, a
+real licence, no ZepOS changes to the plugin code itself. The other three are
+not, and the reason is the same for all three — measured 11.08.2026, at the
+GitHub API and in each tree by hand: no `LICENSE` file, no `Copyright` line,
+`"license": null`. Code with no licence is, under copyright law, "all rights
+reserved" regardless of what a file header claims.
+
+**What that means, and what ZepOS actually did about it.** Leon Marzoll
+(ZeptronIT) — who has contributed to these same upstream trees, and so holds
+copyright in his own contributions to them — gave ZepOS permission on
+11.08.2026 to build from and modify all three. That permission is recorded
+verbatim, with the exact commits, in [`plugins/LICENSE`](plugins/LICENSE). It
+is a **permission, not a licence**: it says what *ZepOS* may do, and says
+nothing about what *you*, installing ZepOS, may do with the code you receive.
+A security review ahead of this repository's publication
+(`.superpowers/sdd/2026-08-18-ags-schale-und-breitenleiter/
+sicherheitsanalyse.md`, section 6) drew the sharper line this permission does
+not cross: it does not cover ZepOS republishing a *copy* of the unlicensed
+source itself. Building from it is one thing; redistributing it is another.
+
+**So, as of 19.08.2026, this repository does not carry the source of
+`hyprlaunch` or `hyprclipx` at all.** `packaging/zepos-hyprlaunch/PKGBUILD`
+and `packaging/zepos-hyprclipx/PKGBUILD` fetch it themselves at build time,
+from the author's own repository, pinned to the exact commit
+[`plugins/LICENSE`](plugins/LICENSE) names — never a moving branch, so the
+build stays reproducible — the same way an AUR package would. `hyprzones` was
+never vendored in the first place and works the same way. ZepOS's own
+modifications to `hyprlaunch` and `hyprclipx` — replacing hardcoded CSS and
+window sizes with ZepOS's generated stylesheets, adding the clipboard
+collector, fixing a path that reached under `$HOME` — are ZepOS's own diffs,
+not copies of upstream code, and live as `packaging/zepos-hyprlaunch/
+zepos-hyprlaunch.patch` and `packaging/zepos-hyprclipx/zepos-hyprclipx.patch`,
+applied at build time and licensed GPL-3.0-or-later. The built, published
+package is unaffected by any of this — the ISO still ships the finished
+plugin — only the unmodified upstream *source* is no longer redistributed by
+this repository.
+
+All three recipes therefore declare `license=('custom')` rather than assert a
+licence that does not exist. Closing the underlying gap needs one commit in
+Jan Ohlmann's own repositories — a `LICENSE` file, once, and the question
+never comes up again for anyone downstream of it — and it should be closed;
+until it is, `plugins/LICENSE` is the honest account of where things stand.

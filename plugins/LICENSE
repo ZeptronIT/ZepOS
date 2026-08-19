@@ -1,33 +1,59 @@
 Die Plugins unter plugins/ - Herkunft und Erlaubnis
 ===================================================
 
-WAS HIER LIEGT
+WAS HIER LIEGT - UND WAS SEIT DEM 19.08.2026 NICHT MEHR HIER LIEGT
 
-  plugins/hyprlaunch/   von Jan Ohlmann (https://github.com/azzuriel),
-                        Stand 24e5c8b82f96f87ac25000353e36a8b17ced4b00
-                        https://github.com/azzuriel/hyprlaunch
+  hyprlaunch   von Jan Ohlmann (https://github.com/azzuriel),
+               Stand 24e5c8b82f96f87ac25000353e36a8b17ced4b00
+               https://github.com/azzuriel/hyprlaunch
 
-  plugins/hyprclipx/    von Jan Ohlmann (https://github.com/azzuriel),
-                        Stand 1eed6ee90a1c3e48ec76510377f8b05f27a4e650
-                        https://github.com/azzuriel/hyprclipx
+  hyprclipx    von Jan Ohlmann (https://github.com/azzuriel),
+               Stand 1eed6ee90a1c3e48ec76510377f8b05f27a4e650
+               https://github.com/azzuriel/hyprclipx
 
-  Seit dem 12.08.2026 gehoeren dazu auch die beiden Python-Haelften von
-  hyprclipx, aus demselben Baum und unter derselben Erlaubnis:
+  Vom 11.08.2026 bis zum 19.08.2026 lagen beide Quellbaeume, schon
+  veraendert, unter plugins/hyprlaunch/ und plugins/hyprclipx/ in
+  diesem Repository. Die Sicherheitspruefung vor der Veroeffentlichung
+  von ZepOS (.superpowers/sdd/2026-08-18-ags-schale-und-breitenleiter/
+  sicherheitsanalyse.md, Abschnitt 6) hat den Unterschied benannt, der
+  bis dahin unter den Tisch gefallen war: die ERLAUBNIS unten deckt,
+  dass ZepOS diese Quellen baut und veraendert - sie deckt NICHT, dass
+  ZepOS eine KOPIE davon selbst oeffentlich weiterverbreitet. Code ohne
+  Lizenz ist urheberrechtlich "alle Rechte vorbehalten", unabhaengig
+  davon, was ein Dateikopf behauptet.
 
-    plugins/hyprclipx/helpers/collector.py
-                          urspruenglich helpers/clipman-daemon.py
-    plugins/hyprclipx/helpers/caret-position.py
-                          urspruenglich helpers/get-caret-position.py
+  Der Nutzer hat am 19.08.2026 entschieden: die Quellen werden nicht
+  mitveroeffentlicht. Seither liegen sie NICHT MEHR in diesem Baum.
+  packaging/zepos-hyprlaunch/PKGBUILD und packaging/zepos-hyprclipx/
+  PKGBUILD holen sie beim Bauen selbst, direkt von den beiden Adressen
+  oben, festgenagelt auf genau die zwei Staende, die diese Datei nennt
+  - wie ein AUR-Paket es taete. Das gebaute, veroeffentlichte Paket
+  aendert sich dadurch nicht: das ISO liefert weiterhin die fertigen
+  Objekte. Nur der unveraenderte Quellbaum wandert nicht mehr mit
+  diesem Repository.
+
+  Was frueher als bearbeitete Datei in plugins/<name>/ lag, liegt jetzt
+  als ZepOS' eigenes Diff neben dem jeweiligen Rezept:
+
+    packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+    packaging/zepos-hyprclipx/zepos-hyprclipx.patch
+
+  Beide Patches stehen unter GPL-3.0-or-later wie der uebrige Baum - es
+  sind ZepOS' eigene Diffs, keine fremde Quelle, auch wenn sie beim
+  Anwenden fremden Code veraendern. Die einzelnen Aenderungen sind in
+  ihren Kopfzeilen genannt; unter anderem die beiden Python-Haelften
+  von hyprclipx, seit dem 12.08.2026 dabei und im Patch aus den
+  umbenannten Originaldateien hervorgegangen:
+
+    helpers/collector.py         urspruenglich helpers/clipman-daemon.py
+    helpers/caret-position.py    urspruenglich helpers/get-caret-position.py
 
   Sie sind nachgezogen, weil das Paket ohne sie ein Fenster ausliefert,
-  hinter dem nichts sammelt - der Kopf von collector.py fuehrt die
-  Messung. helpers/clipman-client.py ist ABSICHTLICH nicht dabei:
-  gemessen am selben Tag hatte das Feld, das darauf zeigte, zwei
-  Zuweisungen und null Leser.
-
-  Die Aenderungen von ZepOS an diesen Baeumen sind in den Dateikoepfen
-  einzeln genannt und stehen unter GPL-3.0-or-later wie der uebrige
-  Baum.
+  hinter dem nichts sammelt - der Kopf des Patches fuehrt die Messung.
+  helpers/clipman-client.py kommt ABSICHTLICH nicht mit: gemessen am
+  12.08.2026 hatte das Feld, das darauf zeigte, zwei Zuweisungen und
+  null Leser; packaging/zepos-hyprclipx/PKGBUILD loescht es in
+  prepare().
 
 DER BEFUND, GEMESSEN AM 11.08.2026
 
