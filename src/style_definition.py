@@ -1928,7 +1928,33 @@ _FIXED_STYLE_VARIABLES = {
     #     will, stellt sie weiterhin um. Geaendert hat sich nur, worauf
     #     sie zeigen, wenn niemand etwas eingestellt hat.
     "STYLE_HYPRBARS_HEIGHT": size_value("STYLE_HYPRBARS_HEIGHT"),
-    "STYLE_HYPRBARS_BG_COLOR": f"rgb({get_user_color('hyprbar_bg', get_user_color('overlay_surface'))[1:]})",
+    # KORREKTUR AM SELBEN TAG: overlay_bg UND NICHT overlay_surface.
+    #
+    #     Am 19.08.2026 habe ich hier zuerst overlay_surface (#0D3D47,
+    #     Petrol) gesetzt, weil der Kopf eines AGS-FENSTERS damit malt.
+    #     Der Nutzer hat sofort widersprochen: "die header der fenster
+    #     sind nicht im dunklen petrol wie der header oder die dock man
+    #     sieht den header dadurch nicht".
+    #
+    #     Er hat recht, und die Zahlen zeigen warum - der Massstab ist
+    #     nicht der Fensterkopf, sondern das, was daneben auf demselben
+    #     Schirm liegt:
+    #
+    #         Leiste (#bar)          rgba(8, 38, 44, 0.86)   Tinte
+    #         Dockplatte             dieselbe Tinte
+    #         hyprbars, mein Fehler  #0D3D47                 Petrol
+    #
+    #     Petrol ist die HELLERE der beiden Markenfarben. Eine
+    #     Titelleiste darin steht heller da als Leiste und Dock, und
+    #     genau das hat er gesehen. overlay_bg ist die Tinte - dieselbe
+    #     Farbe, aus der Leiste und Dock ihr Glas mischen.
+    #
+    #     Deckend und nicht halbdurchsichtig: hyprbars zeichnet auf
+    #     einem Fenster, nicht auf der Tapete, und Hyprlands
+    #     Unschaerfe-Regeln gelten fuer Layer-Shell-Flaechen, nicht fuer
+    #     Titelleisten. Ein rgba hier waere eine Durchsichtigkeit ohne
+    #     das Glas dahinter.
+    "STYLE_HYPRBARS_BG_COLOR": f"rgb({get_user_color('hyprbar_bg', get_user_color('overlay_bg'))[1:]})",
     "STYLE_HYPRBARS_TEXT_COLOR": f"rgb({get_user_color('hyprbar_text', get_user_color('overlay_text'))[1:]})",
     "STYLE_HYPRBARS_TEXT_SIZE": size_value("STYLE_HYPRBARS_TEXT_SIZE"),
     "STYLE_HYPRBARS_BUTTON_SIZE": size_value("STYLE_HYPRBARS_BUTTON_SIZE"),
