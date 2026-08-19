@@ -32,7 +32,7 @@ Jede Aufgabe erbt diese Liste. Ein Verstoss ist ein Fehler, kein Geschmack.
   Verzeichnis, wie `tests/src/test_filemanager.py._render()` es vormacht.
 - **NIEMALS** `git checkout`/`restore`/`reset`/`clean`/`stash`, **niemals**
   `git push`, **niemals** `git add -A` oder `git add .`.
-- **NIEMALS** unter `/home/lmarzoll/.config/iconmanager` schreiben, **niemals**
+- **NIEMALS** unter `~/.config/iconmanager` schreiben, **niemals**
   `/dev/sda` anfassen.
 - **NIEMALS** einen Waechter aufweichen, damit Code durchgeht. Faellt ein Test,
   ist der Code falsch. Einzige Ausnahme: eine Ratschenzahl darf **sinken**.
