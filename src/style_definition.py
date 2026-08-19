@@ -842,6 +842,11 @@ _FIXED_STYLE_VARIABLES = {
     #     grosser Schrift), gilt unveraendert nicht mehr.
     "STYLE_PADDING_MODULE": f'0px {size_value("STYLE_PADDING_BUTTON")}',
     "STYLE_PADDING_BUTTON": size_value("STYLE_PADDING_BUTTON"),
+    # Fuer die vier reinen Symbolmodule der Leiste (#network, #bluetooth,
+    # #pulseaudio, #pulseaudio#microphone) aus bar-style.template -
+    # Aufgabe 19, 19.08.2026. Herleitung bei STYLE_BAR_SYMBOL_WIDTH in
+    # src/sizes.py.
+    "STYLE_BAR_SYMBOL_WIDTH": size_value("STYLE_BAR_SYMBOL_WIDTH"),
 
     # ============================================================================
     # HEIGHTS

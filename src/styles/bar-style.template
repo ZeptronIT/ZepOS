@@ -492,6 +492,22 @@ tooltip label {
   color: {{STYLE_HOVER_COLOR}};
 }
 
+/* NACHGETRAGEN am 19.08.2026 (Aufgabe 19). GEMELDET: "die icon im header
+ * rechts oben sind nicht genau exakt gleich lang alligned von der
+ * breite". Diese vier zeigen NUR ein Zeichen, nie Text daneben (anders
+ * als Uhr, Datum oder der Akku mit seinem Prozentsatz, die darum absicht-
+ * lich UNGLEICH breit bleiben) - siehe die Messung und Herleitung bei
+ * STYLE_BAR_SYMBOL_WIDTH, sizes.py. Eine gemeinsame Mindestbreite statt
+ * vier einzelner: die Zeichen bleiben unterschiedlich TINTE, aber
+ * belegen dieselbe FLAECHE - dasselbe Prinzip wie .zep-btn (eine Hoehe,
+ * vier Rollen) statt einer Zahl pro Fundstelle. */
+#network,
+#bluetooth,
+#pulseaudio,
+#pulseaudio\#microphone {
+  min-width: {{STYLE_BAR_SYMBOL_WIDTH}};
+}
+
 #network {
   margin-right: {{STYLE_GROUP_INTERNAL}};
 }

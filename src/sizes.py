@@ -1375,6 +1375,42 @@ TABLE: dict[str, Size] = {
     "STYLE_CHIP_GAP": Size(10, PX, SCALED),
     "STYLE_PADDING_BUTTON": Size(5, PX, SCALED),
 
+    # NACHGETRAGEN am 19.08.2026 (Aufgabe 19). GEMELDET: "die icon im
+    # header rechts oben sind nicht genau exakt gleich lang alligned von
+    # der breite". GEMESSEN im verschachtelten Compositor, Vorgabegroesse
+    # (STYLE_FONT_BODY, in dem die Leiste ihre Zeichen setzt): die reinen
+    # Symbolmodule tragen unterschiedlich breite Zeichentinte - #network
+    # 19px, #bluetooth 10px, #pulseaudio 15px, #pulseaudio#microphone
+    # 12px -, weil `.bar-module` keine eigene Breite setzt, nur Polsterung
+    # (STYLE_PADDING_BUTTON) um das Zeichen. Ein 9-Punkte-Unterschied
+    # zwischen Netz und Bluetooth ist genau das gemeldete "nicht exakt
+    # gleich lang".
+    #
+    # Module MIT Text (Uhr, Datum, der Akkuprozentsatz) bleiben
+    # ausdruecklich unangetastet - eine feste Breite wuerde sie
+    # abschneiden. Nur die vier reinen Symbolmodule oben bekommen diese
+    # Mindestbreite (siehe STYLE_BAR_SYMBOL_WIDTH-Leser in
+    # bar-style.template).
+    #
+    # HERGELEITET: das breiteste gemessene Zeichen (#network, 19px) reicht
+    # nahe an die eigene Schriftgroesse heran - ein Nerd-Font-Zeichen ist
+    # ungefaehr so breit wie hoch. STYLE_ICON_CAPTION (roh 13, dieselbe
+    # Verankerung wie STYLE_FONT_BODY - siehe icon_px()) ist damit die
+    # sichere obere Schranke fuer EIN Zeichen an dieser Schriftgroesse,
+    # ohne dass sie beschnitten wird. Dazu zweimal STYLE_PADDING_BUTTON
+    # (roh 5), dieselbe Polsterung, die `.bar-module` bereits traegt -
+    # keine zweite Zahl fuer denselben Rand.
+    #
+    #     13 + 2*5 = 23.
+    #
+    # GEGENGEPRUEFT: 23 roh skaliert auf 35px bei Vorgabegroesse - nahe an
+    # der GEMESSENEN #network-Breite (Zeichen 19 + 2*Polsterung 8 = 35),
+    # dem bisher breitesten Modul. #network wird durch die Mindestbreite
+    # also praktisch nicht breiter; #bluetooth (+9), #pulseaudio (+4) und
+    # #pulseaudio#microphone (+7) gleichen sich AN #network an, nicht
+    # umgekehrt - die billigste Angleichung, die die Leiste zu holen war.
+    "STYLE_BAR_SYMBOL_WIDTH": Size(23, PX, SCALED),
+
     # Die Fenstertitelleiste von hyprbars. Nackte Zahlen, weil Hyprland
     # sie so liest.
     "STYLE_HYPRBARS_HEIGHT": Size(25, BARE, SCALED),
