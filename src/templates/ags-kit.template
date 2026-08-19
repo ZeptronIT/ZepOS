@@ -323,17 +323,38 @@ export function zepStateHeader(opts: {
   const kopf = new Gtk.Box({ spacing: 0 })
   kopf.add_css_class("zep-state-head")
 
+  // valign: CENTER aus demselben Grund wie bei zepRow (siehe dort,
+  // Aufgabe 19) - derselbe Aufbau (VERTICAL-Box in einer HORIZONTAL-Box),
+  // hier bisher ohne sichtbare Folge, weil `kopf` keine erzwungene
+  // Mindesthoehe traegt und `texte` meist der hoechste Nachbar ist. Nicht
+  // erst warten, bis ein `ende` mit mehr Hoehe (z.B. ein zweizeiliger
+  // Knopf) denselben Fehler hier auch sichtbar macht.
   const texte = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
     spacing: 0,
+    valign: Gtk.Align.CENTER,
   })
 
+  // NACHGETRAGEN am 19.08.2026 (Aufgabe 19, Nutzermeldung "ich will
+  // auch nicht horizontal scrollen"): zepStateHeader deckelte seinen
+  // Titel bisher NICHT, anders als zepRow (siehe die Begruendung am
+  // Funktionskopf von zepRow oben - `ellipsize` allein senkt nur die
+  // MINDESTbreite, nicht die natuerliche). GEMESSEN: `titel` nimmt in
+  // ags-network.template `connInfo.name` entgegen - den WLAN-Namen,
+  // unbegrenzt und von aussen gegeben. STYLE_MEASURE_LINE (45 Zeichen)
+  // ist dieselbe Grenze, die zepRow fuer genau diesen Fall schon setzt,
+  // und weit genug fuer jeden WLAN-Namen (WPA2 selbst erlaubt hoechstens
+  // 32).
   const titel = new Gtk.Label({ label: opts.titel, xalign: 0 })
+  titel.set_ellipsize(3)  // Pango.EllipsizeMode.END
+  titel.set_max_width_chars({{STYLE_MEASURE_LINE}})
   texte.append(titel)
 
   if (opts.unterzeile) {
     const unter = new Gtk.Label({ label: opts.unterzeile, xalign: 0 })
     unter.add_css_class("zep-row-sub")
+    unter.set_ellipsize(3)
+    unter.set_max_width_chars({{STYLE_MEASURE_LINE}})
     texte.append(unter)
   }
   kopf.append(texte)

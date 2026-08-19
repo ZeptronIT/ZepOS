@@ -628,12 +628,23 @@ export default function WallpaperSelector(): OverlayWidget {
 
       // ===== LOESCHBESTAETIGUNG (Unteransicht, siehe Begruendung bei
       // showDeleteConfirmation() oben) =====
+      // AUFGABE 19 (19.08.2026): margin_top/margin_bottom standen hier
+      // als nackte 24 - dieselbe Zahl wie STYLE_SPACE_24, aber nie durch
+      // die Leiter gelaufen und darum nicht skaliert (GEMESSEN am
+      // 19.08.2026: `grep -n "margin_top\|margin_bottom" src/templates/
+      // *.template` findet ausserhalb dieser Datei keine weitere
+      // Fundstelle). {{STYLE_SPACE_24}} traegt selbst ein "px" (fuer CSS
+      // gedacht) und waere hier ein Syntaxfehler im erzeugten
+      // TypeScript (dieselbe Falle wie bei WIN_WIDTH, Bericht Aufgabe 3
+      // dieses Plans) - parseInt() liest nur die fuehrenden Ziffern und
+      // ist damit hier die richtige Bruecke von "px"-Zeichenkette zu
+      // nackter Zahl.
       confirmBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 16,
         halign: Gtk.Align.CENTER,
-        margin_top: 24,
-        margin_bottom: 24,
+        margin_top: parseInt("{{STYLE_SPACE_24}}"),
+        margin_bottom: parseInt("{{STYLE_SPACE_24}}"),
       })
       confirmBox.set_visible(false)
 

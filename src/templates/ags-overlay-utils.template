@@ -548,6 +548,30 @@ export function createOverlayWindow(config: OverlayConfig): OverlayWidget {
   scroller.set_child(content)
   outerBox.append(scroller)
 
+  // NACHGETRAGEN am 19.08.2026 (Aufgabe 19). GEMELDET: "ich will auch
+  // nicht horizontal scrollen in diesem ags fenster" - ein Fehler, den
+  // dieser Aufbau selbst erst spaet zeigt: `hscrollbar_policy: AUTOMATIC`
+  // (siehe oben) blendet die Leiste NUR ein, wenn der Inhalt tatsaechlich
+  // breiter ist als das Fenster - im Quelltext steht davon nichts, es
+  // faellt nur auf dem Bild auf. GEMESSEN (Bericht dieser Aufgabe):
+  // general 63px, network 27px, bluetooth 77px zu breit fuer ihre
+  // Seite, jede Seite mit einer eigenen Ursache.
+  //
+  // Meldet NUR den Fehlbetrag, nicht jede Messung - `notify::upper`
+  // feuert bei jedem Seitenwechsel neu (der Stapel in createShellWindow
+  // tauscht seinen sichtbaren Inhalt aus), und die meisten Seiten passen.
+  // Ein Log, das bei jedem Aufklappen jedes der zwoelf Fenster eine Zeile
+  // schriebe, waere Rauschen; eine Zeile GENAU DANN, wenn der Inhalt
+  // tatsaechlich nicht passt, ist ein Befund.
+  const hadj = scroller.get_hadjustment()
+  hadj.connect("notify::upper", () => {
+    const ueberschuss = hadj.get_upper() - hadj.get_page_size()
+    if (ueberschuss > 0) {
+      console.log(`Ueberlagerung "${config.name}": Inhalt ${Math.round(ueberschuss)}px `
+        + `breiter als das Fenster erlaubt - waagerechte Bildlaufleiste noetig.`)
+    }
+  })
+
   win.set_child(outerBox)
 
   // ===== AUFGEHEN / ZUGEHEN =====
