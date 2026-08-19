@@ -114,13 +114,18 @@ def test_das_fenster_baut_aus_dem_bausatz_und_nicht_daneben():
 
     # Und keine zweite Zeilenform: die Klassen dieses Fensters heissen
     # alle set-*, und keine davon ist eine Zeile oder ein Knopf.
+    # Die Ausnahme "zep-shell-page" ist am 20.08.2026 weggefallen: die
+    # Klasse gab es nur fuer den Mindestbreiten-Boden der Schale, und der
+    # wird seither in createOverlayWindow() gemessen statt im Stylesheet
+    # geschrieben (`config.fuelltDieSprosse`, ags-overlay-utils.template).
+    # Eine Erlaubnisliste fuer eine Klasse, die es nicht mehr gibt, waere
+    # die naechste Stelle, an der jemand ihr wieder begegnet.
     eigene = set(re.findall(r'add_css_class\("([^"]+)"\)', code))
-    erlaubt = {"zep-shell-page"}
-    for name in eigene - erlaubt:
+    for name in eigene:
         assert name.startswith("set-"), (
-            f"{name!r} ist weder eine set-*-Klasse dieses Fensters noch "
-            "die Schalenklasse - eine Zeile oder ein Knopf mit eigener "
-            "Klasse waere die zweite Formensprache")
+            f"{name!r} ist keine set-*-Klasse dieses Fensters - eine Zeile "
+            "oder ein Knopf mit eigener Klasse waere die zweite "
+            "Formensprache")
         assert not name.endswith(("-row", "-btn", "-button")), (
             f"{name!r} klingt nach einer eigenen Zeile oder einem eigenen "
             "Knopf - beides kommt aus dem Bausatz")

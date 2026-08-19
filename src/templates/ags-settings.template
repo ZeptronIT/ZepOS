@@ -1138,15 +1138,15 @@ export default async function Settings(): Promise<ShellWidget | null> {
       seitenBehaelter.set(seite.name, inhalt)
       zeichneSeite(seite)
 
-      // Der Mindestbreiten-Boden der Schale sitzt auf einer EIGENEN,
-      // polsterlosen Huelle und nicht auf `inhalt` selbst - GTK rechnet
-      // Polster sonst oben auf die 672px drauf (gemessen am 19.08.2026,
-      // Aufgabe 23; siehe .zep-shell-page in ags-style.template und
-      // mitSeitenboden() in ags-control-center.template).
-      const huelle = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-      huelle.add_css_class("zep-shell-page")
-      huelle.append(inhalt)
-      return huelle
+      // KEINE Huelle mit Mindestbreiten-Boden mehr - GEAENDERT am
+      // 20.08.2026. Hier stand eine polsterlose Gtk.Box, die
+      // `.zep-shell-page` (min-width: 672px) trug, damit sich das
+      // Polster von `.set-container` nicht darauf draufrechnet. Der
+      // Boden einer Schalenseite kommt seither aus der Schale selbst und
+      // wird gemessen statt geschrieben (`config.fuelltDieSprosse`,
+      // ags-overlay-utils.template) - er sitzt dort auf dem ganzen
+      // Rumpf, und damit hat die Huelle nichts mehr zu tragen.
+      return inhalt
     },
   }))
 

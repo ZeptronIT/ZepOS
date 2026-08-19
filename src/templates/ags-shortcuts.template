@@ -34,6 +34,10 @@
 import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
+// Fuer Pango.WrapMode in createShortcutRow() - siehe die Begruendung
+// dort. Derselbe Import wie in ags-network.template und
+// ags-control-center.template.
+import Pango from "gi://Pango"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _ } from "../utils/i18n"
 import { zepButton } from "../utils/kit"
@@ -198,12 +202,61 @@ function createShortcutRow(shortcut: Shortcut): Gtk.Box {
   const row = new Gtk.Box({ spacing: 8 })
   row.add_css_class("sc-row")
 
-  const keyLabel = new Gtk.Label({ label: shortcut.chord, xalign: 0 })
+  // BEIDE BESCHRIFTUNGEN DUERFEN UMBRECHEN - NACHGETRAGEN am 20.08.2026
+  //
+  // GEMELDET, woertlich: "tastenkürzel wird horizontal gesccrollt das
+  // möchte ich nicht das ags fenster muss modifziert werden".
+  //
+  // GEMESSEN am 20.08.2026 im verschachtelten Compositor (1920x1080),
+  // MIT der echten Tastenliste dieses Baums (77 beschriebene Bindungen -
+  // die eingebaute Konfiguration einer Maschine ohne `# @Gruppe:`-Marken
+  // liefert eine LEERE Liste, und genau deshalb hat kein Testlauf das
+  // je gesehen):
+  //
+  //     Fensterbreite                 880 (Sprosse L, gedeckelt)
+  //     Sichtfenster                  854
+  //     Inhalt verlangte             2368
+  //                                  ----
+  //     Ueberhang                    1514
+  //
+  // WARUM DIE RECHNUNG AM DATEIKOPF DAS NICHT SIEHT
+  //     Sie rechnet mit `.shortcuts-container { min-width: 664px }` als
+  //     dem bindenden Mass. Das ist es nicht: die INNERE
+  //     Gtk.ScrolledWindow (`#shortcuts-scroll`, weiter unten) traegt
+  //     `hscrollbar_policy: Gtk.PolicyType.NEVER`, und NEVER heisst in
+  //     GTK4 nicht "keine Leiste", sondern "der Inhalt bestimmt die
+  //     Breite" - die MINDESTbreite ihres Kindes wird unveraendert nach
+  //     aussen gemeldet. Eine Gtk.Label ohne Umbruch hat als
+  //     Mindestbreite ihren GANZEN Satz. Die laengste Beschreibung
+  //     dieses Baums hat 72 Zeichen, der laengste Akkord 24 - zweimal
+  //     nebeneinander, in zwei gleich breiten Spalten, ergibt das die
+  //     gemessenen 2368.
+  //
+  // DIE REPARATUR IST, DASS DER SATZ NACHGEBEN DARF
+  //     Eine Beschreibung ist Fliesstext; Fliesstext bricht um. Mit
+  //     `wrap` ist die Mindestbreite einer Label nur noch ihr laengstes
+  //     Wort (WORD_CHAR bricht notfalls auch darin), waehrend die
+  //     natuerliche Breite der ganze Satz bleibt - das Fenster bekommt
+  //     also weiterhin die Breite, die es gern haette, und wird nur
+  //     nicht mehr darunter aufgerissen. Nichts wird abgeschnitten, und
+  //     nichts scrollt waagerecht.
+  //
+  //     Auch der Akkord bricht um: "SUPER + SHIFT + CTRL + W" ist mit
+  //     seinen 24 Zeichen breiter als die 160 Punkte, die
+  //     set_size_request() ihm gibt, und ohne Umbruch waere ER die
+  //     naechste Zeile, die die Spalte aufreisst. Er bricht an den
+  //     Leerzeichen um seine Pluszeichen, also zwischen den Tasten und
+  //     nicht in einem Tastennamen.
+  const keyLabel = new Gtk.Label({
+    label: shortcut.chord, xalign: 0,
+    wrap: true, wrap_mode: Pango.WrapMode.WORD,
+  })
   keyLabel.add_css_class("sc-key")
   keyLabel.set_size_request(160, -1)
 
   const descLabel = new Gtk.Label({
     label: shortcut.description, xalign: 0, hexpand: true,
+    wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR,
   })
   descLabel.add_css_class("sc-desc")
 
@@ -341,6 +394,24 @@ export default function Shortcuts(): OverlayWidget {
     headerIcon: ICONS.keyboard,
     headerTitle: _("Keyboard shortcuts"),
     accentCssClass: "shortcuts-accent",
+    // DIESES FENSTER FUELLT SEINE SPROSSE - NACHGETRAGEN am 20.08.2026,
+    // und es gehoert zur selben Reparatur wie der Umbruch oben.
+    //
+    //     Ein Raster mit zwei Spalten ist kein Fenster, das sich nach
+    //     seinem Inhalt richtet - es TEILT eine gegebene Breite auf. Die
+    //     innere Gtk.ScrolledWindow (`#shortcuts-scroll`) meldet die
+    //     natuerliche Breite ihres Kindes ohnehin nicht nach aussen
+    //     weiter (GEMESSEN am 20.08.2026: min 60 / nat 60 bei leerer
+    //     Liste, obwohl das Kind viel mehr wollte), das Fenster hat also
+    //     gar keine Moeglichkeit, sich am Inhalt zu bemessen.
+    //
+    //     GEMESSEN am selben Tag, mit der echten Liste (77 Bindungen),
+    //     nachdem die Beschriftungen umbrechen duerfen: OHNE diese Zeile
+    //     stand das Fenster 766 Punkte breit da und quetschte den Text in
+    //     zwei schmale Saeulen, obwohl seine Sprosse 880 hergibt. MIT
+    //     ihr bekommt der Inhalt genau das, was die Sprosse nach Rahmen
+    //     und Rinne uebrig laesst.
+    fuelltDieSprosse: true,
     onShow: refill,
     buildContent: (_win, closeWindow) => {
       const mainBox = new Gtk.Box({

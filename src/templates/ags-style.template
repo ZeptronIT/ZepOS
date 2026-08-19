@@ -228,8 +228,10 @@ $overlay-border: $border;
 
 // NACHGETRAGEN am 18.08.2026, task-4 (die Schale, Stufe 3): Seitenleiste
 // und Zustandskopf, aus zepSidebar/zepStateHeader in ags-kit.template.
-// Drei Regeln aus dem Aufgabenblatt, eine vierte (.zep-shell-page) am
-// 19.08.2026 dazugekommen - siehe dort.
+// Drei Regeln aus dem Aufgabenblatt. Eine vierte (.zep-shell-page) kam
+// am 19.08.2026 dazu und ist am 20.08.2026 wieder gefallen - der Boden
+// der Schalenseiten wird seither gemessen statt geschrieben, siehe den
+// Block weiter unten.
 
 // 208px steht in der Spezifikation, Abschnitt 2.2, GEMESSEN (nicht
 // gerechnet) - der einzige Ort, an dem die Zahl stehen darf
@@ -329,142 +331,77 @@ $overlay-border: $border;
   .zep-btn { font-weight: normal; }
 }
 
-// DER BODEN, DER DEN VERBINDUNGSSEITEN FEHLTE - NACHGETRAGEN am
-// 19.08.2026 (Bericht Aufgabe 15/16, Fund "es fehlt irgendwie mehr
-// breite oder so").
+// DER BODEN DER SCHALENSEITEN STEHT SEIT DEM 20.08.2026 NICHT MEHR HIER
 //
-// SHELL_WIDTH (ags-overlay-utils.template) ist STYLE_MODAL_WIDTH_L
-// (880), EINMAL fuer alle Seiten der Schale gesetzt - aber
-// createOverlayWindow() laesst den Inhalt durch eine Gtk.ScrolledWindow
-// mit propagate_natural_width laufen, und ein Gtk.Window wird nie
-// breiter als sein Inhalt verlangt. Die Seitenleiste ist FEST 208px
-// (.zep-sidebar oben); es bleiben also 672 fuer die SEITE SELBST, damit
-// die Summe 880 erreicht - GENAU die Rechnung, mit der
-// ags-control-center.template (generalSeite) schon seit Aufgabe 6
-// argumentiert ("880 minus 208 Seitenleiste = 672px fuer diese Seite"),
-// aber nur als ERWARTUNG, nie erzwungen.
+// Hier stand `.zep-shell-page { min-width: 672px }` - der Boden, der den
+// Verbindungsseiten am 19.08.2026 fehlte ("es fehlt irgendwie mehr
+// breite oder so", GEMESSEN damals: Netzwerk 775, Bluetooth 794, VPN 829
+// statt 880). Der Boden war richtig, seine ZAHL war es nicht.
 //
-// GEMESSEN am 19.08.2026 (Bericht Aufgabe 15, echter Compositor,
-// 1920x1080): general erreicht 672+ von selbst (sein Inhalt ist breiter
-// als noetig), aber keine der drei Verbindungsseiten tut es - jede war
-// als EIGENSTAENDIGES Fenster mit einer eigenen, kleineren Breite
-// entworfen (VPN 642, Netzwerk/Bluetooth aehnlich - siehe die
-// Breitenleiter, src/sizes.py) und wurde nie auf die Breite gebracht,
-// die sie jetzt als Seite der Schale braucht:
+// 672 = 880 (Sprosse L) minus 208 (Seitenleiste) rechnet mit der
+// Sprosse, als waere sie der Platz fuer den Inhalt. Sie ist die Breite
+// des FENSTERS; was das Fenster um den Inhalt herum baut, geht davon ab.
 //
-//     Netzwerk    775   statt 880   (-105)
-//     Bluetooth   794   statt 880   (-86)
-//     VPN         829   statt 880   (-51)
+// GEMESSEN am 20.08.2026 im verschachtelten Compositor, 1920x1080, an
+// der stehenden Schale, Breitenbaum je Widget:
 //
-// Drei VERSCHIEDENE Fehlbetraege - jede Seite verliert ihre Breite auf
-// eigene Weise (verschiedener Inhalt, verschiedene alte Fensterbreite),
-// nicht EINE gemeinsame Ursache. Die REPARATUR ist trotzdem an allen
-// drei Stellen dieselbe Form: ein Mindestbreiten-Boden auf der Seite
-// selbst (dem Wurzel-Widget, das ihr bauen() zurueckgibt), der sie nie
-// schmaler natuerlich messen laesst als der Platz, den die Schale fuer
-// sie freihaelt. Keine Zeile darin wird dadurch breiter gezwungen, als
-// sie ist - der Boden wirkt nur, wenn der Inhalt selbst darunter bliebe.
+//     Rumpf (Seitenleiste + Seitenstapel) verlangt   881
+//     Sichtfenster gibt ihm                          854
+//                                                    ---
+//     Ueberhang                                       27
 //
-// 672 UND NICHT calc(880px - 208px): eine Rechnung im CSS ist kein Mass
-// (dieselbe Haltung wie bei STYLE_CONTROL_HEIGHT/STYLE_ROW_HEIGHT,
-// src/sizes.py, "zweimal Abstand 12 plus Rand ... eine Rechnung im CSS
-// kein Mass ist") - GEPRUEFT `grep -rn "calc(" src/templates/
-// src/styles/`, 19.08.2026: kein einziger Treffer im ganzen Baum, dieser
-// Baustil wird hier nicht neu erfunden.
+//     davon senkrechte Bildlaufleiste                  24
+//           .overlay-outer, Rahmen 1px, zweimal         2
+//           .zep-sidebar, border-right 1px              1
 //
-// NACHGETRAGEN am 19.08.2026 (Aufgabe 23, Bericht dieser Aufgabe):
-// 672 WAR DIE RECHNUNG, ABER NICHT DIE GANZE RECHNUNG.
+// Der Rand der Seitenleiste ist der Posten, den auch die Rechnung
+// "208 + 672 = 880" nie kannte: die Spalte misst sich 209 breit
+// (GEMESSEN, alle vier Seiten), weil `border-right` neben `min-width`
+// steht - dieselbe Sache, die 19.08.2026 fuer die POLSTERUNG schon
+// einmal herausgerechnet werden musste (siehe .zep-sidebar oben).
 //
-//     672 nimmt an, dass der Seite die VOLLE Differenz 880-208 zur
-//     Verfuegung steht. Sie steht es nicht: createOverlayWindow()
-//     (ags-overlay-utils.template) setzt `overlay_scrolling: false` -
-//     die senkrechte Bildlaufleiste liegt NEBEN dem Inhalt und nimmt
-//     echten Platz, keinen schwebenden (derselbe Grund, aus dem sie
-//     ueberhaupt so gesetzt ist - siehe dort). JEDE Seite der Schale
-//     ist hoch genug, um sie zu brauchen (SHELL_HEIGHT ist ein Wunsch,
-//     MEASURE_MODAL_SHARE deckelt auf die halbe Bildschirmhoehe lange
-//     bevor der Inhalt zu Ende ist) - die Leiste ist darum nicht der
-//     Ausnahmefall, sie ist der Normalfall.
+// KEINE KORRIGIERTE ZAHL AN DERSELBEN STELLE, UND DAS IST DER PUNKT
+//     645 statt 672 waere richtig - heute, auf diesem Schirm, mit diesem
+//     GTK-Thema. Die Rinne der Bildlaufleiste kommt aus dem Thema und
+//     folgt dem Groessenregler, der Rahmen aus dem Stylesheet, der Rand
+//     der Seitenleiste ebenfalls. Ein Stylesheet kann keinen davon
+//     messen; es kann sie nur abschreiben und beim naechsten Mal falsch
+//     liegen. Genau das ist hier zweimal passiert.
 //
-//     GEMESSEN (Bericht dieser Aufgabe, echter Compositor, 1920x1080,
-//     Netzwerk-Seite - ihr Inhalt liegt WEIT unter 672, der Boden allein
-//     entscheidet): `hadj.get_upper()` (die tatsaechlich verlangte
-//     Breite des Inhalts, Seitenleiste plus Seite) stand bei 881, `hadj.
-//     get_page_size()` (die WIRKLICH sichtbare Breite, also NACH Abzug
-//     der Bildlaufleiste) bei 854 - 27 Punkte Differenz, obwohl die
-//     Seite selbst genau auf ihrem 672px-Boden lag und keine Zeile
-//     darueber hinausging. `scroller.get_vscrollbar()?.measure(...)`
-//     nannte zur selben Zeit 24 - dieselbe Groessenordnung, der Rest
-//     sind Rundung/Rahmen (.overlay-outer traegt 1px). Der Boden allein
-//     REICHT ALSO NICHT, selbst wenn jede Seite ihn exakt trifft.
+//     Der Boden liegt seither in createOverlayWindow() (show(),
+//     `config.fuelltDieSprosse` - ags-overlay-utils.template). Dort
+//     werden Rahmen und Rinne bei JEDEM Aufgehen GEMESSEN und von der
+//     Sprosse abgezogen, und der Rest ist der Boden fuer den ganzen
+//     Rumpf. Eine Zeile, zwei Schalen, keine getippte Zahl.
 //
-//     672 BLEIBT DENNOCH UNVERAENDERT - AUSPROBIERT UND WIEDER
-//     VERWORFEN, NICHT UEBERSEHEN.
-//
-//     Eine gesenkte Zahl HIER (fuer alle sechs Seiten ueber diese
-//     geteilte Klasse) brachte general (die `startSeite`, die die
-//     Fenstergroesse beim ERSTEN show() fuer die gesamte Sitzung
-//     festlegt - die Layer-Shell-Flaeche laesst sich danach nicht mehr
-//     umsetzen, siehe der Kommentar bei set_default_size() in
-//     ags-overlay-utils.template, show()) unter den 880px-Deckel (875
-//     statt 880, test_die_schale_haelt_ihre_breite_ueber_die_seiten).
-//     Eine ZWEITE, engere Klasse NUR fuer Netzwerk/Bluetooth (per
-//     eigener CSS-Klasse UND per `container.set_size_request()` in der
-//     jeweiligen Vorlage, beides ausprobiert) liess general unangetastet
-//     bei 880, aenderte aber am gemeldeten Ueberlauf NICHTS (Gtk.Stack
-//     scheint sein eigenes Mindestmass ueber ALLE Kinder zu bilden,
-//     nicht nur das sichtbare - eine einzelne engere Seite senkt das
-//     Mindestmass des STAPELS nicht) UND loeste einen ZWEITEN,
-//     unerklaerten Fehler aus: die Seitenleiste bemalte auf JEDER Seite
-//     220 statt 208 Punkte (test_die_seitenleiste_bemalt_208_punkte),
-//     reproduzierbar bei jedem Versuch, aber die Ursache blieb in der
-//     verbleibenden Zeit dieser Aufgabe ungeklaert.
-//
-//     NICHT BEHOBEN: der verbleibende Ueberlauf von Netzwerk (27px) und
-//     der Rest von Bluetooth nach dessen VPN-Fix (ebenfalls ~27px,
-//     siehe .vpn-container weiter unten) - eine Reparatur, die einen
-//     zweiten, schlechter verstandenen Fehler eintauscht, ist keine.
-//     Siehe der Bericht dieser Aufgabe und die ausfuehrlichen Kommentare
-//     bei `container.add_css_class("zep-shell-page")` in
-//     ags-network.template/ags-bluetooth.template.
-.zep-shell-page {
-  min-width: 672px;
-}
+//     `.zep-shell-page` ist damit ohne Regel und ohne Leser und darum
+//     geloescht, nicht auskommentiert - samt der polsterlosen Huellen,
+//     die es nur gab, damit die Polsterung einer Seite sich nicht auf
+//     die 672 draufrechnet (mitSeitenboden() in ags-control-center.
+//     template und die Entsprechungen in ags-vpn/ags-settings). Ohne
+//     eine Zahl im Stylesheet gibt es nichts mehr, worauf sich etwas
+//     draufrechnen koennte.
 
-// ENTFERNT am 19.08.2026 (Aufgabe 23, Bericht dieser Aufgabe):
-// `.cc-container.zep-shell-page` UND `.vpn-container.zep-shell-page`.
+// EINE LANGE VORGESCHICHTE, IN ZWEI SAETZEN, WEIL SIE ERKLAERT, WARUM
+// EIN BODEN IM STYLESHEET HIER DREIMAL SCHIEFGING
 //
-//     Vom 19.08.2026 (Aufgabe 17) bis heute standen hier zwei
-//     Verbundregeln, weil general/sound/display UND VPN ihren
-//     Mindestbreiten-Boden auf DEMSELBEN Wurzel-Widget trugen wie ihr
-//     eigenes Polster (`.cc-container`/`.vpn-container`, beide mit
-//     eigenem `padding`) - zwei Klassenregeln gleicher Spezifitaet auf
-//     einem Element, bei denen die Reihenfolge im Stylesheet entschied.
-//     Die Verbundregel loeste GENAU DIESES Problem (welche der beiden
-//     min-width-Werte gewinnt), aber nicht das NAECHSTE: GTK rechnet
-//     Polster IMMER oben auf eine gesetzte min-width drauf, auch auf
-//     die der Verbundregel - GEMESSEN (Bericht Aufgabe 23): general
-//     708px statt 672, VPN 722px statt 672, exakt die 672 plus zweimal
-//     das jeweils eigene Polster.
+//     Vom 19.08.2026 (Aufgabe 17) bis zum 20.08.2026 wanderte derselbe
+//     Boden dreimal: erst auf `.cc-container`/`.vpn-container` selbst
+//     (dort rechnete GTK deren eigenes Polster oben drauf - GEMESSEN
+//     Aufgabe 23: general 708 statt 672, VPN 722 statt 672), dann als
+//     Verbundregel `.cc-container.zep-shell-page` (loeste nur, welche
+//     der beiden min-width gewinnt, nicht die Polsterung), dann auf
+//     eine eigene polsterlose Huelle (loeste die Polsterung, nicht die
+//     Rinne der Bildlaufleiste).
 //
-//     Die Reparatur trennt die beiden Zustaendigkeiten auf ZWEI
-//     Widgets statt einer Verbundregel: `.zep-shell-page` sitzt seither
-//     auf einer eigenen, polsterlosen Huelle OHNE `.cc-container`/
-//     `.vpn-container` (mitSeitenboden() in ags-control-center.
-//     template, derselbe Kunstgriff von Hand in ags-vpn.template) -
-//     mainBox bleibt DARIN, mit ihrem eigenen Polster, unveraendert.
-//     Keine Klassenkombination `.cc-container.zep-shell-page` oder
-//     `.vpn-container.zep-shell-page` kommt im Baum mehr vor (GEPRUEFT
-//     `grep -rn 'add_css_class("cc-container")\|add_css_class("vpn-
-//     container")\|add_css_class("zep-shell-page")' src/templates/`,
-//     19.08.2026) - die beiden Verbundregeln traefen also nichts mehr
-//     und sind darum geloescht, nicht nur auskommentiert (Regel 14).
+//     Jede dieser drei Stationen hat einen Posten uebersehen, den ein
+//     Stylesheet nicht sehen KANN. Seit dem 20.08.2026 wird der Boden
+//     gemessen statt geschrieben; siehe den Block darueber.
 //
 //     `.cc-container` und `.vpn-container` behalten ihre EIGENEN,
 //     einfachen `min-width`-Regeln weiter unten (320px/400px) -
 //     Notifications braucht die eine weiterhin, die andere hat keinen
-//     Leser mehr (siehe der Kommentar dort), aber keine der beiden
-//     kollidiert mehr mit `.zep-shell-page`.
+//     Leser mehr (siehe der Kommentar dort).
 
 // ===== SHARED OVERLAY STYLES (Muted Dark / HyprLaunch / HyprClipX) =====
 //
@@ -2578,10 +2515,12 @@ $overlay-border: $border;
   background: transparent;
 }
 
-// Die Seite selbst. KEIN min-width hier: das traegt .zep-shell-page auf
-// der polsterlosen Huelle darum (siehe dort und mitSeitenboden() in
-// ags-control-center.template) - GTK rechnet Polster sonst oben auf die
-// 672px drauf, gemessen am 19.08.2026 (Aufgabe 23).
+// Die Seite selbst. KEIN min-width hier, und seit dem 20.08.2026 gibt es
+// auch keins mehr, das anderswo stuende: der Boden einer Schalenseite
+// kommt aus createOverlayWindow() (`config.fuelltDieSprosse`,
+// ags-overlay-utils.template) und wird bei jedem Aufgehen gemessen. Eine
+// Zahl hier wuerde von GTK ohnehin um das eigene Polster ueberschritten
+// - gemessen am 19.08.2026 (Aufgabe 23).
 .set-container {
   padding: {{STYLE_SPACE_16}};
 }

@@ -226,6 +226,41 @@ interface OverlayConfig {
   //     Ein Feld mit einem einzigen Leser ist billiger als ein zweiter
   //     Weg, ein Fenster zu bauen.
   onEscape?: () => boolean
+  // Fuellt dieses Fenster seine Sprosse aus, statt sich nach seinem
+  // Inhalt zu richten?
+  //
+  // WARUM ES DIESES FELD SEIT DEM 20.08.2026 GIBT
+  //     Ein Fenster, das seine Sprosse ausfuellen soll, hatte bis dahin
+  //     nur einen Weg dorthin: einen Mindestbreiten-Boden im Stylesheet,
+  //     der die Zahl der Sprosse abschreibt (`.zep-shell-page
+  //     { min-width: 672px }` = 880 minus 208 Seitenleiste). Diese
+  //     Abschrift MUSS falsch sein, weil sie mit der Sprosse rechnet, als
+  //     waere sie der Platz fuer den Inhalt. Sie ist die Breite des
+  //     FENSTERS; was das Fenster um den Inhalt herum baut, geht davon ab.
+  //
+  //     GEMESSEN am 20.08.2026 im verschachtelten Compositor, 1920x1080,
+  //     an der Schale (`control`), Breitenbaum je Widget:
+  //
+  //         Rumpf (Seitenleiste + Seitenstapel) verlangt   881
+  //         Sichtfenster gibt ihm                          854
+  //                                                        ---
+  //         Ueberhang                                       27
+  //
+  //         davon senkrechte Bildlaufleiste                  24
+  //               .overlay-outer, Rahmen 1px, zweimal         2
+  //               .zep-sidebar, border-right 1px              1
+  //
+  //     Genau diese drei Posten kennt keine Vorlage: die Rinne der
+  //     Bildlaufleiste kommt aus dem GTK-Thema und folgt dem
+  //     Groessenregler, der Rahmen aus dem Stylesheet. Eine Zahl im
+  //     Stylesheet kann sie nicht mitrechnen - show() kann sie MESSEN.
+  //     Darum liegt der Boden seit heute hier und nicht dort.
+  //
+  //     Wer das Feld NICHT setzt, bekommt weiter ein Fenster nach dem Mass
+  //     seines Inhalts (GEMESSEN am selben Tag: Kalender 496 auf Sprosse
+  //     500, Kuerzel 740 auf Sprosse 880, beide ohne Ueberhang) - fuer sie
+  //     bleibt die Sprosse ein Deckel und wird kein Ziel.
+  fuelltDieSprosse?: boolean
 }
 
 // ============================================================================
@@ -624,9 +659,6 @@ export function createOverlayWindow(config: OverlayConfig): OverlayWidget {
     //     weitermeldete (siehe dort). Beides zusammen ist der Deckel:
     //     die Rechnung sagt, was erlaubt ist, die Bildlaufleiste laesst
     //     es zu.
-    const [, naturalWidth] = outerBox.measure(Gtk.Orientation.HORIZONTAL, -1)
-    const [, naturalHeight] = outerBox.measure(Gtk.Orientation.VERTICAL, -1)
-
     // UND DIE BILDLAUFLEISTE KOSTET BREITE, DIE measure() NICHT KENNT
     //
     //     Sie liegt NEBEN dem Inhalt und nicht darueber
@@ -664,6 +696,63 @@ export function createOverlayWindow(config: OverlayConfig): OverlayWidget {
     //     braucht, hat dann rechts denselben Rand wie links.
     const leiste =
       scroller.get_vscrollbar()?.measure(Gtk.Orientation.HORIZONTAL, -1)[1] ?? 0
+
+    // WAS DIE PLATTE UM DEN INHALT HERUM KOSTET - NACHGETRAGEN am
+    // 20.08.2026, UND ES IST DIE ANDERE HAELFTE DERSELBEN RECHNUNG
+    //
+    //     `.overlay-outer` traegt `border: 1px solid` (ags-style.
+    //     template), also einen Punkt links und einen rechts. Das ist
+    //     wenig und es ist NICHT null: zusammen mit der Rinne oben ergibt
+    //     es genau den Betrag, um den der Inhalt der Schale bisher ueber
+    //     die rechte Kante lief.
+    //
+    //     GEMESSEN am 20.08.2026, Schale, verschachtelter Compositor:
+    //     outerBox natuerlich 883, Kopf 132, Bildlaufflaeche 881 - die
+    //     Differenz 883-881 sind diese beiden Punkte.
+    //
+    //     GERECHNET UEBER max(Kopf, Inhalt) UND NICHT UEBER DEN INHALT
+    //     ALLEIN: outerBox ist eine senkrechte Gtk.Box, ihre natuerliche
+    //     Breite ist das MAXIMUM ihrer Kinder plus ihre eigene
+    //     Polsterung/Rahmen. Bei jedem heutigen Fenster ist der Inhalt
+    //     breiter als der Kopf, aber ein Fenster mit langem Titel und
+    //     schmalem Inhalt drehte das um - dann waere `outerBox - Inhalt`
+    //     nicht mehr der Rahmen, sondern der Titelueberhang, und die
+    //     Rechnung darunter risse das Fenster auf.
+    const [, natKopf] = headerBox.measure(Gtk.Orientation.HORIZONTAL, -1)
+    const [, natInhalt] = scroller.measure(Gtk.Orientation.HORIZONTAL, -1)
+    const [, natPlatte] = outerBox.measure(Gtk.Orientation.HORIZONTAL, -1)
+    const rahmen = Math.max(0, natPlatte - Math.max(natKopf, natInhalt))
+
+    // DER BODEN FUER EIN FENSTER, DAS SEINE SPROSSE AUSFUELLEN SOLL
+    //
+    // Siehe OverlayConfig.fuelltDieSprosse fuer die Herleitung und die
+    // Messung. Hier steht nur die Rechnung, und sie hat keine getippte
+    // Zahl: die Sprosse kommt aus der Breitenleiter, Rahmen und Rinne
+    // sind soeben GEMESSEN worden.
+    //
+    //     Sprosse (pos.width)  - Rahmen - Rinne = Platz fuer den Inhalt
+    //     880                  -      2 -    24 = 854
+    //
+    // set_size_request() und nicht `min-width` im Stylesheet: es ist
+    // dieselbe Art Boden (GTK nimmt das Groessere von beidem), aber es
+    // ist der einzige, der die beiden gemessenen Posten kennt. Er wird
+    // bei JEDEM Aufgehen neu gesetzt, weil pos.width vom Schirm abhaengt
+    // und ein Fenster auf dem zweiten Schirm eine andere Antwort bekommt.
+    //
+    // Ein Boden UND KEIN DECKEL, und das ist wichtig: verlangt der Inhalt
+    // von sich aus mehr (die drei Verbindungsseiten tun das nicht, aber
+    // eine spaetere Seite koennte), bleibt es bei seiner Zahl und die
+    // waagerechte Bildlaufleiste erscheint wie vorher. Ein Boden kann
+    // nichts abschneiden.
+    if (config.fuelltDieSprosse) {
+      content.set_size_request(Math.max(0, pos.width - rahmen - leiste), -1)
+    }
+
+    // ERST JETZT MESSEN, NICHT VORHER: der Boden von eben aendert genau
+    // die Zahl, die hier gebraucht wird.
+    const [, naturalWidth] = outerBox.measure(Gtk.Orientation.HORIZONTAL, -1)
+    const [, naturalHeight] = outerBox.measure(Gtk.Orientation.VERTICAL, -1)
+
     win.set_default_size(Math.min(naturalWidth + leiste, pos.width),
                          Math.min(naturalHeight, pos.height))
 
@@ -912,7 +1001,31 @@ export function createShellWindow(config: ShellConfig): ShellWidget {
   // jedem Wechsel komplett neu gebaut wird, um die Markierung zu
   // aktualisieren - derselbe Grund, aus dem ags-bluetooth.template seine
   // Statuszeile bei jedem Takt neu baut, statt sie umzufaerben.
-  const sidebarSlot = new Gtk.Box({})
+  //
+  // `hexpand: false` IST HIER KEINE ZIERDE - NACHGETRAGEN am 20.08.2026
+  //
+  //     In GTK4 RECHNET ein Behaelter seinen Ausdehnungswunsch aus
+  //     seinen Kindern aus, solange ihm keiner gesetzt wurde
+  //     (gtk_widget_compute_expand). Die Beschriftung eines
+  //     Navigationseintrags traegt `hexpand` (zepRow, ags-kit.template),
+  //     also traegt die ganze Saeule ihn mit - und der Rumpf gibt
+  //     ueberschuessige Breite an JEDES Kind, das ihn traegt.
+  //
+  //     Bis zum 20.08.2026 fiel das nie auf, weil es NIE Ueberschuss
+  //     gab: der Boden `.zep-shell-page` (672) plus die Saeule (209)
+  //     ergaben exakt die Breite, die der Rumpf bekam. Mit dem
+  //     gemessenen Boden auf dem Rumpf (siehe fuelltDieSprosse) hat der
+  //     Rumpf wieder Luft - und GEMESSEN am selben Tag am Bild
+  //     (schale-general.png, die 1px-Randlinie von .zep-sidebar gesucht)
+  //     stand die Randlinie danach bei Versatz **309 statt 209**: die
+  //     Saeule hatte sich 101 Punkte genommen, die der Seite gehoeren.
+  //
+  //     Eine Saeule mit fester Breite (208px, Spezifikation 2.2) darf
+  //     keinen Ueberschuss annehmen. Der Wunsch wird deshalb hier
+  //     GESETZT statt gerechnet - ein gesetzter Wert schlaegt den aus
+  //     den Kindern gerechneten, und nur der Seitenstapel (hexpand:
+  //     true, siehe oben) bekommt noch etwas ab.
+  const sidebarSlot = new Gtk.Box({ hexpand: false })
 
   const zeichneSidebar = () => {
     const alt = sidebarSlot.get_first_child()
@@ -940,6 +1053,25 @@ export function createShellWindow(config: ShellConfig): ShellWidget {
     width: SHELL_WIDTH,
     height: SHELL_HEIGHT,
     cssClass: config.cssClass,
+    // DIE SCHALE IST DAS FENSTER, DAS SEINE SPROSSE AUSFUELLT -
+    // NACHGETRAGEN am 20.08.2026, und es ist genau die Zeile, die
+    // `.zep-shell-page { min-width: 672px }` ersetzt.
+    //
+    //     Eine Schale hat vier bis sechs Seiten, und keine davon darf
+    //     die Fensterbreite bestimmen - sonst springt das Fenster beim
+    //     Blaettern (GEMELDET am 19.08.2026: "es fehlt irgendwie mehr
+    //     breite oder so", GEMESSEN damals: Netzwerk 775, Bluetooth 794,
+    //     VPN 829 statt 880). Bis heute stand dafuer ein Boden im
+    //     Stylesheet, der 880 minus 208 Seitenleiste abschrieb - und
+    //     dabei Rahmen, Rinne und den 1px-Rand der Seitenleiste selbst
+    //     unterschlug, zusammen 27 Punkte, die als waagerechte
+    //     Bildlaufleiste wieder herauskamen.
+    //
+    //     Hier ist es EINE Zeile fuer JEDE Schale (heute: das
+    //     Kontrollzentrum und die Einstellungen), und die Zahl dahinter
+    //     wird bei jedem Aufgehen gemessen statt getippt. Siehe
+    //     OverlayConfig.fuelltDieSprosse.
+    fuelltDieSprosse: true,
     // Kein Fenstertitel - siehe Funktionskopf. Die Fabrik braucht die
     // beiden Felder trotzdem (sie sind in OverlayConfig nicht optional),
     // darum leer statt mit einem Namen, der ohnehin nur EINE der

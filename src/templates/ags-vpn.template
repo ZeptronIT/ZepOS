@@ -839,24 +839,23 @@ export const vpnSeite: ShellSeite = {
     // ================================================================
     const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
     mainBox.add_css_class("vpn-container")
-    // Der Mindestbreiten-Boden der Schale (.zep-shell-page,
-    // ags-style.template) - siehe dort fuer die Rechnung und die
-    // Messung (829 statt 880 vor dieser Zeile, 19.08.2026).
+    // KEIN Mindestbreiten-Boden mehr an dieser Seite - GEAENDERT am
+    // 20.08.2026.
     //
-    // NICHT MEHR AUF mainBox SELBST (Aufgabe 23, Bericht dieser
-    // Aufgabe): .vpn-container traegt ein EIGENES Polster (padding:
-    // STYLE_SPACE_16, ags-style.template) - GTK rechnet das oben auf
-    // eine gesetzte min-width drauf statt es darin unterzubringen
-    // (derselbe Fehler wie bei .cc-container, general/sound/display -
-    // Bericht Aufgabe 23). GEMESSEN (Debug-Bau dieser Aufgabe): mainBox
-    // mass 722px, damals noch gegen den alten 672px-Boden - genau 672
-    // plus zweimal 25px Polster (STYLE_SPACE_16 bei 1920x1080). Dieselbe
-    // 722 tauchte als Stapel-Breite auf, WAEHREND network/bluetooth
-    // aktiv waren (Gtk.Stack ist hhomogeneous:false, misst aber trotzdem
-    // gelegentlich nicht nur die sichtbare Seite) und hat dort 50 der
-    // gemeldeten 77px Ueberlauf von bluetooth ausgemacht. Der Boden
-    // sitzt seit dieser Aufgabe auf einer eigenen, polsterlosen Huelle -
-    // siehe `return` unten.
+    //     Hier stand der Verweis auf `.zep-shell-page` (min-width:
+    //     672px) und darunter, am `return`, eine polsterlose Huelle, die
+    //     ihn trug. Beides ist weg: der Boden einer Schalenseite wird
+    //     seit dem 20.08.2026 von der Schale selbst gesetzt und dabei
+    //     GEMESSEN statt geschrieben (`config.fuelltDieSprosse` in
+    //     ags-overlay-utils.template). Er sitzt dort auf dem ganzen
+    //     Rumpf - kein Polster einer einzelnen Seite kann sich mehr
+    //     darauf draufrechnen, und damit entfaellt auch der Grund fuer
+    //     die Huelle.
+    //
+    //     GEMESSEN am 20.08.2026: der Inhalt dieser Seite
+    //     (`.vpn-container`) misst 496 und ist damit die breiteste der
+    //     sechs Schalenseiten - immer noch weit unter dem, was die
+    //     Schale ihr laesst (645 auf 1920x1080).
     mainBox.append(connectedView)
     mainBox.append(formView)
 
@@ -920,13 +919,6 @@ export const vpnSeite: ShellSeite = {
       }
     })
 
-    // Der Mindestbreiten-Boden auf einer eigenen, polsterlosen Huelle -
-    // siehe der Kommentar oben bei mainBox.add_css_class("vpn-container").
-    // NICHT `mainBox.add_css_class("zep-shell-page")`: das war der
-    // Fehler, den diese Aufgabe behebt.
-    const seitenboden = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-    seitenboden.add_css_class("zep-shell-page")
-    seitenboden.append(mainBox)
-    return seitenboden
+    return mainBox
   },
 }

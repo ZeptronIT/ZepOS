@@ -558,23 +558,23 @@ export const bluetoothSeite: ShellSeite = {
     const container = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL, spacing: 12,
     })
-    // Der Mindestbreiten-Boden der Schale (.zep-shell-page,
-    // ags-style.template) - siehe dort fuer die Rechnung und die
-    // Messung (794 statt 880 vor dieser Zeile, 19.08.2026).
+    // KEIN Mindestbreiten-Boden mehr an dieser Seite - GEAENDERT am
+    // 20.08.2026.
     //
-    // NACHGETRAGEN am 19.08.2026 (Aufgabe 23, Bericht dieser Aufgabe):
-    // Bluetooth meldete trotz dieses Bodens 77px waagerechten Ueberlauf
-    // - davon waren 50 ein UNABHAENGIGER zweiter Fehler (.vpn-container
-    // in ags-style.template traegt selbst dasselbe Polster-auf-Boden-
-    // Problem wie general/sound/display, siehe dort - Gtk.Stack hat
-    // dessen aufgeblaehte Breite zeitweise fuer die ganze Schale
-    // gemeldet, waehrend bluetooth aktiv war), BEHOBEN mit dem VPN-Fix.
-    // Die restlichen ~27px sind derselbe, NICHT behobene Fehlbetrag wie
-    // bei Netzwerk (dieselbe senkrechte Bildlaufleiste, derselbe
-    // Boden) - siehe der ausfuehrliche Kommentar dort
-    // (ags-network.template) fuer das, was ausprobiert wurde und warum
-    // es nicht uebernommen wurde.
-    container.add_css_class("zep-shell-page")
+    //     Hier stand `container.add_css_class("zep-shell-page")`, und
+    //     `.zep-shell-page` trug `min-width: 672px` (= Sprosse L 880
+    //     minus 208 Seitenleiste). Diese Seite hat den Boden nie fuer
+    //     sich selbst gebraucht - ihr breitester Bestandteil misst 303
+    //     (GEMESSEN 20.08.2026) -, sondern damit die SCHALE ihre 880
+    //     erreicht und beim Blaettern nicht springt.
+    //
+    //     Das ist jetzt Sache der Schale selbst: createOverlayWindow()
+    //     misst Rahmen und Rinne der Bildlaufleiste und setzt den Boden
+    //     auf den ganzen Rumpf (`config.fuelltDieSprosse`,
+    //     ags-overlay-utils.template). Der Boden hier war um genau diese
+    //     beiden Posten zu gross und lief als waagerechte
+    //     Bildlaufleiste wieder heraus - 27px, GEMESSEN am 19. und noch
+    //     einmal am 20.08.2026.
 
     // ----- Der Zustand des Adapters, mit dem Schalter daneben -----
     //

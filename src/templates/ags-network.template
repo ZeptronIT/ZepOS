@@ -809,29 +809,23 @@ export const networkSeite: ShellSeite = {
 
     // ----- Die drei Ansichten untereinander, immer genau eine sichtbar -----
     const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
-    // Der Mindestbreiten-Boden der Schale (.zep-shell-page,
-    // ags-style.template) - siehe dort fuer die Rechnung und die
-    // Messung (775 statt 880 vor dieser Zeile, 19.08.2026).
+    // KEIN Mindestbreiten-Boden mehr an dieser Seite - GEAENDERT am
+    // 20.08.2026.
     //
-    // NACHGETRAGEN am 19.08.2026 (Aufgabe 23, Bericht dieser Aufgabe):
-    // Netzwerk meldete trotz dieses Bodens (und trotz eigenen Inhalts
-    // WEIT darunter, 307px breitester Bestandteil) 27px waagerechten
-    // Ueberlauf - die senkrechte Bildlaufleiste (overlay_scrolling:
-    // false, ags-overlay-utils.template) nimmt echten Platz und
-    // zieht ihn von genau diesem Boden ab. NICHT BEHOBEN: ein
-    // eigener, engerer Boden NUR fuer diese Seite (per Klasse wie per
-    // `set_size_request`, beides ausprobiert) senkte den gemeldeten
-    // Ueberlauf NICHT (Gtk.Stack scheint sein Mindestmass ueber ALLE
-    // Kinder zu bilden, nicht nur das sichtbare - das Aendern EINER
-    // Seite allein aendert am Mindestmass des Stapels nichts) UND loeste
-    // einen ZWEITEN, unerklaerten Fehler aus (die Seitenleiste bemalte
-    // danach 220 statt 208 Punkte,
-    // test_die_seitenleiste_bemalt_208_punkte, tests/render/
-    // test_schale_stil.py - reproduzierbar, aber die Ursache blieb in
-    // der verbleibenden Zeit dieser Aufgabe ungeklaert). Eine Reparatur,
-    // die einen zweiten, schlechter verstandenen Fehler eintauscht, ist
-    // keine - siehe der Bericht dieser Aufgabe.
-    container.add_css_class("zep-shell-page")
+    //     Hier stand `container.add_css_class("zep-shell-page")`, und
+    //     `.zep-shell-page` trug `min-width: 672px` (= Sprosse L 880
+    //     minus 208 Seitenleiste). Diese Seite hat den Boden nie fuer
+    //     sich selbst gebraucht - ihr breitester Bestandteil misst 307
+    //     (GEMESSEN 20.08.2026) -, sondern damit die SCHALE ihre 880
+    //     erreicht und beim Blaettern nicht springt.
+    //
+    //     Das ist jetzt Sache der Schale selbst: createOverlayWindow()
+    //     misst Rahmen und Rinne der Bildlaufleiste und setzt den Boden
+    //     auf den ganzen Rumpf (`config.fuelltDieSprosse`,
+    //     ags-overlay-utils.template). Der Boden hier war um genau diese
+    //     beiden Posten zu gross und lief als waagerechte
+    //     Bildlaufleiste wieder heraus - 27px, GEMESSEN am 19. und noch
+    //     einmal am 20.08.2026.
     container.append(passwordBox)
     container.append(detailBox)
     container.append(mainContent)
