@@ -538,7 +538,15 @@ def test_the_control_centre_speaks_one_language():
     # Links der msgid, wie er in der Vorlage steht. Rechts das, was ein
     # deutscher Nutzer an dieser Stelle lesen muss.
     ZEILEN = {
-        "Control center": "Kontrollzentrum",
+        # "Control" statt "Control center" seit Aufgabe 17 (19.08.2026):
+        # der Sidebar-Eintrag wurde gemessen zu lang fuer die 208px-Spalte
+        # ("Kontrollzentrum" wurde zu "Kontrollze…" gekuerzt, in BEIDEN
+        # Sprachen zu breit - siehe der Kommentar bei generalSeite.titel,
+        # ags-control-center.template). Der Tooltip des Zahnrads auf der
+        # Leiste (ags-bar.template) traegt weiterhin den vollen Namen
+        # "Control center"/"Kontrollzentrum" - er hat keinen 208px-Deckel
+        # und ist hier nicht betroffen.
+        "Control": "Kontrolle",
         "NETWORK & CONNECTIONS": "NETZ & VERBINDUNGEN",
         "SOUND & DISPLAY": "TON & BILD",
         "SYSTEM SERVICES": "SYSTEMDIENSTE",

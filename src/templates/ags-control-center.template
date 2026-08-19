@@ -851,14 +851,76 @@ export default function ControlCenter(
   //     einer hier eingetragenen Zahl.
   const generalSeite: ShellSeite = {
     id: "general",
-    // "Control center" bleibt der msgid - siehe
-    // tests/src/test_overlay_windows.py,
-    // test_the_control_centre_speaks_one_language: der deutsche Eintrag
-    // "Kontrollzentrum" ist dort namentlich verlangt. Diese Seite TRAEGT
-    // heute noch alles, was das Kontrollzentrum je gezeigt hat - der
-    // Name bleibt darum derselbe, nur der Ort (jetzt ein Sidebar-
-    // Eintrag statt ein Fenstertitel) hat sich geaendert.
-    titel: _("Control center"),
+    // "Control" statt "Control center" - GEMESSEN, nicht geraten
+    // (Aufgabenblatt 17, Aufgabe 3: "steht 'Kontrollzentrum' in der
+    // Seitenleiste als 'Kontrollze…' - passt der Text bei 208px?").
+    //
+    // GEMESSEN am 19.08.2026, echter Compositor (schale-general.png,
+    // dieselbe Aufgabe) UND per PangoCairo-Nachrechnung (headless,
+    // gleiche Schrift/Groesse) ausserhalb des Arbeitsbaums:
+    //
+    //     Seitenleiste 208px (Spezifikation 2.2, Literal in
+    //     ags-style.template, .zep-sidebar). Davon fuer den Titel
+    //     verfuegbar: 208 - {{STYLE_SPACE_12}} (Polster links) -
+    //     {{STYLE_SPACE_12}} (Polster rechts) - ~16 (Symbol) -
+    //     {{STYLE_SPACE_12}} (Abstand Symbol/Text) = ~138px, alle drei
+    //     Abstaende aus .zep-row/.zep-row-texts, bei der ausgelieferten
+    //     Groesse.
+    //
+    //     "Kontrollzentrum" bei STYLE_FONT_BODY (20px, ausgelieferte
+    //     Groesse) UND der eingetragenen Schriftfamilie (STYLE_FONT_FAMILY,
+    //     ags-style.template: "Roboto", "JetBrainsMono Nerd Font",
+    //     sans-serif): 180px in der tatsaechlich benutzten Schrift
+    //     (Roboto fehlt auf dieser Entwicklungsmaschine, fontconfig
+    //     weicht je Glyph auf die naechste im Stapel aus - "JetBrainsMono
+    //     Nerd Font" traegt lateinische Buchstaben ebenfalls und wird
+    //     genommen). Zur Gegenprobe mit einer echten proportionalen
+    //     Schrift (Noto Sans, NICHT Roboto, aber naeher an dessen
+    //     Charakter als eine Mono-Schrift): 151px - IMMER NOCH ueber den
+    //     138px. Auch die ENGLISCHE Fassung "Control center" passt nur
+    //     mit Noto Sans knapp (133px, 5px Luft) und NICHT mit der
+    //     tatsaechlich eingetragenen Schriftfamilie (168px) - der Name
+    //     ist zu lang fuer eine Navigationsspalte, in BEIDEN Sprachen,
+    //     nicht nur eine Frage der deutschen Uebersetzung.
+    //
+    //     ENTSCHIEDEN: kuerzerer Eintragsname statt breiterer
+    //     Seitenleiste. Die Seitenleiste zu verbreitern kostet
+    //     Inhaltsbreite auf JEDER der sechs Seiten (SHELL_WIDTH ist EIN
+    //     Deckel fuer alle); "Kontrollzentrum" ist die EINZIGE
+    //     Fundstelle, die nicht passt - Netzwerk/Bluetooth/VPN/Ton/
+    //     Anzeige passen alle (GEPRUEFT an denselben Bildern). Ein
+    //     einzelner zu langer Name rechtfertigt keinen geteilten Boden,
+    //     den fuenf andere Eintraege gar nicht brauchen.
+    //
+    //     "Control" statt "Center"/"Settings":
+    //     "Settings" waere ein zweiter Name fuer die Gruppe
+    //     EINSTELLUNGEN, die die Spezifikation (4.1) fuer eine spaetere
+    //     Aufgabe vorsieht und die dieser Plan bewusst nicht baut - der
+    //     Name wuerde ihr schon heute im Weg stehen. "Control" haelt
+    //     die Wurzel des vollen Namens fest (kein neues Wort, keine
+    //     neue Bedeutung) und misst 84px in der ungeguenstigsten Schrift
+    //     dieser Maschine (JetBrainsMono Nerd Font), 69px mit Noto Sans -
+    //     mit Abstand die groesste gemessene Luft (54-69px) aller
+    //     geprueften Kandidaten.
+    //
+    //     DER TOOLTIP DES ZAHNRADS AUF DER LEISTE (ags-bar.template,
+    //     staticModule) BLEIBT "Control center"/"Kontrollzentrum" -
+    //     bewusst NICHT umbenannt: ein Tooltip hat kein 208px-Deckel und
+    //     darf den vollen, beschreibenden Namen tragen; die Seitenleiste
+    //     braucht die knappe Navigationsbeschriftung. Beide Aufrufer
+    //     teilten sich bisher denselben msgid - "Control" ist deshalb
+    //     ein EIGENER, neuer Katalogeintrag (po/desktop/de.po: "Control"
+    //     -> "Kontrolle"), keine Aenderung an "Control center"
+    //     ("Kontrollzentrum" bleibt dort unveraendert stehen).
+    //
+    //     tests/src/test_overlay_windows.py,
+    //     test_the_control_centre_speaks_one_language: die Zeile
+    //     "Control center": "Kontrollzentrum" ist dort durch "Control":
+    //     "Kontrolle" ersetzt - eine bewusste, begruendete Anpassung an
+    //     eine tatsaechliche Namensaenderung, keine Aufweichung der
+    //     Zusicherung selbst (sie prueft weiterhin dieselbe Regel: msgid
+    //     in der Vorlage, Uebersetzung im Katalog).
+    titel: _("Control"),
     symbol: ICONS.settings,
     gruppe: gruppeSystem,
     bauen: (win, schliessen) => {
