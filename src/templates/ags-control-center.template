@@ -70,6 +70,20 @@ const UPDATE_INTERVAL = 3000
 // koennen.
 const SCRIPTS = {
   network: `${HOME}/.local/bin/ags-network-scripts`,
+  // NEU am 19.08.2026: dieselbe Antwort, die die Leiste fuer ihr
+  // Netz- und ihr Bluetooth-Zeichen liest (network_module()/
+  // bluetooth_module() in bar-status-config.template) - aus demselben
+  // Grund wie bei weather/clocks/hardware unten, nur fuer die Zeilen
+  // NETZ & VERBINDUNGEN statt SCHREIBTISCH. Vorher fragten
+  // getNetworkIcon() und getBluetoothStatus() ags-network-scripts nach
+  // `icon` und `bluetooth` - zwei Aktionen, die dieses Skript seit dem
+  // 17.08.2026 nicht mehr kennt (siehe der Kommentar ueber dem `case`
+  // in ags-network-scripts.template). Der `*)`-Zweig dort antwortet
+  // mit "Usage: $0 {...}", und weil das keine LEERE Zeile ist, griff
+  // der `|| Rueckfall` keiner der beiden Zeilen - der Nutzer sah den
+  // Skriptpfad ("ich sehe bei kontrollzentrum immernoch die pfade bei
+  // netzwerk und verbindungen ... auch bei bluetooth").
+  status: `${CONFIG_HOME}/ags/scripts/status.sh`,
   vpnControl: `${HOME}/.config/ags/scripts/vpn-control.sh`,
   helpersLauncher: `hyprctl hyprlaunch:helpers`,
   privacy: `${CONFIG_HOME}/ags/scripts/privacy.sh`,
@@ -171,10 +185,30 @@ function joined(value: unknown): string {
 }
 
 // Ein Skript rufen
+//
+// EIN SKRIPT, DAS SEINEN EIGENEN PFAD AUSGIBT, HAT NICHT GEANTWORTET -
+// GEAENDERT am 19.08.2026, GEMELDET vom Nutzer zum zweiten Mal.
+//
+//     ags-network-scripts.template faengt eine unbekannte Aktion im
+//     `*)`-Zweig ab und antwortet mit "Usage: $0 {...}" - `$0` ist der
+//     Skriptpfad. Das ist eine ZEILE und kein leerer String, also
+//     griff kein `|| Rueckfall` in einer aufrufenden Funktion, und der
+//     Pfad landete unveraendert auf dem Bildschirm - so gefunden bei
+//     `icon` und `bluetooth`, zwei Aktionen, die dieses Skript seit
+//     dem 17.08.2026 nicht mehr kennt (siehe SCRIPTS.status oben).
+//
+//     Diese Pruefung faengt die Zeile HIER ab, an einer Stelle statt
+//     an acht: jeder kuenftige Aufruf mit einer unbekannten Aktion
+//     bekommt denselben Rueckfall, den er fuer ein STUMMES Skript
+//     ohnehin schon vorsieht, statt seines eigenen Dateipfads.
+//     tests/src/test_ags_network.py haelt zusaetzlich die gerufenen
+//     Aktionen gegen den `case`-Zweig, damit eine neue unbekannte
+//     Aktion gar nicht erst entsteht.
 async function runScript(action: string): Promise<string> {
   try {
     const output = await execAsync([SCRIPTS.network, action])
-    return output.trim()
+    const line = output.trim()
+    return line.startsWith("Usage:") ? "" : line
   } catch {
     return ""
   }
@@ -183,16 +217,6 @@ async function runScript(action: string): Promise<string> {
 // Was das Netz meldet
 async function getNetworkStatus(): Promise<string> {
   return await runScript("info") || "Nicht verbunden"
-}
-
-// Das Zeichen dazu
-async function getNetworkIcon(): Promise<string> {
-  return await runScript("icon") || ICONS.wifiOff
-}
-
-// Der Zustand von Bluetooth
-async function getBluetoothStatus(): Promise<string> {
-  return await runScript("bluetooth") || "Aus"
 }
 
 // Die IP-Adresse - oder nichts.
@@ -381,8 +405,25 @@ export default function ControlCenter(
 
   // Alles neu einlesen
   const updateDisplay = async () => {
+    // Das Netz-Zeichen und die Bluetooth-Zeile - status.sh, EIN Aufruf
+    // fuer beide, damit sie denselben Messzeitpunkt teilen (siehe
+    // SCRIPTS.status oben, wo auch steht, was hier vorher stand).
+    //
+    // .text ist bei network der Zeichensatz-Buchstabe (network_module())
+    // - dasselbe Zeichen, das die Leiste zeigt. Bei bluetooth ist .text
+    // dagegen Zeichen-plus-Zahl (fuer btIcon ungeeignet, den diese Zeile
+    // nicht anfasst) und .tooltip der SATZ, den bluetooth_module()
+    // daneben schreibt ("Bluetooth ist ausgeschaltet", Geraetenamen,
+    // "Bluetooth an, nichts verbunden") - genau die Auskunft, die
+    // btLabel als Text tragen soll.
+    const sharedStatus = await readJson(SCRIPTS.status)
+    const networkGlyph = typeof sharedStatus.network?.text === "string"
+      ? sharedStatus.network.text : ""
+    const bluetoothText = typeof sharedStatus.bluetooth?.tooltip === "string"
+      ? sharedStatus.bluetooth.tooltip : ""
+
     // Netz
-    networkIcon.set_text(await getNetworkIcon())
+    networkIcon.set_text(networkGlyph || ICONS.wifiOff)
     networkLabel.set_text(await getNetworkStatus())
 
     // Die Adresse
@@ -391,7 +432,7 @@ export default function ControlCenter(
     ipRow.set_visible(ip.length > 0)
 
     // Bluetooth
-    btLabel.set_text(await getBluetoothStatus())
+    btLabel.set_text(bluetoothText || _("Bluetooth"))
 
     // VPN
     const vpnInfo = await getVpnInfo()

@@ -32,6 +32,7 @@ canned output from a file and no real wireless device is ever touched.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -359,3 +360,56 @@ def test_no_active_connection_is_an_empty_document(script, stubs, tmp_path):
     result = _run(script, ["details"], stubs, tmp_path / "home", tmp_path)
 
     assert json.loads(result.stdout) == {}
+
+
+# --------------------------------------------------------------------
+# ags-control-center.template, gegen das, was dieses Skript kennt
+# --------------------------------------------------------------------
+#
+# NEU am 19.08.2026, GEMELDET vom Nutzer ein zweites Mal ("ich sehe bei
+# kontrollzentrum immernoch die pfade bei netzwerk und verbindungen ...
+# auch bei bluetooth"): ags-control-center.template ruft
+# `runScript(action)` acht Mal, gegen DASSELBE Skript wie oben - der
+# Kommentar bei SCRIPTS dort sagt, warum es kein zweites gibt. Zwei der
+# acht Aktionen (`icon`, `bluetooth`) kennt der `case`-Zweig oben nicht
+# mehr: er hat sie am 17.08.2026 verloren (siehe der Kommentar ueber dem
+# `case`), aber niemand hat die beiden Aufrufer mitgezogen. Der
+# `*)`-Zweig antwortet mit "Usage: $0 {...}" - einer ZEILE und keinem
+# leeren String -, also griff kein `|| Rueckfall` im Kontrollzentrum,
+# und der Nutzer sah den Skriptpfad statt eines Wertes.
+#
+# Reine Textsuche und kein Lauf: die Frage ist nicht, was das Skript
+# ANTWORTET, sondern ob eine gerufene Aktion im `case`-Zweig UEBERHAUPT
+# STEHT - das entscheidet sich, ohne dass irgendetwas laeuft.
+
+_CONTROL_CENTER = SRC / "templates" / "ags-control-center.template"
+_RUN_SCRIPT_CALL = re.compile(r'runScript\("([^"]+)"\)')
+# Eine Zeile des `case "$ACTION" in`-Zweigs: vier Leerzeichen Einrueckung,
+# dann ein bareword vor der schliessenden Klammer. Faengt weder
+# `case "$ACTION" in` selbst noch `*)` (beginnt mit `*`, keinem Buchstaben).
+_NETWORK_SCRIPT_ACTION = re.compile(r'^ {4}([a-z][a-z0-9-]*)\)', re.MULTILINE)
+
+
+def test_every_action_the_control_centre_asks_for_exists_in_the_script():
+    """Jede Aktion, die ags-control-center.template ruft, muss im
+    `case`-Zweig von ags-network-scripts.template stehen - sonst
+    landet der Rueckgabewert im `*)`-Zweig und ist der Skriptpfad, kein
+    Wert (siehe den Kopf dieses Abschnitts).
+
+    NICHT geprueft wird die Gegenrichtung: `list`, `connect` und
+    `details` stehen im `case`-Zweig und werden trotzdem von hier aus
+    nie gerufen - sie gehoeren dem Netzwerkfenster
+    (NetworkManager.tsx), nicht diesem Fenster, und das ist gewollt.
+    """
+    called = set(_RUN_SCRIPT_CALL.findall(
+        _CONTROL_CENTER.read_text(encoding="utf-8")))
+    known = set(_NETWORK_SCRIPT_ACTION.findall(
+        (SRC / "templates" / "ags-network-scripts.template")
+        .read_text(encoding="utf-8")))
+
+    unknown = called - known
+    assert unknown == set(), (
+        f"ags-control-center.template ruft runScript() mit {sorted(unknown)} "
+        f"- ags-network-scripts.template kennt im case-Zweig nur "
+        f"{sorted(known)}. Der `*)`-Zweig dort gibt seinen eigenen Pfad "
+        "zurueck, und der landet unveraendert auf dem Bildschirm.")
