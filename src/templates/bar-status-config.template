@@ -394,11 +394,49 @@ battery_module() {
     # ausgeblendet. Bis zum 13.08.2026 stand hier `module "" "" ""`, und
     # damit sah ein Notebook, dessen capacity sich nicht lesen laesst,
     # aus wie ein Standrechner.
-    capacity=$(cat "$battery/capacity" 2>/dev/null) || capacity=""
+    # DIE ZAHL WIRD GERECHNET UND NICHT ABGELESEN, UND DAS IST GEMESSEN
+    #
+    #     GEMELDET am 19.08.2026: "die prozent anzeige der batterie geht
+    #     nur auf 10 ebener als 20 10 das moechte ich nicht genaue
+    #     prozent anzeige 20 19 18 usw."
+    #
+    #     Hier stand `cat "$battery/capacity"`, und daran war nichts
+    #     falsch ausser der Quelle: manche Akku-Treiber melden capacity
+    #     grob. GEMESSEN am selben Tag auf dem Rechner des Nutzers:
+    #
+    #         capacity      100
+    #         energy_now    52490000
+    #         energy_full   52510000
+    #         gerechnet     99,96 %
+    #
+    #     Der Treiber rundet also, und zwar bevor irgendein Programm die
+    #     Zahl sieht. Wer capacity liest, kann die Aufloesung nicht
+    #     zurueckholen - sie ist im Kernel schon weg.
+    #
+    #     energy_now/energy_full liegt daneben und ist exakt. Manche
+    #     Geraete fuehren stattdessen charge_now/charge_full (Ladung
+    #     statt Energie) - beide Paare stehen fuer dasselbe Verhaeltnis,
+    #     also wird genommen, was da ist. capacity bleibt der letzte
+    #     Rueckfall: grob ist besser als gar nichts.
+    capacity=""
+    for paar in energy charge; do
+        now=$(cat "$battery/${paar}_now" 2>/dev/null) || continue
+        full=$(cat "$battery/${paar}_full" 2>/dev/null) || continue
+        [[ "$now" =~ ^[0-9]+$ && "$full" =~ ^[0-9]+$ ]] || continue
+        [ "$full" -gt 0 ] || continue
+        capacity=$(awk -v n="$now" -v f="$full" \
+            'BEGIN { printf "%d", n * 100 / f + 0.5 }')
+        break
+    done
+    [ -n "$capacity" ] || capacity=$(cat "$battery/capacity" 2>/dev/null) || capacity=""
     [[ "$capacity" =~ ^[0-9]+$ ]] || {
-        broken "$battery/capacity ist nicht lesbar oder keine Zahl: '$capacity'"
+        broken "$battery: weder energy_/charge_now noch capacity ergaben eine Zahl"
         return
     }
+    # Ein voller Akku meldet gelegentlich 101 oder 102, weil energy_now
+    # ueber energy_full steigen kann - der Entwurfswert ist nicht die
+    # heutige Kapazitaet. Auf dem Bildschirm ist das ein Fehler.
+    [ "$capacity" -gt 100 ] && capacity=100
     status=$(cat "$battery/status" 2>/dev/null || echo Unknown)
 
     ac=0

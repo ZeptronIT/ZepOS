@@ -185,8 +185,31 @@ function getBatteryIcon(percent: number, charging: boolean): string {
 }
 
 async function getBatteryInfo() {
-  const capacityStr = await sh("cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || echo 0")
-  const percent = parseInt(capacityStr.trim()) || 0
+  // DIESELBE RECHNUNG WIE IN DER LEISTE, UND AUS DEMSELBEN GRUND
+  //
+  //     GEMELDET am 19.08.2026: die Prozentanzeige springe in
+  //     Zehnerschritten. Hier stand `cat .../capacity`, und manche
+  //     Akku-Treiber melden genau das grob. GEMESSEN am selben Tag auf
+  //     dem Rechner des Nutzers: capacity 100, energy_now 52490000,
+  //     energy_full 52510000 - also 99,96 Prozent. Der Treiber rundet,
+  //     bevor irgendein Programm die Zahl sieht; wer capacity liest,
+  //     kann die Aufloesung nicht zurueckholen.
+  //
+  //     energy_now/energy_full ist exakt; manche Geraete fuehren
+  //     stattdessen charge_now/charge_full. Beide Paare beschreiben
+  //     dasselbe Verhaeltnis. capacity bleibt der letzte Rueckfall.
+  //
+  //     Die Leiste rechnet dasselbe in bar-status-config.template -
+  //     zwei Anzeigen derselben Zahl muessen dieselbe Quelle haben,
+  //     sonst widersprechen sie einander auf demselben Bildschirm.
+  const genau = await sh(
+    "for p in energy charge; do "
+    + "n=$(cat /sys/class/power_supply/BAT0/${p}_now 2>/dev/null) || continue; "
+    + "f=$(cat /sys/class/power_supply/BAT0/${p}_full 2>/dev/null) || continue; "
+    + "[ \"$f\" -gt 0 ] 2>/dev/null || continue; "
+    + "awk -v n=\"$n\" -v f=\"$f\" 'BEGIN { printf \"%d\", n * 100 / f + 0.5 }'; exit 0; "
+    + "done; cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || echo 0")
+  const percent = Math.min(100, parseInt(genau.trim()) || 0)
 
   const statusStr = await sh("cat /sys/class/power_supply/BAT0/status 2>/dev/null || echo Unknown")
   const status = statusStr.trim()
