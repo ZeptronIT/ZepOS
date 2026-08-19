@@ -2,38 +2,52 @@
 #
 # hyprclipx - der Zwischenablage-Verlauf auf SUPER+SHIFT+V (Spec §7.1).
 #
-# WAS SICH AM 11.08.2026 GEAENDERT HAT: DIE QUELLE LIEGT JETZT HIER
+# WAS AM 11.08.2026 GEAENDERT WURDE UND AM 19.08.2026 WIEDER RUECKGAENGIG
+# GEMACHT WURDE: DIE QUELLE LAG KURZ HIER
 #     packaging/zepos-hyprlaunch/PKGBUILD hat die Begruendung in voller
-#     Laenge; sie gilt fuer diesen Baum genauso, mit einer Zahl
-#     dazwischen. GEMESSEN am 11.08.2026 an der GitHub-API:
+#     Laenge; sie gilt fuer diesen Baum genauso. Vom 11.08. bis zum
+#     19.08.2026 lag die Quelle unter plugins/hyprclipx/ in diesem Baum,
+#     Tarball und Bau kamen aus dem ARBEITSBAUM. Die
+#     Sicherheitspruefung vor der Veroeffentlichung
+#     (.superpowers/sdd/2026-08-18-ags-schale-und-breitenleiter/
+#     sicherheitsanalyse.md, Abschnitt 6) hat benannt, warum das falsch
+#     war: azzuriel/hyprclipx traegt KEINE Lizenzdatei und keinen
+#     Copyright-Vermerk - "license": null -, Code ohne Lizenz ist
+#     urheberrechtlich "alle Rechte vorbehalten", und Leon Marzolls
+#     Erlaubnis vom 11.08.2026 (plugins/LICENSE) deckt, dass ZepOS diese
+#     Quellen bauen und veraendern darf, nicht aber, dass ZepOS eine KOPIE
+#     des fremden Baums selbst weiterverbreitet.
 #
-#         Sterne 1, Forks 0, Tags 0, Beitragende 1
-#         letzter Commit 2026-08-03, also acht Tage alt
-#         "license": null - keine LICENSE-Datei, kein Urhebervermerk
+#     Der Nutzer hat am 19.08.2026 entschieden: die Quellen werden nicht
+#     mitveroeffentlicht. Dieses Rezept holt sie beim Bauen direkt aus dem
+#     Repository des Urhebers, festgenagelt auf den Commit, den
+#     plugins/LICENSE als uebernommenen Stand nennt - NICHT auf `main`,
+#     aus demselben Reproduzierbarkeitsgrund wie beim Starter.
 #
-#     Acht Tage sind nicht sechs Monate; dieser Baum ist lebendiger als
-#     der des Starters. Das aendert am Ergebnis nichts, und zwar aus
-#     zwei Gruenden. Erstens ist die Verfuegbarkeit dieselbe: ein Konto
-#     einer Privatperson, null Forks, und der Zwischenablage-Verlauf ist
-#     eine Taste, die der Nutzer taeglich drueckt. Zweitens ist der
-#     eigentliche Auftrag die Anpassung - 37 Farbliterale in
-#     einundzwanzig Toenen aus dem uebersetzten Objekt herausholen -,
-#     und eine Anpassung, die nicht im eigenen Baum liegt, ist bei der
-#     naechsten Commit-Anhebung wieder weg.
+#     Was daran offen bleibt: dasselbe Verfuegbarkeitsrisiko wie vor dem
+#     11.08.2026. Verschwindet azzuriel/hyprclipx, laesst sich dieses
+#     Paket nicht mehr bauen.
 #
-# WAS AN DER UEBERNOMMENEN QUELLE GEAENDERT WURDE
+# WAS AN DER UEBERNOMMENEN QUELLE GEAENDERT WIRD, UND WOMIT
 #     168 Zeilen CSS aus dem Objekt heraus in
 #     src/styles/hyprclipx-style.template; die Fenstermasse aus
 #     `static constexpr` in eine erzeugte Datei; die angenommene
 #     Zeilenhoehe von 28 Pixeln durch eine gemessene ersetzt, weil eine
 #     Annahme ueber die Zeilenhoehe falsch wird, sobald die Schrift dem
-#     Regler folgt. Die Koepfe der geaenderten Dateien fuehren die
-#     Messungen einzeln.
+#     Regler folgt.
+#
+#     Diese Aenderungen liegen nicht mehr als bearbeitete Dateien in
+#     diesem Baum, aus demselben Grund wie beim Starter: sie liegen als
+#     zepos-hyprclipx.patch neben diesem Rezept, angewendet in prepare().
+#     Die einzelnen Messungen stehen in den Kopfzeilen des Patches selbst
+#     und in den Kommentaren, die er in die betroffenen Dateien schreibt.
 #
 # DIE LIZENZ
 #     BSD-3-Clause, und der Urhebervermerk kommt als Datei mit -
 #     plugins/LICENSE, dort steht auch, warum er dort zum ersten Mal
-#     ausgeschrieben ist.
+#     ausgeschrieben ist. package() legt sie direkt aus diesem Baum ab,
+#     nicht aus dem heruntergeladenen Tarball - der traegt keine
+#     LICENSE-Datei, weil upstream keine hat.
 #
 # WARUM ZWEI DATEIEN
 #     Dieselbe Teilung wie beim Starter, aus demselben Grund und mit
@@ -52,11 +66,11 @@
 #     laeuft nicht". Das ist erledigt, und zwar an allen vier Stellen,
 #     an denen es offen war.
 #
-#     DIE QUELLE  Upstreams helpers/ lag nicht in diesem Baum.
-#         plugins/hyprclipx/helpers/collector.py und
-#         caret-position.py liegen jetzt darin - dieselbe Uebernahme
-#         wie beim C++ daneben, mit demselben Vermerk in
-#         plugins/LICENSE.
+#     DIE QUELLE  Upstreams helpers/ liegt im heruntergeladenen Tarball
+#         unter den Namen clipman-daemon.py und get-caret-position.py.
+#         prepare() benennt sie zuerst um - collector.py und
+#         caret-position.py -, bevor der Patch greift; derselbe Vermerk
+#         wie beim C++ daneben steht in plugins/LICENSE.
 #
 #     DER PFAD  Globals.cpp suchte fest verdrahtet unter
 #         $HOME/.local/bin, wo ein pacman-Paket nichts besitzen darf
@@ -80,16 +94,21 @@
 #     clipman-client.py kommt NICHT mit, und das ist kein Versehen:
 #     GEMESSEN am 12.08.2026 hatte das Feld, das darauf zeigte, zwei
 #     Zuweisungen und null Leser - die C++-Haelfte spricht den Socket
-#     in ClipboardManager::sendCommand() selbst an. Das Feld ist
-#     geloescht.
+#     in ClipboardManager::sendCommand() selbst an. prepare() loescht es
+#     zusammen mit clipman.service, das dieses Paket ebenfalls nicht
+#     ausliefert - es gibt keinen systemd-Nutzerdienst, exec-once startet
+#     den Sammler.
 _zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# Der Stand, den plugins/LICENSE als uebernommen nennt.
+_commit=1eed6ee90a1c3e48ec76510377f8b05f27a4e650
 
 pkgname=zepos-hyprclipx
 pkgver="$(<"$_zepos_repo/VERSION")"
 pkgrel=1
 pkgdesc="Der Zwischenablage-Verlauf von ZepOS: ein GTK4-Layer-Shell-Fenster und sein Hyprland-Plugin"
 arch=('x86_64')
-url="https://github.com/ZeptronIT/ZepOS"
+url="https://github.com/azzuriel/hyprclipx"
 # Gemessen am 11.08.2026: der Quellbaum traegt KEINE Lizenzdatei und
 # keinen Copyright-Vermerk, die GitHub-API meldet "license": null. Hier
 # stand trotzdem BSD-3-Clause - vermutlich mitgewandert von den Plugins
@@ -133,11 +152,39 @@ makedepends=('cmake' 'ninja' 'zepos-hyprland')
 
 optdepends=('zepos-config: erzeugt config und style.css, ohne die das Fenster ungestylt bleibt')
 
-source=("zepos-hyprclipx-$pkgver.tar.gz")
-sha256sums=('SKIP')
+# Zwei Quellen: der unveraenderte Baum des Urhebers, auf den Commit
+# festgenagelt, den plugins/LICENSE als uebernommen nennt - und ZepOS'
+# eigenes Diff darauf, das neben diesem Rezept liegt. NICHT `main`: ein
+# Bau, der von einem beweglichen Zweig holt, ist nicht reproduzierbar.
+source=("hyprclipx-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
+        "zepos-hyprclipx.patch")
+sha256sums=('6017d78e8999129132e466591f52dca9b2040fd8a1d253e39f18907144733e6f'
+            '1d26a0b50c2937a8f68144322e3ba8fe73755c0cc980d9f4895de7f15b44a062')
 
-_src="zepos-hyprclipx-$pkgver"
+_src="hyprclipx-$_commit"
 _plugin_dir="usr/lib/hyprland/plugins"
+
+prepare() {
+    cd "$srcdir/$_src"
+
+    # Die Umbenennung, BEVOR der Patch greift - er aendert nur noch
+    # Dateiinhalte, keine Dateinamen (siehe zepos-hyprclipx.patch).
+    test -f helpers/clipman-daemon.py || {
+        echo "helpers/clipman-daemon.py fehlt im heruntergeladenen Baum;" >&2
+        echo "upstream hat seine Helfer umbenannt oder verschoben" >&2
+        return 1
+    }
+    test -f helpers/get-caret-position.py || {
+        echo "helpers/get-caret-position.py fehlt im heruntergeladenen" >&2
+        echo "Baum; upstream hat seine Helfer umbenannt oder verschoben" >&2
+        return 1
+    }
+    mv helpers/clipman-daemon.py helpers/collector.py
+    mv helpers/get-caret-position.py helpers/caret-position.py
+    rm -f helpers/clipman-client.py helpers/clipman.service
+
+    patch -p1 < "$srcdir/zepos-hyprclipx.patch"
+}
 
 build() {
     cd "$srcdir/$_src"
@@ -254,6 +301,9 @@ package() {
         return 1
     }
 
-    install -Dm644 "$srcdir/$_src/LICENSE" \
+    # plugins/LICENSE liegt in diesem Baum, nicht im heruntergeladenen
+    # Tarball - der traegt keine LICENSE-Datei, weil upstream keine
+    # hat (siehe oben).
+    install -Dm644 "$_zepos_repo/plugins/LICENSE" \
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

@@ -15,11 +15,25 @@ WORUM ES GEHT
     Fenstermasse als `static constexpr` daneben. Beides konnte
     src/brand.py und src/sizes.py grundsaetzlich nicht erreichen.
 
+WAS SICH AM 19.08.2026 GEAENDERT HAT, UND WARUM DIESE DATEI DAS UEBERLEBT
+    plugins/hyprlaunch/ und plugins/hyprclipx/ liegen seit dem
+    19.08.2026 nicht mehr in diesem Baum - siehe plugins/LICENSE und
+    packaging/zepos-hyprlaunch/PKGBUILD: der Quellbaum von azzuriel
+    traegt keine Lizenz, und eine bearbeitete Kopie fremden Codes im
+    eigenen Repository zu fuehren ist immer noch eine Kopie. Jede
+    Pruefung hier, die vorher `plugins/<name>/...` gelesen hat, liest
+    jetzt ueber tests.adopted_plugin_source.plugin_source(name) - das
+    baut denselben Baum aus dem Netz nach, den packaging/zepos-<name>/
+    PKGBUILD baut: der gepinnte Commit, gepatcht mit demselben Diff.
+    Wo das Netz nicht erreichbar ist, ueberspringt sich eine solche
+    Pruefung selbst, wie tests/, die QEMU, OVMF oder ein gebautes
+    Repository brauchen, es laut CONTRIBUTING.md schon immer tun.
+
 WAS DIESE DATEI PRUEFT, UND WAS NICHT
     Sie misst Text und erzeugte Dateien, und an einer Stelle den
     ECHTEN Leser: test_the_vendored_parser_really_reads_the_generated
-    _file uebersetzt plugins/hyprlaunch/src/ConfigParser.cpp und
-    laesst es die Datei lesen, die der Generator geschrieben hat.
+    _file uebersetzt den rekonstruierten hyprlaunch/src/ConfigParser.cpp
+    und laesst es die Datei lesen, die der Generator geschrieben hat.
 
     Was sie nicht kann, ist das fertige Objekt gegen libgtk-4 messen -
     dafuer braucht es einen Bau. Das tun die beiden Rezepte selbst mit
@@ -38,6 +52,7 @@ DIE FALLE, DIE DIESE DATEI VERMEIDET
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -52,6 +67,7 @@ import pytest
 
 from src import sizes
 from tests.gtk4_headless import gi_interpreter
+from tests.adopted_plugin_source import plugin_source
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -132,7 +148,7 @@ def _uncommented(text: str, marker: str = "#") -> list[str]:
 
 
 def _sources(name: str) -> list[Path]:
-    root = PLUGINS / name
+    root = plugin_source(name)
     return sorted(list((root / "src").glob("*.cpp"))
                   + list((root / "include").rglob("*.hpp")))
 
@@ -150,50 +166,98 @@ def _pkgbuild_code(recipe: str) -> str:
 # --------------------------------------------------------------------
 
 @pytest.mark.parametrize("name, recipe", sorted(ADOPTED.items()))
-def test_the_adopted_source_is_in_this_tree(name, recipe):
-    """Das erste Stueck des Auftrags: "Ihre Quelle gehoert in dieses
-    Repository, nicht in ein Tarball von einem fremden Konto."
+def test_the_adopted_source_is_fetched_and_patched_at_a_pinned_commit(
+        name, recipe):
+    """Die Umkehrung des ersten Stuecks des Auftrags vom 11.08.2026.
 
-    GEMESSEN am 11.08.2026 an der GitHub-API, fuer beide Baeume: Tags 0,
-    Forks 0, Beitragende 1, "license": null. Verschwindet das Konto,
-    laesst sich ZepOS an der Stelle nicht mehr bauen, die den
-    Anwendungsstarter und die Zwischenablage liefert.
+    Damals: "Ihre Quelle gehoert in dieses Repository, nicht in ein
+    Tarball von einem fremden Konto" - mit der Begruendung, ein Konto
+    einer Privatperson koenne verschwinden. Die Sicherheitspruefung vor
+    der Veroeffentlichung (.superpowers/sdd/2026-08-18-ags-schale-und-
+    breitenleiter/sicherheitsanalyse.md, Abschnitt 6) hat den staerkeren
+    Einwand gefunden: der Ursprungsbaum traegt KEINE Lizenz
+    ("license": null), und Leon Marzolls Erlaubnis vom 11.08.2026 deckt,
+    dass ZepOS ihn baut - nicht, dass ZepOS eine Kopie davon selbst
+    weiterverbreitet. Der Nutzer hat am 19.08.2026 entschieden: die
+    Quelle wird nicht mitveroeffentlicht.
+
+    Was jetzt gilt, statt "die Quelle liegt hier": das Rezept holt sie
+    selbst, auf einen festen Commit genagelt - NICHT `main`, sonst waere
+    der Bau nicht reproduzierbar -, und wendet ZepOS' eigenes Diff an.
+    Der Commit ist derselbe, den plugins/LICENSE als uebernommen nennt;
+    beide Dateien duerfen sich darueber nicht widersprechen.
     """
-    root = PLUGINS / name
-    assert (root / "CMakeLists.txt").is_file(), (
-        f"plugins/{name}/CMakeLists.txt fehlt")
-    assert (root / "src").is_dir() and (root / "include").is_dir(), (
-        f"plugins/{name} hat keine Quelle")
-    assert _sources(name), f"plugins/{name} enthaelt keine Uebersetzungseinheit"
+    assert not (PLUGINS / name).exists(), (
+        f"plugins/{name} liegt wieder im Baum - dann widerspricht das "
+        f"der Entscheidung vom 19.08.2026, und plugins/LICENSE, "
+        f"README.md und dieser Test muessten gemeinsam umgeschrieben "
+        f"werden, nicht nur einer von ihnen")
 
+    text = _pkgbuild(recipe)
     code = _pkgbuild_code(recipe)
-    # Der eigene Baum darf genannt werden - url= zeigt auf ihn. Was
-    # nicht mehr vorkommen darf, ist der Ursprungsbaum dieses Plugins:
-    # daraus wurde bis zum 11.08.2026 zur Bauzeit heruntergeladen.
-    assert f"github.com/azzuriel/{name}" not in code, (
-        f"packaging/{recipe} holt seine Quelle weiterhin aus dem fremden "
-        f"Ursprungsbaum")
-    assert "http" not in code.split("source=(", 1)[1].split(")", 1)[0], (
-        f"packaging/{recipe} laedt seine Quelle aus dem Netz")
-    assert f'source=("zepos-{name}-$pkgver.tar.gz")' in code, (
-        f"packaging/{recipe} baut nicht aus dem Arbeitsbaum")
+
+    match = re.search(r"^_commit=([0-9a-f]+)$", text, re.M)
+    assert match, f"packaging/{recipe} pinnt keinen Commit"
+    commit = match.group(1)
+    assert len(commit) == 40, (
+        f"packaging/{recipe} pinnt eine gekuerzte Kennung")
+    assert commit in _read(PLUGINS / "LICENSE"), (
+        f"packaging/{recipe} pinnt einen anderen Commit als "
+        f"plugins/LICENSE als uebernommen nennt")
+
+    # NICHT `main`, NICHT der eigene ZepOS-Baum: der unveraenderte
+    # Ursprungsbaum, auf den Commit genagelt. url= traegt den Baum,
+    # source= haengt $_commit daran - beide zusammen ergeben die
+    # Adresse, keine einzelne Zeile tut es.
+    assert f'url="https://github.com/azzuriel/{name}"' in code, (
+        f"packaging/{recipe} zeigt url= nicht mehr auf azzuriel/{name}")
+    assert f'source=("{name}-$_commit.tar.gz::$url/archive/$_commit.tar.gz"' \
+        in code, (
+        f"packaging/{recipe} holt seine Quelle nicht mehr von $url auf "
+        f"dem gepinnten Commit")
+    assert f'"zepos-{name}.patch"' in code, (
+        f"packaging/{recipe} nennt sein eigenes Diff nicht in source=()")
+    assert not re.search(rf'source=\("zepos-{name}-\$pkgver\.tar\.gz"\)',
+                         code), (
+        f"packaging/{recipe} baut noch aus einem lokalen Arbeitsbaum-"
+        f"Tarball")
+
+    # Die Pruefsumme des Patches, offline gegen die tatsaechliche Datei
+    # gehalten - kein Netz noetig, um zu merken, dass jemand den Patch
+    # geaendert und die Summe nicht nachgezogen hat.
+    patch_path = PACKAGING / recipe / f"zepos-{name}.patch"
+    assert patch_path.is_file(), (
+        f"packaging/{recipe}/zepos-{name}.patch fehlt")
+    sums = re.search(r"sha256sums=\(\s*'([0-9a-f]{64})'\s*\n?\s*'([0-9a-f]{64})'\s*\)",
+                     text)
+    assert sums, f"packaging/{recipe} prueft keine zwei Pruefsummen"
+    actual = hashlib.sha256(patch_path.read_bytes()).hexdigest()
+    assert sums.group(2) == actual, (
+        f"packaging/{recipe} nennt fuer zepos-{name}.patch die falsche "
+        f"Pruefsumme - der Patch wurde geaendert, ohne sha256sums "
+        f"nachzuziehen")
+
+    assert 'patch -p1 < "$srcdir/' + f'zepos-{name}.patch"' in code, (
+        f"packaging/{recipe} wendet sein eigenes Diff in prepare() nicht "
+        f"an")
 
 
-def test_the_working_tree_tarballs_are_actually_made():
-    """Ein Rezept, das einen lokalen Tarball nennt, den niemand
-    erzeugt, scheitert erst im Bau - und dann mit "file not found",
-    das nicht sagt, welcher Schritt fehlt."""
+def test_build_sh_no_longer_makes_a_working_tree_tarball_for_the_adopted_plugins():
+    """Die Gegenprobe zum vorigen Test: packaging/build.sh darf keine
+    plugins/hyprlaunch/ oder plugins/hyprclipx/ mehr in einen Tarball
+    packen - es gibt diese Verzeichnisse seit dem 19.08.2026 nicht mehr,
+    und ein Rezept, das ihn dennoch erwartet, scheitert im Bau mit
+    "file not found", das nicht sagt, welcher Schritt fehlt.
+    """
     build = _read(PACKAGING / "build.sh")
     code = "\n".join(_uncommented(build))
 
-    assert 'rsync -a "$REPO/plugins/$_plugin"/ "$stage"/' in code, (
-        "packaging/build.sh macht aus plugins/ keinen Quelltarball")
-    assert 'rsync -a "$REPO/plugins/LICENSE" "$stage/LICENSE"' in code, (
-        "der BSD-Vermerk kommt nicht in den Tarball; das Rezept legt "
-        "dann eine Datei ab, die es nicht gibt, oder - schlimmer - die "
-        "GPL dieses Baums als Auskunft ueber fremden Code")
-    assert 'for _plugin in hyprlaunch hyprclipx; do' in code, (
-        "die Schleife nennt nicht beide Plugins")
+    assert 'rsync -a "$REPO/plugins/$_plugin"/ "$stage"/' not in code, (
+        "packaging/build.sh baut weiterhin einen Quelltarball aus "
+        "plugins/ - das Verzeichnis gibt es nicht mehr")
+    assert "for _plugin in hyprlaunch hyprclipx; do" not in code, (
+        "die alte Schleife ueber beide Plugins steht noch in "
+        "packaging/build.sh")
 
 
 @pytest.mark.parametrize("plugin, recipe", sorted(NOT_ADOPTED.items()))
@@ -341,7 +405,8 @@ def test_the_window_sizes_left_the_compiled_object():
     traegt, stehen lassen. Genau diesen Fehler schreibt src/sizes.py
     fuer die Leistenhoehe schon auf.
     """
-    launcher = PLUGINS / "hyprlaunch" / "include" / "hyprlaunch" / "Config.hpp"
+    launcher = (plugin_source("hyprlaunch") / "include" / "hyprlaunch"
+                / "Config.hpp")
     code = "\n".join(line for _, line in _cpp_code(launcher))
 
     for gone in ("static constexpr int SEARCH_HEIGHT",
@@ -356,7 +421,7 @@ def test_the_window_sizes_left_the_compiled_object():
             f"{field} fehlt - dann liest das Programm die erzeugte Datei "
             f"nicht mehr vollstaendig")
 
-    clip = (PLUGINS / "hyprclipx" / "include" / "hyprclipx"
+    clip = (plugin_source("hyprclipx") / "include" / "hyprclipx"
             / "ClipboardRenderer.hpp")
     clip_code = "\n".join(line for _, line in _cpp_code(clip))
     assert "static constexpr int ITEM_HEIGHT" not in clip_code, (
@@ -365,7 +430,7 @@ def test_the_window_sizes_left_the_compiled_object():
         "Stylesheet, dessen Schrift dem Faktor folgt, scrollt die Liste "
         "um denselben Faktor daneben")
 
-    renderer = PLUGINS / "hyprclipx" / "src" / "ClipboardRenderer.cpp"
+    renderer = plugin_source("hyprclipx") / "src" / "ClipboardRenderer.cpp"
     render_code = "\n".join(line for _, line in _cpp_code(renderer))
     assert "gtk_widget_compute_bounds" in render_code, (
         "die Zeilenhoehe wird nicht gemessen. Der Starter macht es seit "
@@ -381,12 +446,13 @@ def test_the_launcher_cannot_grow_past_the_screen():
     ausgelieferten Faktor 1.85 ergaeben 20 Zeilen 96 + 20*83 + 9 = 1765
     Pixel, also anderthalb Bildschirmhoehen auf einem 1080er Schirm.
     """
-    config = PLUGINS / "hyprlaunch" / "include" / "hyprlaunch" / "Config.hpp"
+    config = (plugin_source("hyprlaunch") / "include" / "hyprlaunch"
+              / "Config.hpp")
     code = "\n".join(line for _, line in _cpp_code(config))
     assert "int rowsThatFit(int availableHeight) const" in code, (
         "die Zeilenzahl wird nicht gegen den Schirm gedeckelt")
 
-    renderer = PLUGINS / "hyprlaunch" / "src" / "LauncherRenderer.cpp"
+    renderer = plugin_source("hyprlaunch") / "src" / "LauncherRenderer.cpp"
     render_code = "\n".join(line for _, line in _cpp_code(renderer))
     assert "fittingHeight()" in render_code, (
         "das Fenster benutzt die gedeckelte Hoehe nicht")
@@ -641,10 +707,11 @@ def test_the_vendored_parser_really_reads_the_generated_file(name, tmp_path,
     probe = tmp_path / "probe.cpp"
     probe.write_text(_PROBE % {"ns": name, "extra": extra}, encoding="utf-8")
 
+    plugin_root = plugin_source(name)
     binary = tmp_path / "probe"
     build = real_run(
-        [compiler, "-std=c++20", "-I", str(PLUGINS / name / "include"),
-         str(probe), str(PLUGINS / name / "src" / "ConfigParser.cpp"),
+        [compiler, "-std=c++20", "-I", str(plugin_root / "include"),
+         str(probe), str(plugin_root / "src" / "ConfigParser.cpp"),
          "-o", str(binary)],
         capture_output=True, text=True)
     assert build.returncode == 0, (
@@ -779,7 +846,7 @@ def test_the_generated_files_land_where_the_programs_look(name):
     assert f'CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/{name}"' in generator, (
         f"der Generator schreibt nicht nach ~/.config/{name}")
 
-    parser = _read(PLUGINS / name / "src" / "ConfigParser.cpp")
+    parser = _read(plugin_source(name) / "src" / "ConfigParser.cpp")
     assert f'CONFIG_NAMESPACE = "{name}"' in parser, (
         f"plugins/{name} sucht in einem anderen Namensraum")
 
@@ -834,7 +901,7 @@ def test_the_plugin_half_stays_free_of_gtk(name):
     das, was die beiden Fenster ueberhaupt zu Layer-Shell-Clients
     macht.
     """
-    text = _read(PLUGINS / name / "CMakeLists.txt")
+    text = _read(plugin_source(name) / "CMakeLists.txt")
     plugin_block = text.split("add_library", 1)[1].split("add_executable", 1)[0]
     assert "GTK4_LIBRARIES" not in plugin_block, (
         f"plugins/{name}/CMakeLists.txt linkt GTK an die Plugin-Haelfte")
@@ -843,19 +910,23 @@ def test_the_plugin_half_stays_free_of_gtk(name):
         "andere geworden")
 
 
-def test_the_two_surfaces_are_not_documented_as_someone_elses_any_more():
-    """Die Rezepte tragen jetzt die Versionsnummer dieses Baums, weil
-    sie den Code dieses Baums ausliefern. tests/packaging/
-    test_recipes.py prueft die Form; hier steht der Grund, damit die
-    Aenderung nicht als Formsache durchgeht.
+def test_the_two_recipes_still_carry_zepos_own_version_number():
+    """Bis zum 19.08.2026 war der Grund, `_commit=` NICHT zu pinnen: die
+    Quelle lag im Baum, also traf die Versionsnummer dieses Baums zu.
+    Das Pinnen ist zurueck (die Quelle wird wieder geholt statt
+    vorzuliegen) - was NICHT zurueckgekommen ist, ist eine fremde
+    Versionsnummer: das Objekt, das dieses Rezept ausliefert, traegt
+    ZepOS' eigene Anpassungen (Farben, Masse, Sammler), nicht den
+    unveraenderten Stand von azzuriel. pkgver bleibt deshalb an das
+    Release dieses Baums gebunden, nicht an den gepinnten Commit -
+    anders als bei packaging/zepos-hyprzones/PKGBUILD, das nichts
+    Eigenes an hyprzones aendert.
     """
     for recipe in ADOPTED.values():
         code = _pkgbuild_code(recipe)
         assert 'pkgver="$(<"$_zepos_repo/VERSION")"' in code, (
             f"packaging/{recipe} traegt eine fremde Versionsnummer fuer "
-            f"eigenen Code")
-        assert not re.search(r"^_commit=", code, re.M), (
-            f"packaging/{recipe} pinnt weiterhin einen fremden Commit")
+            f"ein Objekt mit ZepOS' eigenen Anpassungen")
 
 
 # --------------------------------------------------------------------
@@ -928,7 +999,7 @@ def test_the_plugin_names_itself_as_ours_in_hyprctl(name):
     Dispatcher tragen; siehe die Begruendung ueber diesem Abschnitt.
     """
     code = "\n".join(line for _n, line
-                     in _cpp_code(PLUGINS / name / "src" / "main.cpp"))
+                     in _cpp_code(plugin_source(name) / "src" / "main.cpp"))
     # Ab PLUGIN_INIT gesucht und nicht ueber die ganze Datei: die
     # Dispatcher darueber enden alle auf `return {.success = true};`,
     # und ein `return\s*\{` ueber der ganzen Datei findet den ersten
@@ -996,7 +1067,8 @@ def test_the_dead_client_path_is_gone():
     ClipboardManager::sendCommand() seit jeher selbst tut.
     """
     for path in _sources("hyprclipx") + [
-            PLUGINS / "hyprclipx" / "include" / "hyprclipx" / "Config.hpp"]:
+            plugin_source("hyprclipx") / "include" / "hyprclipx"
+            / "Config.hpp"]:
         for number, line in _cpp_code(path):
             assert "clipmanClient" not in line, (
                 f"{path.name}:{number} fuehrt das tote Feld weiter")
@@ -1048,10 +1120,10 @@ def test_the_launcher_takes_its_helper_directory_from_the_generated_file():
     auf - ohne das waere der Wert ein Verzeichnis namens "~" im
     Arbeitsverzeichnis des Compositors.
     """
-    parser = _read(PLUGINS / "hyprlaunch" / "src" / "ConfigParser.cpp")
+    launcher_root = plugin_source("hyprlaunch")
+    parser = _read(launcher_root / "src" / "ConfigParser.cpp")
     code = "\n".join(line for _n, line
-                     in _cpp_code(PLUGINS / "hyprlaunch" / "src"
-                                  / "ConfigParser.cpp"))
+                     in _cpp_code(launcher_root / "src" / "ConfigParser.cpp"))
     assert 'key == "helpers_dir"' in code, (
         "der Starter liest den Ort seiner Helfer nicht aus der Datei")
     # Die AUFRUFSTELLE, nicht die Definition. NACHGEWIESEN in der
@@ -1079,13 +1151,14 @@ def test_the_collector_and_the_caret_helper_ship_with_the_package():
     aus und der Verlauf geht am Mauszeiger auf statt an der
     Schreibmarke.
     """
-    helpers = PLUGINS / "hyprclipx" / "helpers"
+    clipx_root = plugin_source("hyprclipx")
+    helpers = clipx_root / "helpers"
     collector = helpers / "collector.py"
     caret = helpers / "caret-position.py"
     assert collector.is_file(), "der Sammler liegt nicht im Baum"
     assert caret.is_file(), "der Schreibmarken-Helfer liegt nicht im Baum"
 
-    cmake = _read(PLUGINS / "hyprclipx" / "CMakeLists.txt")
+    cmake = _read(clipx_root / "CMakeLists.txt")
     for helper in ("helpers/collector.py", "helpers/caret-position.py"):
         assert helper in cmake, f"{helper} wird nicht installiert"
     assert "DESTINATION lib/hyprclipx" in cmake
@@ -1093,7 +1166,7 @@ def test_the_collector_and_the_caret_helper_ship_with_the_package():
     # Und der Pfad, an dem die C++-Haelfte den Helfer sucht, ist der,
     # an den CMake ihn legt. Zwei Wege, die auseinanderlaufen, waeren
     # ein Helfer, der da ist und nicht gefunden wird.
-    config = _read(PLUGINS / "hyprclipx" / "include" / "hyprclipx"
+    config = _read(clipx_root / "include" / "hyprclipx"
                    / "Config.hpp")
     assert '"/usr/lib/hyprclipx/caret-position.py"' in config
 
@@ -1127,7 +1200,7 @@ def test_the_collector_reads_the_generated_configuration():
     Eintraege, der Sammler hob siebenhundert auf - der Verlauf war also
     dauerhaft groesser als alles, was man je zu sehen bekam.
     """
-    source = _read(PLUGINS / "hyprclipx" / "helpers" / "collector.py")
+    source = _read(plugin_source("hyprclipx") / "helpers" / "collector.py")
     code = "\n".join(_uncommented(source))
 
     # Mit der Klammer, und das ist keine Kosmetik: NACHGEWIESEN in der
@@ -1338,7 +1411,7 @@ def test_the_collector_speaks_the_protocol_the_window_speaks(tmp_path,
     # und dieser Test startet den Sammler mit subprocess.POPEN. Eine
     # Zeile, die einen Namen festhaelt, den niemand benutzt, sieht aus
     # wie eine Vorsichtsmassnahme und ist keine.
-    collector = PLUGINS / "hyprclipx" / "helpers" / "collector.py"
+    collector = plugin_source("hyprclipx") / "helpers" / "collector.py"
     assert collector.is_file()
 
     # Die ECHTE erzeugte Datei, mit einem Faktor ungleich 1.0, damit

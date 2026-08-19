@@ -43,6 +43,7 @@ from pathlib import Path
 import pytest
 
 from src import sizes
+from tests.adopted_plugin_source import plugin_source
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -429,6 +430,24 @@ IMPRINTS = {
 }
 
 
+def _read_source(path: str) -> str:
+    """Reads one of the paths above or below.
+
+    Most of them live in this tree and are read from ROOT directly. The
+    two plugins/ ones are not, since 19.08.2026: the unmodified upstream
+    source they patch cannot live in this repository (plugins/LICENSE
+    has the account), so tests/adopted_plugin_source.py reconstructs it
+    from the network, exactly as packaging/zepos-hyprlaunch/PKGBUILD and
+    packaging/zepos-hyprclipx/PKGBUILD now build it.
+    """
+    for name in ("hyprlaunch", "hyprclipx"):
+        prefix = f"plugins/{name}/"
+        if path.startswith(prefix):
+            return (plugin_source(name) / path[len(prefix):]).read_text(
+                encoding="utf-8")
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("path,pattern", sorted(IMPRINTS.items()))
 def test_every_own_program_caps_at_the_share_from_the_size_table(path, pattern):
     """Vier Programme, eine Zahl.
@@ -439,7 +458,7 @@ def test_every_own_program_caps_at_the_share_from_the_size_table(path, pattern):
     Schirm, hyprclipx gegen gar nichts. Drei Programme mit derselben
     Aufgabe und drei Regeln sind drei Regeln.
     """
-    source = (ROOT / path).read_text(encoding="utf-8")
+    source = _read_source(path)
     found = re.search(pattern, source, re.M)
     assert found, f"{path} kennt keinen Anteil MODAL_SHARE mehr"
     assert float(found.group(1)) == sizes.MEASURE_MODAL_SHARE, (
@@ -464,7 +483,7 @@ def test_the_share_is_multiplied_by_something_measured(path, rule):
     Nicht auf eine Zahl aus der Konfiguration: der Deckel soll ja
     gerade das begrenzen, was dort steht.
     """
-    assert rule in (ROOT / path).read_text(encoding="utf-8"), (
+    assert rule in _read_source(path), (
         f"{path} multipliziert den Anteil nicht mehr mit {rule}")
 
 
@@ -495,12 +514,17 @@ FULL_SCREEN_MASKS = {
 }
 
 
-def test_no_program_opens_a_layer_shell_window_without_a_rule():
-    """Die Vollzaehligkeit, aus dem Baum gelesen statt aufgezaehlt.
+def _own_layer_shell_programs() -> set[str]:
+    """Jedes eigene Programm, das eine Layer-Shell-Flaeche aufzieht - im
+    Arbeitsbaum UND in den beiden rekonstruierten Plugin-Baeumen, als
+    dieselbe Art relativer Pfad, die FULL_SCREEN_MASKS und `known` unten
+    schon immer benutzt haben.
 
-    Eine Liste von Hand haette genau das Programm nicht, das jemand
-    hinzufuegt, ohne die Regel zu kennen - also genau den Fall, den
-    diese Zusicherung fangen soll.
+    hyprlaunch und hyprclipx liegen seit dem 19.08.2026 nicht mehr unter
+    root/plugins/ (siehe tests/adopted_plugin_source.py, plugins/
+    LICENSE) - ein blosses ROOT.rglob() faende ihre beiden Aufrufer
+    darum nicht mehr, und `known` unten wuerde zwei Eintraege nennen, die
+    programs nie erreicht. Deshalb der zweite Durchgang.
     """
     programs: set[str] = set()
     for path in ROOT.rglob("*"):
@@ -513,6 +537,33 @@ def test_no_program_opens_a_layer_shell_window_without_a_rule():
         text = path.read_text(encoding="utf-8", errors="replace")
         if any(call in text for call in LAYER_SHELL_CALLS):
             programs.add(relative)
+
+    for name in ("hyprlaunch", "hyprclipx"):
+        plugin_root = plugin_source(name)
+        for sub in ("src", "include"):
+            directory = plugin_root / sub
+            if not directory.is_dir():
+                continue
+            for path in sorted(directory.rglob("*")):
+                if not path.is_file() or path.suffix not in (
+                        ".c", ".cpp", ".py"):
+                    continue
+                text = path.read_text(encoding="utf-8", errors="replace")
+                if any(call in text for call in LAYER_SHELL_CALLS):
+                    programs.add(
+                        f"plugins/{name}/{sub}/"
+                        f"{path.relative_to(directory).as_posix()}")
+    return programs
+
+
+def test_no_program_opens_a_layer_shell_window_without_a_rule():
+    """Die Vollzaehligkeit, aus dem Baum gelesen statt aufgezaehlt.
+
+    Eine Liste von Hand haette genau das Programm nicht, das jemand
+    hinzufuegt, ohne die Regel zu kennen - also genau den Fall, den
+    diese Zusicherung fangen soll.
+    """
+    programs = _own_layer_shell_programs()
 
     known = set(FULL_SCREEN_MASKS) | {
         "menu/zepos_menu/window.py",

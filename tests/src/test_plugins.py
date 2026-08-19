@@ -39,6 +39,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.adopted_plugin_source import plugin_source
+
 # Anchored on this file, the way every other test in this directory does
 # it. src/ has no __init__.py and its modules import each other flatly.
 SRC = Path(__file__).resolve().parents[2] / "src"
@@ -291,11 +293,13 @@ def test_the_collector_path_is_the_one_the_package_writes(plugins):
     eine Taste, die nie das Plugin bekommt.
 
     Beide Seiten stehen hier nebeneinander: der Pfad aus src/plugins.py
-    und der, den plugins/hyprclipx/CMakeLists.txt installiert.
+    und der, den plugins/hyprclipx/CMakeLists.txt installiert - seit dem
+    19.08.2026 aus dem Netz nachgebaut statt aus diesem Baum gelesen
+    (tests/adopted_plugin_source.py, plugins/LICENSE).
     """
     assert plugins.COLLECTOR == Path("/usr/lib/hyprclipx/collector.py")
 
-    cmake = (SRC.parent / "plugins" / "hyprclipx"
+    cmake = (plugin_source("hyprclipx")
              / "CMakeLists.txt").read_text(encoding="utf-8")
     assert "helpers/collector.py" in cmake
     assert "DESTINATION lib/hyprclipx" in cmake, (

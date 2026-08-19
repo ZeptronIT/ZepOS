@@ -1,0 +1,2748 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# ZepOS-eigene Aenderungen an plugins/hyprclipx (Stand 19.08.2026).
+#
+# Dieser Patch ist ZepOS-eigene Arbeit: ein Diff, keine fremde Quelle.
+# Er wird beim Bauen gegen den unveraenderten Baum von
+# https://github.com/azzuriel/hyprclipx angewendet, Commit
+# 1eed6ee90a1c3e48ec76510377f8b05f27a4e650 - siehe packaging/
+# zepos-hyprclipx/PKGBUILD und plugins/LICENSE fuer Herkunft und
+# Erlaubnislage. Vor dem eigentlichen Patch benennt das Rezept zwei
+# Dateien aus helpers/ um (clipman-daemon.py -> collector.py,
+# get-caret-position.py -> caret-position.py) und entfernt
+# clipman-client.py und clipman.service; dieser Patch aendert nur noch
+# Dateiinhalte, keine Dateinamen.
+#
+# Was inhaltlich geaendert wurde: CSS aus dem uebersetzten Objekt in
+# generierte Dateien unter ~/.config/hyprclipx/ ausgelagert, die
+# Fensterlpfade von $HOME/.local/bin auf /usr/lib/hyprclipx/ umgestellt,
+# der Sammler (collector.py) und der Schreibmarken-Helfer
+# (caret-position.py) aus den umbenannten Originaldateien uebernommen
+# und angepasst. Alle Einzelheiten stehen in den Dateikoepfen selbst
+# (SPDX-License-Identifier: GPL-3.0-or-later fuer die ZepOS-Anteile).
+#
+diff -ruN a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt	2026-08-03 21:09:42.000000000 +0200
++++ b/CMakeLists.txt	2026-08-12 21:43:58.202848737 +0200
+@@ -1,7 +1,7 @@
+ cmake_minimum_required(VERSION 3.19)
+ project(hyprclipx
+     VERSION 0.1.0
+-    DESCRIPTION "Layer-shell clipboard manager for Hyprland"
++    DESCRIPTION "Der Zwischenablage-Verlauf von ZepOS"
+     LANGUAGES CXX
+ )
+ 
+@@ -9,7 +9,7 @@
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+ 
+-# Find dependencies
++# Die Abhaengigkeiten suchen
+ find_package(PkgConfig REQUIRED)
+ pkg_check_modules(HYPRLAND REQUIRED hyprland)
+ pkg_check_modules(GTK4 REQUIRED gtk4)
+@@ -18,7 +18,7 @@
+ pkg_check_modules(CAIRO REQUIRED cairo)
+ 
+ # ============================================================================
+-# Target 1: hyprclipx.so (Hyprland plugin - NO GTK, NO threads)
++# Ziel 1: hyprclipx.so, die Haelfte im Compositor - KEIN GTK, KEINE Threads
+ # ============================================================================
+ set(PLUGIN_SOURCES
+     src/main.cpp
+@@ -34,7 +34,8 @@
+     ${HYPRLAND_INCLUDE_DIRS}
+ )
+ 
+-# Plugin links NOTHING except Hyprland (no GTK, no pango, no cairo)
++# Diese Haelfte bindet NICHTS ausser Hyprland - kein GTK, kein Pango,
++# kein Cairo
+ target_compile_options(hyprclipx PRIVATE
+     -Wall -Wextra -Wpedantic -fPIC
+     ${HYPRLAND_CFLAGS_OTHER}
+@@ -46,7 +47,7 @@
+ )
+ 
+ # ============================================================================
+-# Target 2: hyprclipx-ui (standalone GTK4 binary - NO Hyprland)
++# Ziel 2: hyprclipx-ui, ein eigenstaendiges GTK4-Programm - KEIN Hyprland
+ # ============================================================================
+ set(UI_SOURCES
+     src/main_ui.cpp
+@@ -80,6 +81,35 @@
+     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+ )
+ 
+-# Installation
++# Wohin installiert wird
+ install(TARGETS hyprclipx LIBRARY DESTINATION lib/hyprland/plugins)
+ install(TARGETS hyprclipx-ui RUNTIME DESTINATION bin)
++
++# ============================================================================
++# Ziel 3: die zwei Python-Haelften
++# ============================================================================
++#
++# WARUM SIE HIER STEHEN UND NICHT IM REZEPT
++#     Weil sie zum Programm gehoeren und nicht zur Verpackung. Wer aus
++#     dem Arbeitsbaum `cmake --install` aufruft, soll einen
++#     funktionierenden Verlauf bekommen und nicht die Haelfte davon;
++#     das Rezept prueft danach nur, dass beide da sind.
++#
++# WARUM /usr/lib/hyprclipx UND NICHT /usr/bin
++#     include/hyprclipx/Config.hpp fuehrt das Argument aus: keins der
++#     beiden ist ein Programm, das ein Mensch aufruft. Der Sammler ist
++#     ein Dienst, den die Sitzung startet, und der Schreibmarken-Helfer
++#     druckt ein Koordinatenpaar fuer genau einen Aufrufer.
++#
++# WARUM lib UND NICHT ${CMAKE_INSTALL_LIBDIR}
++#     Weil ${CMAKE_INSTALL_LIBDIR} auf manchen Zielen lib64 ist und der
++#     Pfad in Config.hpp eine feste Zeichenkette ist. Zwei Wege, die
++#     auseinanderlaufen koennen, waeren ein Helfer, der auf genau den
++#     Maschinen fehlt, auf denen niemand danach sucht. Die beiden
++#     Zeilen darueber tun dasselbe (lib/hyprland/plugins, bin), aus
++#     demselben Grund: Hyprland sucht seine Plugins ebenfalls an einem
++#     festen Pfad.
++install(PROGRAMS
++    helpers/collector.py
++    helpers/caret-position.py
++    DESTINATION lib/hyprclipx)
+diff -ruN a/helpers/caret-position.py b/helpers/caret-position.py
+--- a/helpers/caret-position.py	2026-08-03 21:09:42.000000000 +0200
++++ b/helpers/caret-position.py	2026-08-12 21:48:00.183252041 +0200
+@@ -1,10 +1,45 @@
+ #!/usr/bin/env python3
+-"""Get text caret position - tries AT-SPI first, then X11 for XWayland apps."""
++# SPDX-License-Identifier: BSD-3-Clause
++#
++# Urspruenglich get-caret-position.py von azzuriel, aus helpers/ des
++# hyprclipx-Baums. Urhebervermerk und Haftungsausschluss stehen in
++# plugins/LICENSE.
++"""Wo die Schreibmarke steht - die zweite von drei Strategien.
++
++WOZU DAS GEBRAUCHT WIRD
++    Das Fenster des Verlaufs setzt sich an die Schreibmarke des
++    Fensters, aus dem heraus SUPER+SHIFT+V gedrueckt wurde. Die erste
++    Strategie liest sie direkt im Compositor aus text-input-v3
++    (plugins/hyprclipx/src/Globals.cpp) und deckt alles ab, was das
++    Protokoll spricht - Firefox, GTK, Qt, kitty, foot, Electron. Diese
++    Datei ist die zweite: sie fragt AT-SPI und trifft damit
++    XWayland-Fenster und alles, was kein text-input-v3 anmeldet. Die
++    dritte ist der Mauszeiger.
++
++WARUM SIE SEIT DEM 12.08.2026 IM BAUM LIEGT
++    Weil Globals.cpp sie unter $HOME/.local/bin suchte, fest verdrahtet,
++    und ein pacman-Paket dort nichts ablegen darf. Sie war damit auf
++    jeder Installation abwesend, und die Strategie dazwischen fiel
++    lautlos aus: popen() auf eine Datei, die es nicht gibt, gibt einen
++    Ausgabestrom ohne Inhalt zurueck, kein Fehler, keine Zeile
++    irgendwo. Der Verlauf oeffnete dann am Mauszeiger statt an der
++    Schreibmarke - was aussieht wie eine Design-Entscheidung und keine
++    war.
++
++    Sie liegt jetzt in /usr/lib/hyprclipx/, und der Pfad steht in
++    ~/.config/hyprclipx/config; Config.hpp begruendet beides.
++
++WARUM DER RUECKFALL AM ENDE 100 PIXEL ADDIERT
++    Er ist eine Schaetzung und gibt sich als solche: wenn AT-SPI nichts
++    weiss, ist die linke obere Ecke des Fensters die einzige bekannte
++    Groesse, und ein Verlaufsfenster genau darauf zu setzen verdeckt
++    die Titelzeile dessen, worin getippt wird.
++"""
+ import json
+ import subprocess
+ 
+ def get_caret_atspi():
+-    """Try AT-SPI for native Wayland apps."""
++    """Ueber AT-SPI, das die Wayland-eigenen Anwendungen beantworten."""
+     try:
+         import gi
+         gi.require_version('Atspi', '2.0')
+@@ -45,24 +80,25 @@
+     return None
+ 
+ def get_focused_window_position():
+-    """Fallback: get focused window position from Hyprland."""
++    """Der Rueckfall: die Lage des fokussierten Fensters, aus Hyprland."""
+     try:
+         result = subprocess.run(['hyprctl', 'activewindow', '-j'],
+                               capture_output=True, text=True, timeout=1)
+         if result.returncode == 0:
+             import json as j
+             data = j.loads(result.stdout)
+-            # Return position inside the window (offset from top-left)
++            # Ein Punkt INNERHALB des Fensters, gemessen von seiner
++            # linken oberen Ecke
+             return {"x": data["at"][0] + 100, "y": data["at"][1] + 100}
+     except:
+         pass
+     return None
+ 
+ if __name__ == "__main__":
+-    # Try AT-SPI first (native Wayland apps)
++    # Zuerst AT-SPI, das trifft die Wayland-eigenen Anwendungen
+     pos = get_caret_atspi()
+ 
+-    # Fallback to focused window position
++    # Sonst die Lage des fokussierten Fensters
+     if not pos:
+         pos = get_focused_window_position()
+ 
+diff -ruN a/helpers/collector.py b/helpers/collector.py
+--- a/helpers/collector.py	2026-08-03 21:09:42.000000000 +0200
++++ b/helpers/collector.py	2026-08-12 21:48:24.149388494 +0200
+@@ -1,7 +1,54 @@
+ #!/usr/bin/env python3
+-"""
+-Clipman - Custom Clipboard Manager Daemon
+-Ersetzt cliphist mit korrekter Multiline-Unterstuetzung
++# SPDX-License-Identifier: BSD-3-Clause
++#
++# Urspruenglich clipman-daemon.py von azzuriel, aus helpers/ des
++# hyprclipx-Baums. Urhebervermerk und Haftungsausschluss stehen in
++# plugins/LICENSE.
++"""Der Sammler hinter hyprclipx: was kopiert wurde, und wer danach fragt.
++
++WARUM DIESE DATEI SEIT DEM 12.08.2026 IM BAUM LIEGT
++    Weil ohne sie die Taste SUPER+SHIFT+V ein leeres Fenster oeffnet,
++    und zwar auf JEDER Installation, die ZepOS macht.
++
++    Die Kette ist kurz und war an genau einer Stelle offen. Das Fenster
++    (plugins/hyprclipx/src/ClipboardManager.cpp) fragt einen Socket:
++
++        /tmp/clipman.sock                 socket_path, aus der
++                                          erzeugten Konfiguration
++
++    Wer diesen Socket bedient, war niemand. Upstream legte den Sammler
++    ueber hyprpm.toml nach $HOME/.local/bin - ein pacman-Paket darf
++    unterhalb von ~ nichts besitzen (src/paths.py fuehrt das Argument),
++    also konnte packaging/zepos-hyprclipx ihn nicht ausliefern, und der
++    Kopf jenes Rezepts fuehrte das am 11.08.2026 als offenen Punkt.
++
++    Was STATTDESSEN in hyprland-universal-config.template stand:
++
++        exec-once = wl-paste --watch cliphist store
++
++    Das ist ein Sammler, und es ist der falsche. cliphist schreibt in
++    SEINE eigene Datenbank und macht keinen Socket auf; das Fenster
++    fragt weiter /tmp/clipman.sock und bekommt weiter keine Antwort.
++    GEMESSEN am 12.08.2026 auf der Maschine des Nutzers: der Prozess,
++    der den Socket haelt, ist von Hand nach ~/.local/bin gelegt worden
++    und traegt das Datum 23.06.2026 - auf einem frisch installierten
++    ZepOS gibt es ihn nicht.
++
++WAS AN DER UEBERNOMMENEN QUELLE GEAENDERT WURDE
++    Die Konfiguration. Sie stand als Wortverzeichnis im Kopf, mit
++    max_items = 700 und dem Socketpfad darin - zwei Zahlen, die
++    src/templates/hyprclipx-config.template ebenfalls schreibt, und
++    zwar mit max_items = 50. Zwei Antworten auf eine Frage, und die
++    Haelfte, die die Oberflaeche fragt, war nicht die, die den Verlauf
++    beschnitt: das Fenster holte 50 und der Sammler hob 700 auf.
++
++    Jetzt liest der Sammler dieselbe erzeugte Datei wie beide
++    C++-Haelften. Die Grundwerte bleiben stehen, weil die Datei fehlen
++    kann und der Verlauf dann trotzdem gesammelt werden soll.
++
++    Und das Datenverzeichnis: $XDG_DATA_HOME statt ~/.local/share fest
++    verdrahtet, damit ein Test es umlenken kann, ohne das echte
++    anzufassen.
+ """
+ 
+ import os
+@@ -17,21 +64,93 @@
+ import signal
+ import re
+ from pathlib import Path
+-from datetime import datetime
+ 
+-# Konfiguration
++
++def _config_dir() -> Path:
++    """Dasselbe Verzeichnis, das ConfigParser.cpp::getConfigDir() bildet."""
++    xdg = os.environ.get("XDG_CONFIG_HOME")
++    base = Path(xdg) if xdg else Path.home() / ".config"
++    return base / "hyprclipx"
++
++
++def _data_dir() -> Path:
++    xdg = os.environ.get("XDG_DATA_HOME")
++    base = Path(xdg) if xdg else Path.home() / ".local/share"
++    return base / "hyprclipx"
++
++
++def _read_generated_config() -> dict:
++    """Die erzeugte Datei, so gelesen, wie ConfigParser.cpp sie liest.
++
++    Also: Zeilen, ein Gleichheitszeichen, Abschnittsueberschriften und
++    Kommentare weg, Anfuehrungszeichen weg. KEIN INI-Parser aus der
++    Standardbibliothek - configparser wuerde bei einem Schluessel vor
++    der ersten Ueberschrift eine Ausnahme werfen, und die C++-Haelfte
++    tut das nicht. Zwei Leser derselben Datei, die sich bei einer
++    kaputten Zeile verschieden verhalten, sind schlimmer als einer.
++    """
++    values: dict[str, str] = {}
++    path = _config_dir() / "config"
++    try:
++        text = path.read_text(encoding="utf-8")
++    except OSError:
++        return values
++    for line in text.splitlines():
++        line = line.strip()
++        if not line or line[0] in "#[":
++            continue
++        key, sep, value = line.partition("=")
++        if not sep:
++            continue
++        value = value.strip()
++        if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
++            value = value[1:-1]
++        values[key.strip()] = value
++    return values
++
++
++def _as_int(values: dict, key: str, fallback: int) -> int:
++    """Eine Zahl aus der erzeugten Datei, mit geduldetem "px".
++
++    Wortgleich zu parseInt() in beiden ConfigParser.cpp, und aus
++    demselben Grund: bei Unfug bleibt der Grundwert stehen, statt eine
++    0 zu werden. Ein max_items von 0 waere ein Verlauf, der jeden
++    Eintrag sofort wieder wegwirft.
++    """
++    raw = values.get(key, "").strip()
++    if raw.endswith("px"):
++        raw = raw[:-2].strip()
++    try:
++        return int(raw)
++    except ValueError:
++        return fallback
++
++
++# Konfiguration. Die Grundwerte gelten, solange die erzeugte Datei
++# fehlt; load_config() zieht darueber, was in ihr steht.
+ CONFIG = {
+-    "max_items": 700,
++    "max_items": 50,
+     "max_image_size_mb": 10,
+     "preview_length": 100,
+     "socket_path": "/tmp/clipman.sock",
+-    "data_dir": Path.home() / ".local/share/clipman",
++    "data_dir": _data_dir(),
+     "sensitive_ttl_seconds": 60,
+ }
+ 
+ 
++def load_config() -> None:
++    """CONFIG aus der erzeugten Datei nachziehen."""
++    values = _read_generated_config()
++    if "socket_path" in values:
++        CONFIG["socket_path"] = values["socket_path"]
++    CONFIG["max_items"] = _as_int(values, "max_items", CONFIG["max_items"])
++    CONFIG["preview_length"] = _as_int(values, "preview_chars",
++                                       CONFIG["preview_length"])
++    CONFIG["data_dir"] = _data_dir()
++
++
+ class ClipmanDB:
+-    """SQLite database handler for clipboard metadata"""
++    """Die SQLite-Datenbank: was zu einer Zeile bekannt ist."""
+ 
+     def __init__(self, db_path):
+         self.db_path = db_path
+@@ -64,13 +183,13 @@
+     def add_item(self, item_uuid, content_type, preview, content_hash,
+                  file_path, thumb_path, byte_size, line_count):
+         with self.lock:
+-            # Check duplicate by hash
++            # Steht derselbe Inhalt schon drin? Verglichen wird die Pruefsumme.
+             existing = self.conn.execute(
+                 "SELECT uuid FROM items WHERE content_hash = ?", (content_hash,)
+             ).fetchone()
+ 
+             if existing:
+-                # Update timestamp of existing item (move to top)
++                # Dann nur die Zeit neu setzen - die Zeile wandert nach oben
+                 self.conn.execute(
+                     "UPDATE items SET created_at = CURRENT_TIMESTAMP WHERE uuid = ?",
+                     (existing['uuid'],)
+@@ -78,7 +197,7 @@
+                 self.conn.commit()
+                 return existing['uuid']
+ 
+-            # Insert new item
++            # Sonst eine neue Zeile
+             self.conn.execute('''
+                 INSERT INTO items (uuid, content_type, preview, content_hash,
+                                  file_path, thumb_path, byte_size, line_count)
+@@ -128,7 +247,7 @@
+             ).fetchone()
+ 
+             if row:
+-                # Delete associated files
++                # Die Dateien, die an dieser Zeile haengen, mit loeschen
+                 for path in [row['file_path'], row['thumb_path']]:
+                     if path:
+                         full_path = CONFIG["data_dir"] / path
+@@ -161,7 +280,8 @@
+             self.conn.commit()
+ 
+     def _cleanup(self):
+-        """Remove oldest non-favorite items when exceeding max_items"""
++        """Die aeltesten Zeilen ohne Stern wegwerfen, sobald es mehr als
++        max_items sind."""
+         count = self.conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
+ 
+         if count > CONFIG["max_items"]:
+@@ -172,7 +292,9 @@
+             ''', (excess,)).fetchall()
+ 
+             for row in old_items:
+-                # Call without lock since we're already in _cleanup (called from add_item which has lock)
++                # Ohne Sperre: _cleanup laeuft aus add_item heraus, und
++                # das haelt sie schon. Ein zweites Nehmen waere ein
++                # Verklemmer.
+                 item_uuid = row['uuid']
+                 file_row = self.conn.execute(
+                     "SELECT file_path, thumb_path FROM items WHERE uuid = ?",
+@@ -195,7 +317,7 @@
+ 
+ 
+ class ContentStore:
+-    """File-based content storage for clipboard data"""
++    """Der Inhalt selbst, als Datei auf der Platte."""
+ 
+     def __init__(self, base_path):
+         self.base_path = Path(base_path)
+@@ -204,7 +326,7 @@
+         (self.base_path / "thumbs").mkdir(parents=True, exist_ok=True)
+ 
+     def store_text(self, content):
+-        """Store text content and return (uuid, file_path, hash)"""
++        """Text ablegen. Zurueck kommen uuid, Pfad und Pruefsumme."""
+         item_uuid = str(uuid.uuid4())
+         content_bytes = content.encode('utf-8')
+         content_hash = hashlib.sha256(content_bytes).hexdigest()
+@@ -214,7 +336,8 @@
+         return item_uuid, file_path, content_hash
+ 
+     def store_image(self, image_bytes):
+-        """Store image content and return (uuid, file_path, thumb_path, hash)"""
++        """Ein Bild ablegen. Zurueck kommen uuid, Pfad, Pfad des
++        Vorschaubildes und Pruefsumme."""
+         item_uuid = str(uuid.uuid4())
+         content_hash = hashlib.sha256(image_bytes).hexdigest()
+         file_path = f"images/{item_uuid}.png"
+@@ -223,7 +346,7 @@
+         full_path = self.base_path / file_path
+         full_path.write_bytes(image_bytes)
+ 
+-        # Generate thumbnail
++        # Das Vorschaubild
+         try:
+             from PIL import Image
+             import io
+@@ -231,16 +354,17 @@
+             img.thumbnail((100, 65))
+             img.save(self.base_path / thumb_path)
+         except ImportError:
+-            # Pillow not installed, skip thumbnail
++            # Ohne Pillow gibt es kein Vorschaubild - der Eintrag
++            # selbst bleibt trotzdem
+             thumb_path = None
+         except Exception:
+-            # Image processing failed
++            # Das Bild liess sich nicht verarbeiten
+             thumb_path = None
+ 
+         return item_uuid, file_path, thumb_path, content_hash
+ 
+     def get_content(self, file_path):
+-        """Retrieve content from file"""
++        """Den Inhalt wieder aus der Datei holen."""
+         full_path = self.base_path / file_path
+         if not full_path.exists():
+             return None
+@@ -251,7 +375,7 @@
+ 
+ 
+ class ClipboardWatcher:
+-    """Watch clipboard changes via wl-paste"""
++    """Was in der Zwischenablage passiert, ueber wl-paste beobachtet."""
+ 
+     def __init__(self, on_text, on_image):
+         self.on_text = on_text
+@@ -263,9 +387,9 @@
+ 
+     def start(self):
+         self.running = True
+-        # Watch text clipboard
++        # Auf Text in der Zwischenablage warten
+         threading.Thread(target=self._watch_text, daemon=True).start()
+-        # Watch image clipboard
++        # Und auf Bilder
+         threading.Thread(target=self._watch_image, daemon=True).start()
+ 
+     def stop(self):
+@@ -275,7 +399,8 @@
+ 
+     @staticmethod
+     def _run_with_timeout(cmd, timeout=2):
+-        """Run subprocess with proper cleanup on timeout (no zombie cat processes)"""
++        """Einen Unterprozess starten und ihn bei Zeitueberschreitung
++        wirklich beenden - sonst bleiben cat-Prozesse als Zombies stehen."""
+         proc = subprocess.Popen(
+             cmd,
+             stdout=subprocess.PIPE,
+@@ -291,7 +416,7 @@
+             return None, None
+ 
+     def _watch_text(self):
+-        """Poll for text clipboard changes"""
++        """Auf neuen Text warten."""
+         while self.running:
+             try:
+                 rc, stdout = self._run_with_timeout(["wl-paste", "--no-newline"])
+@@ -309,12 +434,12 @@
+                             pass
+ 
+             except Exception as e:
+-                print(f"Text watcher error: {e}", file=sys.stderr)
++                print(f"Fehler beim Beobachten des Textes: {e}", file=sys.stderr)
+ 
+             time.sleep(0.5)
+ 
+     def _watch_image(self):
+-        """Poll for image clipboard changes"""
++        """Auf neue Bilder warten."""
+         while self.running:
+             try:
+                 rc, stdout = self._run_with_timeout(["wl-paste", "--type", "image/png"])
+@@ -327,13 +452,13 @@
+                         self.on_image(stdout)
+ 
+             except Exception as e:
+-                print(f"Image watcher error: {e}", file=sys.stderr)
++                print(f"Fehler beim Beobachten der Bilder: {e}", file=sys.stderr)
+ 
+             time.sleep(0.5)
+ 
+ 
+ class IPCServer:
+-    """UNIX socket server for IPC commands"""
++    """Der Unix-Socket, ueber den das Fenster fragt."""
+ 
+     def __init__(self, socket_path, db, store):
+         self.socket_path = socket_path
+@@ -345,7 +470,7 @@
+     def start(self):
+         self.running = True
+ 
+-        # Remove old socket if exists
++        # Einen liegengebliebenen Socket wegraeumen
+         if os.path.exists(self.socket_path):
+             os.unlink(self.socket_path)
+ 
+@@ -354,7 +479,7 @@
+         self.server.listen(5)
+         self.server.settimeout(1.0)  # Allow periodic check for shutdown
+ 
+-        print(f"Clipman IPC server listening on {self.socket_path}")
++        print(f"Der Sammler hoert auf {self.socket_path}")
+ 
+         while self.running:
+             try:
+@@ -368,7 +493,7 @@
+                 continue
+             except Exception as e:
+                 if self.running:
+-                    print(f"Server error: {e}", file=sys.stderr)
++                    print(f"Fehler im Sammler: {e}", file=sys.stderr)
+ 
+     def stop(self):
+         self.running = False
+@@ -404,7 +529,7 @@
+                 limit=args.get("limit", 50)
+             )
+ 
+-            # Enrich items with full paths and normalized fields
++            # Die Zeilen um volle Pfade und einheitliche Felder ergaenzen
+             for item in items:
+                 if item.get("thumb_path"):
+                     item["thumb"] = str(CONFIG["data_dir"] / item["thumb_path"])
+@@ -426,7 +551,8 @@
+                     return {"status": "error", "error": "Content file not found"}
+ 
+                 if row["content_type"] == "text":
+-                    # Strip trailing whitespace from each line + trailing empty lines
++                    # Leerraum am Zeilenende weg, und leere Zeilen am
++                    # Ende des Textes ebenfalls
+                     if isinstance(content, str):
+                         content = '\n'.join(line.rstrip() for line in content.split('\n'))
+                         content = content.rstrip('\n')
+@@ -467,9 +593,15 @@
+ 
+ 
+ def is_sensitive(text: str) -> bool:
+-    """Detect password-like strings via heuristics.
+-    Rules: single-line, 8-128 chars, no spaces, >=3 of 4 char classes.
+-    Excludes: paths, URLs, hex colors, emails, pure numbers."""
++    """Sieht dieser Text aus wie ein Passwort?
++
++    Die Regeln: eine einzige Zeile, 8 bis 128 Zeichen, kein Leerzeichen,
++    und mindestens drei der vier Zeichenklassen. Ausgenommen sind Pfade,
++    Adressen, Farben als Hexzahl, Mailadressen und reine Zahlen.
++
++    Es ist eine Vermutung und kein Beweis - deshalb wird die Zeile nicht
++    abgelehnt, sondern nach sensitive_ttl_seconds wieder geloescht.
++    """
+     if '\n' in text or '\r' in text:
+         return False
+     t = text.strip()
+@@ -477,18 +609,18 @@
+         return False
+     if ' ' in t:
+         return False
+-    # Exclude known patterns
+-    if t.startswith(('/','~')):          # file paths
++    # Was ganz sicher kein Geheimnis ist
++    if t.startswith(('/','~')):          # Pfade
+         return False
+-    if re.match(r'https?://', t):        # URLs
++    if re.match(r'https?://', t):        # Adressen
+         return False
+-    if re.match(r'^#[0-9a-fA-F]{3,8}$', t):  # hex colors
++    if re.match(r'^#[0-9a-fA-F]{3,8}$', t):  # Farben als Hexzahl
+         return False
+-    if '@' in t and '.' in t.split('@')[-1]:  # emails
++    if '@' in t and '.' in t.split('@')[-1]:  # Mailadressen
+         return False
+-    if t.isdigit():                      # pure numbers
++    if t.isdigit():                      # reine Zahlen
+         return False
+-    # Count character classes
++    # Wie viele Zeichenklassen kommen vor?
+     classes = sum([
+         bool(re.search(r'[A-Z]', t)),
+         bool(re.search(r'[a-z]', t)),
+@@ -498,25 +630,28 @@
+     return classes >= 3
+ 
+ 
+-# Active sensitive-item timers (uuid -> Timer)
++# Die laufenden Uhren fuer heikle Zeilen, uuid -> Timer
+ _sensitive_timers: dict[str, threading.Timer] = {}
+ 
+ 
+ def main():
+-    """Main entry point"""
+-    print("Clipman - Custom Clipboard Manager")
+-    print(f"Data directory: {CONFIG['data_dir']}")
++    """Der Einstieg."""
++    load_config()
++    print("hyprclipx - der Sammler")
++    print(f"Datenverzeichnis: {CONFIG['data_dir']}")
++    print(f"Socket: {CONFIG['socket_path']}")
++    print(f"max_items: {CONFIG['max_items']}")
+ 
+-    # Setup data directory
++    # Das Datenverzeichnis anlegen
+     CONFIG["data_dir"].mkdir(parents=True, exist_ok=True)
+ 
+-    # Initialize components
++    # Die Teile
+     db = ClipmanDB(CONFIG["data_dir"] / "clipman.db")
+     store = ContentStore(CONFIG["data_dir"])
+     server = IPCServer(CONFIG["socket_path"], db, store)
+ 
+     def on_text(text):
+-        """Handle new text clipboard content"""
++        """Neuer Text in der Zwischenablage."""
+         item_uuid, file_path, content_hash = store.store_text(text)
+         sensitive = is_sensitive(text)
+         if sensitive:
+@@ -528,24 +663,26 @@
+             item_uuid, "text", preview, content_hash,
+             file_path, None, len(text.encode('utf-8')), line_count
+         )
+-        print(f"Stored text: {preview[:50]}...")
++        print(f"Text gemerkt: {preview[:50]} ...")
+ 
+         if sensitive:
+             def auto_delete():
+-                # Skip if user marked as favorite in the meantime
++                # Hat der Nutzer die Zeile inzwischen mit einem Stern
++                # versehen, bleibt sie stehen
+                 with db.lock:
+                     row = db.conn.execute(
+                         "SELECT is_favorite FROM items WHERE uuid = ?",
+                         (stored_uuid,)
+                     ).fetchone()
+                     if row and row['is_favorite']:
+-                        print(f"Sensitive item {stored_uuid[:8]} kept (favorite)")
++                        print(f"Heikle Zeile {stored_uuid[:8]} bleibt - sie traegt einen Stern")
+                         return
+                 db.delete_item(stored_uuid)
+                 _sensitive_timers.pop(stored_uuid, None)
+-                print(f"Sensitive item {stored_uuid[:8]} auto-deleted after {CONFIG['sensitive_ttl_seconds']}s")
++                print(f"Heikle Zeile {stored_uuid[:8]} nach {CONFIG['sensitive_ttl_seconds']} s geloescht")
+ 
+-            # Cancel previous timer for same uuid (duplicate re-copy)
++            # Wurde dieselbe Zeile noch einmal kopiert, laeuft schon eine
++            # Uhr dafuer - die alte wird abgestellt
+             old = _sensitive_timers.pop(stored_uuid, None)
+             if old:
+                 old.cancel()
+@@ -553,12 +690,12 @@
+             t.daemon = True
+             t.start()
+             _sensitive_timers[stored_uuid] = t
+-            print(f"Sensitive item detected, auto-delete in {CONFIG['sensitive_ttl_seconds']}s")
++            print(f"Heikle Zeile erkannt, wird in {CONFIG['sensitive_ttl_seconds']} s geloescht")
+ 
+     def on_image(image_bytes):
+-        """Handle new image clipboard content"""
++        """Ein neues Bild in der Zwischenablage."""
+         if len(image_bytes) > CONFIG["max_image_size_mb"] * 1024 * 1024:
+-            print(f"Image too large ({len(image_bytes)} bytes), skipping")
++            print(f"Bild zu gross ({len(image_bytes)} Byte) - nicht gemerkt")
+             return
+ 
+         item_uuid, file_path, thumb_path, content_hash = store.store_image(image_bytes)
+@@ -567,15 +704,15 @@
+             item_uuid, "image", preview, content_hash,
+             file_path, thumb_path, len(image_bytes), 0
+         )
+-        print(f"Stored image: {preview}")
++        print(f"Bild gemerkt: {preview}")
+ 
+-    # Start clipboard watcher
++    # Die Beobachtung der Zwischenablage starten
+     watcher = ClipboardWatcher(on_text, on_image)
+     watcher.start()
+ 
+-    # Handle shutdown signals
++    # Das Ende, wenn ein Signal kommt
+     def shutdown(signum, frame):
+-        print("\nShutting down...")
++        print("\nEnde.")
+         watcher.stop()
+         server.stop()
+         sys.exit(0)
+@@ -583,7 +720,7 @@
+     signal.signal(signal.SIGINT, shutdown)
+     signal.signal(signal.SIGTERM, shutdown)
+ 
+-    # Start IPC server (blocking)
++    # Der Socket-Dienst. Er kehrt nicht zurueck.
+     try:
+         server.start()
+     except KeyboardInterrupt:
+diff -ruN a/include/hyprclipx/ClipboardEntry.hpp b/include/hyprclipx/ClipboardEntry.hpp
+--- a/include/hyprclipx/ClipboardEntry.hpp	2026-08-03 21:09:42.000000000 +0200
++++ b/include/hyprclipx/ClipboardEntry.hpp	2026-08-12 21:35:04.879467305 +0200
+@@ -1,5 +1,5 @@
+ #pragma once
+-// Data structure matching clipman-daemon's JSON response
++// Der Aufbau einer Zeile, so wie clipman-daemon sie als JSON schickt
+ 
+ #include <string>
+ 
+@@ -7,9 +7,9 @@
+ 
+ struct ClipboardEntry {
+     std::string uuid;
+-    std::string type;         // "text" or "image"
++    std::string type;         // "text" oder "image"
+     std::string preview;
+-    std::string thumb;        // Full path to thumbnail (images only)
++    std::string thumb;        // Voller Pfad zum Vorschaubild (nur Bilder)
+     bool favorite = false;
+     std::string createdAt;
+ };
+diff -ruN a/include/hyprclipx/ClipboardManager.hpp b/include/hyprclipx/ClipboardManager.hpp
+--- a/include/hyprclipx/ClipboardManager.hpp	2026-08-03 21:09:42.000000000 +0200
++++ b/include/hyprclipx/ClipboardManager.hpp	2026-08-12 21:35:11.819515418 +0200
+@@ -1,6 +1,7 @@
+ #pragma once
+-// IPC client for clipman-daemon (Unix socket on /tmp/clipman.sock)
+-// Mirrors AGS's execAsync("python3 clipman-client.py ...") calls
++// Die Seite, die den clipman-daemon anspricht (Unix-Socket auf
++// /tmp/clipman.sock). Sie ersetzt die Aufrufe, die AGS als
++// execAsync("python3 clipman-client.py ...") gemacht hat.
+ 
+ #include "ClipboardEntry.hpp"
+ #include "Config.hpp"
+@@ -13,7 +14,7 @@
+ public:
+     explicit ClipboardManager(const Config& config);
+ 
+-    // Daemon commands (matching clipman-client.py)
++    // Die Befehle des Dienstes, dieselben wie in clipman-client.py
+     std::vector<ClipboardEntry> fetchItems(const std::string& filter = "all",
+                                            const std::string& search = "",
+                                            int limit = 50);
+@@ -26,10 +27,10 @@
+ private:
+     const Config& m_config;
+ 
+-    // Send command to daemon, return JSON response
++    // Einen Befehl schicken und die Antwort als JSON zurueckgeben
+     std::string sendCommand(const std::string& cmd, const std::string& argsJson = "{}");
+ 
+-    // Parse JSON list response into entries
++    // Die Antwortliste in Eintraege uebersetzen
+     std::vector<ClipboardEntry> parseListResponse(const std::string& json);
+ };
+ 
+diff -ruN a/include/hyprclipx/ClipboardRenderer.hpp b/include/hyprclipx/ClipboardRenderer.hpp
+--- a/include/hyprclipx/ClipboardRenderer.hpp	2026-08-03 21:09:42.000000000 +0200
++++ b/include/hyprclipx/ClipboardRenderer.hpp	2026-08-12 21:35:34.116669003 +0200
+@@ -1,6 +1,7 @@
+ #pragma once
+-// HyprClipX UI — compact horizontal clipboard manager
+-// GTK4 Layer-Shell window — standalone Wayland client (NOT in compositor!)
++// hyprclipx-ui - der Zwischenablage-Verlauf von ZepOS
++// Ein GTK4-Layer-Shell-Fenster als eigener Wayland-Client - NICHT im
++// Compositor!
+ 
+ #include "Forward.hpp"
+ #include "Config.hpp"
+@@ -30,7 +31,7 @@
+     Config& m_config;
+     ClipboardManager& m_manager;
+ 
+-    // GTK widgets
++    // Die Widgets
+     GtkWidget* m_window       = nullptr;
+     GtkWidget* m_listBox      = nullptr;
+     GtkWidget* m_favBox       = nullptr;
+@@ -40,7 +41,7 @@
+     GtkWidget* m_countLabel   = nullptr;
+     GtkWidget* m_filterButtons[4] = {};
+ 
+-    // State
++    // Der Zustand
+     std::string m_filter = "all";
+     std::string m_search;
+     std::vector<ClipboardEntry> m_items;
+@@ -49,29 +50,29 @@
+     std::atomic<bool> m_visible{false};
+     std::string m_previousWindowAddress;
+ 
+-    // UI assembly
++    // Der Aufbau der Oberflaeche
+     void buildUI();
+     GtkWidget* createSidebarHeader();
+     GtkWidget* createSidebarBody();
+     GtkWidget* createSearchBar();
+     GtkWidget* createHintBar();
+ 
+-    // List management
++    // Die Liste
+     void updateList();
+     void updateSelection(int newIndex);
+     void updateFilterIcons();
+     void scrollToIndex(int index);
+     void updateOffsetOverlay();
+ 
+-    // Smart paste (1:1 from AGS)
++    // Das Einfuegen, das weiss, wohin es einfuegt (1:1 aus AGS)
+     void pasteItem(const std::string& uuid, const std::string& itemType);
+ 
+-    // Window helpers
++    // Das Fenster selbst
+     void repositionWindow();
+     void loadCaretOffset();
+     void saveCaretOffset();
+ 
+-    // Window detection (1:1 from AGS)
++    // Welches Fenster vorher den Fokus hatte (1:1 aus AGS)
+     struct WindowInfo {
+         std::string windowClass, initialClass, title, initialTitle, address;
+         int pid = 0;
+@@ -82,15 +83,29 @@
+     bool isKittyTerminal(const WindowInfo& win);
+     bool isBrowser(const WindowInfo& win);
+ 
+-    // Keyboard handler
++    // Die Tastatur
+     static gboolean onKeyPress(GtkEventControllerKey*, guint, guint,
+                                GdkModifierType, gpointer);
+ 
+-    // Helpers
++    // Handwerkszeug
+     void removeAllChildren(GtkWidget* box);
+     std::string exec(const std::string& cmd);
+ 
+-    static constexpr int ITEM_HEIGHT  = 28;
++    // ITEM_HEIGHT = 28 stand hier und ist am 11.08.2026 entfallen.
++    //
++    // Es war die ANGENOMMENE Hoehe einer Listenzeile, mit der
++    // scrollToIndex() gerechnet hat. Solange das Aussehen im
++    // uebersetzten Objekt stand, war die Annahme richtig. Jetzt kommt
++    // es aus einem erzeugten Stylesheet, dessen Schrift dem Regler aus
++    // src/sizes.py folgt - eine Zeile ist bei Faktor 1.85 rund
++    // doppelt so hoch, und die Liste haette beim Blaettern mit den
++    // Pfeiltasten um denselben Faktor daneben gescrollt.
++    //
++    // Statt die Zahl zu einer zweiten Einstellung zu machen, wird sie
++    // gemessen: gtk_widget_compute_bounds() sagt, wie hoch die Zeile
++    // WIRKLICH ist. So macht es der Starter in
++    // plugins/hyprlaunch/src/LauncherRenderer.cpp seit jeher, und eine
++    // gemessene Hoehe kann bei keinem Faktor falsch sein.
+     static constexpr int OFFSET_STEP  = 20;
+ };
+ 
+diff -ruN a/include/hyprclipx/Config.hpp b/include/hyprclipx/Config.hpp
+--- a/include/hyprclipx/Config.hpp	2026-08-03 21:09:42.000000000 +0200
++++ b/include/hyprclipx/Config.hpp	2026-08-12 21:28:08.450215428 +0200
+@@ -1,28 +1,141 @@
++// SPDX-License-Identifier: BSD-3-Clause
++//
++// Urspruenglich hyprclipx von azzuriel, Commit
++// 1eed6ee90a1c3e48ec76510377f8b05f27a4e650. Urhebervermerk und
++// Haftungsausschluss stehen in plugins/LICENSE.
++//
++// WAS ZEPOS HIER GEAENDERT HAT (11.08.2026)
++//     Dieselbe Aenderung wie in plugins/hyprlaunch/include/hyprlaunch/
++//     Config.hpp, mit derselben Begruendung: die Fenstermasse und die
++//     Abstaende stehen nicht mehr im uebersetzten Objekt, sondern
++//     kommen aus der erzeugten Datei ~/.config/hyprclipx/config. Was
++//     Text umschliesst, muss dem Regler aus src/sizes.py folgen
++//     koennen, und ein Wert im Objekt kann das nicht.
++//
++//     Die Grundwerte bleiben stehen, weil die Datei fehlen kann und
++//     SUPER+SHIFT+V dann trotzdem eine Zwischenablage aufmachen soll.
+ #pragma once
++#include <map>
+ #include <string>
+ 
+ namespace hyprclipx {
+ 
++// Wo das Paket den Schreibmarken-Helfer ablegt.
++//
++// WARUM /usr/lib UND NICHT /usr/bin
++//     Weil es kein Programm ist, das ein Mensch aufruft: es druckt ein
++//     Koordinatenpaar als JSON und wird von genau einer Stelle
++//     gestartet, dem geforkten Kind in Globals.cpp. Was in /usr/bin
++//     liegt, steht in jeder Vervollstaendigung jeder Shell und
++//     verspricht damit, dass man es benutzen kann.
++//
++// WARUM ES TROTZDEM UEBERSCHREIBBAR IST
++//     Weil derselbe Quellbaum ohne Paket laeuft - wer aus dem
++//     Arbeitsbaum baut, hat kein /usr/lib/hyprclipx. Der Schluessel
++//     caret_helper in ~/.config/hyprclipx/config nimmt dann den Pfad
++//     dorthin, wo die Datei wirklich liegt.
++inline constexpr const char* CARET_HELPER_DEFAULT =
++    "/usr/lib/hyprclipx/caret-position.py";
++
+ struct Config {
+-    // Window dimensions (compact horizontal layout)
++    // Wie viel vom Schirm ein Fenster hoechstens nimmt, das sich VOR
++    // etwas anderes stellt.
++    //
++    // DER ABDRUCK EINER ZAHL, DIE IN src/sizes.py STEHT
++    //     Dort heisst sie MEASURE_MODAL_SHARE und ist begruendet. Sie
++    //     ist mit Absicht KEIN Platzhalter, und sizes.py sagt warum:
++    //     "eine Anzahl und keine Laenge ... gelesen wird sie nicht von
++    //     einer Vorlage, sondern von den Programmen, die ein solches
++    //     Fenster aufziehen". Dies hier ist eines dieser Programme; die
++    //     anderen sind menu/zepos_menu/window.py,
++    //     src/templates/ags-overlay-utils.template und
++    //     plugins/hyprlaunch/include/hyprlaunch/Config.hpp.
++    //     tests/src/test_modal_rule.py haelt alle vier gegen die
++    //     Groessentabelle und faellt um, sobald einer wandert.
++    //
++    // WARUM SIE ALS constexpr IM OBJEKT STEHEN DARF UND DIE MASSE NICHT
++    //     Der Kopf dieser Datei erklaert, warum windowWidth und
++    //     windowHeight den Weg durch ~/.config/hyprclipx/config nehmen:
++    //     sie umschliessen Text, also muss der Regler aus src/sizes.py
++    //     sie bewegen koennen. Ein ANTEIL des Schirms bewegt sich mit
++    //     keinem Regler - er bleibt die Haelfte, ob die Schrift nun 13
++    //     oder 24 Punkte hat. Er ist keine Einstellung, sondern eine
++    //     Regel, und Regeln stehen im Programm.
++    static constexpr double MODAL_SHARE = 0.5;
++
++    // Die Fenstermasse (kompakte, liegende Anordnung)
+     int windowWidth = 600;
+     int windowHeight = 220;
+ 
+-    // Caret offset (persisted in user-settings.json)
++    // Wieviele Zeichen der Vorschautext einer Zeile hoechstens zeigt.
++    //
++    // Eine ANZAHL und keine Groesse: sie steht hier statt in
++    // src/sizes.py, weil ein Zeichen bei jedem Faktor ein Zeichen
++    // bleibt. Was sich mit dem Faktor aendert, ist die Breite, die
++    // sechzig Zeichen einnehmen - und die ist genau deshalb keine
++    // zweite Einstellung.
++    int previewChars = 60;
++
++    // Der Versatz zur Schreibmarke (steht in user-settings.json)
+     int offsetX = 0;
+     int offsetY = 0;
+ 
+-    // Behavior
++    // Verhalten
+     int maxItems = 50;
+     std::string hotkey = "SUPER V";
+ 
+-    // Paths
+-    std::string clipmanClient;    // path to clipman-client.py
+-    std::string caretHelper;      // path to get-caret-position.py
+-    std::string userSettingsFile;  // path to user-settings.json
++    // Pfade
++    //
++    // WAS SICH AM 12.08.2026 GEAENDERT HAT
++    //     clipmanClient stand hier und zeigte auf clipman-client.py.
++    //     GEMESSEN: zwei Zuweisungen, NULL Leser - die C++-Haelfte
++    //     spricht den Socket in ClipboardManager::sendCommand() selbst
++    //     an. Geloescht statt kommentiert; plugins/hyprclipx/src/
++    //     Globals.cpp fuehrt die Messung.
++    //
++    //     caretHelper und userSettingsFile wurden an ZWEI Stellen
++    //     gesetzt, in Globals.cpp und in main_ui.cpp, beide Male auf
++    //     einen Pfad unter ~. Jetzt setzt loadConfig() sie, also die
++    //     eine Stelle, durch die beide Haelften ohnehin gehen - und der
++    //     Helfer liegt dort, wo ein Paket ihn ablegen darf.
++    std::string caretHelper = CARET_HELPER_DEFAULT;
++    std::string userSettingsFile;  // <configdir>/settings.json
++    std::string styleSheet;        // ~/.config/hyprclipx/style.css
+     std::string caretPosFile = "/tmp/clipboard-manager-caret-pos";
+     std::string prevWindowFile = "/tmp/clipboard-manager-prev-window";
+     std::string socketPath = "/tmp/clipman.sock";
++
++    // Die Abstandsleiter aus src/sizes.py, Sprosse -> Pixel. Warum sie
++    // nicht aus dem Stylesheet kommen kann, steht im Config.hpp von
++    // hyprlaunch: GtkBox nimmt ihren Abstand als Konstruktorargument,
++    // und GTK4 hat dafuer keinen Selektor.
++    std::map<int, int> spacing;
++
++    int space(int rung) const {
++        auto found = spacing.find(rung);
++        return found == spacing.end() ? rung : found->second;
++    }
++
++    // Der Platz, den dieses Fenster auf einer Schirmkante dieser Laenge
++    // ueberhaupt beanspruchen darf.
++    //
++    // DER NAME IST IN BEIDEN EIGENEN PROGRAMMEN DERSELBE
++    //     plugins/hyprlaunch/include/hyprlaunch/Config.hpp fuehrt
++    //     dieselbe Funktion unter demselben Namen. Zwei Namen fuer eine
++    //     Regel sind der Anfang von zwei Regeln.
++    //
++    // WARUM ES DEN VERLAUF UEBERHAUPT TRIFFT, GERECHNET am 12.08.2026
++    //     Die Grundwerte 600x220 lassen die Grenze nie greifen, aber
++    //     sie sind Grundwerte: STYLE_CLIPBOARD_WIDTH und
++    //     STYLE_CLIPBOARD_HEIGHT folgen dem Regler, und bei dem
++    //     ausgelieferten Faktor 1.85 schreibt die erzeugte Datei
++    //     1110x407. Auf einem 1366x768-Notebook sind die Deckel 683 und
++    //     384 - beide greifen. Das Fenster wuchs also mit der Schrift
++    //     ueber den Schirm hinaus, und zwar genau auf den Geraeten, auf
++    //     denen es am wenigsten Platz gibt.
++    int modalCap(int screenEdge) const {
++        return static_cast<int>(screenEdge * MODAL_SHARE);
++    }
+ };
+ 
+ } // namespace hyprclipx
+diff -ruN a/include/hyprclipx/ConfigParser.hpp b/include/hyprclipx/ConfigParser.hpp
+--- a/include/hyprclipx/ConfigParser.hpp	2026-08-03 21:09:42.000000000 +0200
++++ b/include/hyprclipx/ConfigParser.hpp	2026-08-11 23:10:39.932740739 +0200
+@@ -1,21 +1,31 @@
++// SPDX-License-Identifier: BSD-3-Clause
++//
++// Urspruenglich hyprclipx von azzuriel, Commit
++// 1eed6ee90a1c3e48ec76510377f8b05f27a4e650. plugins/LICENSE.
++//
++// WAS ZEPOS HIER GELOESCHT HAT (11.08.2026)
++//   * `bool saveConfig(const Config&)`. Es schrieb die
++//     Konfigurationsdatei zurueck, und die wird jetzt erzeugt - ein
++//     Programm, das seine erzeugte Konfiguration ueberschreibt, wirft
++//     beim naechsten Start weg, was der Regler in src/sizes.py gesagt
++//     hat. Aufgerufen wurde es von nichts (`grep -rn saveConfig
++//     plugins/`, null Treffer ausser Deklaration und Definition).
++//   * `std::string getDataDir()`. Ebenfalls ohne Aufrufer, und es hatte
++//     eine Nebenwirkung: es legte ~/.local/share/hyprclipx an. Ein
++//     Verzeichnis, das eine ungenutzte Funktion nebenbei erzeugt, ist
++//     ein Verzeichnis, das niemand erklaeren kann.
+ #pragma once
+-// Single Responsibility: Configuration file parsing
+-
+ #include "Config.hpp"
+ #include <string>
+ 
+ namespace hyprclipx {
+ 
+-// Load config from ~/.config/hypr/hyprclipx.toml
+ Config loadConfig();
+ 
+-// Save config to file
+-bool saveConfig(const Config& config);
+-
+-// Get config file path
++// Die erzeugte Datei, die loadConfig() liest.
+ std::string getConfigPath();
+ 
+-// Get data directory path
+-std::string getDataDir();
++// Das Verzeichnis, in dem sie und das Stylesheet liegen.
++std::string getConfigDir();
+ 
+ } // namespace hyprclipx
+diff -ruN a/include/hyprclipx/Globals.hpp b/include/hyprclipx/Globals.hpp
+--- a/include/hyprclipx/Globals.hpp	2026-08-03 21:09:42.000000000 +0200
++++ b/include/hyprclipx/Globals.hpp	2026-08-12 21:35:16.635548718 +0200
+@@ -14,11 +14,15 @@
+ void cleanupGlobals();
+ void reloadConfig();
+ 
+-// Capture caret/window using Hyprland APIs, then fork+exec UI command
+-// (Matching ags-toggle-clipboard.template: capture BEFORE opening window)
++// Schreibmarke und Fenster ueber die Schnittstellen von Hyprland
++// festhalten, dann die Oberflaeche ueber fork+exec ansprechen.
++// Festgehalten wird VOR dem Oeffnen des Fensters, genau wie
++// ags-toggle-clipboard.template es gemacht hat: danach liegt der Fokus
++// beim Verlauf, und die Schreibmarke waere die falsche.
+ void captureAndSendUI(const std::string& cmd);
+ 
+-// Send command to UI without caret capture (e.g., hide)
++// Einen Befehl an die Oberflaeche schicken, ohne die Schreibmarke
++// festzuhalten (etwa "hide")
+ void sendUICommand(const std::string& cmd);
+ 
+ } // namespace hyprclipx
+diff -ruN a/src/ClipboardManager.cpp b/src/ClipboardManager.cpp
+--- a/src/ClipboardManager.cpp	2026-08-03 21:09:42.000000000 +0200
++++ b/src/ClipboardManager.cpp	2026-08-12 21:40:30.775595023 +0200
+@@ -1,5 +1,6 @@
+-// IPC client for clipman-daemon via Unix socket
+-// Replaces AGS's execAsync("python3 clipman-client.py ...") calls
++// Die Seite, die den clipman-daemon ueber seinen Unix-Socket
++// anspricht. Sie ersetzt die Aufrufe, die AGS als
++// execAsync("python3 clipman-client.py ...") gemacht hat.
+ 
+ #include "hyprclipx/ClipboardManager.hpp"
+ #include <sys/socket.h>
+@@ -15,7 +16,7 @@
+ }
+ 
+ // ============================================================================
+-// Unix Socket IPC (matching clipman-client.py send_command)
++// Der Unix-Socket, so wie send_command in clipman-client.py ihn spricht
+ // ============================================================================
+ 
+ std::string ClipboardManager::sendCommand(const std::string& cmd, const std::string& argsJson) {
+@@ -26,7 +27,7 @@
+     addr.sun_family = AF_UNIX;
+     strncpy(addr.sun_path, m_config.socketPath.c_str(), sizeof(addr.sun_path) - 1);
+ 
+-    // Timeout (matching clipman-client.py: 5 seconds)
++    // Die Wartezeit, dieselbe wie in clipman-client.py: fuenf Sekunden
+     struct timeval tv{5, 0};
+     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+@@ -36,11 +37,11 @@
+         return "";
+     }
+ 
+-    // Send JSON request (matching clipman-client.py format)
++    // Die Anfrage als JSON, in der Form von clipman-client.py
+     std::string request = "{\"cmd\":\"" + cmd + "\",\"args\":" + argsJson + "}";
+     send(sock, request.c_str(), request.size(), 0);
+ 
+-    // Read response
++    // Die Antwort lesen
+     char buf[65536];
+     ssize_t n = recv(sock, buf, sizeof(buf) - 1, 0);
+     close(sock);
+@@ -53,7 +54,7 @@
+ }
+ 
+ // ============================================================================
+-// Daemon Commands
++// Die Befehle des Dienstes
+ // ============================================================================
+ 
+ std::vector<ClipboardEntry> ClipboardManager::fetchItems(const std::string& filter,
+@@ -61,7 +62,7 @@
+                                                           int limit) {
+     std::string args = "{\"filter\":\"" + filter + "\"";
+     if (!search.empty()) {
+-        // Escape quotes in search
++        // Anfuehrungszeichen im Suchtext maskieren
+         std::string escaped = search;
+         size_t pos = 0;
+         while ((pos = escaped.find('"', pos)) != std::string::npos) {
+@@ -107,7 +108,8 @@
+ }
+ 
+ // ============================================================================
+-// JSON Parsing (minimal, for clipman-daemon responses only)
++// JSON lesen - das Noetigste, und nur fuer die Antworten des
++// clipman-daemon
+ // ============================================================================
+ 
+ static std::string extractJsonString(const std::string& json, const std::string& key) {
+@@ -116,13 +118,13 @@
+     if (pos == std::string::npos) return "";
+     pos += needle.size();
+ 
+-    // Skip whitespace
++    // Leerraum ueberspringen
+     while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
+ 
+     if (pos >= json.size()) return "";
+ 
+     if (json[pos] == '"') {
+-        // String value
++        // Eine Zeichenkette
+         pos++;
+         std::string result;
+         while (pos < json.size() && json[pos] != '"') {
+@@ -143,7 +145,7 @@
+ 
+     if (json[pos] == 'n') return "";  // null
+ 
+-    // Number or boolean - read until delimiter
++    // Eine Zahl oder ein Wahrheitswert - bis zum naechsten Trennzeichen
+     std::string result;
+     while (pos < json.size() && json[pos] != ',' && json[pos] != '}' && json[pos] != ']') {
+         result += json[pos++];
+@@ -154,17 +156,17 @@
+ std::vector<ClipboardEntry> ClipboardManager::parseListResponse(const std::string& json) {
+     std::vector<ClipboardEntry> items;
+ 
+-    // Check status
++    // Hat es geklappt?
+     if (json.find("\"ok\"") == std::string::npos) return items;
+ 
+-    // Find data array
++    // Die Liste finden
+     size_t dataPos = json.find("\"data\":");
+     if (dataPos == std::string::npos) return items;
+ 
+     size_t arrayStart = json.find('[', dataPos);
+     if (arrayStart == std::string::npos) return items;
+ 
+-    // Split into objects by finding matching braces
++    // In Objekte zerlegen, ueber Klammerzaehlung
+     int depth = 0;
+     size_t objStart = 0;
+     for (size_t i = arrayStart; i < json.size(); i++) {
+diff -ruN a/src/ClipboardRenderer.cpp b/src/ClipboardRenderer.cpp
+--- a/src/ClipboardRenderer.cpp	2026-08-03 21:09:42.000000000 +0200
++++ b/src/ClipboardRenderer.cpp	2026-08-12 21:43:36.381719434 +0200
+@@ -1,5 +1,7 @@
+-// HyprClipX UI — compact horizontal clipboard manager
+-// GTK4 Layer-Shell window — standalone Wayland client (NOT in compositor!)
++// hyprclipx-ui - der Zwischenablage-Verlauf von ZepOS, ein
++// GTK4-Layer-Shell-Fenster
++// Ein GTK4-Layer-Shell-Fenster als eigener Wayland-Client - NICHT im
++// Compositor!
+ 
+ #include "hyprclipx/ClipboardRenderer.hpp"
+ #include "hyprclipx/ClipboardManager.hpp"
+@@ -15,7 +17,7 @@
+ 
+ namespace hyprclipx {
+ 
+-// ── Terminal identifiers (1:1 from AGS) ─────────────────────────────────────
++// ── Woran ein Terminal zu erkennen ist (1:1 aus AGS) ────────────────────────
+ static const std::vector<std::string> TERMINAL_IDENTIFIERS = {
+     "kitty", "alacritty", "foot", "wezterm", "konsole",
+     "gnome-terminal", "xterm", "urxvt", "terminator", "tilix",
+@@ -23,189 +25,67 @@
+     "hyper", "tabby", "contour", "cool-retro-term", "claude"
+ };
+ 
+-// ── Filter definitions (SSOT) ───────────────────────────────────────────────
++// ── Die Filter, an genau einer Stelle aufgeschrieben ────────────────────────
+ static const std::string FILTER_NAMES[] = {"all", "favorites", "text", "image"};
+ static const char* FILTER_ICONS[] = {"\xe2\x8a\x9b", "\xe2\x98\x86", "\xf0\x9d\x90\x93", "\xf0\x9f\x96\xbc"};
+ 
+-// ── Browser identifiers (SSOT) ─────────────────────────────────────────────
++// ── Woran ein Browser zu erkennen ist, an genau einer Stelle ───────────────
+ static const std::vector<std::string> BROWSER_IDENTIFIERS = {
+     "firefox", "chrome", "chromium", "brave", "vivaldi",
+     "opera", "zen", "floorp", "librewolf", "edge"
+ };
+ 
+-// ── CSS — compact horizontal layout, HyprZones dark theme ───────────────────
+-static const char* CLIPBOARD_CSS = R"CSS(
+-.ClipboardManager { background: transparent; }
+-
+-.cm-root {
+-  background: #0a0a0a;
+-  border: 1px solid #2a2a2a;
+-}
+-
+-/* ── Sidebar ── */
+-.cm-sidebar-header {
+-  background: #0e0e0e;
+-  border-right: 1px solid #1a1a1a;
+-  border-bottom: 1px solid #1a1a1a;
+-  padding: 2px;
+-  min-width: 36px;
+-}
+-
+-.cm-sidebar-body {
+-  background: #0e0e0e;
+-  border-right: 1px solid #1a1a1a;
+-  padding: 2px;
+-  min-width: 36px;
+-}
+-
+-.cm-sidebar-icon {
+-  min-width: 32px;
+-  min-height: 28px;
+-  padding: 2px;
+-  border-radius: 0;
+-  border: 1px solid transparent;
+-  background: transparent;
+-  color: #4a5a5a;
+-  font-size: 13px;
+-}
+-.cm-sidebar-icon:hover {
+-  background: #1a1a1a;
+-  border-color: #2a3a2a;
+-  color: #7a9a7a;
+-}
+-.cm-sidebar-icon.active {
+-  background: #1a2a1a;
+-  border-color: #3a6a3a;
+-  color: #8aba8a;
+-}
+-
+-.cm-sidebar-sep {
+-  background: #1a1a1a;
+-  min-height: 1px;
+-  margin: 3px 4px;
+-}
+-
+-.cm-count {
+-  font-size: 9px;
+-  font-family: "Fira Code", monospace;
+-  color: #3a4a4a;
+-  padding: 2px;
+-}
+-
+-/* ── Search ── */
+-.cm-search {
+-  background: #111111;
+-  border-bottom: 1px solid #1a1a1a;
+-  padding: 4px 8px;
+-}
+-.cm-search label {
+-  color: #3a4a3a;
+-  font-size: 12px;
+-}
+-.cm-search-input {
+-  background: transparent;
+-  border: none;
+-  color: #8a9a9a;
+-  font-family: "Fira Code", monospace;
+-  font-size: 11px;
+-  caret-color: #3a6a3a;
+-}
+-.cm-search-input:focus { outline: none; }
+-
+-/* ── Item list ── */
+-.cm-scroll { min-height: 120px; }
+-.cm-list { padding: 2px 4px; }
+-
+-.cm-item {
+-  padding: 3px 8px;
+-  border-radius: 0;
+-  border: 1px solid transparent;
+-  background: transparent;
+-}
+-.cm-item:hover {
+-  background: #161616;
+-  border-color: #1a2a1a;
+-}
+-.cm-item.selected {
+-  background: rgba(42, 90, 42, 0.25);
+-  border-color: #3a6a3a;
+-}
+-.cm-item.selected:hover {
+-  background: rgba(58, 106, 58, 0.25);
+-}
+-
+-.cm-triangle {
+-  font-size: 9px;
+-  color: #2a3a3a;
+-  min-width: 10px;
+-}
+-.cm-item.selected .cm-triangle {
+-  color: #5a9a5a;
+-}
+-
+-.cm-preview {
+-  font-family: "Fira Code", monospace;
+-  font-size: 11px;
+-  color: #7a8a8a;
+-}
+-.cm-item.selected .cm-preview {
+-  color: #9aaa9a;
+-}
+-
+-.cm-fav-column {
+-  border-left: 1px solid #1a1a1a;
+-  min-width: 26px;
+-  padding: 2px 0;
+-}
+-
+-.cm-fav-indicator {
+-  font-size: 10px;
+-  color: #2a3a3a;
+-  min-width: 26px;
+-  padding: 3px 0;
+-  border: 1px solid transparent;
+-  border-radius: 0;
+-  background: transparent;
+-}
+-.cm-fav-indicator:hover {
+-  background: transparent;
+-  border-color: transparent;
+-}
+-.cm-fav-indicator.starred {
+-  color: #f9e2af;
+-}
+-
+-.cm-img-indicator {
+-  font-size: 9px;
+-  color: #3a5a5a;
+-  margin-right: 4px;
+-}
++// ── Das Stylesheet ──────────────────────────────────────────────
++//
++// HIER STANDEN 168 ZEILEN CSS (11.08.2026)
++//     Upstream trug sein Aussehen als `static const char*
++//     CLIPBOARD_CSS` im uebersetzten Objekt. GEZAEHLT an Commit
++//     1eed6ee: 37 Farbliterale in EINUNDZWANZIG Toenen, dazu drei
++//     rgba(); "Fira Code" an fuenf Stellen; zehn Schriftgroessen;
++//     vierzehn Abstandsregeln. Einundzwanzig Toene sind mehr, als
++//     src/brand.py fuer den ganzen Schreibtisch kennt - kein einziger
++//     davon konnte je aus der Marke kommen.
++//
++//     Zur Schrift steht die genaue Lage im Kopf von
++//     plugins/hyprlaunch/src/LauncherRenderer.cpp: "Fira Code" ist
++//     installiert, aber die Kette dahinter fehlte, und dieses Fenster
++//     zeichnet mit Stern, Dreieck und Bildsymbol noch mehr Zeichen,
++//     die Fira Code nicht hat.
++//
++//     Jetzt kommt es aus ~/.config/hyprclipx/style.css, das
++//     src/styles/hyprclipx-style.template erzeugt.
++//
++// WARUM DER LADER HIER NOCH EINMAL STEHT
++//     Wortgleich zu plugins/hyprlaunch/src/LauncherRenderer.cpp. Die
++//     beiden Programme teilen keine Bibliothek und sollen keine
++//     bekommen; die Begruendung steht im ConfigParser von hyprclipx.
++static void loadStyleSheet(const std::string& path) {
++    GtkCssProvider* css = gtk_css_provider_new();
+ 
+-/* ── Hint bar ── */
+-.cm-hints {
+-  background: #0a0a0a;
+-  border-top: 1px solid #1a1a1a;
+-  padding: 2px 8px;
+-}
+-.cm-hint {
+-  font-size: 9px;
+-  font-family: "Fira Code", monospace;
+-  color: #2a3a3a;
+-}
++    g_signal_connect(css, "parsing-error",
++        G_CALLBACK(+[](GtkCssProvider*, GtkCssSection* section,
++                       const GError* error, gpointer) {
++            g_autofree char* where = gtk_css_section_to_string(section);
++            g_printerr("hyprclipx-ui: %s: %s\n", where, error->message);
++        }), nullptr);
++
++    if (!g_file_test(path.c_str(), G_FILE_TEST_EXISTS)) {
++        g_printerr("hyprclipx-ui: %s fehlt - die Zwischenablage "
++                   "erscheint ungestylt.\n"
++                   "  zepos-generate -hyprclipx-style schreibt die Datei.\n",
++                   path.c_str());
++        g_object_unref(css);
++        return;
++    }
+ 
+-/* ── Offset overlay ── */
+-.cm-offset-overlay {
+-  background: rgba(42, 90, 42, 0.85);
+-  color: #8a9a9a;
+-  font-size: 9px;
+-  font-family: "Fira Code", monospace;
+-  padding: 1px 6px;
+-  border: 1px solid #3a6a3a;
+-  margin: 4px;
++    gtk_css_provider_load_from_path(css, path.c_str());
++    gtk_style_context_add_provider_for_display(
++        gdk_display_get_default(), GTK_STYLE_PROVIDER(css),
++        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
++    g_object_unref(css);
+ }
+-)CSS";
+ 
+-// ── Ctor / Dtor ─────────────────────────────────────────────────────────────
++// ── Anfang und Ende ─────────────────────────────────────────────────────────
+ 
+ ClipboardRenderer::ClipboardRenderer(Config& config, ClipboardManager& manager)
+     : m_config(config), m_manager(manager) {}
+@@ -214,7 +94,7 @@
+     if (m_window) { gtk_window_destroy(GTK_WINDOW(m_window)); m_window = nullptr; }
+ }
+ 
+-// ── Helpers ─────────────────────────────────────────────────────────────────
++// ── Handwerkszeug ───────────────────────────────────────────────────────────
+ 
+ std::string ClipboardRenderer::exec(const std::string& cmd) {
+     std::array<char, 4096> buf;
+@@ -233,20 +113,22 @@
+     return s;
+ }
+ 
+-// ── Initialize ──────────────────────────────────────────────────────────────
++// ── Der Aufbau ──────────────────────────────────────────────────────────────
+ 
+ void ClipboardRenderer::initialize() {
+     loadCaretOffset();
+ 
+-    GtkCssProvider* css = gtk_css_provider_new();
+-    gtk_css_provider_load_from_string(css, CLIPBOARD_CSS);
+-    gtk_style_context_add_provider_for_display(
+-        gdk_display_get_default(), GTK_STYLE_PROVIDER(css),
+-        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+-    g_object_unref(css);
++    loadStyleSheet(m_config.styleSheet);
+ 
+     m_window = gtk_window_new();
+-    gtk_window_set_title(GTK_WINDOW(m_window), "HyprClipX");
++    // Der Titel, den ein Layer-Shell-Fenster traegt: kein Fenstertitel auf dem Schirm, aber die Antwort von
++    // `hyprctl layers` und das, was eine Vorlesehilfe ansagt.
++    //
++    // Hier stand 'HyprClipX', der Produktname des Baums, aus dem diese
++    // Quelle kommt. Er ist nicht die CSS-Klasse zwei Zeilen weiter
++    // unten - die bindet dieses Programm an sein eigenes Stylesheet
++    // und bleibt deshalb, wie sie ist.
++    gtk_window_set_title(GTK_WINDOW(m_window), "ZepOS Zwischenablage");
+     gtk_window_set_default_size(GTK_WINDOW(m_window),
+                                 m_config.windowWidth, m_config.windowHeight);
+ 
+@@ -292,13 +174,32 @@
+         }), this);
+ }
+ 
+-// ── UI Assembly ─────────────────────────────────────────────────────────────
++// DIE ABSTAENDE ZWISCHEN DEN KINDERN EINER GtkBox STEHEN AUF DER
++// LEITER, UND ZWEI VON IHNEN MUSSTEN DAFUER GERUNDET WERDEN
++//     Upstream hatte hier 1, 2, 4 und 6. Die Leiter aus src/sizes.py
++//     hat die Sprossen 2, 4, 8, 12, 16, 20, 24; gerundet wird
++//     kaufmaennisch auf das Vielfache von vier, mit der 2 als einziger
++//     halber Sprosse - genau die Regel, mit der src/sizes.py seine elf
++//     gemessenen Stylesheet-Werte auf sieben Sprossen gebracht hat.
++//
++//         1  ->  2   die halbe Sprosse. Nicht 0: es ist der
++//                    Haarabstand zwischen zwei Zeilen der Liste, und
++//                    ohne ihn stossen sie aneinander.
++//         2  ->  2   unveraendert
++//         4  ->  4   unveraendert
++//         6  ->  8   kaufmaennisch aufgerundet, wie 6 -> 8 in
++//                    src/sizes.py
++//
++//     Das ist der Unterschied zwischen "diese beiden Kaesten haben
++//     zufaellig denselben Abstand" und "sie stehen auf derselben
++//     Sprosse" - und nur der zweite ueberlebt das naechste Anfassen.
++// ── Der Aufbau der Oberflaeche ──────────────────────────────────────────────
+ //
+ //  ╭────┬────────────────────────────────────────────────╮
+ //  │ 📋 │ 🔍 …                                           │
+ //  ├────┼────────────────────────────────────────────────┤
+-//  │ ⊛  │ ▸ item text preview...                      ★  │
+-//  │ ☆  │   another entry...                          ☆  │
++//  │ ⊛  │ ▸ Vorschau der Zeile ...                    ★  │
++//  │ ☆  │   die naechste Zeile ...                    ☆  │
+ //  │ 𝐓  │   ...                                       ☆  │
+ //  │ 🖼  │                                                │
+ //  │    │                                                │
+@@ -308,12 +209,13 @@
+ //   ↑↓ ⏎ ⌫ ⇥ ⎋ ⌘⌥↕
+ 
+ void ClipboardRenderer::buildUI() {
+-    // Root: vertical (header-row | body-row | hints)
+-    // Split into rows so sidebar buttons align exactly with list items
++    // Der Rumpf, senkrecht: Kopfzeile, Rumpfzeile, Tastenzeile.
++    // In ZEILEN geteilt, damit die Knoepfe der Seitenleiste genau auf
++    // der Hoehe der Listenzeilen sitzen.
+     GtkWidget* root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+     gtk_widget_add_css_class(root, "cm-root");
+ 
+-    // Header row: sidebar-header | search bar (same height)
++    // Die Kopfzeile: Kopf der Seitenleiste und Suchzeile, gleich hoch
+     GtkWidget* headerRow = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+     gtk_box_append(GTK_BOX(headerRow), createSidebarHeader());
+     GtkWidget* searchBar = createSearchBar();
+@@ -321,7 +223,8 @@
+     gtk_box_append(GTK_BOX(headerRow), searchBar);
+     gtk_box_append(GTK_BOX(root), headerRow);
+ 
+-    // Body row: sidebar-body | scrolled list (filter buttons align with items)
++    // Die Rumpfzeile: Seitenleiste und Liste. So stehen die
++    // Filterknoepfe auf einer Linie mit den Eintraegen.
+     GtkWidget* bodyRow = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+     gtk_widget_set_vexpand(bodyRow, TRUE);
+     gtk_box_append(GTK_BOX(bodyRow), createSidebarBody());
+@@ -333,15 +236,15 @@
+     gtk_widget_set_hexpand(m_scrolled, TRUE);
+     gtk_widget_add_css_class(m_scrolled, "cm-scroll");
+ 
+-    // Scroll content: [item-list | fav-column]
++    // Im Bildlauf: die Liste und daneben die Spalte mit den Sternen
+     GtkWidget* scrollContent = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+ 
+-    m_listBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
++    m_listBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, m_config.space(2));
+     gtk_widget_add_css_class(m_listBox, "cm-list");
+     gtk_widget_set_hexpand(m_listBox, TRUE);
+     gtk_box_append(GTK_BOX(scrollContent), m_listBox);
+ 
+-    m_favBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
++    m_favBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, m_config.space(2));
+     gtk_widget_add_css_class(m_favBox, "cm-fav-column");
+     gtk_widget_set_vexpand(m_favBox, TRUE);
+     gtk_box_append(GTK_BOX(scrollContent), m_favBox);
+@@ -350,10 +253,10 @@
+     gtk_box_append(GTK_BOX(bodyRow), m_scrolled);
+     gtk_box_append(GTK_BOX(root), bodyRow);
+ 
+-    // Hint bar (full width)
++    // Die Tastenzeile, ueber die ganze Breite
+     gtk_box_append(GTK_BOX(root), createHintBar());
+ 
+-    // Overlay for offset indicator
++    // Die Anzeige des Versatzes liegt DARUEBER und schiebt nichts
+     GtkWidget* overlay = gtk_overlay_new();
+     gtk_overlay_set_child(GTK_OVERLAY(overlay), root);
+ 
+@@ -366,13 +269,13 @@
+ 
+     gtk_window_set_child(GTK_WINDOW(m_window), overlay);
+ 
+-    // Key handler
++    // Die Tastatur
+     GtkEventController* kc = gtk_event_controller_key_new();
+     g_signal_connect(kc, "key-pressed", G_CALLBACK(onKeyPress), this);
+     gtk_widget_add_controller(m_window, kc);
+ }
+ 
+-// ── Sidebar header (logo, shares row with search bar) ───────────────────────
++// ── Der Kopf der Seitenleiste: das Zeichen, auf Hoehe der Suchzeile ─────────
+ 
+ GtkWidget* ClipboardRenderer::createSidebarHeader() {
+     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+@@ -387,13 +290,13 @@
+     return box;
+ }
+ 
+-// ── Sidebar body (filter buttons, shares row with list) ─────────────────────
++// ── Der Rumpf der Seitenleiste: die Filterknoepfe, auf Hoehe der Liste ──────
+ 
+ GtkWidget* ClipboardRenderer::createSidebarBody() {
+-    GtkWidget* bar = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
++    GtkWidget* bar = gtk_box_new(GTK_ORIENTATION_VERTICAL, m_config.space(2));
+     gtk_widget_add_css_class(bar, "cm-sidebar-body");
+ 
+-    // Filter icons
++    // Die Filterzeichen
+     struct FilterData { ClipboardRenderer* self; int idx; };
+     for (int i = 0; i < 4; i++) {
+         GtkWidget* btn = gtk_button_new_with_label(FILTER_ICONS[i]);
+@@ -416,17 +319,17 @@
+         gtk_box_append(GTK_BOX(bar), btn);
+     }
+ 
+-    // Spacer
++    // Die Luecke, die alles Weitere nach unten drueckt
+     GtkWidget* spacer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+     gtk_widget_set_vexpand(spacer, TRUE);
+     gtk_box_append(GTK_BOX(bar), spacer);
+ 
+-    // Separator
++    // Der Trennstrich
+     GtkWidget* sep = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+     gtk_widget_add_css_class(sep, "cm-sidebar-sep");
+     gtk_box_append(GTK_BOX(bar), sep);
+ 
+-    // Clear button
++    // Der Knopf, der den Verlauf leert
+     GtkWidget* clearBtn = gtk_button_new_with_label("\xf0\x9f\x97\x91");
+     gtk_widget_set_can_focus(clearBtn, FALSE);
+     gtk_widget_add_css_class(clearBtn, "cm-sidebar-icon");
+@@ -438,7 +341,7 @@
+         }), this);
+     gtk_box_append(GTK_BOX(bar), clearBtn);
+ 
+-    // Item count
++    // Wie viele Zeilen es gerade sind
+     m_countLabel = gtk_label_new("0");
+     gtk_widget_add_css_class(m_countLabel, "cm-count");
+     gtk_box_append(GTK_BOX(bar), m_countLabel);
+@@ -446,17 +349,18 @@
+     return bar;
+ }
+ 
+-// ── Search bar ──────────────────────────────────────────────────────────────
++// ── Die Suchzeile ───────────────────────────────────────────────────────────
+ 
+ GtkWidget* ClipboardRenderer::createSearchBar() {
+-    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
++    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, m_config.space(8));
+     gtk_widget_add_css_class(box, "cm-search");
+ 
+     GtkWidget* icon = gtk_label_new("\xe2\x97\x8e");
+     gtk_box_append(GTK_BOX(box), icon);
+ 
+     m_searchEntry = gtk_entry_new();
+-    gtk_entry_set_placeholder_text(GTK_ENTRY(m_searchEntry), "filter search...");
++    gtk_entry_set_placeholder_text(GTK_ENTRY(m_searchEntry),
++                                   "Verlauf durchsuchen ...");
+     gtk_widget_set_hexpand(m_searchEntry, TRUE);
+     gtk_widget_set_can_focus(m_searchEntry, FALSE);
+     gtk_widget_add_css_class(m_searchEntry, "cm-search-input");
+@@ -474,7 +378,7 @@
+     return box;
+ }
+ 
+-// ── Hint bar (keyboard shortcuts) ───────────────────────────────────────────
++// ── Die Tastenzeile am unteren Rand ─────────────────────────────────────────
+ 
+ GtkWidget* ClipboardRenderer::createHintBar() {
+     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+@@ -496,7 +400,7 @@
+     return box;
+ }
+ 
+-// ── List management ─────────────────────────────────────────────────────────
++// ── Die Liste ───────────────────────────────────────────────────────────────
+ 
+ void ClipboardRenderer::removeAllChildren(GtkWidget* box) {
+     GtkWidget* child = gtk_widget_get_first_child(box);
+@@ -516,7 +420,8 @@
+     for (size_t i = 0; i < m_items.size(); i++) {
+         const auto& item = m_items[i];
+ 
+-        // Item button (selection highlight only here)
++        // Die Zeile selbst. Die Hervorhebung der Auswahl haengt NUR
++        // hier - eine zweite Stelle waere eine zweite Wahrheit.
+         GtkWidget* btn = gtk_button_new();
+         gtk_widget_set_can_focus(btn, FALSE);
+         gtk_widget_add_css_class(btn, "cm-item");
+@@ -524,35 +429,36 @@
+         if (static_cast<int>(i) == m_selectedIndex)
+             gtk_widget_add_css_class(btn, "selected");
+ 
+-        GtkWidget* hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
++        GtkWidget* hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL,
++                                      m_config.space(4));
+ 
+-        // Selection triangle
++        // Das Dreieck, das auf die gewaehlte Zeile zeigt
+         GtkWidget* triangle = gtk_label_new(
+             static_cast<int>(i) == m_selectedIndex ? "\xe2\x96\xb8" : " ");
+         gtk_widget_add_css_class(triangle, "cm-triangle");
+         gtk_box_append(GTK_BOX(hbox), triangle);
+ 
+-        // Image indicator
++        // Das Zeichen, das eine Zeile als Bild ausweist
+         if (item.type == "image") {
+             GtkWidget* imgIcon = gtk_label_new("\xe2\x96\xa0");
+             gtk_widget_add_css_class(imgIcon, "cm-img-indicator");
+             gtk_box_append(GTK_BOX(hbox), imgIcon);
+         }
+ 
+-        // Preview text
++        // Der Vorschautext
+         GtkWidget* preview = gtk_label_new(
+             item.preview.empty() ? (item.type == "image" ? item.thumb.c_str() : "[Empty]")
+                                  : item.preview.c_str());
+         gtk_widget_set_hexpand(preview, TRUE);
+         gtk_label_set_xalign(GTK_LABEL(preview), 0);
+-        gtk_label_set_max_width_chars(GTK_LABEL(preview), 60);
++        gtk_label_set_max_width_chars(GTK_LABEL(preview), m_config.previewChars);
+         gtk_label_set_ellipsize(GTK_LABEL(preview), PANGO_ELLIPSIZE_END);
+         gtk_widget_add_css_class(preview, "cm-preview");
+         gtk_box_append(GTK_BOX(hbox), preview);
+ 
+         gtk_button_set_child(GTK_BUTTON(btn), hbox);
+ 
+-        // Click → paste
++        // Ein Klick fuegt ein
+         struct ClickData { ClipboardRenderer* self; std::string uuid; std::string type; };
+         auto* cd = new ClickData{this, item.uuid, item.type};
+         g_signal_connect(btn, "clicked",
+@@ -563,7 +469,9 @@
+ 
+         gtk_box_append(GTK_BOX(m_listBox), btn);
+ 
+-        // Fav star (separate column, same widget type as cm-item = same height)
++        // Der Stern steht in einer EIGENEN Spalte und ist derselbe
++        // Widget-Typ wie eine Listenzeile - nur so sind beide gleich
++        // hoch und stehen auf einer Linie.
+         GtkWidget* star = gtk_button_new_with_label(
+             item.favorite ? "\xe2\x98\x85" : "\xe2\x98\x86");
+         gtk_widget_set_can_focus(star, FALSE);
+@@ -572,7 +480,7 @@
+         gtk_box_append(GTK_BOX(m_favBox), star);
+     }
+ 
+-    // Update count
++    // Die Zahl unten in der Seitenleiste nachziehen
+     if (m_countLabel) {
+         gtk_label_set_text(GTK_LABEL(m_countLabel),
+                            std::to_string(m_items.size()).c_str());
+@@ -588,7 +496,7 @@
+         if (idx == m_selectedIndex || idx == newIndex) {
+             if (idx == m_selectedIndex) gtk_widget_remove_css_class(btn, "selected");
+             if (idx == newIndex)        gtk_widget_add_css_class(btn, "selected");
+-            // Update triangle indicator
++            // Das Dreieck auf die neue Zeile setzen
+             GtkWidget* hbox = gtk_button_get_child(GTK_BUTTON(btn));
+             if (hbox) {
+                 GtkWidget* tri = gtk_widget_get_first_child(hbox);
+@@ -605,13 +513,28 @@
+ }
+ 
+ void ClipboardRenderer::scrollToIndex(int index) {
+-    if (!m_scrolled) return;
++    if (!m_scrolled || !m_listBox || index < 0) return;
+     GtkAdjustment* vadj = gtk_scrolled_window_get_vadjustment(
+         GTK_SCROLLED_WINDOW(m_scrolled));
+     if (!vadj) return;
++
++    // Die Zeile, zu der gescrollt werden soll - abgezaehlt, weil die
++    // Liste eine GtkBox ist und keine Modellansicht mit Index.
++    GtkWidget* row = gtk_widget_get_first_child(m_listBox);
++    for (int i = 0; i < index && row; i++)
++        row = gtk_widget_get_next_sibling(row);
++    if (!row) return;
++
++    // GEMESSEN statt angenommen, siehe ClipboardRenderer.hpp. Schlaegt
++    // die Messung fehl - das Fenster hatte noch keinen Frame -, wird
++    // nicht gescrollt: die falsche Bewegung ist schlimmer als keine,
++    // weil sie die Auswahl aus dem Bild schiebt.
++    graphene_rect_t bounds;
++    if (!gtk_widget_compute_bounds(row, m_listBox, &bounds)) return;
++
+     double page = gtk_adjustment_get_page_size(vadj);
+-    double top = index * ITEM_HEIGHT;
+-    double bot = top + ITEM_HEIGHT;
++    double top = bounds.origin.y;
++    double bot = top + bounds.size.height;
+     double cur = gtk_adjustment_get_value(vadj);
+     if (bot > cur + page) gtk_adjustment_set_value(vadj, bot - page);
+     else if (top < cur)   gtk_adjustment_set_value(vadj, top);
+@@ -636,7 +559,7 @@
+     }
+ }
+ 
+-// ── Keyboard handler ────────────────────────────────────────────────────────
++// ── Die Tastatur ────────────────────────────────────────────────────────────
+ 
+ gboolean ClipboardRenderer::onKeyPress(GtkEventControllerKey*,
+                                         guint keyval, guint,
+@@ -644,7 +567,7 @@
+     auto* self = static_cast<ClipboardRenderer*>(data);
+     int count = static_cast<int>(self->m_items.size());
+ 
+-    // Super+Alt+Arrow: move window offset
++    // Super+Alt+Pfeil verschiebt das Fenster gegenueber der Schreibmarke
+     if ((state & GDK_SUPER_MASK) && (state & GDK_ALT_MASK)) {
+         int dx = 0, dy = 0;
+         if      (keyval == GDK_KEY_Left)  dx = -OFFSET_STEP;
+@@ -669,7 +592,7 @@
+         }
+     }
+ 
+-    // Ctrl+F: toggle favorite
++    // Strg+F setzt oder loescht den Stern
+     if ((state & GDK_CONTROL_MASK) && (keyval == GDK_KEY_f || keyval == GDK_KEY_F)) {
+         if (!self->m_items.empty() && self->m_selectedIndex < count) {
+             self->m_manager.toggleFavorite(self->m_items[self->m_selectedIndex].uuid);
+@@ -749,7 +672,7 @@
+     return FALSE;
+ }
+ 
+-// ── Smart paste (1:1 from AGS) ──────────────────────────────────────────────
++// ── Einfuegen, das weiss, wohin es einfuegt (1:1 aus AGS) ───────────────────
+ 
+ void ClipboardRenderer::pasteItem(const std::string& uuid, const std::string& itemType) {
+     gtk_widget_set_visible(m_window, FALSE);
+@@ -787,7 +710,7 @@
+     }).detach();
+ }
+ 
+-// ── Window detection (1:1 from AGS) ─────────────────────────────────────────
++// ── Welches Fenster vorher den Fokus hatte (1:1 aus AGS) ────────────────────
+ 
+ ClipboardRenderer::WindowInfo ClipboardRenderer::getActiveWindowInfo() {
+     WindowInfo info;
+@@ -856,12 +779,12 @@
+     return false;
+ }
+ 
+-// ── Positioning ─────────────────────────────────────────────────────────────
++// ── Wo das Fenster hinkommt und wie gross es dabei wird ─────────────────────
+ 
+ void ClipboardRenderer::repositionWindow() {
+     if (!m_window) return;
+ 
+-    // Parse caret position file: caretX,caretY[,monX,monY,monW,monH]
++    // Die Datei mit der Schreibmarke lesen: caretX,caretY[,monX,monY,monW,monH]
+     int cx = 400, cy = 400;
+     int monX = 0, monY = 0, monW = 0, monH = 0;
+     {
+@@ -875,7 +798,7 @@
+         }
+     }
+ 
+-    // If no monitor bounds from plugin, get them from GTK display
++    // Nennt die Compositor-Haelfte keinen Schirm, wird GDK gefragt
+     if (monW <= 0 || monH <= 0) {
+         GdkDisplay* display = gdk_display_get_default();
+         if (display) {
+@@ -885,7 +808,7 @@
+                 auto* mon = GDK_MONITOR(g_list_model_get_item(monitors, i));
+                 GdkRectangle geo;
+                 gdk_monitor_get_geometry(mon, &geo);
+-                // Find the monitor that contains (or is nearest to) the caret
++                // Der Schirm, auf dem die Schreibmarke steht
+                 if (cx >= geo.x && cx < geo.x + geo.width &&
+                     cy >= geo.y && cy < geo.y + geo.height) {
+                     monX = geo.x; monY = geo.y;
+@@ -893,7 +816,7 @@
+                     g_object_unref(mon);
+                     break;
+                 }
+-                // Track the first monitor as fallback
++                // Der erste bleibt als Rueckfall stehen
+                 if (i == 0) {
+                     monX = geo.x; monY = geo.y;
+                     monW = geo.width; monH = geo.height;
+@@ -903,7 +826,28 @@
+         }
+     }
+ 
+-    // Clamp caret to monitor bounds before applying offset
++    // Die Masse, die dieses Fenster auf DIESEM Schirm bekommt.
++    //
++    // WARUM DIE GRENZE HIER STEHT UND NICHT IN initialize()
++    //     Dort ist noch kein Schirm bekannt - der Verlauf geht dorthin
++    //     auf, wo die Schreibmarke steht, und die kann auf jedem der
++    //     angeschlossenen Schirme stehen. Erst hier ist er ausgesucht.
++    //     Und diese Funktion haengt an "map", laeuft also vor JEDEM
++    //     Aufgehen: wer den Verlauf auf dem Notebookschirm oeffnet und
++    //     dann auf dem grossen, bekommt zweimal die richtige Grenze.
++    //
++    // Die Begruendung fuer die Haelfte steht bei Config::modalCap().
++    int winW = m_config.windowWidth;
++    int winH = m_config.windowHeight;
++    if (monW > 0 && monH > 0) {
++        winW = std::min(winW, m_config.modalCap(monW));
++        winH = std::min(winH, m_config.modalCap(monH));
++        gtk_window_set_default_size(GTK_WINDOW(m_window), winW, winH);
++        gtk_widget_set_size_request(m_window, winW, winH);
++    }
++
++    // Die Schreibmarke auf den Schirm beschneiden, bevor der Versatz
++    // dazukommt
+     if (monW > 0 && monH > 0) {
+         cx = std::max(cx, monX);
+         cx = std::min(cx, monX + monW - 1);
+@@ -911,23 +855,24 @@
+         cy = std::min(cy, monY + monH - 1);
+     }
+ 
+-    int x = cx - m_config.windowWidth / 2 + m_config.offsetX;
+-    int y = cy - m_config.windowHeight / 2 + m_config.offsetY;
++    int x = cx - winW / 2 + m_config.offsetX;
++    int y = cy - winH / 2 + m_config.offsetY;
+ 
+-    // Clamp final window position to monitor bounds
++    // Die fertige Lage auf den Schirm beschneiden
+     if (monW > 0 && monH > 0) {
+         x = std::max(x, monX);
+         y = std::max(y, monY);
+-        x = std::min(x, monX + monW - m_config.windowWidth);
+-        y = std::min(y, monY + monH - m_config.windowHeight);
++        x = std::min(x, monX + monW - winW);
++        y = std::min(y, monY + monH - winH);
+     }
+ 
+-    // Layer-shell margins are relative to the monitor origin, not absolute
++    // Die Raender der Layer-Shell zaehlen ab dem Ursprung des Schirms und
++    // nicht absolut
+     gtk_layer_set_margin(GTK_WINDOW(m_window), GTK_LAYER_SHELL_EDGE_LEFT, x - monX);
+     gtk_layer_set_margin(GTK_WINDOW(m_window), GTK_LAYER_SHELL_EDGE_TOP, y - monY);
+ }
+ 
+-// ── Offset persistence ──────────────────────────────────────────────────────
++// ── Der Versatz, ueber die Sitzung hinaus gemerkt ───────────────────────────
+ 
+ void ClipboardRenderer::loadCaretOffset() {
+     if (m_config.userSettingsFile.empty()) return;
+diff -ruN a/src/ConfigParser.cpp b/src/ConfigParser.cpp
+--- a/src/ConfigParser.cpp	2026-08-03 21:09:42.000000000 +0200
++++ b/src/ConfigParser.cpp	2026-08-12 12:45:16.513201420 +0200
+@@ -1,43 +1,45 @@
+-// Configuration file parsing
++// SPDX-License-Identifier: BSD-3-Clause
++//
++// Urspruenglich hyprclipx von azzuriel, Commit
++// 1eed6ee90a1c3e48ec76510377f8b05f27a4e650. plugins/LICENSE.
++//
++// WAS ZEPOS HIER GEAENDERT HAT (11.08.2026)
++//   * Der Pfad: ~/.config/hyprclipx/config statt
++//     ~/.config/hypr/hyprclipx.toml. Der Grund steht im ConfigParser
++//     von hyprlaunch in voller Laenge - kurz: ~/.config/hypr gehoert
++//     Hyprland und ist voll erzeugter Dateien dieses Projekts, und ein
++//     eigenes Format dazwischen wird beim Aufraeumen erwischt.
++//   * saveConfig() und getDataDir() sind geloescht, siehe
++//     ConfigParser.hpp.
++//   * Die Abstandsleiter aus src/sizes.py wird gelesen.
++//   * parseInt() nimmt ein nachgestelltes "px" hin und weist alles
++//     andere zurueck, statt es wortlos zu 0 zu machen.
+ 
+ #include "hyprclipx/ConfigParser.hpp"
+ #include <fstream>
+ #include <sstream>
+ #include <cstdlib>
+-#include <filesystem>
+-
+-namespace fs = std::filesystem;
+ 
+ namespace hyprclipx {
+ 
+-std::string getConfigPath() {
++static const char* CONFIG_NAMESPACE = "hyprclipx";
++
++std::string getConfigDir() {
+     const char* xdgConfig = std::getenv("XDG_CONFIG_HOME");
+     std::string configDir;
+ 
+-    if (xdgConfig) {
++    if (xdgConfig && *xdgConfig) {
+         configDir = xdgConfig;
+     } else {
+         const char* home = std::getenv("HOME");
+         configDir = home ? std::string(home) + "/.config" : "/tmp";
+     }
+ 
+-    return configDir + "/hypr/hyprclipx.toml";
++    return configDir + "/" + CONFIG_NAMESPACE;
+ }
+ 
+-std::string getDataDir() {
+-    const char* xdgData = std::getenv("XDG_DATA_HOME");
+-    std::string dataDir;
+-
+-    if (xdgData) {
+-        dataDir = xdgData;
+-    } else {
+-        const char* home = std::getenv("HOME");
+-        dataDir = home ? std::string(home) + "/.local/share" : "/tmp";
+-    }
+-
+-    dataDir += "/hyprclipx";
+-    fs::create_directories(dataDir);
+-    return dataDir;
++std::string getConfigPath() {
++    return getConfigDir() + "/config";
+ }
+ 
+ static std::string trim(const std::string& str) {
+@@ -54,18 +56,50 @@
+     return v;
+ }
+ 
+-static int parseInt(const std::string& value) {
++// Wortgleich zu plugins/hyprlaunch/src/ConfigParser.cpp, und die
++// Begruendung fuer das geduldete "px" steht dort.
++//
++// WARUM ES HIER TROTZDEM EIN ZWEITES MAL STEHT
++//     Weil die beiden Programme keine gemeinsame Bibliothek haben und
++//     auch keine bekommen sollen: es sind zwei CMake-Projekte, zwei
++//     Pakete und zwei Namensraeume, und ein drittes Paket, das nichts
++//     enthaelt als vierzig Zeilen Zahlenlesen, waere eine
++//     Abhaengigkeit mehr fuer jede der beiden.
++//
++//     Die Vorgaengerfassung war upstreams `int parseInt(const
++//     std::string&)`, das bei Unfug eine 0 zurueckgab. Damit machte
++//     eine vertippte Zeile in der Konfiguration aus einem Fenster ein
++//     nulldimensionales, ohne ein Wort. Jetzt bleibt der Grundwert
++//     stehen, wenn ein Wert nicht lesbar ist.
++static bool parseInt(const std::string& value, int& out) {
++    std::string v = trim(value);
++    if (v.size() > 2 && v.compare(v.size() - 2, 2, "px") == 0)
++        v = trim(v.substr(0, v.size() - 2));
++    if (v.empty())
++        return false;
++
++    size_t consumed = 0;
++    int parsed = 0;
+     try {
+-        return std::stoi(trim(value));
++        parsed = std::stoi(v, &consumed);
+     } catch (...) {
+-        return 0;
++        return false;
+     }
++    if (consumed != v.size())
++        return false;
++
++    out = parsed;
++    return true;
+ }
+ 
+ Config loadConfig() {
+     Config config;
+-    std::string configPath = getConfigPath();
++    config.styleSheet = getConfigDir() + "/style.css";
++    // Beide Haelften kommen hier durch, also steht der Pfad hier und
++    // nicht zweimal daneben - siehe Config.hpp, Abschnitt "Paths".
++    config.userSettingsFile = getConfigDir() + "/settings.json";
+ 
++    std::string configPath = getConfigPath();
+     std::ifstream file(configPath);
+     if (!file.is_open()) {
+         return config;
+@@ -85,42 +119,47 @@
+         std::string key = trim(line.substr(0, eq));
+         std::string value = trim(line.substr(eq + 1));
+ 
+-        if (key == "window_width") config.windowWidth = parseInt(value);
+-        else if (key == "window_height") config.windowHeight = parseInt(value);
+-        else if (key == "offset_x") config.offsetX = parseInt(value);
+-        else if (key == "offset_y") config.offsetY = parseInt(value);
+-        else if (key == "max_items") config.maxItems = parseInt(value);
+-        else if (key == "hotkey") config.hotkey = parseString(value);
+-        else if (key == "socket_path") config.socketPath = parseString(value);
+-    }
+-
+-    return config;
+-}
++        if (key == "hotkey") {
++            config.hotkey = parseString(value);
++            continue;
++        }
++        if (key == "socket_path") {
++            config.socketPath = parseString(value);
++            continue;
++        }
++        // Der Schreibmarken-Helfer. Ohne diesen Schluessel bleibt der
++        // Grundwert aus Config.hpp stehen, also der Pfad, an den das
++        // Paket ihn legt.
++        if (key == "caret_helper") {
++            config.caretHelper = parseString(value);
++            continue;
++        }
+ 
+-bool saveConfig(const Config& config) {
+-    std::string configPath = getConfigPath();
++        // Eine Sprosse der Abstandsleiter, ueber den Namen erkannt und
++        // nicht ueber eine feste Liste - die Leiter steht in
++        // src/sizes.py, und eine zweite Aufzaehlung hier waere die
++        // Kopie, die beim naechsten Sprossenzuwachs stehen bleibt.
++        if (key.rfind("space_", 0) == 0) {
++            int rung = 0;
++            int pixels = 0;
++            if (parseInt(key.substr(6), rung) && parseInt(value, pixels))
++                config.spacing[rung] = pixels;
++            continue;
++        }
+ 
+-    // Ensure parent directory exists
+-    fs::create_directories(fs::path(configPath).parent_path());
++        int number = 0;
++        if (!parseInt(value, number))
++            continue;
+ 
+-    std::ofstream file(configPath);
+-    if (!file.is_open()) {
+-        return false;
++        if (key == "window_width") config.windowWidth = number;
++        else if (key == "window_height") config.windowHeight = number;
++        else if (key == "offset_x") config.offsetX = number;
++        else if (key == "offset_y") config.offsetY = number;
++        else if (key == "max_items") config.maxItems = number;
++        else if (key == "preview_chars") config.previewChars = number;
+     }
+ 
+-    file << "# HyprClipX Configuration\n\n";
+-    file << "[window]\n";
+-    file << "window_width = " << config.windowWidth << "\n";
+-    file << "window_height = " << config.windowHeight << "\n";
+-    file << "offset_x = " << config.offsetX << "\n";
+-    file << "offset_y = " << config.offsetY << "\n\n";
+-
+-    file << "[general]\n";
+-    file << "hotkey = \"" << config.hotkey << "\"\n";
+-    file << "max_items = " << config.maxItems << "\n";
+-    file << "socket_path = \"" << config.socketPath << "\"\n";
+-
+-    return true;
++    return config;
+ }
+ 
+ } // namespace hyprclipx
+diff -ruN a/src/Globals.cpp b/src/Globals.cpp
+--- a/src/Globals.cpp	2026-08-03 21:09:42.000000000 +0200
++++ b/src/Globals.cpp	2026-08-12 21:41:42.740036696 +0200
+@@ -1,5 +1,59 @@
+-// Global instance management (plugin side - NO GTK!)
+-// Uses Hyprland internal APIs for window info, fork+exec for UI
++// SPDX-License-Identifier: BSD-3-Clause
++//
++// Urspruenglich hyprclipx von azzuriel, Commit
++// 1eed6ee90a1c3e48ec76510377f8b05f27a4e650. Urhebervermerk und
++// Haftungsausschluss stehen in plugins/LICENSE.
++//
++// Die gemeinsamen Zeiger der Compositor-Haelfte - KEIN GTK hier!
++// Was das Fenster ist, sagen die internen Schnittstellen von Hyprland;
++// die Oberflaeche wird ueber fork+exec gestartet.
++//
++// WAS ZEPOS HIER GEAENDERT HAT (12.08.2026)
++//
++// 1. DAS PROTOKOLL NACH /tmp/hyprclipx-debug.log IST WEG
++//     Es waren fuenfzehn Schreibstellen, und sie liefen IM
++//     COMPOSITOR-PROZESS, bei jedem Druck auf SUPER+SHIFT+V. Drei
++//     Dinge daran, jedes fuer sich ein Grund:
++//
++//       * Unbegrenzt. `std::ios::app` ohne Obergrenze und ohne Rotation.
++//         GEMESSEN am 12.08.2026 an dieser Datei: ein Durchlauf ohne
++//         Schreibmarke schreibt 9 Zeilen, rund 260 Byte. Wer den
++//         Verlauf hundertmal am Tag oeffnet, legt im Jahr knapp
++//         10 MB in /tmp an - ein tmpfs, also im ARBEITSSPEICHER.
++//       * Aus dem Compositor heraus. std::ofstream oeffnet, schreibt
++//         und schliesst synchron; das haengt an der Taste, die den
++//         Verlauf oeffnen soll, und auf einem vollen Dateisystem
++//         haengt es laenger.
++//       * Weltlesbar. Die Zeilen enthielten `window class` und
++//         `window title` des Fensters, in dem der Nutzer gerade tippt.
++//         /tmp ist von jedem Konto der Maschine lesbar, und ein
++//         Fenstertitel ist der Name des geoeffneten Dokuments.
++//
++//     Ersatzlos und nicht hinter einen Schalter: ein Schalter waere
++//     die Zeile, die trotzdem bei jedem Tastendruck geprueft wird, und
++//     die Frage "steht er noch an?" haette niemand mehr gestellt.
++//
++// 2. DER PFAD ZUM SCHREIBMARKEN-HELFER STEHT NICHT MEHR IM OBJEKT
++//     Er war `home + "/.local/bin/get-caret-position.py"`, fest
++//     verdrahtet. Ein pacman-Paket darf unterhalb von ~ nichts
++//     besitzen (der Kopf von src/paths.py fuehrt das Argument aus),
++//     also konnte kein Paket das Programm ausliefern, das diese Zeile
++//     sucht. Die Folge stand am 11.08.2026 im Rezept als offener
++//     Punkt: das Plugin laedt, sein Fenster oeffnet, und die zweite
++//     Strategie der Schreibmarkensuche findet nichts vor.
++//
++//     Jetzt kommt der Pfad aus ~/.config/hyprclipx/config, mit
++//     /usr/lib/hyprclipx/caret-position.py als Grundwert - dem Ort,
++//     an den das Paket ihn legt.
++//
++// 3. clipmanClient IST GELOESCHT
++//     GEMESSEN am 12.08.2026, `grep -rn clipmanClient plugins/`: zwei
++//     Zuweisungen, NULL Leser. Das Feld zeigte auf clipman-client.py,
++//     ein Python-Programm, das Befehle ueber den Socket schickt - und
++//     die C++-Haelfte tut das seit ihrer ersten Fassung selbst, in
++//     ClipboardManager::sendCommand(). Ein Pfad auf ein Programm, das
++//     niemand startet, ist kein Rueckfall, sondern eine Zeile, die
++//     erklaert, dass hier frueher etwas anderes stand.
+ 
+ #include "hyprclipx/Globals.hpp"
+ #include "hyprclipx/IPCHandler.hpp"
+@@ -32,13 +86,6 @@
+ 
+ void initGlobals() {
+     reloadConfig();
+-
+-    const char* homeEnv = std::getenv("HOME");
+-    std::string home = homeEnv ? homeEnv : "/root";
+-    g_config.clipmanClient = home + "/.local/bin/clipman-client.py";
+-    g_config.caretHelper = home + "/.local/bin/get-caret-position.py";
+-    g_config.userSettingsFile = home + "/.config/hyprclipx/settings.json";
+-
+     g_ipcHandler = std::make_unique<IPCHandler>();
+ }
+ 
+@@ -51,32 +98,37 @@
+ }
+ 
+ // ============================================================================
+-// Caret capture strategy (3-tier):
+-// 1. text-input-v3: direct struct read in compositor thread (fastest)
+-//    Works for: Firefox, GTK apps, Qt apps, kitty, foot, alacritty, Electron
+-// 2. AT-SPI: fork + Python (for XWayland / apps without text-input)
+-//    Works for: JetBrains, some legacy apps
+-// 3. Mouse cursor position (last resort)
++// Wie die Schreibmarke gefunden wird - drei Wege, in dieser Reihenfolge:
++//
++//   1. text-input-v3: ein Strukturfeld, direkt im Compositor gelesen.
++//      Der schnellste Weg, und er trifft Firefox, die GTK- und
++//      Qt-Anwendungen, kitty, foot, alacritty und Electron.
++//   2. AT-SPI: fork und Python. Fuer XWayland und alles, was
++//      text-input nicht spricht - etwa die JetBrains-Umgebungen.
++//   3. Die Mausposition. Der letzte Ausweg.
+ // ============================================================================
+ 
+ void captureAndSendUI(const std::string& cmd) {
+-    // Reap zombie children from previous calls
++    // Die Kinder frueherer Aufrufe einsammeln, sonst bleiben Zombies
++    // im Prozessbaum des Compositors stehen
+     while (waitpid(-1, nullptr, WNOHANG) > 0) {}
+ 
+-    // Get the keyboard-focused window via SeatManager (not mouse cursor!)
+-    // This correctly identifies the focused window on multi-monitor setups
+-    // regardless of where the mouse pointer is
++    // Das Fenster mit dem TASTATURFOKUS, ueber den SeatManager - nicht
++    // das unter der Maus. Auf mehreren Schirmen ist das der
++    // Unterschied: getippt wird dort, wo der Fokus liegt, und die Maus
++    // kann irgendwo stehen.
+     PHLWINDOW pFocusedWindow;
+     {
+         auto focusSurface = g_pSeatManager->m_state.keyboardFocus.lock();
+         if (focusSurface) {
+-            // Hyprland 0.56: CCompositor::getWindowFromSurface() was removed.
+-            // Surface -> view lookup now goes through the view state tracker's
+-            // query builder. Constraining the query to VIEW_TYPE_WINDOW
+-            // reproduces the old behaviour exactly: 0.55 resolved the surface's
+-            // hlSurface->view(), returned nullptr unless its type was
+-            // VIEW_TYPE_WINDOW, then downcast to CWindow. Without the type
+-            // constraint the query would fall back to a layer-surface lookup.
++            // Hyprland 0.56: CCompositor::getWindowFromSurface() gibt es
++            // nicht mehr. Von der Flaeche zur Ansicht fuehrt jetzt der
++            // Abfragebauer des Zustandsspeichers. Die Einschraenkung auf
++            // VIEW_TYPE_WINDOW bildet das alte Verhalten genau nach:
++            // 0.55 loeste hlSurface->view() auf, gab nullptr zurueck,
++            // wenn der Typ nicht VIEW_TYPE_WINDOW war, und wandelte dann
++            // nach CWindow. Ohne die Einschraenkung faende die Abfrage
++            // auch eine Layer-Shell-Flaeche.
+             pFocusedWindow = Desktop::viewState()
+                                  ->query()
+                                  .type(Desktop::View::VIEW_TYPE_WINDOW)
+@@ -85,26 +137,27 @@
+         }
+     }
+ 
+-    // Save previous window address BEFORE opening UI (must capture now,
+-    // because focus changes once clipboard window opens)
++    // Die Adresse des vorherigen Fensters merken, BEVOR die Oberflaeche
++    // aufgeht: danach liegt der Fokus beim Verlauf, und die Antwort
++    // waere er selbst
+     if (pFocusedWindow) {
+         std::string windowAddr = std::format("0x{:x}", (uintptr_t)pFocusedWindow.get());
+         std::ofstream f(g_config.prevWindowFile);
+         if (f.is_open()) f << windowAddr;
+     }
+ 
+-    // Capture monitor bounds from the focused window's monitor
++    // Der Schirm, auf dem das fokussierte Fenster liegt
+     int monX = 0, monY = 0, monW = 1920, monH = 1080;
+     {
+         PHLMONITOR monitor;
+         if (pFocusedWindow)
+             monitor = pFocusedWindow->m_monitor.lock();
+         if (!monitor) {
+-            // Hyprland 0.56: CCompositor::getMonitorFromCursor() was removed.
+-            // 0.55 implemented it as getMonitorFromVector(pointer position), and
+-            // a vec()-only monitor query resolves through
+-            // CMonitorQueryCore::closestTo(), which is the same
+-            // "monitor containing the point, else nearest monitor" logic.
++            // Hyprland 0.56: CCompositor::getMonitorFromCursor() gibt es
++            // nicht mehr. 0.55 hat es als getMonitorFromVector(Zeiger)
++            // gebaut, und eine Monitorabfrage mit nur einem vec() geht
++            // durch CMonitorQueryCore::closestTo() - dieselbe Logik
++            // "der Schirm, auf dem der Punkt liegt, sonst der naechste".
+             monitor = State::monitorState()->query().vec(Pointer::mgr()->position()).run();
+         }
+         if (monitor) {
+@@ -119,72 +172,44 @@
+     std::string caretPosFile = g_config.caretPosFile;
+     std::string uiArg = "--" + cmd;
+ 
+-    // Format: caretX,caretY,monX,monY,monW,monH
++    // Die Form der Zeile: caretX,caretY,monX,monY,monW,monH
+     auto writeCaretFile = [&](int cx, int cy) {
+         std::ofstream f(caretPosFile);
+         if (f.is_open())
+             f << cx << "," << cy << "," << monX << "," << monY << "," << monW << "," << monH;
+     };
+ 
+-    // ---- Strategy 1: text-input-v3 (direct compositor read, no fork) ----
+-    // Apps using text-input-v3 send set_cursor_rectangle automatically.
+-    // Just a struct read - fast, reliable, no Python, no file-IO roundtrip.
++    // ---- Weg 1: text-input-v3, direkt im Compositor gelesen ----
++    // Wer text-input-v3 spricht, schickt set_cursor_rectangle von
++    // selbst. Es ist nur ein Strukturfeld: schnell, verlaesslich, ohne
++    // Python und ohne den Umweg ueber eine Datei.
+     bool caretCaptured = false;
+-    {
+-        // Debug log to /tmp/hyprclipx-debug.log
+-        std::ofstream dbg("/tmp/hyprclipx-debug.log", std::ios::app);
+-        dbg << "--- captureAndSendUI ---\n";
+-        dbg << "pFocusedWindow: " << (pFocusedWindow ? "yes" : "null") << "\n";
+-
+-        if (pFocusedWindow) {
+-            dbg << "window class: " << pFocusedWindow->m_class << "\n";
+-            dbg << "window title: " << pFocusedWindow->m_title << "\n";
+-            // Hyprland 0.56: CGeometricMovableAnimated::m_realPosition became
+-            // protected. IGeometric::position() is the public accessor;
+-            // GEOMETRIC_CURRENT returns m_realPosition->value() verbatim.
+-            Vector2D winPos = pFocusedWindow->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
+-            dbg << "window pos: " << winPos.x << "," << winPos.y << "\n";
+-
+-            CTextInput* ti = g_pInputManager->m_relay.getFocusedTextInput();
+-            dbg << "getFocusedTextInput: " << (ti ? "yes" : "null") << "\n";
+-
+-            if (ti) {
+-                dbg << "  isV3: " << ti->isV3() << "\n";
+-                dbg << "  isEnabled: " << ti->isEnabled() << "\n";
+-                dbg << "  hasCursorRectangle: " << ti->hasCursorRectangle() << "\n";
+-                CBox cb = ti->cursorBox();
+-                dbg << "  cursorBox: x=" << cb.x << " y=" << cb.y
+-                    << " w=" << cb.w << " h=" << cb.h << "\n";
+-
+-                auto surf = ti->focusedSurface();
+-                dbg << "  focusedSurface: " << (surf ? "yes" : "null") << "\n";
+-
+-                if (ti->isEnabled() && ti->hasCursorRectangle()) {
+-                    int cx = static_cast<int>(winPos.x + cb.x);
+-                    int cy = static_cast<int>(winPos.y + cb.y);
+-                    dbg << "  global caret: " << cx << "," << cy << "\n";
+-                    cx = std::clamp(cx, monX, monX + monW - 1);
+-                    cy = std::clamp(cy, monY, monY + monH - 1);
+-                    dbg << "  clamped caret: " << cx << "," << cy << "\n";
+-                    writeCaretFile(cx, cy);
+-                    caretCaptured = true;
+-                    dbg << "  STRATEGY 1 SUCCESS\n";
+-                }
+-            }
++    if (pFocusedWindow) {
++        // Hyprland 0.56: CGeometricMovableAnimated::m_realPosition ist
++        // protected geworden. IGeometric::position() ist der oeffentliche
++        // Zugang; GEOMETRIC_CURRENT gibt m_realPosition->value()
++        // unveraendert zurueck.
++        Vector2D winPos = pFocusedWindow->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
++
++        CTextInput* ti = g_pInputManager->m_relay.getFocusedTextInput();
++        if (ti && ti->isEnabled() && ti->hasCursorRectangle()) {
++            CBox cb = ti->cursorBox();
++            int cx = static_cast<int>(winPos.x + cb.x);
++            int cy = static_cast<int>(winPos.y + cb.y);
++            cx = std::clamp(cx, monX, monX + monW - 1);
++            cy = std::clamp(cy, monY, monY + monH - 1);
++            writeCaretFile(cx, cy);
++            caretCaptured = true;
+         }
+-        dbg << "caretCaptured: " << caretCaptured << "\n";
+-        dbg << std::flush;
+     }
+ 
+-    // Fork child: fallback caret strategies + exec UI
+-    // Only AT-SPI/cursor detection runs in child (blocking calls)
++    // Ein Kindprozess fuer die beiden anderen Wege und fuer den Start
++    // der Oberflaeche. Nur AT-SPI und die Zeigerabfrage laufen dort -
++    // beide blockieren, und im Compositor haenge daran die Taste.
+     if (fork() == 0) {
+         setsid();
+ 
+         if (!caretCaptured) {
+-            std::ofstream dbg("/tmp/hyprclipx-debug.log", std::ios::app);
+-            dbg << "  entering fallback (forked child)\n" << std::flush;
+-
+             auto getCursorPos = [](int& outX, int& outY) -> bool {
+                 FILE* p = popen("hyprctl cursorpos -j 2>/dev/null", "r");
+                 if (!p) return false;
+@@ -199,8 +224,8 @@
+                 return outX >= 0 && outY >= 0;
+             };
+ 
+-            // ---- Strategy 2: AT-SPI via Python (XWayland / legacy apps) ----
+-            dbg << "  trying AT-SPI...\n" << std::flush;
++            // ---- Weg 2: AT-SPI ueber Python, fuer XWayland und alles,
++            // was text-input nicht spricht ----
+             bool caretFound = false;
+             FILE* pipe = popen(("/usr/bin/python3 " + caretHelper + " 2>/dev/null").c_str(), "r");
+             if (pipe) {
+@@ -219,19 +244,15 @@
+                         cy = std::clamp(cy, monY, monY + monH - 1);
+                         writeCaretFile(cx, cy);
+                         caretFound = true;
+-                        dbg << "  STRATEGY 2 SUCCESS: " << cx << "," << cy << "\n" << std::flush;
+                     }
+                 }
+             }
+ 
+-            // ---- Strategy 3: Mouse cursor position (last resort) ----
++            // ---- Weg 3: die Mausposition, der letzte Ausweg ----
+             if (!caretFound) {
+-                dbg << "  AT-SPI failed, trying cursor pos...\n" << std::flush;
+                 int mx = -1, my = -1;
+-                if (getCursorPos(mx, my)) {
++                if (getCursorPos(mx, my))
+                     writeCaretFile(mx, my);
+-                    dbg << "  STRATEGY 3 (cursor): " << mx << "," << my << "\n" << std::flush;
+-                }
+             }
+         }
+ 
+diff -ruN a/src/IPCHandler.cpp b/src/IPCHandler.cpp
+--- a/src/IPCHandler.cpp	2026-08-03 21:09:42.000000000 +0200
++++ b/src/IPCHandler.cpp	2026-08-12 21:40:04.309430511 +0200
+@@ -1,5 +1,5 @@
+-// IPC command handling (plugin side - NO GTK!)
+-// Forwards UI commands to hyprclipx-ui via fork+exec
++// Die Befehle der Compositor-Haelfte - KEIN GTK hier!
++// Weitergereicht wird an hyprclipx-ui, ueber fork+exec.
+ 
+ #include "hyprclipx/IPCHandler.hpp"
+ #include "hyprclipx/Globals.hpp"
+diff -ruN a/src/main.cpp b/src/main.cpp
+--- a/src/main.cpp	2026-08-03 21:09:42.000000000 +0200
++++ b/src/main.cpp	2026-08-12 21:40:54.270740097 +0200
+@@ -1,6 +1,7 @@
+-// HyprClipX - Layer-shell clipboard manager for Hyprland
+-// Plugin entry point - LIGHTWEIGHT (no GTK, no threads)
+-// UI runs as separate process (hyprclipx-ui)
++// hyprclipx - der Zwischenablage-Verlauf von ZepOS, Plugin-Haelfte
++// Der Einstieg des Plugins, und er ist absichtlich duenn: kein GTK,
++// keine Threads. Die Oberflaeche laeuft als eigener Prozess
++// (hyprclipx-ui).
+ 
+ #define WLR_USE_UNSTABLE
+ #include <hyprland/src/plugins/PluginAPI.hpp>
+@@ -11,10 +12,15 @@
+ 
+ using namespace hyprclipx;
+ 
+-inline HANDLE g_pHandle = nullptr;
++// g_pHandle STAND HIER UND IST WEG (12.08.2026)
++//
++// Es hielt eine zweite Kopie desselben Zeigers, den Globals.cpp als
++// g_handle fuehrt. Gelesen wurde es an genau einer Stelle - der
++// Abmeldemeldung in PLUGIN_EXIT -, und die ist mit derselben
++// Aenderung gegangen. Was blieb, war eine Zuweisung ohne Leser.
+ 
+ // ============================================================================
+-// IPC Command Handler (hyprctl hyprclipx <cmd> [args])
++// Die Befehle von `hyprctl hyprclipx <befehl> [argumente]`
+ // ============================================================================
+ 
+ static std::string cmdHyprclipx(eHyprCtlOutputFormat, std::string request) {
+@@ -34,7 +40,8 @@
+ }
+ 
+ // ============================================================================
+-// Dispatchers (matching ags-toggle-clipboard.template flow)
++// Die Dispatcher, in derselben Reihenfolge wie
++// ags-toggle-clipboard.template sie hatte
+ // ============================================================================
+ 
+ static SDispatchResult dispatchShow(std::string) {
+@@ -47,14 +54,15 @@
+     return {.success = true};
+ }
+ 
+-// Toggle: capture caret BEFORE toggle (matching AGS flow)
++// Umschalten: die Schreibmarke wird VORHER festgehalten, so wie AGS es
++// getan hat - danach liegt der Fokus beim Verlauf
+ static SDispatchResult dispatchToggle(std::string) {
+     captureAndSendUI("toggle");
+     return {.success = true};
+ }
+ 
+ // ============================================================================
+-// Plugin Lifecycle
++// Das Leben des Plugins
+ // ============================================================================
+ 
+ APICALL EXPORT std::string PLUGIN_API_VERSION() {
+@@ -62,44 +70,38 @@
+ }
+ 
+ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
+-    g_pHandle = handle;
+     g_handle = handle;
+ 
+     initGlobals();
+ 
+-    // Register IPC command
++    // Den Befehl anmelden
+     HyprlandAPI::registerHyprCtlCommand(g_handle,
+         SHyprCtlCommand{"hyprclipx", true, cmdHyprclipx});
+ 
+-    // Register dispatchers
++    // Die Dispatcher anmelden
+     HyprlandAPI::addDispatcherV2(handle, "hyprclipx:show", dispatchShow);
+     HyprlandAPI::addDispatcherV2(handle, "hyprclipx:hide", dispatchHide);
+     HyprlandAPI::addDispatcherV2(handle, "hyprclipx:toggle", dispatchToggle);
+ 
+-    // Register config values
++    // Die Konfigurationsschluessel anmelden
+     HyprlandAPI::addConfigValue(handle, "plugin:hyprclipx:enabled",
+                                 Hyprlang::INT{1});
+     HyprlandAPI::addConfigValue(handle, "plugin:hyprclipx:hotkey",
+                                 Hyprlang::STRING{"SUPER V"});
+ 
+-    HyprlandAPI::addNotification(handle,
+-        "[HyprClipX] Loaded successfully!",
+-        CHyprColor(0.2f, 0.8f, 0.2f, 1.0f),
+-        5000);
+-
++    // Die Erfolgsmeldung bei jeder Anmeldung ist weg, und der Urheber
++    // ist jetzt der, der das hier ausliefert. Die Begruendung steht in
++    // voller Laenge in plugins/hyprlaunch/src/main.cpp; sie gilt hier
++    // wortgleich, und die zwei gruenen Kaesten, die sie zaehlt, waren
++    // dieser und der dort.
+     return {
+         "hyprclipx",
+-        "Layer-shell clipboard manager for Hyprland",
+-        "HyprClipX",
++        "Der Zwischenablage-Verlauf von ZepOS",
++        "ZepOS",
+         "0.1.0"
+     };
+ }
+ 
+ APICALL EXPORT void PLUGIN_EXIT() {
+     cleanupGlobals();
+-
+-    HyprlandAPI::addNotification(g_pHandle,
+-        "[HyprClipX] Unloaded",
+-        CHyprColor(0.8f, 0.8f, 0.2f, 1.0f),
+-        3000);
+ }
+diff -ruN a/src/main_ui.cpp b/src/main_ui.cpp
+--- a/src/main_ui.cpp	2026-08-03 21:09:42.000000000 +0200
++++ b/src/main_ui.cpp	2026-08-12 21:36:03.457868888 +0200
+@@ -1,6 +1,8 @@
+-// HyprClipX UI - Standalone GTK4 process (NOT inside compositor!)
+-// Runs as a normal Wayland client. Receives commands via Unix socket.
+-// Matching original AGS architecture: UI = separate process.
++// hyprclipx-ui - der Zwischenablage-Verlauf von ZepOS, als eigener
++// GTK4-Prozess (NICHT im Compositor!)
++// Laeuft als gewoehnlicher Wayland-Client und nimmt seine Befehle ueber
++// einen Unix-Socket entgegen - derselbe Aufbau wie unter AGS, wo die
++// Oberflaeche ebenfalls ein eigener Prozess war.
+ 
+ #include "hyprclipx/ClipboardRenderer.hpp"
+ #include "hyprclipx/ClipboardManager.hpp"
+@@ -21,7 +23,8 @@
+ static int g_listenSock = -1;
+ 
+ // ============================================================================
+-// Send command to existing UI instance (returns true if sent)
++// Einen Befehl an eine schon laufende Oberflaeche schicken. Wahr, wenn
++// er angekommen ist.
+ // ============================================================================
+ 
+ static bool sendCommand(const char* cmd) {
+@@ -43,7 +46,7 @@
+ }
+ 
+ // ============================================================================
+-// Socket listener (accepts commands from plugin via fork+exec)
++// Der Socket, an dem die Compositor-Haelfte ihre Befehle abliefert
+ // ============================================================================
+ 
+ static gboolean onSocketAccept(GIOChannel*, GIOCondition, gpointer) {
+@@ -93,7 +96,7 @@
+ }
+ 
+ // ============================================================================
+-// Signal handler (clean shutdown)
++// Das Ende, wenn ein Signal kommt
+ // ============================================================================
+ 
+ static GMainLoop* g_mainLoop = nullptr;
+@@ -107,7 +110,7 @@
+ // ============================================================================
+ 
+ int main(int argc, char* argv[]) {
+-    // Parse command
++    // Den Befehl von der Befehlszeile lesen
+     std::string cmd;
+     for (int i = 1; i < argc; i++) {
+         std::string arg = argv[i];
+@@ -116,53 +119,56 @@
+         else if (arg == "--hide" || arg == "hide") cmd = "hide";
+     }
+ 
+-    // If we have a command, try sending to existing instance first
++    // Gibt es einen Befehl, zuerst die laufende Oberflaeche fragen
+     if (!cmd.empty()) {
+         if (sendCommand(cmd.c_str())) {
+-            return 0;  // Sent to running instance, done
++            return 0;  // angekommen, mehr ist nicht zu tun
+         }
+-        // No running instance → start one and execute command
++        // Es laeuft keine - also eine starten und den Befehl ausfuehren
+     }
+ 
+-    // Initialize GTK (safe: we're a separate Wayland client, NOT inside compositor)
++    // GTK hochfahren. Unbedenklich: das hier ist ein eigener
++    // Wayland-Client und NICHT der Compositor.
+     gtk_init();
+ 
+-    // Load config
++    // Die Konfiguration
++    //
++    // Hier standen drei Zeilen, die drei Pfade unter ~ zusammensetzten
++    // - dieselben drei, die Globals.cpp auf der anderen Seite noch
++    // einmal zusammensetzte. Zwei Kopien einer Pfadberechnung sind zwei
++    // Kopien, die auseinanderlaufen; jetzt setzt loadConfig() sie, und
++    // die Begruendung steht in Config.hpp.
+     Config config = loadConfig();
+-    const char* homeEnv = getenv("HOME");
+-    std::string home = homeEnv ? homeEnv : "/root";
+-    config.clipmanClient = home + "/.local/bin/clipman-client.py";
+-    config.caretHelper = home + "/.local/bin/get-caret-position.py";
+-    config.userSettingsFile = home + "/.config/hyprclipx/settings.json";
+ 
+-    // Create components
++    // Die Teile
+     ClipboardManager manager(config);
+     ClipboardRenderer renderer(config, manager);
+     g_renderer = &renderer;
+ 
+-    // Create UI (window, CSS, widgets - but don't show yet)
++    // Die Oberflaeche bauen - Fenster, Stil, Widgets -, aber noch nicht
++    // zeigen
+     renderer.initialize();
+ 
+-    // Set up socket listener for commands from plugin
++    // Den Socket aufmachen, ueber den die Compositor-Haelfte spricht
+     createSocketListener();
+ 
+-    // If started with a command, execute it now
++    // Wurde mit einem Befehl gestartet, kommt er jetzt dran
+     if (!cmd.empty()) {
+         if (cmd == "toggle" || cmd == "show") {
+             renderer.show();
+         }
+     }
+ 
+-    // Signal handling
++    // Signale
+     signal(SIGINT, onSignal);
+     signal(SIGTERM, onSignal);
+ 
+-    // Run GLib main loop
++    // Die Hauptschleife von GLib
+     g_mainLoop = g_main_loop_new(nullptr, FALSE);
+     g_main_loop_run(g_mainLoop);
+     g_main_loop_unref(g_mainLoop);
+ 
+-    // Cleanup
++    // Aufraeumen
+     g_renderer = nullptr;
+     unlink(SOCKET_PATH);
+     if (g_listenSock >= 0) close(g_listenSock);

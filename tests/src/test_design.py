@@ -53,6 +53,7 @@ from pathlib import Path
 import pytest
 
 from src import sizes
+from tests.adopted_plugin_source import plugin_source
 # Auf Modulebene, aus demselben Grund wie in tests/src/test_spacing.py:
 # der Isolationswaechter verbietet waehrend eines Tests jedes Schreiben
 # ausserhalb von tmp_path, wozu auch das __pycache__ zaehlt, das pytest
@@ -679,12 +680,17 @@ def test_the_launcher_reads_its_line_length_from_the_configuration():
     also dort, wo kein Regler und keine Vorlage sie je erreicht haetten.
     Dieselbe Geschichte wie die sieben `static constexpr`, die am
     11.08.2026 aus den beiden Plugins herausgeholt wurden.
+
+    hyprlaunch liegt seit dem 19.08.2026 nicht mehr unter root/plugins/
+    (tests/adopted_plugin_source.py, plugins/LICENSE) - die drei Dateien
+    kommen deshalb aus dem rekonstruierten Baum.
     """
-    header = (ROOT / "plugins" / "hyprlaunch" / "include" / "hyprlaunch"
+    plugin_root = plugin_source("hyprlaunch")
+    header = (plugin_root / "include" / "hyprlaunch"
               / "Config.hpp").read_text(encoding="utf-8")
-    parser = (ROOT / "plugins" / "hyprlaunch" / "src"
+    parser = (plugin_root / "src"
               / "ConfigParser.cpp").read_text(encoding="utf-8")
-    renderer = (ROOT / "plugins" / "hyprlaunch" / "src"
+    renderer = (plugin_root / "src"
                 / "LauncherRenderer.cpp").read_text(encoding="utf-8")
     template = (SRC / "templates"
                 / "hyprlaunch-config.template").read_text(encoding="utf-8")

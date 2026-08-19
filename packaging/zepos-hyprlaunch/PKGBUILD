@@ -2,47 +2,62 @@
 #
 # hyprlaunch - der Anwendungsstarter auf SUPER+SPACE (Spec §7.1).
 #
-# WAS SICH AM 11.08.2026 GEAENDERT HAT: DIE QUELLE LIEGT JETZT HIER
-#     Bis dahin holte dieses Rezept einen Tarball von
-#     github.com/azzuriel/hyprlaunch, festgenagelt auf 24e5c8b. Das
-#     Paket hiess zepos-hyprlaunch und war ein Nachbau eines fremden
-#     Baums.
+# WAS AM 11.08.2026 GEAENDERT WURDE UND AM 19.08.2026 WIEDER RUECKGAENGIG
+# GEMACHT WURDE: DIE QUELLE LAG KURZ HIER
+#     Vom 11.08. bis zum 19.08.2026 lag die Quelle unter plugins/hyprlaunch/
+#     in diesem Baum, und dieses Rezept baute daraus - ein Tarball, den
+#     packaging/build.sh aus dem ARBEITSBAUM machte. Der Grund war
+#     Verfuegbarkeit: ein Konto einer Privatperson, ohne Fork, der es
+#     ueberleben wuerde.
 #
-#     GEMESSEN am 11.08.2026, an der GitHub-API und am Tarball selbst:
+#     Die Sicherheitspruefung vor der Veroeffentlichung
+#     (.superpowers/sdd/2026-08-18-ags-schale-und-breitenleiter/
+#     sicherheitsanalyse.md, Abschnitt 6) hat den eigentlichen Fehler daran
+#     benannt: der Quellbaum von azzuriel/hyprlaunch traegt KEINE
+#     Lizenzdatei und keinen Copyright-Vermerk - die GitHub-API meldet
+#     "license": null. Code ohne Lizenz ist urheberrechtlich "alle Rechte
+#     vorbehalten". Leon Marzolls Erlaubnis vom 11.08.2026 (plugins/LICENSE)
+#     deckt, dass ZepOS diese Quellen bauen und veraendern darf - er ist
+#     selbst Contributor an denselben Baeumen. Sie deckt NICHT, dass ZepOS
+#     eine KOPIE des fremden Quellbaums selbst weiterverbreitet: eine
+#     Erlaubnis gilt dem, dem sie erteilt wurde, und dieses Repository
+#     oeffentlich zu machen haette genau das getan.
 #
-#         Sterne 1, Forks 0, Tags 0, Beitragende 1
-#         letzter Commit 2026-02-10, also sechs Monate alt
-#         "license": null - es gibt keine LICENSE-Datei und keinen
-#             einzigen Urhebervermerk im ganzen Baum
+#     Der Nutzer hat am 19.08.2026 entschieden: die Quellen werden nicht
+#     mitveroeffentlicht. Dieses Rezept holt sie beim Bauen direkt aus dem
+#     Repository des Urhebers, wie es bei einem AUR-Paket ueblich ist -
+#     festgenagelt auf den Commit, der schon in plugins/LICENSE als der
+#     uebernommene Stand steht, geprueft mit einer Pruefsumme, NICHT auf
+#     `main`: ein Bau, der von einem beweglichen Zweig holt, ist nicht
+#     reproduzierbar. Damit verbreitet ZepOS fremden Code nicht selbst
+#     weiter, und das gebaute Paket - das Objekt, das dieses Rezept
+#     ausliefert - aendert sich dadurch nicht.
 #
-#     Sechs Monate sind in Hyprland-Zeit vier Minor-Versionen. Das
-#     Argument "upstream zieht die Compositor-Version nach" ist bei
-#     diesem Baum also nicht bloss schwach, es ist gemessen falsch: die
-#     Portierung auf 0.56 steht in packaging/zepos-hyprland und in den
-#     Kommentaren dieses Projekts, nicht dort. ZepOS war schon der
-#     Pfleger; es besass die Quelle nur nicht.
+#     Was daran offen bleibt, weil es keine Textfrage ist: dasselbe
+#     Verfuegbarkeitsrisiko wie vor dem 11.08.2026 gilt wieder. Verschwindet
+#     azzuriel/hyprlaunch, laesst sich dieses Paket nicht mehr bauen, bis
+#     jemand den Tarball von Hand woanders ablegt und dieses Rezept darauf
+#     zeigt.
 #
-#     Dazu die Verfuegbarkeit: ein Konto einer Privatperson, ohne Fork,
-#     der es ueberleben wuerde. Verschwindet es, laesst sich ZepOS nicht
-#     mehr bauen - und zwar an der Stelle, die den Anwendungsstarter
-#     liefert.
-#
-#     Die Quelle liegt deshalb unter plugins/hyprlaunch/ in diesem Baum,
-#     und dieses Rezept baut daraus. Dieselbe Bauart wie zepos-config,
-#     zepos-installer, zepos-logout und zepos-menu: packaging/build.sh
-#     macht den Tarball aus dem ARBEITSBAUM.
-#
-# WAS AN DER UEBERNOMMENEN QUELLE GEAENDERT WURDE
+# WAS AN DER UEBERNOMMENEN QUELLE GEAENDERT WIRD, UND WOMIT
 #     Das Aussehen. 116 Zeilen CSS standen als `static const char*` im
 #     uebersetzten Objekt, mit zwanzig Farbliteralen in zehn Toenen -
 #     kein einziger davon aus src/brand.py, und der Schreibtisch ist
 #     petrolfarben. Die drei Fenstermasse standen als `static constexpr`
 #     daneben, wo der Regler aus src/sizes.py sie nicht erreichen
 #     konnte. Beides kommt jetzt aus erzeugten Dateien in
-#     ~/.config/hyprlaunch/. Die Koepfe der geaenderten Dateien fuehren
-#     die Messungen einzeln.
+#     ~/.config/hyprlaunch/.
 #
-# DIE LIZENZ, UND WARUM SIE JETZT ALS DATEI MITKOMMT
+#     Diese Aenderungen liegen nicht mehr als bearbeitete Dateien in
+#     diesem Baum - aus demselben Grund, aus dem die unveraenderte Quelle
+#     nicht mehr hier liegt: eine bearbeitete Kopie fremden Codes ist
+#     immer noch eine Kopie. Sie liegen als zepos-hyprlaunch.patch neben
+#     diesem Rezept, ZepOS' eigenes Diff und keine fremde Quelle,
+#     angewendet in prepare(). Die einzelnen Messungen stehen in den
+#     Kopfzeilen des Patches selbst und in den Kommentaren, die er in die
+#     betroffenen Dateien schreibt.
+#
+# DIE LIZENZ, UND WARUM SIE ALS DATEI MITKOMMT
 #     BSD-3-Clause erlaubt genau das hier - uebernehmen, aendern,
 #     weitergeben - unter der Bedingung, dass Urhebervermerk und
 #     Haftungsausschluss erhalten bleiben. Upstream hatte beides nicht:
@@ -50,8 +65,9 @@
 #     Datei. Ein Vermerk, den es nicht gibt, laesst sich nicht erhalten,
 #     also ist er in plugins/LICENSE zum ersten Mal ausgeschrieben, aus
 #     dem, was nachpruefbar ist. Dieses Rezept legt ihn unter
-#     /usr/share/licenses ab - was das vorherige, das denselben Code
-#     auslieferte, nicht tat.
+#     /usr/share/licenses ab, direkt aus diesem Baum statt aus dem
+#     heruntergeladenen Tarball - der traegt keine LICENSE-Datei, aus der
+#     package() sie kopieren koennte.
 #
 # WARUM DAS PAKET ZWEI DATEIEN LEGT UND NICHT EINE
 #     Spec §4.2 sagt, ein Plugin-Paket legt genau eine Datei ab, das
@@ -78,12 +94,16 @@
 #     die Zeichenkette "0.1" und sieht gar nichts.
 _zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# Der Stand, den plugins/LICENSE als uebernommen nennt - hier wiederholt,
+# weil das Bauen ihn braucht, nicht weil er anderswo unbekannt waere.
+_commit=24e5c8b82f96f87ac25000353e36a8b17ced4b00
+
 pkgname=zepos-hyprlaunch
 pkgver="$(<"$_zepos_repo/VERSION")"
 pkgrel=1
 pkgdesc="Der Anwendungsstarter von ZepOS: ein GTK4-Layer-Shell-Fenster und sein Hyprland-Plugin"
 arch=('x86_64')
-url="https://github.com/ZeptronIT/ZepOS"
+url="https://github.com/azzuriel/hyprlaunch"
 # Gemessen am 11.08.2026: der Quellbaum traegt KEINE Lizenzdatei und
 # keinen Copyright-Vermerk, die GitHub-API meldet "license": null. Hier
 # stand trotzdem BSD-3-Clause - vermutlich mitgewandert von den Plugins
@@ -132,15 +152,22 @@ makedepends=('cmake' 'ninja' 'zepos-hyprland')
 # den pacman zwar aufloest und den niemand lesen kann.
 optdepends=('zepos-config: erzeugt config und style.css, ohne die der Starter ungestylt bleibt')
 
-# Erzeugt von packaging/build.sh aus dem Arbeitsbaum, mit auf
-# SOURCE_DATE_EPOCH geklemmten Zeitstempeln. SKIP aus demselben Grund
-# wie bei zepos-config: eine Pruefsumme ueber eine Datei, die dasselbe
-# Skript Sekunden vorher geschrieben hat, prueft nichts.
-source=("zepos-hyprlaunch-$pkgver.tar.gz")
-sha256sums=('SKIP')
+# Zwei Quellen: der unveraenderte Baum des Urhebers, auf den Commit
+# festgenagelt, den plugins/LICENSE als uebernommen nennt - und ZepOS'
+# eigenes Diff darauf, das neben diesem Rezept liegt. NICHT `main`: ein
+# Bau, der von einem beweglichen Zweig holt, ist nicht reproduzierbar.
+source=("hyprlaunch-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
+        "zepos-hyprlaunch.patch")
+sha256sums=('9e79a3a77b77214d60d9f3129362c8bb264a772b8946e3a53dc3be8cca576e75'
+            '8dc7f9a592dd30236a42d278fb6422743b84406ff75851ff32f35c44fd336aed')
 
-_src="zepos-hyprlaunch-$pkgver"
+_src="hyprlaunch-$_commit"
 _plugin_dir="usr/lib/hyprland/plugins"
+
+prepare() {
+    cd "$srcdir/$_src"
+    patch -p1 < "$srcdir/zepos-hyprlaunch.patch"
+}
 
 build() {
     cd "$srcdir/$_src"
@@ -239,6 +266,9 @@ package() {
         return 1
     }
 
-    install -Dm644 "$srcdir/$_src/LICENSE" \
+    # plugins/LICENSE liegt in diesem Baum, nicht im heruntergeladenen
+    # Tarball - der traegt keine LICENSE-Datei, weil upstream keine
+    # hat (siehe oben).
+    install -Dm644 "$_zepos_repo/plugins/LICENSE" \
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

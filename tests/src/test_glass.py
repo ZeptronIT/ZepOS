@@ -47,6 +47,7 @@ from src import brand
 # verbietet waehrend eines Tests jedes Schreiben ausserhalb von tmp_path,
 # wozu auch das __pycache__ des ersten Imports zaehlt.
 from tests.src import test_sizes
+from tests.adopted_plugin_source import plugin_source
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -166,6 +167,16 @@ def _over(top, alpha: float, bottom):
 # meldet einen erfundenen Namensraum an, um zu beweisen, dass der
 # Sperrbildschirm einen zweiten Client abweist. Ein Testhilfsmittel ist
 # kein Fenster dieses Systems.
+#
+# "plugins" bleibt in dieser Liste, obwohl root/plugins/ seit dem
+# 19.08.2026 nur noch LICENSE enthaelt (hyprlaunch und hyprclipx liegen
+# nicht mehr darunter, siehe tests/adopted_plugin_source.py, plugins/
+# LICENSE) - ein leeres "plugins" traegt hier nichts bei, und
+# test_the_namespace_scan_finds_a_window_planted_in_each_language
+# pflanzt seinen C++-Fund unten absichtlich genau dorthin, gegen einen
+# SYNTHETISCHEN root, der kein plugins/LICENSE kennt. _namespace_sources()
+# holt die zwei ECHTEN Plugin-Baeume unten gesondert dazu, nur wenn root
+# der echte Arbeitsbaum ist.
 NAMESPACE_ROOTS = ("src/templates", "plugins", "menu", "logout", "lock")
 
 # Eine Zeile, die einen Namensraum anmeldet - in jeder der vier
@@ -192,6 +203,24 @@ def _namespace_sources(root: Path):
         for path in sorted(directory.rglob("*")):
             if path.suffix in (".c", ".cpp", ".py", ".template"):
                 yield path
+
+    # hyprlaunch und hyprclipx, aus dem Netz nachgebaut statt aus
+    # root/plugins/ gelesen (tests/adopted_plugin_source.py). Nur beim
+    # ECHTEN Wurzelverzeichnis: test_the_namespace_scan_finds_a_window_
+    # planted_in_each_language uebergibt unten tmp_path, eine
+    # synthetische Pruefung, die absichtlich kein plugins/ hat und
+    # keinen Netzzugriff braucht - root == SRC.parent haelt die beiden
+    # auseinander.
+    if root == SRC.parent:
+        for name in ("hyprlaunch", "hyprclipx"):
+            plugin_root = plugin_source(name)
+            for sub in ("src", "include"):
+                directory = plugin_root / sub
+                if not directory.is_dir():
+                    continue
+                for path in sorted(directory.rglob("*")):
+                    if path.suffix in (".c", ".cpp", ".py", ".template"):
+                        yield path
 
 
 def _declared_namespaces(root: Path = SRC.parent) -> dict[str, str]:

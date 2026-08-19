@@ -41,14 +41,23 @@ ISO_PROFILE = ROOT / "iso" / "profile"
 # have upstream versions, and inventing a ZepOS number for them would
 # hide which upstream release is installed.
 #
-# Am 11.08.2026 sind zwei Plugin-Rezepte dazugekommen, und der Satz
-# darueber ist damit fuer sie umgedreht. zepos-hyprlaunch und
-# zepos-hyprclipx bauen seither aus plugins/ in DIESEM Baum, nicht mehr
-# aus einem Tarball von github.com/azzuriel: das Aussehen der beiden
-# Fenster kommt aus src/brand.py und src/sizes.py, und eine Anpassung,
-# die nicht im eigenen Baum liegt, ist bei der naechsten
-# Commit-Anhebung wieder weg. Wessen Code ein Rezept ausliefert, ist
-# damit dieses Projekt - also traegt es auch dessen Versionsnummer.
+# Am 11.08.2026 sind zwei Plugin-Rezepte dazugekommen: zepos-hyprlaunch
+# und zepos-hyprclipx bauten von da an aus plugins/ in DIESEM Baum,
+# nicht mehr aus einem Tarball von github.com/azzuriel. Am 19.08.2026
+# ist das WOHER zurueckgedreht worden - die Sicherheitspruefung vor der
+# Veroeffentlichung von ZepOS (.superpowers/sdd/2026-08-18-ags-schale-
+# und-breitenleiter/sicherheitsanalyse.md, Abschnitt 6) hat benannt,
+# dass der Ursprungsbaum keine Lizenz traegt und eine bearbeitete Kopie
+# davon im eigenen Repository zu fuehren immer noch eine Kopie ist. Die
+# beiden Rezepte holen ihre Quelle seither wieder von github.com/
+# azzuriel, auf einen Commit gepinnt, und wenden ZepOS' eigenes Diff an
+# (packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch, packaging/
+# zepos-hyprclipx/zepos-hyprclipx.patch). Das WAS ist dabei nicht
+# zurueckgedreht: das Aussehen der beiden Fenster kommt weiterhin aus
+# src/brand.py und src/sizes.py, uebertragen durch den Patch statt
+# durch eine Datei im Arbeitsbaum, und ist damit weiterhin ZepOS'
+# eigener Code, an dessen Versionsnummer haengend - nicht die des
+# gepinnten Commits.
 #
 # Die drei uebrigen Plugin-Rezepte bleiben draussen und das ist eine
 # Entscheidung mit Messung, nicht ein Rest:

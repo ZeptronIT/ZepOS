@@ -466,37 +466,29 @@ if selected_holds zepos-lock; then
     pack_stage zepos-lock "zepos-lock-$version"
 fi
 
-# Die beiden Plugins, deren Quelle seit dem 11.08.2026 in diesem Baum
-# liegt statt auf einem fremden GitHub-Konto.
+# zepos-hyprlaunch und zepos-hyprclipx brauchen HIER nichts mehr.
 #
-# WARUM SIE FLACH AUSGEPACKT WERDEN UND NICHT WIE logout/ IHR
-# VERZEICHNIS BEHALTEN
-#     Weil ihr CMakeLists.txt an der Wurzel des Projekts steht und mit
-#     ${CMAKE_SOURCE_DIR}/include rechnet. logout/ behaelt sein
-#     Verzeichnis, weil sein meson.build die Version mit `cat
-#     ../VERSION` aus dem Verzeichnis DANEBEN liest - diese beiden
-#     brauchen kein Daneben, und ein zusaetzliches plugins/hyprlaunch/
-#     im Tarball waere ein Pfad mehr, den das Rezept nachbilden muss.
+# Vom 11.08. bis zum 19.08.2026 stand an dieser Stelle eine Schleife, die
+# aus plugins/hyprlaunch/ und plugins/hyprclipx/ einen lokalen
+# Quelltarball baute - dieselbe Bauart wie zepos-config und
+# zepos-logout. Die Sicherheitspruefung vor der Veroeffentlichung
+# (.superpowers/sdd/2026-08-18-ags-schale-und-breitenleiter/
+# sicherheitsanalyse.md, Abschnitt 6) hat benannt, warum das falsch war:
+# die beiden Quellbaeume tragen keine Lizenz, und eine bearbeitete Kopie
+# fremden Codes im eigenen Repository zu fuehren ist immer noch eine
+# Kopie, unabhaengig davon, welche Erlaubnis ZepOS selbst hat, sie zu
+# BAUEN. plugins/hyprlaunch/ und plugins/hyprclipx/ sind seit dem
+# 19.08.2026 aus diesem Baum geloescht.
 #
-# WARUM plugins/LICENSE MITKOMMT UND NICHT DAS LICENSE DER WURZEL
-#     Weil es eine andere Lizenz ist. Der Baum steht unter GPL-3.0;
-#     diese beiden Verzeichnisse sind eine Bearbeitung fremder
-#     BSD-3-Clause-Quellen, und der Urhebervermerk, den Bedingung 1
-#     dieser Lizenz zu erhalten verlangt, steht in plugins/LICENSE.
-#     Das Rezept legt genau diese Datei unter /usr/share/licenses ab -
-#     die GPL dorthin zu legen waere eine falsche Auskunft ueber
-#     fremden Code.
-for _plugin in hyprlaunch hyprclipx; do
-    selected_holds "zepos-$_plugin" || continue
-    step "Source tarball for zepos-$_plugin"
-    stage="$PACKAGING/zepos-$_plugin/.stage/zepos-$_plugin-$version"
-    rm -rf "$PACKAGING/zepos-$_plugin/.stage"
-    mkdir -p "$stage"
-    rsync -a "$REPO/plugins/$_plugin"/ "$stage"/
-    rsync -a "$REPO/plugins/LICENSE" "$stage/LICENSE"
-    pack_stage "zepos-$_plugin" "zepos-$_plugin-$version"
-done
-unset _plugin
+# packaging/zepos-hyprlaunch/PKGBUILD und packaging/zepos-hyprclipx/
+# PKGBUILD holen ihre Quelle jetzt selbst, in ihrem eigenen source=(),
+# von github.com/azzuriel - auf den Commit festgenagelt, den
+# plugins/LICENSE als uebernommen nennt - und wenden ZepOS' eigenes Diff
+# an, das als zepos-hyprlaunch.patch beziehungsweise
+# zepos-hyprclipx.patch neben dem jeweiligen Rezept liegt. makepkg macht
+# daraus keinen zweiten Tarball; es laedt herunter und patcht in
+# prepare(), wie packaging/zepos-hyprzones/PKGBUILD und
+# packaging/hyprland-plugins/PKGBUILD es schon immer taten.
 
 # --------------------------------------------------------------------
 # Build
