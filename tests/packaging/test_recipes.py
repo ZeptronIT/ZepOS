@@ -305,6 +305,58 @@ def test_every_container_runs_with_network_host(script):
             f"a container in packaging/{script} runs without --network host")
 
 
+def test_no_shell_script_captures_dollar_question_after_a_semicolon():
+    """A command whose exit status a script means to READ, not merely
+    survive, cannot sit on the left of a bare `;` under `set -e` -
+    `errexit` fires on that command before the assignment meant to
+    capture its status ever runs, and whatever check the capture exists
+    for is never reached.
+
+    MEASURED on 19.08.2026 (Aufgabe 29): packaging/verify-install.sh's
+    screen-arrangement-guard check read
+    `env -i .../zepos-displays-guard </dev/null; guard_code=$?` - the
+    guard exits 2 by design, but `bash -euo pipefail` aborted on the
+    first command of that `;`-sequence before `guard_code` was ever
+    assigned, let alone compared. Every container after that point in
+    the script - 2 of the file's 3 - had not run once since the file's
+    first commit; nothing about them had ever been verified. Minimally
+    reproduced: `bash -euo pipefail -c` with the body
+    `false; x=$?; echo reached` never prints "reached".
+
+    The abort DID surface as a non-zero exit from the whole script - so
+    this is not a check that failure was silent in the strictest sense.
+    It is a check that the failure was for the WRONG reason: the script
+    stopped on a shell quirk before its own assertion ever ran, with no
+    message saying so, and a future change to the guard's real exit code
+    would abort in exactly the same unexplained way rather than through
+    the "FEHLER: ..." line written for it.
+
+    The fix moved the command onto its own line, guarded by `set +e` /
+    `set -e` - the idiom packaging/verify-install.sh already uses
+    correctly a few hundred lines below, for exactly this situation. This
+    test is the difference stated as a rule instead of a one-off patch:
+    no script under packaging/ may capture $? on the same line as a `;`.
+    """
+    pattern = re.compile(r";\s*\w+=\$\?")
+    candidates = (sorted(PACKAGING.glob("*.sh"))
+                  + sorted(PACKAGING.glob("*/*.sh"))
+                  + sorted(PACKAGING.glob("*/*.install")))
+    assert candidates, "no shell scripts found under packaging/ to check"
+
+    offenders = []
+    for path in candidates:
+        code = _code(_read(path))
+        for lineno, line in enumerate(code.splitlines(), start=1):
+            if pattern.search(line):
+                offenders.append(f"{path.relative_to(PACKAGING)}:{lineno}: {line.strip()}")
+
+    assert offenders == [], (
+        "a command's exit status is captured immediately after a `;` - "
+        "under `set -e` the shell aborts on that command before the "
+        "capture ever runs, so whatever the capture was for never fires:\n"
+        + "\n".join(offenders))
+
+
 def test_signing_is_refused_rather_than_skipped():
     """Spec §8.6: signatures from the first ISO, because a repository
     that starts unsigned makes every already-installed system import a

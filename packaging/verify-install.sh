@@ -237,7 +237,29 @@ readonly CORE='
         # gemeldet hat. Ein fehlender oder kaputter Waechter ist auf
         # einer Installation deshalb kein stiller Verlust, sondern eine
         # Seite, die gar nichts mehr tut.
-        env -i /usr/bin/zepos-displays-guard </dev/null; guard_code=$?
+        #
+        # set +e UND NICHT `; guard_code=$?` AUF EINER ZEILE - GEFUNDEN
+        # am 19.08.2026, in Aufgabe 29: genau diese eine Zeile hier stand
+        # vorher als `env -i .../zepos-displays-guard </dev/null;
+        # guard_code=$?`. Der Waechter endet WIE DOKUMENTIERT mit 2, aber
+        # unter `bash -euo pipefail` bricht `errexit` schon am ERSTEN
+        # Befehl der `;`-Kette ab, bevor `guard_code` je gesetzt, geschweige
+        # denn geprueft wird - der `if` darunter lief nie. MINIMAL NACHGE-
+        # STELLT: bash -euo pipefail -c mit dem Rumpf false; x=$?; echo weiter
+        # gibt niemals "weiter" aus. Container 1 brach deshalb hier IMMER ab,
+        # ohne jede Fehlermeldung, und alles, was im Skript nach dieser
+        # Zeile stand - Container 2, Container 3, jede spaetere Zusicherung
+        # - wurde seit dem allerersten Commit nie ausgefuehrt.
+        #
+        # Die Zeilen 553-556 dieser Datei (der Text-Installer) loesen
+        # genau dasselbe Problem schon richtig: `set +e`, der Befehl auf
+        # einer eigenen Zeile, `$?` auf der naechsten, dann `set -e`
+        # wieder an. Dieselbe Form steht jetzt auch hier - eine Datei,
+        # eine Loesung fuer denselben Fall, statt zweier verschiedener.
+        set +e
+        env -i /usr/bin/zepos-displays-guard </dev/null
+        guard_code=$?
+        set -e
         if [ "$guard_code" -ne 2 ]; then
             echo "  FEHLER: der Waechter endete mit $guard_code statt 2" >&2
             exit 1
