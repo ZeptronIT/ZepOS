@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
-"POT-Creation-Date: 2026-08-19 10:58+0200\n"
+"POT-Creation-Date: 2026-08-19 23:40+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -27,13 +27,13 @@ msgid "{script} is not answering: {reason}"
 msgstr ""
 
 #: src/templates/ags-bar.template:1322
-#: src/templates/ags-control-center.template:1450
+#: src/templates/ags-control-center.template:1503
 #: src/templates/ags-disk.template:368
 msgid "Disk space"
 msgstr ""
 
 #: src/templates/ags-bar.template:1325
-#: src/templates/ags-control-center.template:1447
+#: src/templates/ags-control-center.template:1500
 #: src/templates/ags-wallpaper.template:329
 msgid "Wallpaper"
 msgstr ""
@@ -84,47 +84,45 @@ msgstr ""
 msgid "Performance"
 msgstr ""
 
-#: src/templates/ags-battery.template:233
-#: src/templates/ags-battery.template:296
+#: src/templates/ags-battery.template:256
+#: src/templates/ags-battery.template:319
 msgid "On mains"
 msgstr ""
 
-#: src/templates/ags-battery.template:258
+#: src/templates/ags-battery.template:281
 msgid "Power profile"
 msgstr ""
 
-#: src/templates/ags-battery.template:262
+#: src/templates/ags-battery.template:285
 msgid "Error: {message}"
 msgstr ""
 
-#: src/templates/ags-battery.template:293
+#: src/templates/ags-battery.template:316
 msgid "Charging"
 msgstr ""
 
-#: src/templates/ags-battery.template:294
+#: src/templates/ags-battery.template:317
 msgid "Discharging"
 msgstr ""
 
-#: src/templates/ags-battery.template:295
+#: src/templates/ags-battery.template:318
 msgid "Full"
 msgstr ""
 
-#: src/templates/ags-battery.template:324
+#: src/templates/ags-battery.template:347
 msgid "Battery"
 msgstr ""
 
-#: src/templates/ags-battery.template:372
+#: src/templates/ags-battery.template:395
 msgid "Time left"
 msgstr ""
 
-#: src/templates/ags-battery.template:383
+#: src/templates/ags-battery.template:406
 msgid "Power"
 msgstr ""
 
 #: src/templates/ags-bluetooth.template:256
-msgid ""
-"bluetoothctl is not answering ({error}). Usually the service is not running: "
-"systemctl enable --now bluetooth.service"
+msgid "bluetoothctl is not answering ({error}). Usually the service is not running: systemctl enable --now bluetooth.service"
 msgstr ""
 
 #: src/templates/ags-bluetooth.template:330
@@ -132,13 +130,13 @@ msgid "Unnamed device"
 msgstr ""
 
 #: src/templates/ags-bluetooth.template:364
-#: src/templates/ags-control-center.template:445
-#: src/templates/ags-control-center.template:1212
+#: src/templates/ags-control-center.template:444
+#: src/templates/ags-control-center.template:1265
 msgid "Bluetooth"
 msgstr ""
 
 #: src/templates/ags-bluetooth.template:366
-#: src/templates/ags-control-center.template:594
+#: src/templates/ags-control-center.template:593
 #: src/templates/ags-network.template:368 src/templates/ags-vpn.template:456
 msgid "CONNECTIONS"
 msgstr ""
@@ -176,7 +174,7 @@ msgid "Turn Bluetooth on to see devices"
 msgstr ""
 
 #: src/templates/ags-bluetooth.template:472
-#: src/templates/ags-bluetooth.template:595
+#: src/templates/ags-bluetooth.template:608
 msgid "Searching …"
 msgstr ""
 
@@ -208,19 +206,19 @@ msgstr ""
 msgid "Connect to {device}"
 msgstr ""
 
-#: src/templates/ags-bluetooth.template:586
+#: src/templates/ags-bluetooth.template:599
 msgid "DEVICES"
 msgstr ""
 
-#: src/templates/ags-bluetooth.template:610
+#: src/templates/ags-bluetooth.template:623
 msgid "Search for devices for {seconds} seconds"
 msgstr ""
 
-#: src/templates/ags-bluetooth.template:614
+#: src/templates/ags-bluetooth.template:627
 msgid "Read the list again"
 msgstr ""
 
-#: src/templates/ags-bluetooth.template:635
+#: src/templates/ags-bluetooth.template:648
 msgid "Open Blueman - pairing, sending files"
 msgstr ""
 
@@ -253,214 +251,204 @@ msgstr ""
 msgid "Next month"
 msgstr ""
 
-#: src/templates/ags-control-center.template:450
+#: src/templates/ags-control-center.template:449
 msgid "VPN: {status}"
 msgstr ""
 
-#: src/templates/ags-control-center.template:479
+#: src/templates/ags-control-center.template:478
 msgid "Network watchdog: {status}"
 msgstr ""
 
-#: src/templates/ags-control-center.template:487
+#: src/templates/ags-control-center.template:486
 msgid "Helper scripts ({count})"
 msgstr ""
 
-#: src/templates/ags-control-center.template:535
+#: src/templates/ags-control-center.template:534
 msgid "Regenerate the configuration"
 msgstr ""
 
-#: src/templates/ags-control-center.template:538
+#: src/templates/ags-control-center.template:537
 msgid "Try the update again"
 msgstr ""
 
-#: src/templates/ags-control-center.template:547
+#: src/templates/ags-control-center.template:546
 msgid "Update the Arch base - in the terminal, with a prompt"
 msgstr ""
 
-#: src/templates/ags-control-center.template:550
+#: src/templates/ags-control-center.template:549
 msgid "Configure the self-update"
 msgstr ""
 
-#: src/templates/ags-control-center.template:580
-#: src/templates/ags-control-center.template:1435
+#: src/templates/ags-control-center.template:579
+#: src/templates/ags-control-center.template:1488
 msgid "Hardware"
 msgstr ""
 
-#: src/templates/ags-control-center.template:595
+#: src/templates/ags-control-center.template:594
 msgid "SYSTEM"
 msgstr ""
 
-#: src/templates/ags-control-center.template:642
+#: src/templates/ags-control-center.template:683
 msgid "Sound"
 msgstr ""
 
-#: src/templates/ags-control-center.template:732
+#: src/templates/ags-control-center.template:777
 msgid "Volume muted"
 msgstr ""
 
-#: src/templates/ags-control-center.template:733
+#: src/templates/ags-control-center.template:778
 msgid "Volume {level}%"
 msgstr ""
 
-#: src/templates/ags-control-center.template:735
+#: src/templates/ags-control-center.template:780
 msgid "Microphone muted"
 msgstr ""
 
-#: src/templates/ags-control-center.template:736
+#: src/templates/ags-control-center.template:781
 msgid "Microphone {level}%"
 msgstr ""
 
-#: src/templates/ags-control-center.template:755
+#: src/templates/ags-control-center.template:800
 msgid "Display"
 msgstr ""
 
-#: src/templates/ags-control-center.template:802
+#: src/templates/ags-control-center.template:848
 msgid "Brightness {level}%"
 msgstr ""
 
-#: src/templates/ags-control-center.template:923
+#: src/templates/ags-control-center.template:969
 msgid "Control"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1033
+#: src/templates/ags-control-center.template:1086
 msgid "PRIVACY"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1053
+#: src/templates/ags-control-center.template:1106
 msgid "Microphone:"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1064
+#: src/templates/ags-control-center.template:1117
 msgid "Mute the microphone"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1074
+#: src/templates/ags-control-center.template:1127
 msgid "Camera:"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1143
+#: src/templates/ags-control-center.template:1196
 msgid "NETWORK & CONNECTIONS"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1152
+#: src/templates/ags-control-center.template:1205
 msgid "Loading …"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1161
+#: src/templates/ags-control-center.template:1214
 msgid "Wi-Fi networks - the same page as above"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1191
+#: src/templates/ags-control-center.template:1244
 msgid "VPN: off"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1222
+#: src/templates/ags-control-center.template:1275
 msgid "Bluetooth devices - the same page as above"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1242
+#: src/templates/ags-control-center.template:1295
 msgid "SOUND & DISPLAY"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1299
+#: src/templates/ags-control-center.template:1352
 msgid "Previous track"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1311
+#: src/templates/ags-control-center.template:1364
 msgid "Pause / resume"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1313
+#: src/templates/ags-control-center.template:1366
 msgid "Next track"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1344
+#: src/templates/ags-control-center.template:1397
 msgid "Displays"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1352
+#: src/templates/ags-control-center.template:1405
 msgid "Set arrangement, resolution and refresh rate"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1381
+#: src/templates/ags-control-center.template:1434
 msgid "DESKTOP"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1417
+#: src/templates/ags-control-center.template:1470
 msgid "Set the location for the weather"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1435
+#: src/templates/ags-control-center.template:1488
 msgid "Open btop"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1439
+#: src/templates/ags-control-center.template:1492
 #: src/templates/ags-shortcuts.template:342
 msgid "Keyboard shortcuts"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1440
+#: src/templates/ags-control-center.template:1493
 msgid "Show all keyboard shortcuts"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1443
+#: src/templates/ags-control-center.template:1496
 msgid "Floating windows"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1444
+#: src/templates/ags-control-center.template:1497
 msgid "Restore the saved arrangement"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1447
+#: src/templates/ags-control-center.template:1500
 msgid "Choose another image"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1450
+#: src/templates/ags-control-center.template:1503
 msgid "Show how the drives are filled"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1457
+#: src/templates/ags-control-center.template:1510
 msgid "SYSTEM SERVICES"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1466
+#: src/templates/ags-control-center.template:1519
 msgid "Printer"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1494
+#: src/templates/ags-control-center.template:1547
 msgid "Network watchdog"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1519
+#: src/templates/ags-control-center.template:1572
 msgid "Helper scripts"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1554
+#: src/templates/ags-control-center.template:1607
 msgid "Style editor"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1559
+#: src/templates/ags-control-center.template:1612
 msgid "Appearance and colors - the same window as above"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1697
-msgid "Shut down"
+#: src/templates/ags-control-center.template:1708
+#: src/templates/ags-logout.template:195
+#: src/templates/ags-power-button.template:84
+msgid "Session"
 msgstr ""
 
-#: src/templates/ags-control-center.template:1698
-msgid "Restart"
-msgstr ""
-
-#: src/templates/ags-control-center.template:1699
-msgid "Suspend"
-msgstr ""
-
-#: src/templates/ags-control-center.template:1700
-msgid "Lock"
-msgstr ""
-
-#: src/templates/ags-control-center.template:1701
-msgid "Log out"
+#: src/templates/ags-control-center.template:1714
+msgid "Lock, log out, restart, shut down, suspend or hibernate"
 msgstr ""
 
 #: src/templates/ags-disk.template:144
@@ -515,6 +503,30 @@ msgstr ""
 
 #: src/templates/ags-disk.template:542
 msgid "Analyze"
+msgstr ""
+
+#: src/templates/ags-logout.template:132
+msgid "Lock"
+msgstr ""
+
+#: src/templates/ags-logout.template:134
+msgid "Log out"
+msgstr ""
+
+#: src/templates/ags-logout.template:136
+msgid "Restart"
+msgstr ""
+
+#: src/templates/ags-logout.template:138
+msgid "Shut down"
+msgstr ""
+
+#: src/templates/ags-logout.template:140
+msgid "Suspend"
+msgstr ""
+
+#: src/templates/ags-logout.template:142
+msgid "Hibernate"
 msgstr ""
 
 #: src/templates/ags-network.template:366
@@ -632,6 +644,159 @@ msgstr ""
 msgid "Clear all"
 msgstr ""
 
+#: src/templates/ags-settings.template:384
+msgid "Back to the shipped value"
+msgstr ""
+
+#: src/templates/ags-settings.template:385
+msgid "Leave it to the scale factor again"
+msgstr ""
+
+#: src/templates/ags-settings.template:432
+msgid "{value} (unchanged)"
+msgstr ""
+
+#: src/templates/ags-settings.template:501
+msgid "Back to the shipped colour"
+msgstr ""
+
+#: src/templates/ags-settings.template:520
+msgid "unknown kind: {kind}"
+msgstr ""
+
+#: src/templates/ags-settings.template:573
+msgid "<value>"
+msgstr ""
+
+#: src/templates/ags-settings.template:615
+msgid "Nothing is placed on this side."
+msgstr ""
+
+#: src/templates/ags-settings.template:627
+msgid "One place further to the front"
+msgstr ""
+
+#: src/templates/ags-settings.template:636
+msgid "One place further to the back"
+msgstr ""
+
+#: src/templates/ags-settings.template:642
+msgid "Take it off the bar"
+msgstr ""
+
+#: src/templates/ags-settings.template:673
+msgid "Put it on the bar"
+msgstr ""
+
+#: src/templates/ags-settings.template:683
+msgid "As shipped"
+msgstr ""
+
+#: src/templates/ags-settings.template:734
+msgid "Switched on"
+msgstr ""
+
+#: src/templates/ags-settings.template:735
+msgid "at {x}, {y}"
+msgstr ""
+
+#: src/templates/ags-settings.template:762
+msgid "Resolution"
+msgstr ""
+
+#: src/templates/ags-settings.template:788
+msgid "Scale"
+msgstr ""
+
+#: src/templates/ags-settings.template:808
+msgid "Rotation"
+msgstr ""
+
+#: src/templates/ags-settings.template:820
+msgid "Position: every screen keeps the place it has. Dragging them around each other is done in the settings application; this window sets what a single screen shows."
+msgstr ""
+
+#: src/templates/ags-settings.template:827
+#: src/templates/ags-style-editor.template:1064
+#: src/templates/ags-style-editor.template:1192
+msgid "Apply"
+msgstr ""
+
+#: src/templates/ags-settings.template:834
+msgid "Applying asks back: without an answer within {seconds} seconds the old arrangement comes back. That happens even if this surface dies in the meantime - the way back runs in its own process."
+msgstr ""
+
+#: src/templates/ags-settings.template:839
+msgid "Kept in {file}"
+msgstr ""
+
+#: src/templates/ags-settings.template:880
+#: src/templates/ags-settings.template:927
+msgid "Applied, on probation. Keep it? {seconds} s"
+msgstr ""
+
+#: src/templates/ags-settings.template:886
+msgid "Kept and written: {files}"
+msgstr ""
+
+#: src/templates/ags-settings.template:891
+msgid "Taken back."
+msgstr ""
+
+#: src/templates/ags-settings.template:923
+msgid "No answer - the old arrangement is coming back."
+msgstr ""
+
+#: src/templates/ags-settings.template:957
+msgid "Writing ..."
+msgstr ""
+
+#: src/templates/ags-settings.template:961
+msgid "The machine follows this setting from now on."
+msgstr ""
+
+#: src/templates/ags-settings.template:963
+#: src/templates/ags-settings.template:984
+msgid "failed"
+msgstr ""
+
+#: src/templates/ags-settings.template:981
+msgid "Saving ..."
+msgstr ""
+
+#: src/templates/ags-settings.template:988
+msgid "Saved. In effect with the next login - or now."
+msgstr ""
+
+#: src/templates/ags-settings.template:1016
+msgid "{count} change(s) not yet saved"
+msgstr ""
+
+#: src/templates/ags-settings.template:1018
+msgid "Saved - not yet applied."
+msgstr ""
+
+#: src/templates/ags-settings.template:1027
+msgid "Keep"
+msgstr ""
+
+#: src/templates/ags-settings.template:1029
+#: src/templates/ags-vpn-settings.template:1021
+msgid "Save"
+msgstr ""
+
+#: src/templates/ags-settings.template:1031
+msgid "Apply now"
+msgstr ""
+
+#: src/templates/ags-settings.template:1033
+msgid "Reload"
+msgstr ""
+
+#: src/templates/ags-settings.template:1103
+msgid "SETTINGS"
+msgstr ""
+
 #: src/templates/ags-shortcuts.template:374
 msgid "Edit keybinds"
 msgstr ""
@@ -697,11 +862,6 @@ msgstr ""
 #: src/templates/ags-style-editor.template:1061
 #: src/templates/ags-vpn-settings.template:1003
 msgid "Cancel"
-msgstr ""
-
-#: src/templates/ags-style-editor.template:1064
-#: src/templates/ags-style-editor.template:1192
-msgid "Apply"
 msgstr ""
 
 #: src/templates/ags-style-editor.template:1097
@@ -891,8 +1051,7 @@ msgid "Add network"
 msgstr ""
 
 #: src/templates/ags-vpn-settings.template:760
-msgid ""
-"Without at least one network the tunnel comes up and carries no traffic."
+msgid "Without at least one network the tunnel comes up and carries no traffic."
 msgstr ""
 
 #: src/templates/ags-vpn-settings.template:786
@@ -937,10 +1096,6 @@ msgstr ""
 
 #: src/templates/ags-vpn-settings.template:1010
 msgid "Back to the VPN connection"
-msgstr ""
-
-#: src/templates/ags-vpn-settings.template:1021
-msgid "Save"
 msgstr ""
 
 #: src/templates/ags-vpn.template:398 src/templates/ags-vpn.template:667
@@ -1095,14 +1250,14 @@ msgstr ""
 msgid "Refresh"
 msgstr ""
 
-#: src/templates/ags-wallpaper.template:650
+#: src/templates/ags-wallpaper.template:661
 msgid "Delete wallpaper?"
 msgstr ""
 
-#: src/templates/ags-wallpaper.template:663
+#: src/templates/ags-wallpaper.template:674
 msgid "No"
 msgstr ""
 
-#: src/templates/ags-wallpaper.template:670
+#: src/templates/ags-wallpaper.template:681
 msgid "Yes"
 msgstr ""

@@ -2557,6 +2557,106 @@ $overlay-border: $border;
   }
 }
 
+// ===== EINSTELLUNGEN (das AGS-Fenster, Aufgabe 32, 19.08.2026) =====
+//
+// NEUN KLASSEN, UND KEINE DAVON IST EIN KNOPF ODER EINE ZEILE
+//     Die Zeilen kommen aus zepRow, die Knoepfe aus zepButton, die
+//     Ueberschriften aus zepSectionLabel, der Kopf aus zepStateHeader
+//     (ags-kit.template) - das ist die Formensprache dieses Systems, und
+//     ein zweites Aussehen fuer dasselbe Bauteil war genau der Mangel,
+//     den das Kit behoben hat. Was hier steht, sind ausschliesslich die
+//     EINGABEFELDER, die das Kit nicht kennt (Drehknopf, Auswahlliste,
+//     Textfeld, Farbprobe) und die Prosa.
+//
+// WARUM ES SIE UEBERHAUPT BRAUCHT
+//     Ein Gtk.SpinButton, ein Gtk.DropDown und ein Gtk.Entry bringen
+//     ihre eigene Groesse aus dem GTK-Thema mit. Ohne diese Regeln
+//     stehen in einem Fenster, dessen Zeilen auf der Leiter von
+//     src/sizes.py sitzen, drei Bedienelemente in einer vierten
+//     Groesse - sichtbar zu klein, sobald jemand den Massstab hochsetzt.
+.Settings {
+  background: transparent;
+}
+
+// Die Seite selbst. KEIN min-width hier: das traegt .zep-shell-page auf
+// der polsterlosen Huelle darum (siehe dort und mitSeitenboden() in
+// ags-control-center.template) - GTK rechnet Polster sonst oben auf die
+// 672px drauf, gemessen am 19.08.2026 (Aufgabe 23).
+.set-container {
+  padding: {{STYLE_SPACE_16}};
+}
+
+// Die Prosa der Seiten - die Texte, die model.py als NOTE_* fuehrt und
+// bridge.py an Seite und Gruppe haengt. Gedaempft und in der
+// Kleinschrift, weil sie ERKLAEREN und nicht bedienen; dasselbe Paar aus
+// Farbe und Groesse wie .zep-row-sub, damit eine Erklaerung unter einer
+// Zeile und eine ueber einer Gruppe gleich aussehen.
+.set-note {
+  font-size: {{STYLE_FONT_CAPTION}};
+  color: $subtext;
+  padding: {{STYLE_SPACE_4}} 0 {{STYLE_SPACE_8}} 0;
+}
+
+// Der Befehl unter einer gesperrten Zeile - zum Abtippen, wenn es kein
+// pkexec gibt. OHNE eigene font-family: .overlay-outer setzt fuer das
+// ganze Fenster bereits {{STYLE_FONT_FAMILY}}, und das IST die
+// Codeschrift (THEME.FONT_FAMILY_CODE, src/style_definition.py).
+.set-command {
+  font-size: {{STYLE_FONT_CAPTION}};
+  color: $subtext;
+  padding: 0 0 {{STYLE_SPACE_8}} {{STYLE_SPACE_16}};
+}
+
+// Eine Art, die das Fenster nicht zeichnen kann. Sie faellt AUF, und
+// das ist der Zweck: bridge.py fuehrt `kind` als geschlossene Liste,
+// damit ein unbekannter Wert ein Fehler ist und keine leere Zeile.
+.set-unknown {
+  font-size: {{STYLE_FONT_CAPTION}};
+  color: $yellow;
+}
+
+.set-number,
+.set-entry,
+.set-hex,
+.set-choice {
+  min-height: {{STYLE_CONTROL_HEIGHT}};
+  border-radius: {{STYLE_RADIUS_CONTROL}};
+  font-size: {{STYLE_FONT_BODY}};
+}
+
+.set-number,
+.set-entry,
+.set-hex {
+  background: rgba($surface, 0.4);
+  border: 1px solid $border;
+  color: $text;
+  padding: 0 {{STYLE_SPACE_8}};
+}
+
+// Die Farbe selbst, links neben ihrem Hexwert. Die FLAECHE bekommt sie
+// zur Laufzeit von einem eigenen CssProvider (siehe farbWidget in
+// ags-settings.template) - eine Farbe, die der Nutzer gerade eintippt,
+// kann keine Klasse in diesem Stylesheet haben. Hier steht nur, was
+// unabhaengig von ihr gilt.
+.set-swatch {
+  border: 1px solid $border;
+  border-radius: {{STYLE_RADIUS_CONTROL}};
+}
+
+// Die Einheit hinter einer Zahl ("px", "pt"). Gedaempft, weil sie zur
+// Zahl gehoert und nicht neben ihr steht.
+.set-unit {
+  font-size: {{STYLE_FONT_CAPTION}};
+  color: $subtext;
+}
+
+// Das Paar, mit dem ein Modul auf die Leiste kommt. Es ist KEINE
+// zepRow: es traegt keinen Namen und keinen Zustand, nur eine Liste und
+// einen Knopf nebeneinander - darum heisst es auch nicht "-row".
+.set-add {
+  padding: {{STYLE_SPACE_8}} 0;
+}
+
 // ===== NOTIFICATIONS =====
 //
 // DER MELDER, UEBERARBEITET AM 12.08.2026

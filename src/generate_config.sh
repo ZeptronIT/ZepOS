@@ -861,6 +861,14 @@ case "$CONFIG_NAME" in
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
         CONFIG_FILE="ControlCenter.tsx"
         ;;
+    # Die Einstellungen als eigenes AGS-Fenster, seit dem 19.08.2026
+    # (Aufgabe 32). Es zeichnet die sieben Seiten, die
+    # `zepos-settings-gui --json get` ausgibt - kein Regler und keine
+    # Grenze steht in der Vorlage selbst, siehe deren Kopf.
+    ags-settings)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
+        CONFIG_FILE="Settings.tsx"
+        ;;
     ags-network)
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
         CONFIG_FILE="NetworkManager.tsx"

@@ -224,6 +224,14 @@ def test_the_dials_are_a_subset_and_the_page_says_how_many_are_not(model):
     und nicht getippt. Genau das prueft diese Zusicherung: eine getippte
     Zahl waere ab der naechsten neuen Groesse falsch, und niemand
     bekaeme es gesagt.
+
+    GEPRUEFT WIRD SEIT DEM 19.08.2026 (Aufgabe 32) model.py UND NICHT
+    MEHR app.py: der Satz, der die Zahl nennt, ist als NOTE_SIZES_REST
+    dorthin gezogen, weil ihn seither ZWEI Fenster zeigen (das GTK- und
+    das AGS-Fenster, ueber bridge.py). Die Zusicherung selbst ist
+    dieselbe geblieben - sie zeigt nur dorthin, wo der Satz jetzt
+    wohnt. `len(DIALS)` statt `len(model.DIALS)`, weil model.py auf
+    seine eigene Tabelle ohne Modulnamen zeigt.
     """
     import sizes
 
@@ -231,12 +239,12 @@ def test_the_dials_are_a_subset_and_the_page_says_how_many_are_not(model):
     assert names < set(sizes.TABLE)
     assert len(names) == len(model.DIALS), "ein Regler steht doppelt"
 
-    app = (SETTINGS_ROOT / "zepos_settings_gui" / "app.py").read_text(
+    source = (SETTINGS_ROOT / "zepos_settings_gui" / "model.py").read_text(
         encoding="utf-8")
-    assert "{len(sizes.TABLE)}" in app, (
+    assert "{len(sizes.TABLE)}" in source, (
         "die Anwendung nennt die Zahl der einstellbaren Groessen nicht "
         "mehr aus der Tabelle")
-    assert "{len(sizes.TABLE) - len(model.DIALS)}" in app
+    assert "{len(sizes.TABLE) - len(DIALS)}" in source
 
 
 # --------------------------------------------------------------------

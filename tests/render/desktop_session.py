@@ -152,6 +152,10 @@ RENDERED = {
     "templates/ags-battery.template": "widget/Battery.tsx",
     "templates/ags-disk.template": "widget/DiskUsage.tsx",
     "templates/ags-control-center.template": "widget/ControlCenter.tsx",
+    # Die Einstellungen als eigenes AGS-Fenster, seit dem 19.08.2026
+    # (Aufgabe 32) - der case-Zweig dazu heisst `ags-settings)` in
+    # src/generate_config.sh.
+    "templates/ags-settings.template": "widget/Settings.tsx",
     "templates/ags-network.template": "widget/NetworkManager.tsx",
     "templates/ags-bluetooth.template": "widget/BluetoothManager.tsx",
     "templates/ags-wallpaper.template": "widget/WallpaperSelector.tsx",
@@ -218,19 +222,23 @@ def module_payloads() -> tuple[dict[str, str], dict[str, str]]:
                          (tests/src/test_bar_headless.py); zwei
                          Nachstellungen desselben Skripts, die
                          Verschiedenes sagen, messen zwei Leisten.
-        status.sh        bar-status-config.template: seit dem
-                         12.08.2026 NUR das Zeichen, und das Zeichen
-                         traegt die Stufe: fuenf Akkustaende, drei
-                         Lautstaerken, vier Feldstaerken. Die
-                         Prozentzahl steht im Tooltip ("Symbol allein,
-                         Zahl im Tooltip - so macht es macOS").
+        status.sh        bar-status-config.template: das Zeichen traegt
+                         die Stufe - fuenf Akkustaende, drei
+                         Lautstaerken, vier Feldstaerken.
 
-                         DER AKKU IST SEIT DEM 13.08.2026 AUSGENOMMEN
-                         und traegt Zeichen UND Zahl - bestellt an dem
-                         Tag: "ich will auch eine prozentzahl haben fuer
-                         die batterie nicht nur ein symbol". Die
-                         Begruendung, warum bei ihm und nicht bei Ton
-                         und Mikrofon, steht im Kopf der Vorlage.
+                         AKKU, TON UND MIKROFON TRAGEN IHRE ZAHL SEIT
+                         DEM 19.08.2026 AUF DER LEISTE, und zwar auch im
+                         stummen Zustand; nur das Netz hat sie noch im
+                         Tooltip. Hier stand bis dahin die Gegenregel vom
+                         12.08.2026 ("Symbol allein, Zahl im Tooltip - so
+                         macht es macOS"), mit dem Akku als einziger
+                         Ausnahme seit dem 13.08.2026. Der Nutzer hat sie
+                         umgekehrt und ausdruecklich BEIDE dauerhaft mit
+                         Zahl gewaehlt (Commit 6cbd095). Die
+                         ausfuehrliche Begruendung steht im Kopfabschnitt
+                         von bar-status-config.template und wird hier
+                         nicht abgeschrieben; GEMESSEN dort: Ton 51 -> 90
+                         px, Mikrofon 51 -> 78 px.
 
     WORIN DAS VON tests/src/test_bar_headless.py ABWEICHT, UND WARUM DAS
     EIN BEFUND IST

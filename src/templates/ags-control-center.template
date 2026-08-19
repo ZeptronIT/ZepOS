@@ -411,6 +411,11 @@ export default function ControlCenter(
   // Arch-Aktualisierungen fasst update.scope "zepos" mit Absicht nicht
   // an.
   let updateAction = ""
+  // Die Seite, die der Knopf statt eines Befehls oeffnet - leer, solange
+  // er einen Befehl hat. Zwei Felder und kein "der Befehl faengt mit
+  // settings: an": ein Befehl und eine Seite sind zwei Dinge, und eine
+  // Zeichenkette, die beides sein kann, wird als erstes verwechselt.
+  let updateSeite = ""
 
   // Alles neu einlesen
   const updateDisplay = async () => {
@@ -531,9 +536,11 @@ export default function ControlCenter(
     // ueberhaupt existiert.
     if (kind.includes("updates-regenerate")) {
       updateAction = "zepos-generate --all"
+      updateSeite = ""
       updateBtn.set_tooltip_text(_("Regenerate the configuration"))
     } else if (kind.includes("updates-failed")) {
       updateAction = "sudo zepos-update"
+      updateSeite = ""
       updateBtn.set_tooltip_text(_("Try the update again"))
     } else if (kind.includes("updates-base")) {
       // Der volle Schritt, und er steht hier, weil update.py ihn
@@ -542,13 +549,23 @@ export default function ControlCenter(
       // Nutzer den vollen Schritt bewusst tun kann." Bewusst tun kann
       // er ihn nur, wenn es einen Weg dorthin gibt.
       updateAction = "sudo pacman -Syu"
+      updateSeite = ""
       updateBtn.set_tooltip_text(
         _("Update the Arch base - in the terminal, with a prompt"))
     } else if (kind.includes("updates-disabled")) {
-      updateAction = "zepos-settings-gui --page aktualisierung"
+      // KEIN Befehl, sondern eine SEITE - seit Aufgabe 32 (19.08.2026).
+      // Hier stand `zepos-settings-gui --page aktualisierung`, und weil
+      // updateBtn seine drei anderen Zustaende in einem Terminal
+      // ausfuehrt (sie fragen nach Passwort und Bestaetigung), lief das
+      // GTK-Fenster in einem kitty mit `read` dahinter. Eine Seite
+      // gehoert nicht in ein Terminal; `updateSeite` fuehrt sie am
+      // Befehl vorbei (siehe updateBtn weiter unten).
+      updateAction = ""
+      updateSeite = "settings:aktualisierung"
       updateBtn.set_tooltip_text(_("Configure the self-update"))
     } else {
       updateAction = ""
+      updateSeite = ""
     }
 
     // ===== SCHREIBTISCH =====
@@ -1395,12 +1412,18 @@ export default function ControlCenter(
       const displayIcon = new Gtk.Label({ label: ICONS.displays })
       displayIcon.add_css_class("cc-icon")
       const displayLabel = ccLabel(_("Displays"))
-      // zepButton, Rolle "still" (Task D, 18.08.2026): oeffnet ein
-      // fremdes Werkzeug (zepos-settings-gui), reine Navigation.
-      const displayBtn = zepButton(ICONS.launch, "still", () => {
-        execAsync(["zepos-settings-gui", "--page", "bildschirme"])
-        closeFn?.()
-      })
+      // zepButton, Rolle "still": reine Navigation.
+      //
+      // SEIT AUFGABE 32 (19.08.2026) IN DIE EIGENE OBERFLAECHE UND NICHT
+      // MEHR IN EIN FREMDES PROGRAMM: hier stand `execAsync(["zepos-
+      // settings-gui", "--page", "bildschirme"])`, also ein zweiter
+      // Prozess mit einem GTK4/libadwaita-Fenster daneben. Die Seite
+      // gibt es seit heute als Seite eines AGS-Fensters (ags-settings.
+      // template), und `opens()` erreicht sie ueber toggleByName()
+      // ("settings:bildschirme") - derselbe Weg, den Netz, Bluetooth und
+      // VPN am 18.08.2026 genommen haben, als sie Seiten wurden.
+      const displayBtn = zepButton(ICONS.launch, "still",
+                                   opens("settings:bildschirme"))
       displayBtn.set_tooltip_text(
         _("Set arrangement, resolution and refresh rate"))
       displayRow.append(displayIcon)
@@ -1468,7 +1491,10 @@ export default function ControlCenter(
 
       const [weatherBox, weatherText] = deskRow(
         ICONS.weather, "", _("Set the location for the weather"),
-        runs("zepos-settings-gui --page wetter"))
+        // Aufgabe 32 (19.08.2026): die Seite "Wetter" des eigenen
+        // Einstellungsfensters statt eines zweiten Prozesses - siehe
+        // die Begruendung bei displayBtn weiter oben.
+        opens("settings:wetter"))
       weatherRow = weatherBox
       weatherLabel = weatherText
       weatherRow.set_visible(false)
@@ -1659,6 +1685,13 @@ export default function ControlCenter(
       // woanders hinzufuehren. Ein Kontrollzentrum, das etwas zu
       // melden hat, soll genau darauf hinweisen - das ist "voll".
       updateBtn = zepButton(ICONS.launch, "voll", () => {
+        // Die Seite zuerst: sie ist der einzige der fuenf Zustaende, der
+        // kein Terminal braucht (Aufgabe 32, 19.08.2026).
+        if (updateSeite) {
+          toggle(updateSeite)
+          closeFn?.()
+          return
+        }
         if (!updateAction) return
         // Im Terminal und nicht im Hintergrund: drei der vier Befehle
         // fragen nach etwas - sudo nach dem Passwort, pacman nach der

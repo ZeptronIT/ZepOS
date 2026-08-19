@@ -731,3 +731,298 @@ def test_der_json_weg_zieht_kein_gtk_herein():
         encoding="utf-8")
     before = main_source.split("bridge.main")[0]
     assert "from .app import" not in before
+
+
+# --------------------------------------------------------------------
+# Die Prosa der Seiten steht in model.py und nicht in einem Fenster
+# --------------------------------------------------------------------
+
+def test_die_erklaerenden_texte_kommen_aus_model_py(bridge, capsys):
+    """Ein Satz, zwei Fenster - und deshalb genau eine Quelle.
+
+    Bis zum 19.08.2026 standen die Beschreibungen der Seiten als
+    `Adw.PreferencesGroup(description=...)` in app.py, also in EINEM der
+    beiden Fenster; der Bericht zu Aufgabe 29 nannte das ausdruecklich
+    als das, was die Bruecke noch nicht hergibt. Abgeschrieben ins
+    AGS-Fenster waeren sie zwei Fassungen desselben Satzes, und ab der
+    ersten Umformulierung laese der Nutzer je nach Fenster eine andere
+    Begruendung fuer denselben Regler.
+
+    Geprueft wird gegen model.py und NICHT gegen einen hier getippten
+    Text: eine Abschrift in der Zusicherung waere dieselbe Doppelung,
+    nur an einer dritten Stelle.
+    """
+    _code, document, _err = read(bridge, capsys, ["get"])
+    from zepos_settings_gui import model
+
+    seiten = {page["name"]: page for page in document["pages"]}
+    gruppen = {page["name"]: {gruppe["name"]: gruppe["note"]
+                              for gruppe in page["groups"]}
+               for page in document["pages"]}
+
+    assert gruppen["groesse"][model.GROUP_SCALE] == model.NOTE_SCALE_GROUP
+    assert gruppen["groesse"][model.GROUP_DIALS] == model.NOTE_DIALS_GROUP
+    assert gruppen["groesse"][model.GROUP_MOTION] == model.NOTE_MOTION_GROUP
+    assert (gruppen["groesse"][model.NOTE_SIZES_REST_TITLE]
+            == model.NOTE_SIZES_REST)
+    assert gruppen["wetter"][model.GROUP_WEATHER] == model.NOTE_WEATHER_GROUP
+    assert gruppen["thema"][model.GROUP_THEME] == model.theme_note(
+        model.theme_writable())
+    assert gruppen["aktualisierung"][model.GROUP_UPDATE] == model.update_note(
+        model.update_writable())
+    assert (gruppen["aktualisierung"][model.NOTE_UPDATE_REST_TITLE]
+            == model.NOTE_UPDATE_REST)
+
+    # Und die Nebenzeilen der einzelnen Bedienelemente.
+    elemente = {control["key"]: control for page in document["pages"]
+                for control in page["controls"]}
+    assert elemente["sizes.motion"]["note"] == model.NOTE_MOTION
+    assert elemente["sizes.scale"]["note"] == model.NOTE_SCALE_RESET
+    assert elemente["update.enabled"]["note"] == model.NOTE_UPDATE_ENABLED
+    assert elemente["update.scope"]["note"] == model.NOTE_UPDATE_SCOPE
+    assert elemente["update.notify"]["note"] == model.NOTE_UPDATE_NOTIFY
+
+    # Jede Gruppe, die ein Bedienelement nennt, gibt es auch.
+    for page in document["pages"]:
+        namen = {gruppe["name"] for gruppe in page["groups"]}
+        for control in page["controls"]:
+            if control["group"]:
+                assert control["group"] in namen, (
+                    f"{control['key']} steht in der Gruppe "
+                    f"{control['group']!r}, die seine Seite nicht fuehrt")
+    assert seiten["farben"]["groups"], "die Farbgruppen fehlen"
+
+
+def test_app_py_schreibt_die_texte_nicht_mehr_selbst():
+    """Die andere Haelfte derselben Aussage.
+
+    Ohne sie waere "es steht in model.py" auch dann wahr, wenn daneben
+    in app.py noch eine zweite Fassung stuende - und genau die waere die
+    eine, die niemand mitpflegt.
+    """
+    app = (SETTINGS_ROOT / "zepos_settings_gui" / "app.py").read_text(
+        encoding="utf-8")
+    for anfang in ("Ein Faktor auf alles, was Text ist",
+                   "Fuenf Groessen mit einem eigenen Grund",
+                   "Aus heisst wirklich aus",
+                   "Ein Ortsname, eine Postleitzahl",
+                   "Die Palette, unter der die eigenen Farben liegen",
+                   "Diese Einstellungen gehoeren der MASCHINE"):
+        assert anfang not in app, (
+            f"app.py traegt {anfang!r} wieder selbst - dann gibt es den "
+            "Satz zweimal")
+
+
+# --------------------------------------------------------------------
+# Die Bildschirme: der laufende Weg
+# --------------------------------------------------------------------
+
+class _FakeAttempt:
+    """Ein Versuch, ohne Waechter und ohne hyprctl.
+
+    displays.arm_and_apply() startet einen echten Kindprozess und ruft
+    `hyprctl --batch`. Beides ist in dieser Suite verboten - hyprctl
+    steht in NEVER_PASSTHROUGH des Isolationswaechters, weil es die
+    laufende Sitzung des Entwicklers anfasst. Geprueft wird deshalb, WAS
+    bridge.arm() dem Waechter uebergibt und in welcher Reihenfolge, nicht
+    ob Hyprland gehorcht.
+    """
+
+    def __init__(self, code: int = 0) -> None:
+        self.applied = ["hyprctl", "--batch", "keyword monitor eDP-1,..."]
+        self.antwort = None
+        self.code = code
+
+    def keep(self):
+        self.antwort = "behalten"
+        return _FakeOutcome(self.code)
+
+    def revert(self):
+        self.antwort = "verwerfen"
+        return _FakeOutcome(12)
+
+
+class _FakeOutcome:
+    def __init__(self, code: int) -> None:
+        self.code = code
+        self.report = "nachgestellt"
+
+    @property
+    def kept(self) -> bool:
+        return self.code == 0
+
+
+def _arm(bridge, monkeypatch, eingabe: str, versuch=None):
+    """`--json arm` mit einem nachgestellten Waechter."""
+    import io
+
+    gesehen = {}
+    attempt = versuch if versuch is not None else _FakeAttempt()
+
+    def arm_and_apply(neu, alt, **kwargs):
+        gesehen["neu"] = list(neu)
+        gesehen["alt"] = list(alt)
+        return attempt
+
+    monkeypatch.setattr(bridge.displays, "arm_and_apply", arm_and_apply)
+
+    stdin = io.StringIO(eingabe)
+    stdout = io.StringIO()
+    code = bridge.arm(runner=screen_runner(), stdin=stdin, stdout=stdout)
+    zeilen = [json.loads(zeile) for zeile in stdout.getvalue().splitlines()
+              if zeile.strip()]
+    return code, zeilen, gesehen, attempt
+
+
+def test_arm_wendet_an_und_schreibt_erst_nach_der_bestaetigung(
+        bridge, monkeypatch, tmp_path):
+    """Die Reihenfolge IST die Zusicherung dieser Seite.
+
+    Erst der Waechter, dann das Anwenden, dann die Frage - und die Datei
+    zuletzt. Eine schon geschriebene Datei braeuchte einen zweiten
+    Rueckfall, und eine Sitzung, die danach mit ihr startet, faende
+    keinen Schirm mehr, auf dem sie fragen koennte (Kopf von
+    src/displays.py).
+    """
+    import displays
+
+    ziel = displays.config_path()
+    assert not ziel.exists()
+
+    code, zeilen, gesehen, attempt = _arm(
+        bridge, monkeypatch,
+        json.dumps({"layout": [{"name": "eDP-1", "scale": 2.0}]})
+        + "\nbehalten\n")
+
+    assert code == 0
+    # Zeile 1 meldet "scharf und angewandt", Zeile 2 das Ergebnis. Zwei
+    # Zeilen und nicht eine: dazwischen laeuft die Frist, und das
+    # Fenster muss in dieser Zeit etwas anzeigen koennen.
+    assert len(zeilen) == 2, zeilen
+    assert zeilen[0]["armed"] is True
+    assert zeilen[0]["seconds"] == displays.CONFIRM_SECONDS
+    assert attempt.antwort == "behalten"
+    assert zeilen[1]["kept"] is True
+    assert [item.scale for item in gesehen["neu"]] == [2.0]
+    assert [item.scale for item in gesehen["alt"]] == [1.0], (
+        "der Waechter bekommt den Stand VOR der Aenderung - sonst stellt "
+        "er im Ernstfall genau das wieder her, was niemand sehen konnte")
+    assert ziel.exists(), "behalten und nicht geschrieben"
+    assert str(ziel) in zeilen[1]["written"]
+
+
+def test_ohne_antwort_wird_nichts_geschrieben(bridge, monkeypatch):
+    """Ein Dateiende ist ein "ich sehe nichts".
+
+    Wer die Verbindung verliert, hat die neue Anordnung nicht gesehen -
+    also gilt sie nicht. Dieselbe Vorgabe wie beim Schliess-Ergebnis der
+    Rueckfrage im GTK-Fenster (screens.py, _ask).
+    """
+    import displays
+
+    code, zeilen, _gesehen, attempt = _arm(
+        bridge, monkeypatch,
+        json.dumps({"layout": [{"name": "eDP-1", "enabled": True}]}) + "\n")
+
+    assert code == 0
+    assert attempt.antwort == "verwerfen"
+    assert zeilen[-1]["kept"] is False
+    assert not displays.config_path().exists()
+
+
+def test_ein_waechter_der_schon_zurueckstellte_schlaegt_die_absicht(
+        bridge, monkeypatch):
+    """Seine Frist lief genau in diesem Moment ab.
+
+    Dann gilt SEIN Ergebnis und nicht die Absicht: auf dem Schirm steht
+    die alte Anordnung, also wird auch keine neue geschrieben.
+    """
+    import displays
+
+    code, zeilen, _gesehen, _attempt = _arm(
+        bridge, monkeypatch,
+        json.dumps({"layout": [{"name": "eDP-1", "scale": 2.0}]})
+        + "\nbehalten\n",
+        versuch=_FakeAttempt(code=10))
+
+    assert code == 1
+    assert zeilen[-1]["kept"] is False
+    assert not displays.config_path().exists()
+    assert "zurueckgestellt" in zeilen[-1]["problems"][0]
+
+
+@pytest.mark.parametrize("dokument, erwartet", [
+    ({"layout": [{"name": "gibt-es-nicht"}]}, "gibt es hier nicht"),
+    ({"layout": [{"name": "eDP-1", "quatsch": 1}]}, "kennt diese Oberflaeche"),
+    ({"layout": [{"name": "eDP-1", "scale": "gross"}]}, "ist keine Zahl"),
+    ({"layout": [{"name": "eDP-1", "enabled": 1}]}, "ist kein Schalter"),
+    ({"layout": [{"enabled": True}]}, "braucht seinen `name`"),
+    ({"layout": [{"name": "eDP-1", "enabled": False}]}, "Kein Bildschirm"),
+    ({"schirme": []}, "erwartet wird"),
+])
+def test_eine_anordnung_die_nicht_geht_wird_gar_nicht_erst_scharf(
+        bridge, monkeypatch, dokument, erwartet):
+    """Abgelehnt VOR dem Waechter, nicht nach ihm.
+
+    Der letzte Fall ist der, der zaehlt: eine Anordnung ohne
+    eingeschalteten Schirm ist genau der schwarze Schirm, vor dem die
+    ganze Vorrichtung schuetzen soll - displays.guard_plan() wirft
+    dafuer NoScreenLeft, und diese Pruefung kommt ihr zuvor.
+    """
+    import displays
+
+    code, zeilen, gesehen, _attempt = _arm(
+        bridge, monkeypatch, json.dumps(dokument) + "\nbehalten\n")
+
+    assert code == 1
+    assert zeilen[-1]["ok"] is False
+    assert zeilen[-1]["armed"] is False
+    assert any(erwartet in klage for klage in zeilen[-1]["problems"]), zeilen
+    assert gesehen == {}, "es wurde trotz Ablehnung ein Waechter scharfgemacht"
+    assert not displays.config_path().exists()
+
+
+def test_das_dokument_nennt_den_laufenden_weg_und_seine_bedingung(
+        bridge, capsys):
+    """`writable: false` bleibt wahr - fuer `set`.
+
+    Die Anordnung geht nicht durch `--json set`, und das steht weiter
+    so da. Was dazugekommen ist, ist der ZWEITE Weg: `armable` sagt, ob
+    er hier offensteht, `arm` nennt ihn, `seconds` sagt, wie lange die
+    Frist ist. Ein Fenster, das den Anwenden-Knopf zeigt, ohne dass es
+    einen Waechter gibt, haette einen Knopf, der nur Fehlermeldungen
+    kann.
+    """
+    _code, document, _err = read(bridge, capsys, ["get"])
+    from zepos_settings_gui import bridge as modul
+
+    control = next(control for page in document["pages"]
+                   for control in page["controls"]
+                   if page["name"] == "bildschirme")
+    assert control["writable"] is False
+    assert "set" in control["reason"] and modul.ARM in control["reason"]
+    assert control["arm"] == [modul.OPTION, modul.ARM]
+    assert control["armable"] is True
+    assert control["seconds"] > 0
+    assert control["scales"] and control["transforms"]
+    # Die Modi kommen aus `hyprctl monitors all -j` und nicht aus einer
+    # Liste hier: ein Fenster, das eine Aufloesung anbietet, die dieser
+    # Schirm nicht kann, bietet einen schwarzen Schirm an.
+    assert control["value"][0]["modes"] == [
+        {"width": 1920, "height": 1080, "refresh": 60.0,
+         "label": "1920 x 1080, 60 Hz"}]
+
+
+def test_ohne_waechter_wird_der_weg_nicht_angeboten(bridge, capsys,
+                                                    monkeypatch):
+    """Kein Rueckfall auf "dann eben ohne Waechter"."""
+    def kein_waechter():
+        raise FileNotFoundError("zepos-displays-guard fehlt")
+
+    monkeypatch.setattr(bridge.displays, "guard_command", kein_waechter)
+    _code, document, _err = read(bridge, capsys, ["get"])
+
+    control = next(control for page in document["pages"]
+                   for control in page["controls"]
+                   if page["name"] == "bildschirme")
+    assert control["armable"] is False

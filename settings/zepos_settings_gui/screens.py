@@ -96,28 +96,14 @@ MAXIMUM_MAGNIFICATION = 1 / 6
 # hineinziehen koennen muss.
 CANVAS_HEIGHT = 240
 
-# Die acht Transformationen von wl_output, in der Reihenfolge ihrer
-# Nummern - der Index IST der Wert, der in die Zeile kommt.
-TRANSFORMS = (
-    "Normal",
-    "90 Grad",
-    "180 Grad (auf dem Kopf)",
-    "270 Grad",
-    "Gespiegelt",
-    "Gespiegelt, 90 Grad",
-    "Gespiegelt, 180 Grad",
-    "Gespiegelt, 270 Grad",
-)
-
-# Die Massstaebe, die angeboten werden.
-#
-# Eine Liste und kein Drehknopf, und das ist eine Messung: Hyprland lehnt
-# einen Massstab ab, bei dem Breite oder Hoehe nicht ganzzahlig aufgehen,
-# und meldet das als Konfigurationsfehler. Ein Drehknopf in Schritten von
-# 0.05 boete ueber dreissig Zahlen an, von denen die meisten fuer einen
-# gegebenen Schirm falsch sind. Diese sechs sind Vielfache von 1/4 und
-# gehen auf jeder gaengigen Aufloesung auf.
-SCALES = (1.0, 1.25, 1.5, 1.75, 2.0, 3.0)
+# Die Drehungen und die Massstaebe stehen seit dem 19.08.2026
+# (Aufgabe 32) in model.py und nicht mehr hier: bridge.py schreibt sie
+# ins JSON, damit das AGS-Fenster dieselben acht Drehungen und dieselben
+# sechs Massstaebe anbietet - und bridge.py darf diese Datei nicht
+# importieren, sie zieht `gi` herein. Die Begruendungen fuer BEIDE
+# Listen stehen dort bei TRANSFORMS/SCALES.
+TRANSFORMS = model.TRANSFORMS
+SCALES = model.SCALES
 
 
 def _rung(section: dict, index: int) -> int:

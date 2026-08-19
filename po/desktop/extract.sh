@@ -5,7 +5,7 @@
 # schreibt sie in zepos-desktop.pot. Danach traegt `msgmerge` sie in
 # de.po nach, ohne vorhandene Uebersetzungen zu verlieren:
 #
-#     ./extract.sh && msgmerge -U de.po zepos-desktop.pot
+#     ./extract.sh && msgmerge --no-wrap -U de.po zepos-desktop.pot
 #
 # WARUM --language=JavaScript AUF EINER .template-DATEI
 #     Die Vorlagen sind TypeScript mit {{PLATZHALTERN}} darin, und
@@ -50,7 +50,23 @@ for pfad in "$WURZEL"/src/templates/ags-*.template; do
     VORLAGEN+=("src/templates/$name")
 done
 
+# --no-wrap, UND DAS IST KEIN GESCHMACK
+#     GEMESSEN am 19.08.2026 (Aufgabe 32): ohne die Angabe bricht
+#     xgettext lange msgids nach 79 Spalten um -
+#
+#         msgid ""
+#         "Position: every screen keeps the place it has. Dragging them "
+#         "around each other is ..."
+#
+#     - und tests/src/test_ags_i18n.py sucht im Katalog nach der
+#     ZEICHENFOLGE `msgid "<ganzer Text>"`. Ein umgebrochener Eintrag
+#     findet sich darin nicht wieder; der Lauf meldete vier msgids ohne
+#     Katalogeintrag und drei Eintraege ohne Uebersetzung, obwohl zwei
+#     davon seit Tagen uebersetzt dastanden - ein `msgmerge` hatte sie
+#     nur neu umgebrochen. de.po und die .pot sind seither ungebrochen
+#     (`msgcat --no-wrap`), und diese Zeile haelt sie so.
 xgettext \
+    --no-wrap \
     --language=JavaScript \
     --from-code=UTF-8 \
     --keyword=_ \

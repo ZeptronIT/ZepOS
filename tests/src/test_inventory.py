@@ -357,8 +357,19 @@ def test_template_count_is_seventy_seven():
     Literal). ags-power-button.template kommt dazu (+1, der Dock-Knopf
     selbst, eine eigene kleine Layer-Shell-Flaeche). Die Zwillingszusicherung
     in tests/src/test_new_templates.py haelt dieselbe Rechnung.
+
+    85 STATT 84, am 19.08.2026 (Aufgabe 32): ags-settings. Der Nutzer
+    hatte am 18.08.2026 "ein komplett eigenes ags fenster" fuer die
+    Einstellungen bestellt und am 19.08.2026 festgestellt, dass er
+    stattdessen eine Umfaerbung der GTK4-Anwendung bekommen hatte
+    ("uebrigens hast du die settings die du selber gebaut hast immernoch
+    nicht in einem ags fenster umgesetzt was ich eigentlich wollte").
+    Die neue Vorlage erzeugt ags/widget/Settings.tsx - die zweite Schale
+    dieses Baums (createShellWindow) neben dem Kontrollzentrum. Sie
+    traegt KEINE Einstellung selbst: sie zeichnet, was
+    `zepos-settings-gui --json get` ausgibt.
     """
-    assert len(list((SRC / "templates").glob("*.template"))) == 84
+    assert len(list((SRC / "templates").glob("*.template"))) == 85
 
 
 def test_nothing_refers_to_a_deleted_template():

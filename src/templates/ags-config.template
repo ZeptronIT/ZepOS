@@ -26,6 +26,13 @@ import ControlCenter from "./widget/ControlCenter"
 import WallpaperSelector from "./widget/WallpaperSelector"
 import StyleEditor from "./widget/StyleEditor"
 import VpnSettings from "./widget/VpnSettings"
+// Die Einstellungen als eigenes AGS-Fenster - Aufgabe 32 (19.08.2026),
+// bestellt am 18.08.2026 ("ich will auch fuer unsere einstellungen ein
+// komplett eigenes ags fenster"). ASYNCHRON, als einziges der zwoelf:
+// seine sieben Seiten stehen in `zepos-settings-gui --json get` und
+// nicht in der Vorlage (siehe deren Kopf), und createShellWindow()
+// braucht sie beim Bauen.
+import Settings from "./widget/Settings"
 // Die Sitzungsmaske - der Ersatz fuer zepos-logout (Aufgabe 26,
 // 19.08.2026). Ein Fenster aus createOverlayWindow() wie jedes andere
 // hier, kein eigenes Programm mehr - siehe den Kopf von
@@ -63,6 +70,10 @@ let widgets: Record<string, OverlayWidget | null> = {
   vpnSettings: null,
   notifications: null,
   logout: null,
+  // Erst gefuellt, wenn das erste `--json get` zurueck ist (siehe den
+  // Import oben). Bis dahin meldet toggleWidget() "widget not found" -
+  // und das ist die ehrliche Antwort, nicht ein leeres Fenster.
+  settings: null,
 }
 
 let dock: DockHandle | null = null
@@ -141,6 +152,16 @@ function toggleByName(name: string, at?: OverlayAnchor): void {
   if (name === "bluetooth" || name === "network" || name === "vpn"
       || name === "sound") {
     (widgets.control as ShellWidget | null)?.zeigeSeite(name, at)
+    return
+  }
+  // "settings:bildschirme" - dieselbe Umleitung wie oben, nur in die
+  // ZWEITE Schale dieses Prozesses. Der Doppelpunkt trennt Fenster und
+  // Seite, weil beide Schalen eigene Seitennamen fuehren: ein blosses
+  // "bildschirme" waere ab der naechsten Seite des Kontrollzentrums
+  // zweideutig. Die Seitennamen kommen aus model.PAGES (Aufgabe 32).
+  if (name.startsWith("settings:")) {
+    (widgets.settings as ShellWidget | null)
+      ?.zeigeSeite(name.slice("settings:".length), at)
     return
   }
   void toggleWidget(widgets[name] ?? null, at)
@@ -265,6 +286,17 @@ app.start({
       console.error("Failed to create VpnSettings:", e)
     }
 
+    // Die Einstellungen. ALS EINZIGES FENSTER MIT .then(): Settings()
+    // ist asynchron (siehe den Import oben), weil seine Seiten aus dem
+    // Dokument der Bruecke kommen. Der Rest von main() laeuft
+    // weiter - eine Leiste, die auf ein Python-Programm wartet, waere
+    // eine Sekunde schwarzer Schirm bei jeder Anmeldung.
+    Settings().then(fenster => {
+      widgets.settings = fenster
+      console.log(fenster ? "Settings loaded successfully"
+        : "Settings: zepos-settings-gui antwortet nicht")
+    }).catch(e => console.error("Failed to create Settings:", e))
+
     // Create the session/logout window - the replacement for the
     // standalone zepos-logout binary (Aufgabe 26, 19.08.2026). Reached
     // over SUPER+M (`ags request logout`).
@@ -377,6 +409,12 @@ app.start({
       toggleWidget(widgets.style).then(r => res(r))
     } else if (reqStr.includes("vpn-settings")) {
       toggleWidget(widgets.vpnSettings).then(r => res(r))
+    } else if (reqStr.includes("settings")) {
+      // NACH "vpn-settings" und NICHT davor: "vpn-settings" enthaelt
+      // "settings", also faenge dieser Zweig das andere Fenster mit ab,
+      // stuende er weiter oben. Dieselbe Falle wie bei "vpn"/"vpn-
+      // settings" weiter unten, nur eine Ebene frueher.
+      toggleWidget(widgets.settings).then(r => res(r))
     } else if (reqStr.includes("logout")) {
       // SUPER+M (`ags request logout`, hyprland-universal-config.
       // template) und der Dock-Knopf (PowerButton.tsx). Bis zum

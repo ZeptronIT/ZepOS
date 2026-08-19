@@ -165,12 +165,17 @@ UPDATE_CHOICES: dict[str, dict[str, str]] = {
 USAGE = """usage: zepos-settings-gui --json get
        zepos-settings-gui --json set <dokument>|-
        zepos-settings-gui --json apply
+       zepos-settings-gui --json arm
 
 get   schreibt den Zustand aller sieben Seiten als ein JSON-Dokument.
 set   nimmt ein Objekt {schluessel: wert} entgegen - dieselben
       Schluessel, die `get` in jedem Bedienelement unter "key" nennt,
       also dieselben wie bei `zepos-settings set`. "-" liest stdin.
-apply laesst zepos-generate --all laufen und raeumt die Marke weg."""
+apply laesst zepos-generate --all laufen und raeumt die Marke weg.
+arm   wendet eine Bildschirmanordnung AUF PROBE an und BLEIBT STEHEN:
+      Zeile 1 auf stdin ist die Anordnung, Zeile 2 die Antwort
+      (behalten/verwerfen). Ohne Antwort nimmt der Waechter zurueck.
+      Fuer ein Programm, das laufen bleibt - nicht fuer die Hand."""
 
 
 # --------------------------------------------------------------------
@@ -213,16 +218,45 @@ def _control(key: str, kind: str, label: str, value: Any, **rest: Any) -> dict:
         # update_elevated_command() und nicht getippt, damit hier nicht
         # eine zweite Fassung derselben Befehlszeile steht.
         "command": [],
+        # Zu welcher Gruppe der Seite dieses Element gehoert - der Name
+        # aus `groups` seiner Seite, oder leer.
+        #
+        # NACHGETRAGEN am 19.08.2026 (Aufgabe 32): die Farben trugen
+        # dieses Feld schon (brand.COLOR_GROUPS), die uebrigen sechs
+        # Seiten nicht - und damit hatte das Dokument zwei Formen
+        # desselben Bedienelements, genau das, was der Absatz oben
+        # verbietet. Es steht jetzt an JEDEM, weil jede Seite Gruppen
+        # hat: sie standen bisher nur als Adw.PreferencesGroup-Titel in
+        # app.py, also in einem der beiden Fenster.
+        "group": "",
     }
     control.update(rest)
     return control
 
 
-def _page(name: str, controls: list[dict], note: str = "") -> dict:
+def _page(name: str, controls: list[dict], note: str = "",
+          groups: list[dict] | None = None) -> dict:
+    """Eine Seite mit ihren Gruppen.
+
+    `groups` ist eine GEORDNETE Liste von {"name", "note"} und keine
+    Abbildung: die Reihenfolge ist die, in der die Gruppen im Fenster
+    stehen, und ein JSON-Objekt gibt sie nicht zuverlaessig her.
+
+    Eine Gruppe OHNE Bedienelemente ist erlaubt und kommt zweimal vor
+    ("Die uebrigen Groessen", "Die uebrigen Einstellungen"): im
+    GTK-Fenster sind das Adw.ActionRows ohne Wirkung, die sagen, was
+    diese Oberflaeche NICHT anbietet und wo es stattdessen steht. Sie
+    sind Text und kein Bedienelement - als Bedienelement getarnt waeren
+    sie eine Zeile, die aussieht, als koennte man sie anfassen.
+    """
     label, icon = next((title, icon) for page, title, icon in model.PAGES
                        if page == name)
     return {"name": name, "label": label, "icon": icon, "note": note,
-            "controls": controls}
+            "groups": groups or [], "controls": controls}
+
+
+def _group(name: str, note: str = "") -> dict:
+    return {"name": name, "note": note}
 
 
 # --------------------------------------------------------------------
@@ -253,9 +287,13 @@ def _scale_free(draft: model.Draft, name: str) -> float:
 def _page_groesse(draft: model.Draft) -> dict:
     controls = [_control(
         SIZES_SCALE, NUMBER, model.LABEL_SCALE, draft.current_scale(),
+        # Der Satz erklaert den Rueckstell-Knopf neben diesem Regler
+        # (im GTK-Fenster eine eigene Zeile "Zuruecksetzen", hier das
+        # `default`-Feld daneben) - siehe model.NOTE_SCALE_RESET.
+        note=model.NOTE_SCALE_RESET,
         default=sizes.SCALE_DEFAULT,
         minimum=model.SCALE_MINIMUM, maximum=model.SCALE_MAXIMUM,
-        step=model.SCALE_STEP, digits=2, unit="")]
+        step=model.SCALE_STEP, digits=2, unit="", group=model.GROUP_SCALE)]
 
     for dial in model.DIALS:
         controls.append(_control(
@@ -265,6 +303,7 @@ def _page_groesse(draft: model.Draft) -> dict:
             default=_scale_free(draft, dial.name),
             minimum=dial.minimum, maximum=dial.maximum,
             step=1, digits=0, unit=sizes.TABLE[dial.name].unit,
+            group=model.GROUP_DIALS,
             # Der ganze Sinn der fuenf Ausnahmen: eine 24 kann heissen
             # "der Faktor hat 24 daraus gemacht" oder "hier steht fest
             # eine 24". null als Wert setzt sie wieder auf den Faktor.
@@ -272,28 +311,52 @@ def _page_groesse(draft: model.Draft) -> dict:
 
     controls.append(_control(
         SIZES_MOTION, SWITCH, model.LABEL_MOTION, draft.current_motion(),
+        note=model.NOTE_MOTION, group=model.GROUP_MOTION,
         default=sizes.motion_enabled({})))
-    return _page("groesse", controls)
+    return _page("groesse", controls, groups=[
+        _group(model.GROUP_SCALE, model.NOTE_SCALE_GROUP),
+        _group(model.GROUP_DIALS, model.NOTE_DIALS_GROUP),
+        _group(model.GROUP_MOTION, model.NOTE_MOTION_GROUP),
+        # Die Gruppe ohne Bedienelemente - siehe _page(). Sie sagt, was
+        # diese Oberflaeche nicht anbietet, und wo es stattdessen steht.
+        _group(model.NOTE_SIZES_REST_TITLE, model.NOTE_SIZES_REST),
+    ])
+
+
+DISPLAY_KEY = "displays.layout"
 
 
 def _page_bildschirme(*, runner=None) -> dict:
-    """Was der Compositor gerade zeigt - zum LESEN.
+    """Was der Compositor gerade zeigt - und wie man es aendert.
 
-    WARUM HIER NICHTS EINGESTELLT WIRD, OBWOHL DIE SEITE ES KANN
-        displays.arm_and_apply() macht einen Waechter scharf, wendet
-        dann an und gibt einen Attempt zurueck, der einen LAUFENDEN
-        Kindprozess haelt: entweder bestaetigt jemand innerhalb von
-        displays.CONFIRM_SECONDS Sekunden, oder der Waechter stellt die
-        alte Anordnung wieder her. Genau deshalb ist er ein eigener
-        Prozess - ein Zeitgeber im Programm stirbt mit ihm, und der
-        schwarze Schirm bliebe.
+    WARUM `writable` HIER `false` IST UND DIE SEITE TROTZDEM BEDIENBAR
+        `writable` ist eine Aussage ueber `--json set`, und die bleibt:
+        durch `set` geht diese Anordnung nicht. displays.arm_and_apply()
+        macht einen Waechter scharf, wendet dann an und gibt einen
+        Attempt zurueck, der einen LAUFENDEN Kindprozess haelt: entweder
+        bestaetigt jemand innerhalb von displays.CONFIRM_SECONDS
+        Sekunden, oder der Waechter stellt die alte Anordnung wieder
+        her. Genau deshalb ist er ein eigener Prozess - ein Zeitgeber im
+        Programm stirbt mit ihm, und der schwarze Schirm bliebe.
 
-        Ein einmaliger Befehl, der nach seiner Ausgabe endet, kann
-        diesen Prozess nicht halten. Er wuerde anwenden und sterben,
-        der Waechter naehme zurueck, und die Oberflaeche haette einen
-        Schalter, der nachweislich nichts bewirkt. Also steht die
-        Anordnung hier zum Lesen, und das Anwenden bleibt bei dem, was
-        laufen bleibt.
+        Ein Befehl, der nach seiner Ausgabe endet, kann diesen Prozess
+        nicht halten. Er wuerde anwenden und sterben, der Waechter naehme
+        zurueck, und die Oberflaeche haette einen Schalter, der
+        nachweislich nichts bewirkt.
+
+    WAS SICH AM 19.08.2026 (Aufgabe 32) GEAENDERT HAT
+        Der Bericht der Aufgabe 29 schloss: "Das AGS-Fenster braucht
+        dafuer einen eigenen, laufenden Weg - oder die Seite bleibt beim
+        GTK-Fenster." Den laufenden Weg gibt es jetzt: `--json arm`
+        (siehe arm() weiter unten) BLEIBT STEHEN, solange der Waechter
+        laeuft, und nimmt die Antwort auf seiner eigenen Standardeingabe
+        entgegen. AGS endet nicht - ein AGS-Fenster kann diesen Prozess
+        also halten, und Astal.Process.write() schreibt ihm die Antwort.
+
+        `armable` sagt, ob dieser Weg hier ueberhaupt offensteht (er
+        braucht einen lesbaren Compositor UND einen auffindbaren
+        Waechter), `arm` nennt den Befehl dafuer - aus derselben Regel
+        wie `command` bei Thema und Aktualisierung: nicht getippt.
     """
     try:
         outputs = displays.read_outputs(runner=runner)
@@ -301,31 +364,64 @@ def _page_bildschirme(*, runner=None) -> dict:
             outputs, displays.read_trailing_options())
         available, reason = True, ""
     except (RuntimeError, OSError, ValueError) as problem:
-        layout, available, reason = [], False, str(problem)
+        outputs, layout, available, reason = [], [], False, str(problem)
+
+    # Die Modi je Schirm, aus `hyprctl monitors all -j` und nicht
+    # geraten: ein Fenster, das eine Aufloesung anbietet, die dieser
+    # Schirm nicht kann, bietet einen schwarzen Schirm an.
+    modes = {output.name: [{"width": mode.width, "height": mode.height,
+                            "refresh": mode.refresh, "label": mode.label}
+                           for mode in output.modes]
+             for output in outputs}
 
     control = _control(
-        "displays.layout", LAYOUT, "Anordnung der Bildschirme",
+        DISPLAY_KEY, LAYOUT, "Anordnung der Bildschirme",
         [{"name": place.name, "selector": place.selector,
           "enabled": place.enabled,
           "width": place.width, "height": place.height,
           "refresh": place.refresh, "x": place.x, "y": place.y,
           "scale": place.scale, "transform": place.transform,
-          "extra": list(place.extra)}
+          "extra": list(place.extra),
+          "label": next((output.label for output in outputs
+                         if output.name == place.name), place.name),
+          "modes": modes.get(place.name, [])}
          for place in layout],
         scope=DESKTOP, immediate=True, writable=False,
         reason=reason or (
-            f"Eine Anordnung wird ueber {displays.GUARD_NAME} angewandt, "
-            f"der {displays.CONFIRM_SECONDS} Sekunden auf eine "
-            f"Bestaetigung wartet und sonst zuruecknimmt. Dieser Befehl "
-            f"endet mit seiner Ausgabe und koennte den Waechter nicht "
-            f"halten - angewandt wird deshalb aus einem Programm, das "
-            f"laufen bleibt."),
+            f"Diese Anordnung geht nicht durch `set`: sie wird ueber "
+            f"{displays.GUARD_NAME} angewandt, der "
+            f"{displays.CONFIRM_SECONDS} Sekunden auf eine Bestaetigung "
+            f"wartet und sonst zuruecknimmt. Ein Befehl, der mit seiner "
+            f"Ausgabe endet, koennte den Waechter nicht halten - "
+            f"angewandt wird deshalb ueber `{OPTION} arm` aus einem "
+            f"Programm, das laufen bleibt."),
         available=available,
+        armable=available and _guard_found(),
+        arm=[OPTION, ARM],
+        seconds=displays.CONFIRM_SECONDS,
+        scales=list(model.SCALES),
+        transforms=list(model.TRANSFORMS),
         # Nicht user-settings.json, und das ist der Grund, aus dem diese
         # Seite am Speichern-Knopf des Fensters nicht haengt.
         target=str(displays.config_path()),
         profile=displays.current_profile())
     return _page("bildschirme", [control])
+
+
+def _guard_found() -> bool:
+    """Ob es den Waechter auf dieser Maschine ueberhaupt gibt.
+
+    displays.guard_command() wirft FileNotFoundError, wenn er weder auf
+    PATH noch neben dem Modul liegt - dann wird ohnehin nichts
+    angewandt (siehe dort, "kein Rueckfall auf 'dann eben ohne
+    Waechter'"). Ein Fenster, das den Anwenden-Knopf trotzdem zeigt,
+    haette einen Knopf, der nur eine Fehlermeldung kann.
+    """
+    try:
+        displays.guard_command()
+    except (FileNotFoundError, OSError):
+        return False
+    return True
 
 
 def _page_leiste(draft: model.Draft) -> dict:
@@ -356,7 +452,7 @@ def _page_thema() -> dict:
     control = _control(
         THEME_KEY, CHOICE, model.LABEL_THEME, model.current_theme(),
         note=model.THEME_TIMING,
-        default=theme.DEFAULT,
+        default=theme.DEFAULT, group=model.GROUP_THEME,
         options=[{"value": name, "label": model.theme_label(name),
                   "note": model.theme_description(name)} for name in names],
         scope=MACHINE, immediate=True, writable=writable,
@@ -365,7 +461,9 @@ def _page_thema() -> dict:
             "der Anmeldebildschirm dazugehoert. Beim Wechseln wird nach "
             "Rechten gefragt."),
         command=model.theme_elevated_command(theme.DEFAULT)[:-1])
-    return _page("thema", [control])
+    return _page("thema", [control],
+                 groups=[_group(model.GROUP_THEME,
+                                model.theme_note(writable))])
 
 
 def _page_farben(draft: model.Draft) -> dict:
@@ -381,15 +479,22 @@ def _page_farben(draft: model.Draft) -> dict:
                 # die Farben haette das Fenster gezwungen, diese eine
                 # Seite anders zu lesen als die sechs anderen.
                 group=group))
-    return _page("farben", controls)
+    # Die zwoelf Gruppen ohne eigenen Text: brand.py fuehrt zu ihnen
+    # keinen, und im GTK-Fenster steht ueber ihnen ebenfalls nur der
+    # Name (Adw.PreferencesGroup(title=name), ohne description).
+    return _page("farben", controls,
+                 groups=[_group(name) for name, _rows in brand.COLOR_GROUPS])
 
 
 def _page_wetter(draft: model.Draft) -> dict:
     stored = settings_file.defaults().get("weather")
     control = _control(
         WEATHER_KEY, TEXT, model.LABEL_WEATHER, draft.current_weather(),
+        group=model.GROUP_WEATHER,
         default=stored.get("location", "") if isinstance(stored, dict) else "")
-    return _page("wetter", [control])
+    return _page("wetter", [control],
+                 groups=[_group(model.GROUP_WEATHER,
+                                model.NOTE_WEATHER_GROUP)])
 
 
 def _page_aktualisierung() -> dict:
@@ -408,24 +513,39 @@ def _page_aktualisierung() -> dict:
     def machine(key: str, kind: str, label: str, value: Any, **rest: Any) -> dict:
         return _control(f"{UPDATE_PREFIX}{key}", kind, label, value,
                         scope=MACHINE, immediate=True, writable=writable,
-                        reason=reason,
+                        reason=reason, group=model.GROUP_UPDATE,
                         command=model.update_elevated_command(key, None)[:-1],
                         **rest)
+
+    # Die Nebenzeilen der vier, aus model.py. Der Zeitgeber-Takt hat
+    # keine - er hatte im GTK-Fenster auch keine, und ein erfundener
+    # Satz hier waere ein Satz, den nur eines der beiden Fenster zeigt.
+    notes = {
+        model.UPDATE_ENABLED: model.NOTE_UPDATE_ENABLED,
+        model.UPDATE_SCOPE: model.NOTE_UPDATE_SCOPE,
+        model.UPDATE_NOTIFY: model.NOTE_UPDATE_NOTIFY,
+        model.UPDATE_INTERVAL: "",
+    }
 
     controls = [machine(
         model.UPDATE_ENABLED, SWITCH,
         model.UPDATE_LABELS[model.UPDATE_ENABLED],
         bool(config.get(model.UPDATE_ENABLED)),
+        note=notes[model.UPDATE_ENABLED],
         default=bool(shipped.get(model.UPDATE_ENABLED)))]
 
     for key, labels in UPDATE_CHOICES.items():
         controls.append(machine(
             key, CHOICE, model.UPDATE_LABELS[key],
             _dotted(config, key),
+            note=notes[key],
             default=_dotted(shipped, key),
             options=[{"value": name, "label": text}
                      for name, text in labels.items()]))
-    return _page("aktualisierung", controls)
+    return _page("aktualisierung", controls, groups=[
+        _group(model.GROUP_UPDATE, model.update_note(writable)),
+        _group(model.NOTE_UPDATE_REST_TITLE, model.NOTE_UPDATE_REST),
+    ])
 
 
 def _dotted(document: dict, key: str) -> Any:
@@ -687,6 +807,193 @@ def write(changes: dict[str, Any], *, runner=None) -> tuple[dict, int]:
             0 if not problems else 1)
 
 
+# --------------------------------------------------------------------
+# Die Bildschirme - der laufende Weg
+# --------------------------------------------------------------------
+
+ARM = "arm"
+
+# Die Felder einer Anordnung, die dieser Weg entgegennimmt, mit dem
+# Typ, in den sie gebracht werden. `extra` und `selector` stehen NICHT
+# darin: der eine wird durchgereicht (siehe Placement.extra, "nicht
+# angeboten darf nicht weg heissen"), der andere kommt aus
+# monitors.selector() und ist keine Einstellung.
+ARM_FIELDS: dict[str, Any] = {
+    "enabled": bool,
+    "width": int,
+    "height": int,
+    "refresh": float,
+    "x": int,
+    "y": int,
+    "scale": float,
+    "transform": int,
+}
+
+
+def _arm_plan(document: Any, desk, problems: list[str]) -> None:
+    """Die gewuenschte Anordnung in den Schreibtisch legen.
+
+    Durch displays.Desk.change() und nicht durch selbstgebaute
+    Placements: dort sitzen das Einrasten, das Normalisieren und die
+    Frage, was ein Schirm im Gesamtbild einnimmt. Ein zweiter Rechenweg
+    hier waere eine zweite Anordnung.
+    """
+    if not isinstance(document, dict) or not isinstance(
+            document.get("layout"), list):
+        problems.append(
+            "erwartet wird {\"layout\": [{\"name\": ..., ...}]} - dieselbe "
+            "Form, die `--json get` unter displays.layout ausgibt")
+        return
+
+    known = {place.name for place in desk.placements}
+    for screen in document["layout"]:
+        if not isinstance(screen, dict) or not isinstance(
+                screen.get("name"), str):
+            problems.append(f"{screen!r}: jeder Schirm braucht seinen `name`")
+            continue
+        name = screen["name"]
+        if name not in known:
+            problems.append(
+                f"{name}: diesen Schirm gibt es hier nicht. Bekannt sind "
+                f"{', '.join(sorted(known))}.")
+            continue
+
+        fields: dict[str, Any] = {}
+        for field, kind in ARM_FIELDS.items():
+            if field not in screen:
+                continue
+            value = screen[field]
+            if kind is bool:
+                if not isinstance(value, bool):
+                    problems.append(f"{name}.{field}: {_kind(value)} ist "
+                                    f"kein Schalter")
+                    continue
+                fields[field] = value
+            elif isinstance(value, bool) or not isinstance(value, (int, float)):
+                problems.append(f"{name}.{field}: {_kind(value)} ist keine "
+                                f"Zahl")
+            else:
+                fields[field] = kind(value)
+
+        unknown = sorted(set(screen) - set(ARM_FIELDS) - {"name"})
+        if unknown:
+            problems.append(
+                f"{name}: {', '.join(unknown)} kennt diese Oberflaeche "
+                f"nicht. Einstellbar sind {', '.join(ARM_FIELDS)}.")
+            continue
+        if fields:
+            desk.change(name, **fields)
+
+
+def arm(*, runner=None, stdin=None, stdout=None) -> int:
+    """Anwenden, auf Probe - und stehenbleiben, bis jemand antwortet.
+
+    DER GANZE PUNKT DIESES BEFEHLS IST, DASS ER NICHT ENDET.
+        Zeile 1 auf der Standardeingabe ist die gewuenschte Anordnung.
+        Danach schreibt er EINE Zeile JSON und bleibt stehen: der
+        Waechter laeuft, die neue Anordnung ist auf dem Schirm, und die
+        Frist von displays.CONFIRM_SECONDS Sekunden laeuft.
+
+        Zeile 2 ist die Antwort - displays.GUARD_KEEP oder
+        displays.GUARD_REVERT. Dieselben zwei Woerter, die auch der
+        Waechter selbst versteht; ein drittes Vokabular waere eine
+        dritte Stelle, an der man sich vertippen kann. Ein Dateiende
+        zaehlt als GUARD_REVERT: wer die Verbindung verliert, hat nichts
+        gesehen.
+
+        Die Frist laeuft AUCH DANN ab, wenn dieser Prozess stirbt - der
+        Waechter ist ein eigener Prozess in einer eigenen Sitzung, und
+        die brechende Pipe ist ihm das Zeichen zum Zuruecknehmen. Das
+        ist der Grund, aus dem hier kein Zeitgeber steht: der Rueckweg
+        gehoert nicht in das Programm, dessen Absturz er auffangen soll.
+
+    GESCHRIEBEN WIRD ERST NACH DEM BEHALTEN, und nie davor. Der Kopf
+    von src/displays.py fuehrt aus, warum: eine schon geschriebene
+    Datei braeuchte einen zweiten Rueckfall, und eine Sitzung, die
+    danach mit ihr startet, findet keinen Schirm mehr, auf dem sie
+    fragen koennte. screens.py macht es in _settle() genauso.
+    """
+    read_from = stdin if stdin is not None else sys.stdin
+    write_to = stdout if stdout is not None else sys.stdout
+
+    def say(document: dict) -> None:
+        write_to.write(json.dumps(document, ensure_ascii=False) + "\n")
+        write_to.flush()
+
+    problems: list[str] = []
+    try:
+        desk = displays.Desk.load(runner=runner)
+    except (RuntimeError, OSError, ValueError) as problem:
+        say({"schema": SCHEMA, "ok": False, "armed": False,
+             "problems": [str(problem)]})
+        return 1
+
+    raw = read_from.readline()
+    try:
+        document = json.loads(raw)
+    except ValueError as problem:
+        say({"schema": SCHEMA, "ok": False, "armed": False,
+             "problems": [f"das Dokument ist kein JSON: {problem}"]})
+        return 1
+
+    _arm_plan(document, desk, problems)
+    problems.extend(desk.problems())
+    if problems:
+        say({"schema": SCHEMA, "ok": False, "armed": False,
+             "problems": problems})
+        return 1
+
+    try:
+        attempt = displays.arm_and_apply(desk.placements, desk.original,
+                                         runner=runner)
+    except (displays.NoScreenLeft, displays.GuardRefused,
+            displays.ApplyFailed, OSError) as problem:
+        say({"schema": SCHEMA, "ok": False, "armed": False,
+             "problems": [f"Nicht angewandt: {problem}"]})
+        return 1
+
+    # Von hier an steht die neue Anordnung auf dem Schirm, und die Frist
+    # laeuft. Diese Zeile ist das Zeichen fuer das Fenster, seine
+    # Rueckfrage zu zeigen.
+    say({"schema": SCHEMA, "ok": True, "armed": True,
+         "seconds": displays.CONFIRM_SECONDS, "problems": [],
+         "applied": list(attempt.applied)})
+
+    answer = (read_from.readline() or "").strip()
+    if answer != displays.GUARD_KEEP:
+        outcome = attempt.revert()
+        say({"schema": SCHEMA, "ok": True, "armed": False, "kept": False,
+             "problems": [], "written": [], "report": outcome.report})
+        return 0
+
+    outcome = attempt.keep()
+    if not outcome.kept:
+        # Der Waechter hat trotz "behalten" zurueckgestellt: seine Frist
+        # lief genau in diesem Moment ab. Dann gilt SEIN Ergebnis - auf
+        # dem Schirm steht die alte Anordnung, also wird auch keine neue
+        # geschrieben. Wortgleich zu screens.py, _settle().
+        say({"schema": SCHEMA, "ok": False, "armed": False, "kept": False,
+             "problems": ["Der Waechter hatte schon zurueckgestellt: "
+                          + outcome.report],
+             "written": [], "report": outcome.report})
+        return 1
+
+    try:
+        written = displays.write(desk.placements)
+    except OSError as problem:
+        say({"schema": SCHEMA, "ok": False, "armed": False, "kept": True,
+             "problems": [f"Angewandt, aber nicht geschrieben: {problem}. "
+                          f"Die Anordnung steht bis zum naechsten "
+                          f"Anmelden."],
+             "written": [], "report": outcome.report})
+        return 1
+
+    say({"schema": SCHEMA, "ok": True, "armed": False, "kept": True,
+         "problems": [], "written": [str(path) for path in written],
+         "report": outcome.report})
+    return 0
+
+
 def apply_now(*, runner=None) -> tuple[dict, int]:
     """zepos-generate --all, und die Marke faellt bei Erfolg."""
     completed = model.regenerate(runner=runner)
@@ -709,14 +1016,23 @@ OPTION = "--json"
 
 def main(arguments: list[str], *, runner=None, stdin=None) -> int:
     """`zepos-settings-gui --json ...`, ohne den Schalter selbst."""
-    if not arguments or arguments[0] not in ("get", "set", "apply"):
+    if not arguments or arguments[0] not in ("get", "set", "apply", ARM):
         print(USAGE, file=sys.stderr)
         return 2
 
     verb, rest = arguments[0], arguments[1:]
-    if (verb in ("get", "apply") and rest) or (verb == "set" and len(rest) != 1):
+    if (verb in ("get", "apply", ARM) and rest) or (
+            verb == "set" and len(rest) != 1):
         print(USAGE, file=sys.stderr)
         return 2
+
+    if verb == ARM:
+        # KEIN model.load() davor: diese Anordnung steht nicht in
+        # user-settings.json (siehe `target` am Bedienelement), und eine
+        # unlesbare Einstellungsdatei darf nicht der Grund sein, aus dem
+        # jemand seinen zweiten Schirm nicht mehr einschalten kann -
+        # dieses Fenster ist genau das, was man dann braucht.
+        return arm(runner=runner, stdin=stdin)
 
     if verb == "apply":
         document, code = apply_now(runner=runner)

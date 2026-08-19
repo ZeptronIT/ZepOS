@@ -1,0 +1,1143 @@
+// Die Einstellungen als AGS-Fenster (AGS v3, GTK4) - Layer-Shell-Schale
+// Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+// Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-settings.template kopieren
+//
+// WARUM ES DIESES FENSTER GIBT, MIT DATUM
+//     BESTELLT am 18.08.2026, woertlich: "ich will auch fuer unsere
+//     einstellungen ein komplett eigenes ags fenster dafuer mit farben
+//     und alles drum und dran". Geliefert war bis zum 19.08.2026 eine
+//     UMFAERBUNG der bestehenden GTK4/libadwaita-Anwendung, und der
+//     Nutzer hat genau das benannt: "uebrigens hast du die settings die
+//     du selber gebaut hast immernoch nicht in einem ags fenster
+//     umgesetzt was ich eigentlich wollte". Diese Datei holt das nach.
+//
+// WOHER DIESES FENSTER WEISS, WAS ES ANBIETET
+//     Aus `zepos-settings-gui --json get`, und aus sonst nichts. Die
+//     Bruecke (settings/zepos_settings_gui/bridge.py, 19.08.2026)
+//     liefert sieben Seiten mit zusammen 86 Bedienelementen, jedes mit
+//     `key`, `kind`, `label`, `note`, `value`, `default`, `writable`,
+//     `reason`, `command`, `group` - und je nach Art mit `minimum`,
+//     `maximum`, `step`, `unit`, `options`, `placeable`.
+//
+//     KEIN Regler, keine Grenze, kein Vorgabewert und keine Farbe steht
+//     in dieser Datei. Der Kopf von bridge.py fuehrt aus, warum: die 559
+//     Platzhalter, die 53 Groessen, die 69 Farben und die Frage, ob
+//     dieses Konto /etc/zepos schreiben darf, ein zweites Mal in
+//     TypeScript zu haben, waere CONTRIBUTING.md Regel 2 in ihrer
+//     reinsten Form. Diese Datei ZEICHNET; model.py bleibt das Hirn.
+//
+//     Praktische Folge, und sie ist der ganze Punkt: eine neue Farbe in
+//     brand.py oder ein neuer Regler in model.py erscheint hier OHNE
+//     eine Zeile Aenderung. Ein `kind`, das diese Datei nicht kennt,
+//     wird als solches ANGEZEIGT und nicht verschwiegen (siehe
+//     unbekanntesElement) - eine leere Zeile waere eine Einstellung, die
+//     da ist und die niemand findet.
+//
+// WARUM DAS FENSTER ERST NACH DEM ERSTEN `get` ENTSTEHT
+//     createShellWindow() (ags-overlay-utils.template) bekommt seine
+//     Seiten beim Bauen, und die Seiten stehen in model.PAGES - also im
+//     Dokument. Eine hier getippte Liste der sieben Seiten waere die
+//     zweite Aufzaehlung, die als erste veraltet; genau dagegen steht
+//     die Tabelle PAGES in model.py ("Damit die .desktop-Datei und
+//     dieses Fenster nicht auseinanderlaufen koennen, steht die Liste
+//     dort EINMAL").
+//
+//     Also ist Settings() asynchron: app.ts haengt das fertige Fenster
+//     ein, sobald das erste `get` zurueck ist. Der Preis ist eine
+//     Zehntelsekunde nach der Anmeldung, in der `ags request settings`
+//     "widget not found" meldet. Der Gegenwert ist, dass es keine
+//     zweite Wahrheit ueber die Seiten gibt.
+//
+// WAS DIESES FENSTER NICHT TUT
+//     Es schreibt keine Datei. Jede Aenderung geht durch
+//     `--json set`, also durch model.save() und settings.merge() -
+//     dieselbe Naht, durch die auch das GTK-Fenster und
+//     `zepos-settings set` schreiben. Zwei Wege zu einer Einstellung,
+//     die verschiedene Dateien anfassen, sind zwei Einstellungen.
+
+import { Gtk } from "ags/gtk4"
+import { execAsync, subprocess } from "ags/process"
+import { timeout } from "ags/time"
+import { createShellWindow, ShellSeite, ShellWidget } from "../utils/overlay"
+import { _, format } from "../utils/i18n"
+import {
+  zepButton, zepDivider, zepRow, zepSectionLabel, zepStateHeader, zepToggle,
+} from "../utils/kit"
+
+const WINDOW_NAME = "settings"
+
+// Der Befehl, der das Hirn ist. Ein Name und kein Pfad: er liegt als
+// /usr/bin/zepos-settings-gui im Paket zepos-settings-gui, und im
+// Arbeitsbaum auf dem PATH der Sitzung.
+const BEFEHL = "zepos-settings-gui"
+const JSON_SCHALTER = "--json"
+
+// Die Seitenzeichen.
+//
+// Das Dokument liefert je Seite ein `icon` - aber einen
+// freedesktop-Symbolnamen ("video-display-symbolic"), den das
+// GTK-Fenster an Adw.ViewStack weiterreicht. Eine Nerd-Font-Oberflaeche
+// kann damit nichts anfangen, also steht die Zuordnung hier - als
+// PLATZHALTER und nicht als Zeichen, wie ueberall in diesem Baum.
+// Der Schluessel ist `page.name` aus model.PAGES; eine Seite ohne
+// Eintrag bekommt das Zahnrad und verschwindet nicht.
+const SEITEN_ZEICHEN: Record<string, string> = {
+  groesse: "{{ICON_EXPAND}}",
+  bildschirme: "{{ICON_MONITOR_MULTIPLE}}",
+  leiste: "{{ICON_LIST}}",
+  thema: "{{ICON_THEME}}",
+  farben: "{{ICON_PALETTE}}",
+  wetter: "{{ICON_WEATHER_PARTLY_CLOUDY}}",
+  aktualisierung: "{{ICON_UPDATE}}",
+}
+
+const ICONS = {
+  settings: "{{ICON_SETTINGS}}",
+  // Das Schloss ist die Antwort auf `writable: false`. Es steht ANSTELLE
+  // des Artzeichens und nicht daneben: ein Regler, den das System still
+  // ablehnt, luegt den Nutzer an (Kopf von bridge.py, `_control`), und
+  // das muss man SEHEN, bevor man ihn anfasst.
+  gesperrt: "{{ICON_LOCK}}",
+  zahl: "{{ICON_EXPAND}}",
+  schalter: "{{ICON_CHECK}}",
+  text: "{{ICON_WRITE}}",
+  auswahl: "{{ICON_LIST}}",
+  farbe: "{{ICON_PALETTE}}",
+  reihenfolge: "{{ICON_LIST}}",
+  anordnung: "{{ICON_MONITOR_MULTIPLE}}",
+  unbekannt: "{{ICON_INFO}}",
+  zuruecksetzen: "{{ICON_RESET}}",
+  speichern: "{{ICON_SAVE}}",
+  anwenden: "{{ICON_APPLY}}",
+  hinweis: "{{ICON_INFO}}",
+  // Vor und zurueck IN DER LEISTE, nicht in der Liste: die Liste einer
+  // Leistenhaelfte wird von aussen nach innen gelesen (siehe BAR_SIDES
+  // in model.py, "der oberste Eintrag steht am weitesten links"), also
+  // bewegt der Pfeil den Eintrag entlang der LEISTE. Nach oben/unten
+  // zeigende Pfeile gibt es in icon_definition.py nicht, und ein Zeichen
+  // dort nachzutragen hiesse, icons_db.py neu zu erzeugen - das holt
+  // seine Zeichen aus dem Netz.
+  vor: "{{ICON_ARROW_LEFT}}",
+  zurueck: "{{ICON_ARROW_RIGHT}}",
+  entfernen: "{{ICON_DELETE}}",
+  hinzufuegen: "{{ICON_ADD}}",
+}
+
+// Die Arten, die bridge.py kennt - als geschlossene Liste, wie dort.
+const ZAHL = "zahl"
+const SCHALTER = "schalter"
+const TEXT = "text"
+const AUSWAHL = "auswahl"
+const FARBE = "farbe"
+const REIHENFOLGE = "reihenfolge"
+const ANORDNUNG = "anordnung"
+
+// Wie die Bruecke ihre Antworten auf `--json arm` nennt. Dieselben zwei
+// Woerter, die auch der Waechter selbst versteht (displays.GUARD_KEEP /
+// GUARD_REVERT) - ein drittes Vokabular waere eine dritte Stelle, an der
+// man sich vertippen kann.
+const BEHALTEN = "behalten"
+const VERWERFEN = "verwerfen"
+
+// ============================================================================
+// DAS DOKUMENT
+// ============================================================================
+
+interface Bedienelement {
+  key: string
+  kind: string
+  label: string
+  note: string
+  value: any
+  default: any
+  scope: string
+  immediate: boolean
+  writable: boolean
+  reason: string
+  command: string[]
+  group: string
+  // Je nach Art. Sie stehen einzeln und nicht in einem Untertyp, weil
+  // das Dokument sie so liefert - siehe `_control` in bridge.py.
+  minimum?: number
+  maximum?: number
+  step?: number
+  digits?: number
+  unit?: string
+  follows_scale?: boolean
+  options?: { value: any; label: string; note?: string }[]
+  placeable?: string[] | null
+  labels?: Record<string, string>
+  effective?: string[]
+  available?: boolean
+  armable?: boolean
+  seconds?: number
+  scales?: number[]
+  transforms?: string[]
+  target?: string
+  profile?: string
+}
+
+interface Gruppe {
+  name: string
+  note: string
+}
+
+interface SeiteDaten {
+  name: string
+  label: string
+  icon: string
+  note: string
+  groups: Gruppe[]
+  controls: Bedienelement[]
+}
+
+interface Zustand {
+  schema: number
+  ok: boolean
+  problems: string[]
+  settings_file: string
+  elevator: string[]
+  pending_regenerate: boolean
+  cost: { generate: string; theme: string }
+  pages: SeiteDaten[]
+}
+
+interface Schirm {
+  name: string
+  label: string
+  selector: string
+  enabled: boolean
+  width: number
+  height: number
+  refresh: number
+  x: number
+  y: number
+  scale: number
+  transform: number
+  extra: string[]
+  modes: { width: number; height: number; refresh: number; label: string }[]
+}
+
+/** Ein Aufruf der Bruecke. Wirft nie - der Fehler IST die Antwort.
+ *
+ * `--json set` schreibt seine Klage auf stdout und endet mit 1 (siehe
+ * den Kopf von bridge.py: "weil der Aufrufer eine Oberflaeche ist und
+ * die Klage ANZEIGEN muss"). execAsync verwirft bei einem Rueckgabewert
+ * ungleich 0 - also wird der Wurf hier wieder eingefangen und sein Text
+ * als JSON gelesen. Ein Fenster, das die Begruendung im Fehlerstrom
+ * liegen laesst, zeigt "es hat nicht geklappt" und sonst nichts.
+ */
+async function bruecke(argumente: string[]): Promise<any> {
+  const befehl = [BEFEHL, JSON_SCHALTER, ...argumente]
+  try {
+    const ausgabe = await execAsync(befehl)
+    return JSON.parse(ausgabe)
+  } catch (fehler) {
+    const text = String(fehler)
+    // Der geworfene Text traegt die Ausgabe des Befehls, wenn er eine
+    // hatte - dann steht darin das JSON mit "problems".
+    const anfang = text.indexOf("{")
+    if (anfang >= 0) {
+      try {
+        return JSON.parse(text.slice(anfang))
+      } catch {
+        // faellt durch
+      }
+    }
+    return { ok: false, problems: [text] }
+  }
+}
+
+// ============================================================================
+// DAS FENSTER
+// ============================================================================
+
+export default async function Settings(): Promise<ShellWidget | null> {
+  let zustand: Zustand = await bruecke(["get"])
+  if (!zustand || !Array.isArray(zustand.pages) || zustand.pages.length === 0) {
+    // Ohne Dokument gibt es nichts zu zeichnen, und ein leeres Fenster
+    // waere schlimmer als keins: es sagt nicht, dass die Bruecke fehlt.
+    console.error("Settings: keine Antwort von", BEFEHL, zustand)
+    return null
+  }
+
+  // Was noch nicht geschrieben ist. Schluessel wie im Dokument, Wert wie
+  // ihn `--json set` entgegennimmt - das GEGENSTUECK zu model.Draft,
+  // und aus demselben Grund: waehrend jemand einen Regler zieht, laeuft
+  // er durch Dutzende Werte, und jeden davon zu schreiben waere ein
+  // Erzeugungslauf je Zwischenschritt.
+  const entwurf = new Map<string, any>()
+
+  // Waehrend das Fenster selbst Werte in Widgets schreibt, sind die
+  // Rueckrufe still. Wortgleich zum `_quiet` des GTK-Fensters (app.py)
+  // und aus demselben Grund: ein Zuruecksetzen setzt den Wert im
+  // Widget, das Widget meldet "geaendert", und der Rueckruf legte den
+  // eben zurueckgesetzten Wert wieder in den Entwurf.
+  let still = false
+
+  // Die Meldungszeile jeder Seite und ihr Speichern-Knopf. Sie werden
+  // bei jedem Neuzeichnen neu gefuellt.
+  let meldung = ""
+  // JE SEITE EINER, und darum eine Abbildung und keine Liste: eine Seite
+  // wird beim Bedienen einer Reihenfolge neu gezeichnet, und ein
+  // Auffrischer, der auf den Kopf von VORHIN zeigt, schriebe danach in
+  // ein Widget, das an keinem Fenster mehr haengt.
+  const koepfe = new Map<string, () => void>()
+  const seitenBehaelter = new Map<string, Gtk.Box>()
+
+  const sagen = (text: string) => {
+    meldung = text
+    for (const auffrischen of koepfe.values()) auffrischen()
+  }
+
+  // ---- Werkzeug -----------------------------------------------------
+
+  const leeren = (kasten: Gtk.Box) => {
+    let kind = kasten.get_first_child()
+    while (kind) {
+      kasten.remove(kind)
+      kind = kasten.get_first_child()
+    }
+  }
+
+  /** Ein Absatz Prosa - die Texte, die model.py als NOTE_* fuehrt.
+   *
+   * Sie sind LANG (der Absatz ueber wttr.in, die Herleitung des
+   * Massstabs), also brechen sie um und tragen ihre eigene Klasse.
+   * `max_width_chars` deckelt die natuerliche Breite, aus demselben
+   * Grund wie in zepRow (siehe den Funktionskopf dort): ohne Deckel
+   * blaeht ein langer Text das ganze Fenster auf.
+   */
+  const absatz = (text: string): Gtk.Widget => {
+    const marke = new Gtk.Label({ label: text, xalign: 0, wrap: true })
+    marke.add_css_class("set-note")
+    marke.set_max_width_chars({{STYLE_MEASURE_LINE}})
+    return marke
+  }
+
+  const zeichenFuer = (element: Bedienelement): string => {
+    if (!element.writable) return ICONS.gesperrt
+    switch (element.kind) {
+      case ZAHL: return ICONS.zahl
+      case SCHALTER: return ICONS.schalter
+      case TEXT: return ICONS.text
+      case AUSWAHL: return ICONS.auswahl
+      case FARBE: return ICONS.farbe
+      case REIHENFOLGE: return ICONS.reihenfolge
+      case ANORDNUNG: return ICONS.anordnung
+      default: return ICONS.unbekannt
+    }
+  }
+
+  /** Der aktuelle Wert: der Entwurf schlaegt das Dokument. */
+  const wertVon = (element: Bedienelement): any =>
+    entwurf.has(element.key) ? entwurf.get(element.key) : element.value
+
+  const merken = (element: Bedienelement, wert: any) => {
+    if (still) return
+    entwurf.set(element.key, wert)
+    sagen("")
+  }
+
+  // ---- Die Bedienelemente je Art ------------------------------------
+
+  const zahlWidget = (element: Bedienelement): Gtk.Widget => {
+    const wert = Number(wertVon(element) ?? 0)
+    const schritt = element.step ?? 1
+    const drehknopf = new Gtk.SpinButton({
+      adjustment: new Gtk.Adjustment({
+        value: wert,
+        lower: element.minimum ?? 0,
+        upper: element.maximum ?? 0,
+        step_increment: schritt,
+        page_increment: schritt * 4,
+      }),
+      digits: element.digits ?? 0,
+      climb_rate: schritt,
+      valign: Gtk.Align.CENTER,
+    })
+    drehknopf.add_css_class("set-number")
+    // Ein Drehknopf und kein Schieberegler, aus demselben Grund, den
+    // app.py fuer seine Adw.SpinRow nennt: der ausgelieferte Massstab
+    // ist 24/13 = 1.8461..., und wer ihn nach einem Versuch wiederhaben
+    // will, trifft ihn mit der Maus nicht.
+    drehknopf.connect("value-changed", () =>
+      merken(element, drehknopf.get_value()))
+    if (!element.writable) drehknopf.set_sensitive(false)
+
+    const zurueck = zepButton(ICONS.zuruecksetzen, "still", () => {
+      // Bei den fuenf Ausnahmen ist `null` die Ansage "folge wieder dem
+      // Massstab" (siehe `follows_scale` in bridge.py) - eine Zahl waere
+      // eine FESTE Zahl, die zufaellig gerade passt.
+      const zielwert = element.follows_scale === undefined
+        ? element.default : null
+      entwurf.set(element.key, zielwert)
+      still = true
+      try {
+        drehknopf.set_value(Number(element.default ?? 0))
+      } finally {
+        still = false
+      }
+      sagen("")
+    })
+    zurueck.set_tooltip_text(element.follows_scale === undefined
+      ? _("Back to the shipped value")
+      : _("Leave it to the scale factor again"))
+
+    const kasten = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+    kasten.append(drehknopf)
+    if (element.unit) {
+      const einheit = new Gtk.Label({ label: element.unit })
+      einheit.add_css_class("set-unit")
+      kasten.append(einheit)
+    }
+    if (element.writable) kasten.append(zurueck)
+    return kasten
+  }
+
+  const schalterWidget = (element: Bedienelement): Gtk.Widget => {
+    const schalter = zepToggle(Boolean(wertVon(element)), (an) => {
+      if (still) return
+      if (element.immediate) void sofortSchreiben(element, an)
+      else merken(element, an)
+    })
+    if (!element.writable) schalter.set_sensitive(false)
+    return schalter
+  }
+
+  const textWidget = (element: Bedienelement): Gtk.Widget => {
+    const feld = new Gtk.Entry({
+      text: String(wertVon(element) ?? ""),
+      valign: Gtk.Align.CENTER,
+    })
+    feld.add_css_class("set-entry")
+    feld.connect("changed", () => merken(element, feld.get_text()))
+    if (!element.writable) feld.set_sensitive(false)
+    return feld
+  }
+
+  const auswahlWidget = (element: Bedienelement): Gtk.Widget => {
+    const auswahlmoeglichkeiten = element.options ?? []
+    const beschriftungen = auswahlmoeglichkeiten.map(eintrag => eintrag.label)
+    const aktuell = wertVon(element)
+    let index = auswahlmoeglichkeiten.findIndex(
+      eintrag => eintrag.value === aktuell)
+    if (index < 0) {
+      // Ein Wert, den diese Oberflaeche nicht anbietet - eine Zeitspanne
+      // statt eines Kalenderworts etwa, die `zepos-settings` durchaus
+      // setzen kann. Er wird ANGEZEIGT statt ueberschrieben, wortgleich
+      // zur Begruendung in app.py: eine Auswahl, die beim blossen
+      // Oeffnen des Fensters etwas anderes einstellt, ist kein Anzeigen.
+      beschriftungen.unshift(
+        format(_("{value} (unchanged)"), { value: String(aktuell) }))
+      auswahlmoeglichkeiten.unshift({ value: aktuell, label: "" })
+      index = 0
+    }
+
+    const liste = new Gtk.DropDown({
+      model: Gtk.StringList.new(beschriftungen),
+      valign: Gtk.Align.CENTER,
+    })
+    liste.add_css_class("set-choice")
+    liste.set_selected(index)
+    liste.connect("notify::selected", () => {
+      if (still) return
+      const gewaehlt = auswahlmoeglichkeiten[liste.get_selected()]
+      if (!gewaehlt) return
+      if (element.immediate) void sofortSchreiben(element, gewaehlt.value)
+      else merken(element, gewaehlt.value)
+    })
+    if (!element.writable) liste.set_sensitive(false)
+    return liste
+  }
+
+  const farbWidget = (element: Bedienelement): Gtk.Widget => {
+    const kasten = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+
+    const probe = new Gtk.Box()
+    probe.set_size_request(28, 28)
+    probe.add_css_class("set-swatch")
+    const male = (farbe: string) => {
+      // Derselbe Weg wie im Stil-Editor (createColorRow,
+      // ags-style-editor.template): eine Farbe, die der Nutzer gerade
+      // eingibt, kann keine Klasse im Stylesheet haben.
+      const stil = new Gtk.CssProvider()
+      stil.load_from_string(
+        `* { background-color: ${farbe}; border-radius: {{STYLE_RADIUS_CONTROL}}; }`)
+      probe.get_style_context().add_provider(
+        stil, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    }
+
+    const feld = new Gtk.Entry({
+      text: String(wertVon(element) ?? ""),
+      valign: Gtk.Align.CENTER,
+      max_length: 7,
+    })
+    feld.add_css_class("set-hex")
+    feld.connect("changed", () => {
+      const text = feld.get_text().trim()
+      // GEMALT wird jeder Text, der wie eine Farbe aussieht; ABGELEHNT
+      // wird von model.py. Die Pruefung hier ist keine zweite Regel,
+      // sondern die Frage "kann ich das ueberhaupt zeichnen" - ein
+      // halbgetipptes "#ff" waere sonst eine CSS-Regel, die GTK auf der
+      // Konsole beklagt.
+      if (/^#[0-9a-fA-F]{6}$/.test(text)) male(text)
+      merken(element, text)
+    })
+    if (!element.writable) feld.set_sensitive(false)
+    male(String(wertVon(element) ?? "#000000"))
+
+    const zurueck = zepButton(ICONS.zuruecksetzen, "still", () => {
+      still = true
+      try {
+        feld.set_text(String(element.default ?? ""))
+      } finally {
+        still = false
+      }
+      entwurf.set(element.key, element.default)
+      male(String(element.default ?? "#000000"))
+      sagen("")
+    })
+    zurueck.set_tooltip_text(_("Back to the shipped colour"))
+
+    kasten.append(probe)
+    kasten.append(feld)
+    if (element.writable) kasten.append(zurueck)
+    return kasten
+  }
+
+  /** Eine Art, die diese Datei nicht kennt.
+   *
+   * SIE WIRD GEZEIGT UND NICHT UEBERSPRUNGEN. bridge.py fuehrt `kind`
+   * als geschlossene Liste, damit ein Fenster fuer jede genau einen
+   * Zeichner hat "und ein unbekanntes `kind` ein Fehler ist und keine
+   * leere Zeile". Eine uebersprungene Zeile waere eine Einstellung, die
+   * es gibt und die niemand findet - genau so sind neunundzwanzig
+   * Farben jahrelang im Stil-Editor gestanden.
+   */
+  const unbekanntesElement = (element: Bedienelement): Gtk.Widget => {
+    const marke = new Gtk.Label({
+      label: format(_("unknown kind: {kind}"), { kind: element.kind }),
+      valign: Gtk.Align.CENTER,
+    })
+    marke.add_css_class("set-unknown")
+    return marke
+  }
+
+  // ---- Eine Zeile ---------------------------------------------------
+
+  const elementZeile = (element: Bedienelement): Gtk.Widget => {
+    let ende: Gtk.Widget
+    switch (element.kind) {
+      case ZAHL: ende = zahlWidget(element); break
+      case SCHALTER: ende = schalterWidget(element); break
+      case TEXT: ende = textWidget(element); break
+      case AUSWAHL: ende = auswahlWidget(element); break
+      case FARBE: ende = farbWidget(element); break
+      default: ende = unbekanntesElement(element)
+    }
+
+    // DIE NEBENZEILE IST DER GRUND, WENN ES EINEN GIBT. `reason` steht
+    // an jedem Bedienelement, das dieses Konto nicht schreiben darf -
+    // und es zu zeigen ist der ganze Zweck des Feldes: "er legt ihn um,
+    // nichts passiert, und er sucht den Fehler bei sich" (bridge.py).
+    const unterzeile = element.writable ? element.note : element.reason
+
+    const zeile = zepRow({
+      symbol: zeichenFuer(element),
+      titel: element.label,
+      unterzeile: unterzeile || undefined,
+      ende,
+      // Die Nebenzeilen sind ganze Saetze aus model.py, keine Namen aus
+      // einem fremden Programm - sie duerfen stehen, statt nach 45
+      // Zeichen mit drei Punkten zu enden.
+      vollerText: true,
+    })
+
+    if (element.writable) return zeile
+
+    // Der Befehl zum Abtippen. Er steht NUR bei den gesperrten Zeilen
+    // und nur, wenn es einen gibt: ohne pkexec (leeres `elevator` im
+    // Dokument) ist er der einzige Weg, und das soll dastehen, BEVOR
+    // jemand einen Schalter umlegt.
+    const block = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    block.append(zeile)
+    if (element.command.length > 0) {
+      // Der Befehl kommt aus model.theme_elevated_command() /
+      // update_elevated_command() und ist OHNE seinen letzten Teil, den
+      // Wert (siehe `command` in bridge.py) - der Platzhalter dafuer ist
+      // das einzige daran, was ein Mensch liest, und laeuft darum durch
+      // den Katalog. Der Befehl selbst nicht: er wird ABGETIPPT und
+      // nicht gelesen, und ein uebersetzter Befehl waere einer, der
+      // nicht laeuft.
+      const befehlszeile = `${element.command.join(" ")} ${_("<value>")}`
+      const befehl = new Gtk.Label({
+        label: befehlszeile,
+        xalign: 0,
+        selectable: true,
+      })
+      befehl.add_css_class("set-command")
+      block.append(befehl)
+    }
+    return block
+  }
+
+  // ---- Die Leistenhaelften (kind: reihenfolge) ----------------------
+
+  /** Was gerade in dieser Haelfte steht.
+   *
+   * `null` heisst "wie ausgeliefert" und ist eine ANGABE, keine
+   * Abwesenheit (siehe model.bar_stored()) - das Dokument legt die
+   * ausgelieferte Liste deshalb als `default` daneben, nicht an Stelle
+   * des Werts.
+   */
+  const leistenListe = (element: Bedienelement): string[] => {
+    const wert = wertVon(element)
+    if (Array.isArray(wert)) return wert.map(String)
+    if (Array.isArray(element.default)) return element.default.map(String)
+    return (element.effective ?? []).map(String)
+  }
+
+  const reihenfolgeSeite = (element: Bedienelement,
+                            zeichneNeu: () => void): Gtk.Widget => {
+    const kasten = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL, spacing: 4,
+    })
+
+    const liste = leistenListe(element)
+    const beschriftungen = element.labels ?? {}
+    const setze = (neu: string[]) => {
+      entwurf.set(element.key, neu)
+      zeichneNeu()
+    }
+
+    if (liste.length === 0) {
+      kasten.append(absatz(_("Nothing is placed on this side.")))
+    }
+
+    liste.forEach((name, stelle) => {
+      const knoepfe = new Gtk.Box({ spacing: 4, valign: Gtk.Align.CENTER })
+
+      const vor = zepButton(ICONS.vor, "still", () => {
+        if (stelle === 0) return
+        const neu = [...liste]
+        neu.splice(stelle - 1, 0, neu.splice(stelle, 1)[0])
+        setze(neu)
+      })
+      vor.set_tooltip_text(_("One place further to the front"))
+      vor.set_sensitive(stelle > 0)
+
+      const zurueck = zepButton(ICONS.zurueck, "still", () => {
+        if (stelle >= liste.length - 1) return
+        const neu = [...liste]
+        neu.splice(stelle + 1, 0, neu.splice(stelle, 1)[0])
+        setze(neu)
+      })
+      zurueck.set_tooltip_text(_("One place further to the back"))
+      zurueck.set_sensitive(stelle < liste.length - 1)
+
+      const weg = zepButton(ICONS.entfernen, "still", () => {
+        setze(liste.filter((_name, index) => index !== stelle))
+      })
+      weg.set_tooltip_text(_("Take it off the bar"))
+
+      knoepfe.append(vor)
+      knoepfe.append(zurueck)
+      knoepfe.append(weg)
+
+      kasten.append(zepRow({
+        symbol: ICONS.reihenfolge,
+        titel: beschriftungen[name] ?? name,
+        unterzeile: beschriftungen[name] ? name : undefined,
+        ende: knoepfe,
+      }))
+    })
+
+    // Was noch hineinkoennte. `placeable` ist null, wenn der Abdruck der
+    // ausgelieferten Leiste fehlt (shipped-bar.json unter der
+    // Systemwurzel, also ein Checkout ohne installiertes Paket) - dann
+    // steht die Erklaerung dazu in der `note` der SEITE, und hier gibt
+    // es nichts anzubieten. Der PFAD steht bewusst nicht da: eine
+    // erzeugte Datei kann das Verzeichnis ihres Pakets nicht raten
+    // (tests/src/test_naming.py).
+    const uebrig = (element.placeable ?? []).filter(
+      name => !liste.includes(name))
+    if (uebrig.length > 0) {
+      const wahl = new Gtk.DropDown({
+        model: Gtk.StringList.new(
+          uebrig.map(name => beschriftungen[name] ?? name)),
+        valign: Gtk.Align.CENTER,
+      })
+      wahl.add_css_class("set-choice")
+      const dazu = zepButton(ICONS.hinzufuegen, "umrandet", () => {
+        const name = uebrig[wahl.get_selected()]
+        if (name) setze([...liste, name])
+      })
+      dazu.set_tooltip_text(_("Put it on the bar"))
+
+      const zeile = new Gtk.Box({ spacing: 8 })
+      // NICHT "-row": eine zepRow hat Symbol, Titel und einen Zustand,
+      // dieses Paar aus Liste und Knopf hat keins davon. Der Name sagt
+      // das auch - tests/src/test_ags_settings.py laesst keine Klasse
+      // zu, die nach einer eigenen Zeilenform klingt.
+      zeile.add_css_class("set-add")
+      zeile.append(wahl)
+      zeile.append(dazu)
+      kasten.append(zeile)
+    }
+
+    const zurueckAufAusgeliefert = zepButton(
+      _("As shipped"), "still", () => {
+        // null und keine Liste: dieselbe Ansage wie `reset_bar()` im
+        // Entwurf des GTK-Fensters - "diese Haelfte hat keine eigene
+        // Reihenfolge", nicht "sie ist leer".
+        entwurf.set(element.key, null)
+        zeichneNeu()
+      })
+    kasten.append(zurueckAufAusgeliefert)
+    return kasten
+  }
+
+  // ---- Die Bildschirme (kind: anordnung) ----------------------------
+
+  // Der laufende Waechterprozess, solange eine Anordnung auf Probe
+  // steht. Er ist der Grund, aus dem diese Seite ueberhaupt bedienbar
+  // ist - siehe den Kopf von _page_bildschirme() in bridge.py.
+  let waechter: any = null
+
+  // Wie man ihm antwortet, solange er laeuft. Der Knopf dafuer steht im
+  // SEITENKOPF und nicht in der Seite: er muss waehrend der Frist
+  // erreichbar sein, ohne dass jemand erst scrollt.
+  let behaltenKnopf: ((wort: string) => void) | null = null
+
+  const anordnungSeite = (element: Bedienelement,
+                          zeichneNeu: () => void): Gtk.Widget => {
+    const kasten = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL, spacing: 8,
+    })
+
+    if (!element.available) {
+      kasten.append(absatz(element.reason))
+      return kasten
+    }
+
+    // Der Entwurf DIESER Seite. Er haengt nicht am Speichern-Knopf: was
+    // hier eingestellt wird, geht nicht nach user-settings.json, sondern
+    // an den laufenden Compositor und danach in die Datei, die
+    // `target` nennt.
+    const schirme: Schirm[] = (entwurf.get(element.key)
+      ?? element.value) as Schirm[]
+    const aendere = (name: string, felder: Partial<Schirm>) => {
+      entwurf.set(element.key, schirme.map(
+        schirm => schirm.name === name ? { ...schirm, ...felder } : schirm))
+      zeichneNeu()
+    }
+
+    for (const schirm of schirme) {
+      kasten.append(zepSectionLabel(schirm.label || schirm.name))
+
+      kasten.append(zepRow({
+        symbol: ICONS.anordnung,
+        titel: _("Switched on"),
+        unterzeile: format(_("at {x}, {y}"), { x: schirm.x, y: schirm.y }),
+        ende: zepToggle(schirm.enabled,
+          (an) => aendere(schirm.name, { enabled: an })),
+      }))
+
+      if (schirm.modes.length > 0) {
+        const modi = new Gtk.DropDown({
+          model: Gtk.StringList.new(schirm.modes.map(modus => modus.label)),
+          valign: Gtk.Align.CENTER,
+        })
+        modi.add_css_class("set-choice")
+        const jetzt = schirm.modes.findIndex(
+          modus => modus.width === schirm.width
+            && modus.height === schirm.height
+            && Math.abs(modus.refresh - schirm.refresh) < 0.01)
+        if (jetzt >= 0) modi.set_selected(jetzt)
+        modi.connect("notify::selected", () => {
+          if (still) return
+          const modus = schirm.modes[modi.get_selected()]
+          if (!modus) return
+          if (modus.width === schirm.width && modus.height === schirm.height
+              && Math.abs(modus.refresh - schirm.refresh) < 0.01) return
+          aendere(schirm.name, {
+            width: modus.width, height: modus.height, refresh: modus.refresh,
+          })
+        })
+        kasten.append(zepRow({
+          symbol: ICONS.anordnung, titel: _("Resolution"), ende: modi,
+        }))
+      }
+
+      const massstaebe = element.scales ?? []
+      if (massstaebe.length > 0) {
+        // Der eigene Wert kommt dazu, falls er keiner der angebotenen
+        // ist: eine Auswahl, die beim Oeffnen etwas anderes einstellt,
+        // ist kein Anzeigen (dieselbe Regel wie bei jeder anderen
+        // Auswahl dieses Fensters).
+        const werte = massstaebe.includes(schirm.scale)
+          ? massstaebe : [schirm.scale, ...massstaebe]
+        const wahl = new Gtk.DropDown({
+          model: Gtk.StringList.new(werte.map(zahl => `${zahl}`)),
+          valign: Gtk.Align.CENTER,
+        })
+        wahl.add_css_class("set-choice")
+        wahl.set_selected(werte.indexOf(schirm.scale))
+        wahl.connect("notify::selected", () => {
+          if (still) return
+          const neu = werte[wahl.get_selected()]
+          if (neu !== undefined && neu !== schirm.scale) {
+            aendere(schirm.name, { scale: neu })
+          }
+        })
+        kasten.append(zepRow({
+          symbol: ICONS.anordnung, titel: _("Scale"), ende: wahl,
+        }))
+      }
+
+      const drehungen = element.transforms ?? []
+      if (drehungen.length > 0) {
+        const wahl = new Gtk.DropDown({
+          model: Gtk.StringList.new(drehungen),
+          valign: Gtk.Align.CENTER,
+        })
+        wahl.add_css_class("set-choice")
+        wahl.set_selected(schirm.transform % drehungen.length)
+        wahl.connect("notify::selected", () => {
+          if (still) return
+          const neu = wahl.get_selected()
+          if (neu !== schirm.transform) {
+            aendere(schirm.name, { transform: neu })
+          }
+        })
+        kasten.append(zepRow({
+          symbol: ICONS.anordnung, titel: _("Rotation"), ende: wahl,
+        }))
+      }
+
+      kasten.append(zepDivider())
+    }
+
+    // WAS DIESE SEITE NICHT KANN, UND ZWAR AUSGESPROCHEN: die Schirme
+    // gegeneinander VERSCHIEBEN. Das GTK-Fenster hat dafuer eine
+    // Zeichenflaeche zum Ziehen (screens.DeskArea); hier stehen die
+    // Positionen, aber sie lassen sich nicht anfassen. Eine Seite, die
+    // das verschweigt, laesst den Nutzer suchen.
+    kasten.append(absatz(_("Position: every screen keeps the place it has. Dragging them around each other is done in the settings application; this window sets what a single screen shows.")))
+
+    if (!element.armable) {
+      kasten.append(absatz(element.reason))
+      return kasten
+    }
+
+    const anwenden = zepButton(_("Apply"), "voll", () => {
+      void anordnungAnwenden(element, zeichneNeu)
+    })
+    anwenden.set_sensitive(entwurf.has(element.key) && waechter === null)
+    kasten.append(anwenden)
+
+    kasten.append(absatz(format(
+      _("Applying asks back: without an answer within {seconds} seconds the old arrangement comes back. That happens even if this surface dies in the meantime - the way back runs in its own process."),
+      { seconds: element.seconds ?? 0 })))
+
+    if (element.target) {
+      kasten.append(absatz(format(
+        _("Kept in {file}"), { file: element.target })))
+    }
+    return kasten
+  }
+
+  /** Anwenden, auf Probe - und die Rueckfrage mit dem Zaehler.
+   *
+   * DAS IST DIE STELLE, AN DER EIN LAUFENDES PROGRAMM MEHR KANN ALS EIN
+   * BEFEHL. `--json arm` bleibt stehen, solange der Waechter laeuft
+   * (siehe arm() in bridge.py); Astal.Process haelt seine Standard-
+   * eingabe offen und schreibt die Antwort hinein. Ein Befehl, der mit
+   * seiner Ausgabe endet, koennte das nicht - genau deshalb war diese
+   * Seite bis zum 19.08.2026 nur lesbar.
+   */
+  const anordnungAnwenden = async (element: Bedienelement,
+                                   zeichneNeu: () => void) => {
+    if (waechter !== null) return
+    const schirme = entwurf.get(element.key)
+    if (!schirme) return
+
+    let beantwortet = false
+    const antworte = (wort: string) => {
+      if (beantwortet || waechter === null) return
+      beantwortet = true
+      void waechter.write(wort + "\n")
+    }
+
+    const prozess = subprocess(
+      [BEFEHL, JSON_SCHALTER, "arm"],
+      (zeile: string) => {
+        let antwort: any
+        try {
+          antwort = JSON.parse(zeile)
+        } catch {
+          return
+        }
+        if (antwort.armed) {
+          // Die Frist laeuft. Der Zaehler hier ist NICHT der Rueckfall -
+          // der laeuft im Waechter, in einem eigenen Prozess. Er ist die
+          // Hoeflichkeit davor: wer sieht, was er bestellt hat, soll
+          // nicht funfzehn Sekunden warten muessen.
+          sagen(format(_("Applied, on probation. Keep it? {seconds} s"),
+            { seconds: antwort.seconds ?? 0 }))
+          zeigeRueckfrage(antwort.seconds ?? 0, antworte)
+          return
+        }
+        if (antwort.kept) {
+          sagen(format(_("Kept and written: {files}"),
+            { files: (antwort.written ?? []).join(", ") }))
+        } else if ((antwort.problems ?? []).length > 0) {
+          sagen(antwort.problems.join("\n"))
+        } else {
+          sagen(_("Taken back."))
+        }
+      },
+      (fehler: string) => sagen(fehler))
+
+    waechter = prozess
+    prozess.connect("exit", () => {
+      waechter = null
+      // Nach dem Ende steht die Wahrheit wieder beim Compositor und
+      // nicht im Entwurf - also frisch lesen statt raten.
+      void neuLaden()
+    })
+
+    await prozess.write(JSON.stringify({ layout: schirme }) + "\n")
+    zeichneNeu()
+  }
+
+  /** Der Zaehler zur Rueckfrage.
+   *
+   * Ohne Antwort passiert NICHTS von hier aus - der Waechter nimmt von
+   * selbst zurueck, wenn seine Frist ablaeuft. Diese Funktion zaehlt
+   * nur die Meldungszeile herunter; ein Fenster, das stattdessen selbst
+   * zurueckstellen wollte, waere ein zweiter Rueckweg neben dem, der
+   * einen Absturz ueberlebt.
+   */
+  const zeigeRueckfrage = (sekunden: number,
+                           antworte: (wort: string) => void) => {
+    let rest = sekunden
+    const ticken = () => {
+      if (waechter === null) return
+      rest -= 1
+      if (rest <= 0) {
+        sagen(_("No answer - the old arrangement is coming back."))
+        antworte(VERWERFEN)
+        return
+      }
+      sagen(format(_("Applied, on probation. Keep it? {seconds} s"),
+        { seconds: rest }))
+      timeout(1000, ticken)
+    }
+    behaltenKnopf = antworte
+    timeout(1000, ticken)
+  }
+
+  // ---- Schreiben ----------------------------------------------------
+
+  const neuLaden = async () => {
+    const frisch = await bruecke(["get"])
+    if (frisch && Array.isArray(frisch.pages)) {
+      zustand = frisch
+      entwurf.clear()
+      zeichneAlles()
+    }
+  }
+
+  /** Ein einzelner Wert, sofort - Thema und Aktualisierung.
+   *
+   * Sie haengen an keinem Speichern-Knopf, weil sie der MASCHINE
+   * gehoeren und moeglicherweise durch pkexec geschrieben werden: ein
+   * Rechtefenster, das erst beim Speichern erscheint und dann fuer eine
+   * Auswahl fragt, die man vor zwei Minuten getroffen hat, ist keine
+   * Bestaetigung mehr, sondern eine Ueberraschung (app.py, _theme_page).
+   */
+  const sofortSchreiben = async (element: Bedienelement, wert: any) => {
+    const dokument: Record<string, any> = {}
+    dokument[element.key] = wert
+    sagen(_("Writing ..."))
+    const antwort = await bruecke(["set", JSON.stringify(dokument)])
+    if (antwort.ok) {
+      sagen(element.key === "theme" ? zustand.cost.theme
+        : _("The machine follows this setting from now on."))
+    } else {
+      sagen((antwort.problems ?? [_("failed")]).join("\n"))
+    }
+    await neuLaden()
+  }
+
+  const speichern = async () => {
+    if (entwurf.size === 0) return
+    const dokument: Record<string, any> = {}
+    for (const [schluessel, wert] of entwurf) {
+      // Die Bildschirme gehen NICHT durch `set` - sie stehen nicht in
+      // user-settings.json und haben ihren eigenen Weg (arm). Der
+      // Schluessel bliebe sonst als "kein Schluessel dieser
+      // Oberflaeche" liegen und machte das ganze Dokument ungueltig.
+      if (schluessel.startsWith("displays.")) continue
+      dokument[schluessel] = wert
+    }
+    if (Object.keys(dokument).length === 0) return
+
+    sagen(_("Saving ..."))
+    const antwort = await bruecke(["set", JSON.stringify(dokument)])
+    if (!antwort.ok) {
+      sagen((antwort.problems ?? [_("failed")]).join("\n"))
+      return
+    }
+    await neuLaden()
+    sagen(_("Saved. In effect with the next login - or now."))
+  }
+
+  const jetztAnwenden = () => {
+    // In einer EIGENEN Sitzung, und das ist gemessen und nicht
+    // vorsichtshalber: `zepos-generate --all` beendet die Oberflaeche
+    // und startet sie neu (`ags quit`, dann `pkill -9 -f "gjs.*ags"` -
+    // siehe model.GENERATE_COST). Ein Kindprozess dieses Fensters
+    // liefe waehrenddessen weiter, aber niemand koennte ihm noch
+    // zuhoeren; setsid macht daraus einen, der nicht einmal mehr an
+    // dieser Sitzung haengt. `--json apply` und nicht `zepos-generate`
+    // direkt, weil danach die Marke wegzuraeumen ist (siehe
+    // apply_now() in bridge.py) - eine Marke, die liegenbleibt, laesst
+    // die naechste Anmeldung noch einmal erzeugen.
+    void execAsync(["setsid", "--fork", BEFEHL, JSON_SCHALTER, "apply"])
+    sagen(zustand.cost.generate)
+  }
+
+  // ---- Der Kopf einer Seite -----------------------------------------
+
+  const seitenKopf = (seite: SeiteDaten): Gtk.Widget => {
+    const huelle = new Gtk.Box({})
+
+    const bauen = () => {
+      leeren(huelle)
+
+      const offen = entwurf.size
+      const unterzeile = meldung || (offen > 0
+        ? format(_("{count} change(s) not yet saved"), { count: offen })
+        : (zustand.pending_regenerate
+          ? _("Saved - not yet applied.")
+          : zustand.settings_file))
+
+      // Was rechts steht, haengt von der Lage ab und nicht von der
+      // Seite: waehrend eine Anordnung auf Probe steht, ist "Behalten"
+      // das einzige, was zaehlt.
+      let ende: Gtk.Widget
+      if (waechter !== null && behaltenKnopf !== null) {
+        const antworte = behaltenKnopf
+        ende = zepButton(_("Keep"), "voll", () => antworte(BEHALTEN))
+      } else if (entwurf.size > 0) {
+        ende = zepButton(_("Save"), "voll", () => void speichern())
+      } else if (zustand.pending_regenerate) {
+        ende = zepButton(_("Apply now"), "umrandet", jetztAnwenden)
+      } else {
+        ende = zepButton(_("Reload"), "still", () => void neuLaden())
+      }
+
+      huelle.append(zepStateHeader({
+        titel: seite.label,
+        unterzeile,
+        ende,
+      }))
+    }
+
+    bauen()
+    koepfe.set(seite.name, bauen)
+    return huelle
+  }
+
+  // ---- Eine Seite ---------------------------------------------------
+
+  const zeichneSeite = (seite: SeiteDaten) => {
+    const behaelter = seitenBehaelter.get(seite.name)
+    if (!behaelter) return
+    leeren(behaelter)
+
+    behaelter.append(seitenKopf(seite))
+
+    if (seite.note) behaelter.append(absatz(seite.note))
+
+    const gezeichnet = new Set<string>()
+    const zeichneElement = (element: Bedienelement) => {
+      gezeichnet.add(element.key)
+      if (element.kind === REIHENFOLGE) {
+        behaelter.append(zepSectionLabel(element.label))
+        if (element.note) behaelter.append(absatz(element.note))
+        behaelter.append(reihenfolgeSeite(
+          element, () => zeichneSeite(seite)))
+        behaelter.append(zepDivider())
+        return
+      }
+      if (element.kind === ANORDNUNG) {
+        behaelter.append(anordnungSeite(element, () => zeichneSeite(seite)))
+        return
+      }
+      behaelter.append(elementZeile(element))
+    }
+
+    for (const gruppe of seite.groups) {
+      behaelter.append(zepSectionLabel(gruppe.name))
+      if (gruppe.note) behaelter.append(absatz(gruppe.note))
+      for (const element of seite.controls) {
+        if (element.group === gruppe.name) zeichneElement(element)
+      }
+    }
+
+    // Was zu keiner Gruppe gehoert, steht trotzdem da. Eine Gruppe, die
+    // bridge.py nicht nennt, darf keine Zeile verschlucken.
+    for (const element of seite.controls) {
+      if (!gezeichnet.has(element.key)) zeichneElement(element)
+    }
+  }
+
+  const zeichneAlles = () => {
+    for (const seite of zustand.pages) zeichneSeite(seite)
+  }
+
+  // ---- Die Schale ---------------------------------------------------
+
+  // Alle sieben unter EINER Ueberschrift: die Seitenleiste gruppiert
+  // (zepSidebar, ags-kit.template), und dieses Fenster hat genau eine
+  // Gruppe - es ist die Einstellungsanwendung, nicht ein Ausschnitt
+  // davon. Der Name steht hier und nicht im Dokument, weil er die
+  // SEITENLEISTE beschriftet und nicht eine Einstellung ist.
+  const GRUPPE = _("SETTINGS")
+
+  const seiten: ShellSeite[] = zustand.pages.map(seite => ({
+    id: seite.name,
+    titel: seite.label,
+    symbol: SEITEN_ZEICHEN[seite.name] ?? ICONS.settings,
+    gruppe: GRUPPE,
+    bauen: () => {
+      const inhalt = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 4,
+      })
+      inhalt.add_css_class("set-container")
+      seitenBehaelter.set(seite.name, inhalt)
+      zeichneSeite(seite)
+
+      // Der Mindestbreiten-Boden der Schale sitzt auf einer EIGENEN,
+      // polsterlosen Huelle und nicht auf `inhalt` selbst - GTK rechnet
+      // Polster sonst oben auf die 672px drauf (gemessen am 19.08.2026,
+      // Aufgabe 23; siehe .zep-shell-page in ags-style.template und
+      // mitSeitenboden() in ags-control-center.template).
+      const huelle = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+      huelle.add_css_class("zep-shell-page")
+      huelle.append(inhalt)
+      return huelle
+    },
+  }))
+
+  return createShellWindow({
+    name: WINDOW_NAME,
+    cssClass: "Settings",
+    seiten,
+    startSeite: seiten[0].id,
+  })
+}

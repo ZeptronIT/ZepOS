@@ -352,16 +352,178 @@ def size_text(name: str, value: float) -> str:
 #     abgeschrieben werden - und ab dem ersten Umformulieren hiesse
 #     derselbe Regler in zwei Fenstern verschieden.
 #
-#     Die langen BESCHREIBUNGEN daneben sind nicht mitgekommen, und das
-#     ist kein Versehen: sie sind an libadwaitas Gruppen und Zeilen
-#     gebunden (Adw.PreferencesGroup description, ActionRow subtitle),
-#     also an eine Aufteilung, die ein anderes Fenster nicht hat. Wer
-#     sie dort braucht, hebt sie einzeln hierher - eine Zeile, die
-#     nichts als ihren Ort aendert.
+#     Die langen BESCHREIBUNGEN daneben sind am 19.08.2026 (Aufgabe 29)
+#     zunaechst in app.py geblieben, weil sie an libadwaitas Gruppen und
+#     Zeilen hingen (Adw.PreferencesGroup description, ActionRow
+#     subtitle), also an eine Aufteilung, die ein anderes Fenster nicht
+#     hat. Der Bericht dieser Aufgabe sagte dazu: "Wer sie dort braucht,
+#     hebt sie einzeln hierher - eine Zeile, die nichts als ihren Ort
+#     aendert." Genau das ist am selben Tag (Aufgabe 32, das AGS-Fenster)
+#     passiert - siehe NOTE_* weiter unten.
 LABEL_SCALE = "Groesse des Schreibtischs"
 LABEL_MOTION = "Bewegung zeigen"
 LABEL_WEATHER = "Ort"
 LABEL_THEME = "Thema dieses Rechners"
+
+
+# --------------------------------------------------------------------
+# Die Prosa der Seiten
+# --------------------------------------------------------------------
+#
+# NACHGETRAGEN am 19.08.2026 (Aufgabe 32, das AGS-Einstellungsfenster).
+#
+# WARUM SIE HIERHER GEHOERT UND NICHT IN EIN FENSTER
+#     Bis heute standen diese Texte als `Adw.PreferencesGroup(
+#     description=...)` und `Adw.ActionRow(subtitle=...)` in app.py -
+#     also in EINEM der beiden Fenster. Das AGS-Fenster haette sie
+#     abschreiben muessen, und zwei Fassungen desselben Satzes driften
+#     ab der ersten Umformulierung: der Nutzer liest dann je nach
+#     Fenster eine andere Begruendung fuer denselben Regler.
+#
+#     Sie sind WOERTLICH aus app.py hierhergezogen und nicht neu
+#     formuliert worden - eine Zeile, die nichts als ihren Ort aendert.
+#     app.py liest sie seither von hier, bridge.py schreibt sie ins
+#     JSON, das AGS-Fenster zeichnet sie. Eine Quelle, drei Leser.
+#
+# WARUM ZWEI DAVON FUNKTIONEN SIND
+#     Thema und Aktualisierung sagen im letzten Satz, ob DIESES Konto
+#     die Maschinendatei schreiben darf. Das ist keine Formulierung,
+#     sondern eine Messung (theme_writable()/update_writable()), und
+#     sie faellt auf jeder Maschine anders aus. Eine Konstante koennte
+#     nur eine der beiden Lagen tragen.
+
+# Die acht Transformationen von wl_output, in der Reihenfolge ihrer
+# Nummern - der Index IST der Wert, der in die Zeile kommt.
+#
+# HIER SEIT DEM 19.08.2026 (Aufgabe 32) UND NICHT MEHR IN screens.py:
+# bridge.py schreibt diese Liste ins JSON, und bridge.py darf screens.py
+# nicht importieren - die Datei ist ein Gtk.Box und zieht `gi` herein,
+# also genau das, wovon `--json get` frei sein muss.
+TRANSFORMS = (
+    "Normal",
+    "90 Grad",
+    "180 Grad (auf dem Kopf)",
+    "270 Grad",
+    "Gespiegelt",
+    "Gespiegelt, 90 Grad",
+    "Gespiegelt, 180 Grad",
+    "Gespiegelt, 270 Grad",
+)
+
+# Die Massstaebe, die angeboten werden.
+#
+# Eine Liste und kein Drehknopf, und das ist eine Messung: Hyprland lehnt
+# einen Massstab ab, bei dem Breite oder Hoehe nicht ganzzahlig aufgehen,
+# und meldet das als Konfigurationsfehler. Ein Drehknopf in Schritten von
+# 0.05 boete ueber dreissig Zahlen an, von denen die meisten fuer einen
+# gegebenen Schirm falsch sind. Diese sechs sind Vielfache von 1/4 und
+# gehen auf jeder gaengigen Aufloesung auf.
+SCALES = (1.0, 1.25, 1.5, 1.75, 2.0, 3.0)
+
+
+# Die Ueberschriften der Gruppen, aus demselben Grund wie die Texte
+# darunter: das AGS-Fenster setzt dieselben Ueberschriften ueber
+# dieselben Regler (zepSectionLabel, ags-kit.template), und eine
+# Ueberschrift, die in app.py steht, waere dort abgeschrieben.
+GROUP_SCALE = "Massstab"
+GROUP_DIALS = "Ausnahmen"
+GROUP_MOTION = "Bewegung"
+GROUP_THEME = "Thema"
+GROUP_WEATHER = "Wetter in der Leiste"
+GROUP_UPDATE = "Selbstaktualisierung"
+
+NOTE_SCALE_GROUP = (
+    "Ein Faktor auf alles, was Text ist oder Text umschliesst: "
+    "die Schrift, die Zeilenhoehen, die Dicke der Leiste. "
+    f"{sizes.SCALE_DEFAULT:.4g} ist die ausgelieferte Groesse - "
+    "dieselbe, in der das Startmenue schreibt. 1 ist die "
+    "Groesse davor.")
+
+NOTE_SCALE_RESET = (
+    f"Stellt den Faktor auf {sizes.SCALE_DEFAULT:.4g} und gibt jede "
+    "Ausnahme unten wieder an ihn zurueck.")
+
+NOTE_DIALS_GROUP = (
+    "Fuenf Groessen mit einem eigenen Grund, vom Faktor abzuweichen. "
+    "Wer hier eine Zahl nennt, sagt, was auf dem Schirm stehen soll - "
+    "der Faktor gilt fuer sie dann nicht mehr.")
+
+# Die drei Dauern werden GELESEN und nicht genannt: sie stehen in
+# sizes.py, und eine abgeschriebene Millisekundenzahl hier waere beim
+# naechsten Verstellen dort falsch.
+NOTE_MOTION_GROUP = (
+    "Eine Kurve und drei Dauern - "
+    + ", ".join(sizes.value_of(f"{sizes.MOTION_PREFIX}{role}", {})
+                for role, _ in sizes.MOTION_ROLES)
+    + ". Sie folgen dem Faktor NICHT: wer die Schrift verdoppelt, "
+      "will groesser lesen und nicht laenger warten.")
+
+NOTE_MOTION = (
+    "Aus heisst wirklich aus - der Compositor und die fremden "
+    "GTK4-Fenster gehen mit. Bewegte Flaechen loesen bei einer "
+    "vestibulaeren Stoerung Schwindel aus; das ist der Grund "
+    "fuer diesen Schalter und kein Geschmack.")
+
+NOTE_SIZES_REST_TITLE = "Die uebrigen Groessen"
+
+NOTE_SIZES_REST = (
+    f"Einstellbar sind {len(sizes.TABLE)}. Die anderen "
+    f"{len(sizes.TABLE) - len(DIALS)} sind Sprossen der "
+    "vier Leitern - Schrift, Symbol, Rundung, Abstand -, die "
+    "der Regler oben IM VERHAELTNIS bewegt, und Innenmasse "
+    "von Fenstern, die nach dem Platzhalter heissen, den sie "
+    "setzen. Einzeln angeboten waeren sie wieder der Katalog, "
+    "den die Leitern abgeloest haben. "
+    "`zepos-settings get sizes` zeigt, was gesetzt ist, "
+    "`user_settings.py list-sizes` alle mit ihrem aktuellen Wert.")
+
+NOTE_WEATHER_GROUP = (
+    "Ein Ortsname, eine Postleitzahl oder ein Flughafencode. "
+    "Leer heisst: das Modul bleibt leer und fragt niemanden - "
+    "und nur dann erfaehrt wttr.in nicht, wo diese Maschine "
+    "steht. Der Ort geht bei jeder Auffrischung dorthin.")
+
+NOTE_UPDATE_ENABLED = (
+    "Aus heisst: systemd haelt den Zeitgeber gar nicht erst.")
+
+NOTE_UPDATE_SCOPE = (
+    "Nur ZepOS laesst die Arch-Basis in Ruhe. Ein "
+    "unbeaufsichtigtes Vollupgrade auf einem Rolling Release ist "
+    "ein Rechner, der eines Morgens nicht mehr startet.")
+
+NOTE_UPDATE_NOTIFY = (
+    "Ein Fehlschlag meldet sich immer, ausser bei \"Nie\" - eine "
+    "abgelehnte Unterschrift darf nicht wie \"schon eine Weile "
+    "nichts Neues\" aussehen.")
+
+NOTE_UPDATE_REST_TITLE = "Die uebrigen Einstellungen"
+
+NOTE_UPDATE_REST = (
+    "Verzoegerung nach dem Start, zufaellige Streuung, Nachholen und "
+    "die Meldung ueber die Arch-Basis stehen in `zepos-update --help`.")
+
+
+def theme_note(writable: bool) -> str:
+    """Die Beschreibung der Themenseite - mit dem Satz, der misst."""
+    return (
+        "Die Palette, unter der die eigenen Farben liegen: was "
+        "auf der Seite \"Farben\" eingestellt ist, ueberlebt "
+        "jeden Wechsel.\n\n"
+        "Das Thema gehoert der MASCHINE und nicht diesem Konto - "
+        "der Anmeldebildschirm steht vor jedem Konto und soll "
+        "dasselbe zeigen. "
+        + ("Dieses Konto darf es schreiben." if writable else
+           "Deshalb wird beim Wechseln nach Rechten gefragt."))
+
+
+def update_note(writable: bool) -> str:
+    """Dieselbe Form fuer die Aktualisierung."""
+    return (
+        "Diese Einstellungen gehoeren der MASCHINE und nicht "
+        "diesem Konto: der Dienst laeuft, bevor sich jemand "
+        "angemeldet hat. Sie werden sofort geschrieben - "
+        + ("dieses Konto darf das." if writable else
+           "und dafuer wird nach Rechten gefragt."))
 
 
 # Die Seiten dieses Fensters, in der Reihenfolge, in der sie im

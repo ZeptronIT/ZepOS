@@ -2318,6 +2318,13 @@ GLASS_LAYERS = (
     # Glasplatte des Namensraums "control". "vpn-settings" bleibt: die
     # VPN-Einstellungen sind ein eigenes Fenster, kein Verbindungsziel.
     "vpn-settings",
+    # Die Einstellungen als eigenes AGS-Fenster, seit Aufgabe 32
+    # (19.08.2026). Die ZWEITE Schale dieses Baums (createShellWindow(),
+    # ags-settings.template) neben dem Kontrollzentrum - eine eigene
+    # Flaeche und kein Teil von "control", weil sie ein eigenes Fenster
+    # ist: sie geht auf, ohne dass das Kontrollzentrum aufgeht, und sie
+    # bleibt offen, waehrend jemand dort etwas anderes tut.
+    "settings",
     # Die Sitzungsmaske, seit Aufgabe 26 (19.08.2026) - der Ersatz fuer
     # zepos-logout (siehe die Anmerkung weiter oben) ist ein Fenster wie
     # Kalender, Kuerzel und die uebrigen: `createOverlayWindow({name:
@@ -2450,6 +2457,11 @@ GLASS_PLATES = {
     # bei GLASS_LAYERS oben. VPN malt sich seither auf der Platte des
     # Namensraums "control".
     "vpn-settings": _OVERLAY,
+    # Die Einstellungen (Aufgabe 32, 19.08.2026): createShellWindow()
+    # reicht an createOverlayWindow() weiter, also traegt dieses Fenster
+    # dieselbe `.overlay-outer`-Platte wie die uebrigen elf - genau wie
+    # das Kontrollzentrum, die andere Schale.
+    "settings": _OVERLAY,
     "hyprlaunch": GlassPlate("styles/hyprlaunch-style.template",
                              ".launcher-container", ("overlay_subtext",),
                              None),

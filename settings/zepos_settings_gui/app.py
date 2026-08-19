@@ -147,14 +147,13 @@ class SettingsWindow(Adw.ApplicationWindow):
     def _size_page(self) -> Adw.PreferencesPage:
         page = Adw.PreferencesPage()
 
+        # DIE BESCHREIBUNGEN DIESER SEITE STEHEN SEIT DEM 19.08.2026
+        # (Aufgabe 32) IN model.py ALS NOTE_*, NICHT MEHR HIER: das
+        # AGS-Einstellungsfenster zeichnet dieselben Saetze, und zwei
+        # Fassungen desselben Satzes driften ab der ersten
+        # Umformulierung. Siehe den Kopf des NOTE_*-Blocks dort.
         group = Adw.PreferencesGroup(
-            title="Massstab",
-            description=(
-                "Ein Faktor auf alles, was Text ist oder Text umschliesst: "
-                "die Schrift, die Zeilenhoehen, die Dicke der Leiste. "
-                f"{sizes.SCALE_DEFAULT:.4g} ist die ausgelieferte Groesse - "
-                "dieselbe, in der das Startmenue schreibt. 1 ist die "
-                "Groesse davor."))
+            title=model.GROUP_SCALE, description=model.NOTE_SCALE_GROUP)
 
         self.scale_row = Adw.SpinRow(
             title=model.LABEL_SCALE,
@@ -171,58 +170,29 @@ class SettingsWindow(Adw.ApplicationWindow):
                            valign=Gtk.Align.CENTER)
         reset.connect("clicked", self._on_scale_reset)
         shipped = Adw.ActionRow(
-            title="Zuruecksetzen",
-            subtitle="Stellt den Faktor auf "
-                     f"{sizes.SCALE_DEFAULT:.4g} und gibt jede Ausnahme "
-                     "unten wieder an ihn zurueck.")
+            title="Zuruecksetzen", subtitle=model.NOTE_SCALE_RESET)
         shipped.add_suffix(reset)
         group.add(shipped)
         page.add(group)
 
         exceptions = Adw.PreferencesGroup(
-            title="Ausnahmen",
-            description=(
-                "Fuenf Groessen mit einem eigenen Grund, vom Faktor "
-                "abzuweichen. Wer hier eine Zahl nennt, sagt, was auf dem "
-                "Schirm stehen soll - der Faktor gilt fuer sie dann nicht "
-                "mehr."))
+            title=model.GROUP_DIALS, description=model.NOTE_DIALS_GROUP)
         for dial in model.DIALS:
             exceptions.add(self._dial_row(dial))
         page.add(exceptions)
 
         motion = Adw.PreferencesGroup(
-            title="Bewegung",
-            description=(
-                "Eine Kurve und drei Dauern - "
-                f"{', '.join(sizes.value_of(f'{sizes.MOTION_PREFIX}{role}', {}) for role, _ in sizes.MOTION_ROLES)}. "
-                "Sie folgen dem Faktor NICHT: wer die Schrift verdoppelt, "
-                "will groesser lesen und nicht laenger warten."))
+            title=model.GROUP_MOTION, description=model.NOTE_MOTION_GROUP)
         self.motion_row = Adw.SwitchRow(
-            title=model.LABEL_MOTION,
-            subtitle=(
-                "Aus heisst wirklich aus - der Compositor und die fremden "
-                "GTK4-Fenster gehen mit. Bewegte Flaechen loesen bei einer "
-                "vestibulaeren Stoerung Schwindel aus; das ist der Grund "
-                "fuer diesen Schalter und kein Geschmack."),
+            title=model.LABEL_MOTION, subtitle=model.NOTE_MOTION,
             active=self.draft.current_motion())
         self.motion_row.connect("notify::active", self._on_motion)
         motion.add(self.motion_row)
         page.add(motion)
 
         rest = Adw.PreferencesGroup()
-        rest.add(Adw.ActionRow(
-            title="Die uebrigen Groessen",
-            subtitle=(
-                f"Einstellbar sind {len(sizes.TABLE)}. Die anderen "
-                f"{len(sizes.TABLE) - len(model.DIALS)} sind Sprossen der "
-                "vier Leitern - Schrift, Symbol, Rundung, Abstand -, die "
-                "der Regler oben IM VERHAELTNIS bewegt, und Innenmasse "
-                "von Fenstern, die nach dem Platzhalter heissen, den sie "
-                "setzen. Einzeln angeboten waeren sie wieder der Katalog, "
-                "den die Leitern abgeloest haben. "
-                "`zepos-settings get sizes` zeigt, was gesetzt ist, "
-                "`user_settings.py list-sizes` alle mit ihrem aktuellen "
-                "Wert.")))
+        rest.add(Adw.ActionRow(title=model.NOTE_SIZES_REST_TITLE,
+                               subtitle=model.NOTE_SIZES_REST))
         page.add(rest)
         return page
 
@@ -362,12 +332,7 @@ class SettingsWindow(Adw.ApplicationWindow):
     def _weather_page(self) -> Adw.PreferencesPage:
         page = Adw.PreferencesPage()
         group = Adw.PreferencesGroup(
-            title="Wetter in der Leiste",
-            description=(
-                "Ein Ortsname, eine Postleitzahl oder ein Flughafencode. "
-                "Leer heisst: das Modul bleibt leer und fragt niemanden - "
-                "und nur dann erfaehrt wttr.in nicht, wo diese Maschine "
-                "steht. Der Ort geht bei jeder Auffrischung dorthin."))
+            title=model.GROUP_WEATHER, description=model.NOTE_WEATHER_GROUP)
 
         self.weather_row = Adw.EntryRow(title=model.LABEL_WEATHER)
         self.weather_row.set_text(self.draft.current_weather())
@@ -396,16 +361,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         writable = model.theme_writable()
 
         group = Adw.PreferencesGroup(
-            title="Thema",
-            description=(
-                "Die Palette, unter der die eigenen Farben liegen: was "
-                "auf der Seite \"Farben\" eingestellt ist, ueberlebt "
-                "jeden Wechsel.\n\n"
-                "Das Thema gehoert der MASCHINE und nicht diesem Konto - "
-                "der Anmeldebildschirm steht vor jedem Konto und soll "
-                "dasselbe zeigen. "
-                + ("Dieses Konto darf es schreiben." if writable else
-                   "Deshalb wird beim Wechseln nach Rechten gefragt.")))
+            title=model.GROUP_THEME, description=model.theme_note(writable))
 
         names = model.theme_names()
         current = model.current_theme()
@@ -458,18 +414,12 @@ class SettingsWindow(Adw.ApplicationWindow):
 
         writable = model.update_writable()
         group = Adw.PreferencesGroup(
-            title="Selbstaktualisierung",
-            description=(
-                "Diese Einstellungen gehoeren der MASCHINE und nicht "
-                "diesem Konto: der Dienst laeuft, bevor sich jemand "
-                "angemeldet hat. Sie werden sofort geschrieben - "
-                + ("dieses Konto darf das." if writable else
-                   "und dafuer wird nach Rechten gefragt.")))
+            title=model.GROUP_UPDATE,
+            description=model.update_note(writable))
 
         enabled = Adw.SwitchRow(
             title=model.UPDATE_LABELS[model.UPDATE_ENABLED],
-            subtitle="Aus heisst: systemd haelt den Zeitgeber gar nicht "
-                     "erst.",
+            subtitle=model.NOTE_UPDATE_ENABLED,
             active=bool(config.get(model.UPDATE_ENABLED)))
         enabled.connect("notify::active", self._on_update_switch,
                         model.UPDATE_ENABLED)
@@ -478,16 +428,12 @@ class SettingsWindow(Adw.ApplicationWindow):
 
         group.add(self._update_choice(
             model.UPDATE_SCOPE, model.UPDATE_LABELS[model.UPDATE_SCOPE],
-            "Nur ZepOS laesst die Arch-Basis in Ruhe. Ein "
-            "unbeaufsichtigtes Vollupgrade auf einem Rolling Release ist "
-            "ein Rechner, der eines Morgens nicht mehr startet.",
+            model.NOTE_UPDATE_SCOPE,
             model.UPDATE_SCOPE_LABELS, config.get(model.UPDATE_SCOPE)))
 
         group.add(self._update_choice(
             model.UPDATE_NOTIFY, model.UPDATE_LABELS[model.UPDATE_NOTIFY],
-            "Ein Fehlschlag meldet sich immer, ausser bei \"Nie\" - eine "
-            "abgelehnte Unterschrift darf nicht wie \"schon eine Weile "
-            "nichts Neues\" aussehen.",
+            model.NOTE_UPDATE_NOTIFY,
             model.UPDATE_NOTIFY_LABELS, config.get(model.UPDATE_NOTIFY)))
 
         schedule = config.get("schedule")
@@ -500,11 +446,8 @@ class SettingsWindow(Adw.ApplicationWindow):
         page.add(group)
 
         rest = Adw.PreferencesGroup()
-        rest.add(Adw.ActionRow(
-            title="Die uebrigen Einstellungen",
-            subtitle="Verzoegerung nach dem Start, zufaellige Streuung, "
-                     "Nachholen und die Meldung ueber die Arch-Basis "
-                     "stehen in `zepos-update --help`."))
+        rest.add(Adw.ActionRow(title=model.NOTE_UPDATE_REST_TITLE,
+                               subtitle=model.NOTE_UPDATE_REST))
         page.add(rest)
         return page
 

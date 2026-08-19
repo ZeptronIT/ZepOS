@@ -331,19 +331,41 @@ def test_the_type_only_exemption_still_lets_the_rule_reach_somebody():
 @pytest.mark.parametrize("template", [
     path for path in _TOOLBOX_READERS if not _takes_only_types(path)])
 def test_who_imports_the_toolbox_imports_the_factory(template):
-    """Wer utils/overlay anfasst, ruft createOverlayWindow.
+    """Wer utils/overlay anfasst, ruft EINE der beiden Fabriken.
 
     Ausgenommen ist, wer AUSSCHLIESSLICH `import type` schreibt - siehe
     _takes_only_types() darueber. Das sind app.ts, das die Fenster in
     einem Feld fuehrt, und die Leiste, die sagen muss, wo geklickt
     wurde. Beide bauen kein Fenster, und beide koennen es nach dem
     Uebersetzen auch gar nicht mehr.
+
+    ZWEI NAMEN SEIT DEM 19.08.2026 (Aufgabe 32), UND DAS IST EINE
+    VERSCHAERFUNG UND KEINE AUFWEICHUNG
+        utils/overlay hat seit Aufgabe 5 (18.08.2026) ZWEI Fabriken:
+        createOverlayWindow und createShellWindow, und die zweite ruft
+        die erste (siehe ihren Kopf dort - "createShellWindow BAUT KEIN
+        ZWEITES ASTAL.WINDOW VON HAND"). Diese Zusicherung kannte nur
+        die erste.
+
+        GEMESSEN am 19.08.2026: ags-control-center.template ruft seit
+        Aufgabe 6 ausschliesslich createShellWindow und bestand hier
+        trotzdem - der Name createOverlayWindow steht dort nur noch
+        dreimal, zweimal in einem `//`-Kommentar (die _code() streicht)
+        und einmal in einer `*`-Zeile eines Blockkommentars (die sie
+        NICHT streicht). Die Fabrikpflicht war fuer die Schale also seit
+        einem Tag folgenlos: haette das Kontrollzentrum sein Fenster von
+        Hand zusammengesetzt, waere es hier gruen geblieben, solange nur
+        der alte Fabrikname irgendwo im Fliesstext stand.
+
+        Mit beiden Namen greift sie fuer beide Bauweisen WIRKLICH - und
+        ein Blockkommentar allein rettet keine Vorlage mehr, weil der
+        Aufruf, den sie tatsaechlich macht, jetzt auch benannt ist.
     """
     code = _code(template)
-    assert "createOverlayWindow" in code, (
-        f"{template.name} importiert aus utils/overlay, ruft aber nicht "
-        f"die Fabrik - dann holt es sich Teile und setzt sie selbst "
-        f"zusammen")
+    assert "createOverlayWindow" in code or "createShellWindow" in code, (
+        f"{template.name} importiert aus utils/overlay, ruft aber weder "
+        f"createOverlayWindow noch createShellWindow - dann holt es sich "
+        f"Teile und setzt sie selbst zusammen")
 
 
 def test_the_factory_can_do_what_the_bypass_was_built_for():
