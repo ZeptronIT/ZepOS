@@ -805,8 +805,35 @@ window.dock-window {
  *     Gehalten wird das von tests/render/test_geometry.py, das seit
  *     demselben Tag ueber mehrere Schirme und mehrere Faktoren misst -
  *     und nicht mehr nur ueber einen. */
+/* DER WEISSE RING UM JEDES SYMBOL, UND WARUM ER IM TEST NIE ZU SEHEN WAR
+ *
+ *     GEMELDET am 17.08.2026 ("jedes icon hat doch eine weiss umrandung")
+ *     und am 19.08.2026 erneut, mit dem Hinweis, der die Sache loeste:
+ *     "auf deinem aquamarine test sieht das besser aus".
+ *
+ *     Genau so ist es, und das ist kein Zufall. Im verschachtelten
+ *     Compositor, in dem tests/render/ misst, ist KEIN GTK-Thema
+ *     installiert - ein Gtk.Button hat dort von sich aus keinen Rahmen.
+ *     Auf einer echten Maschine malt das Systemthema seinen
+ *     Standard-Knopfrahmen, und diese Regel hat ihn nie zurueckgesetzt:
+ *     sie ueberschreibt `border-bottom`, sonst nichts. Die drei anderen
+ *     Kanten und der Schlagschatten blieben, wie das Thema sie wollte.
+ *
+ *     Ein Fehler, den der Testaufbau STRUKTURELL nicht finden kann: er
+ *     misst in einer Umgebung, in der die Ursache nicht existiert.
+ *
+ *     `border-bottom` bleibt als einzige Kante stehen und behaelt seine
+ *     Aufgabe: es reserviert die Hoehe fuer den Aktiv-Strich, damit das
+ *     Anklicken kein Fenster des Schirms um einen Punkt verschiebt. Die
+ *     Messreihe darueber (DOCK_BORDERS = 3) bleibt damit gueltig - sie
+ *     zaehlt die zwei Punkte des Kastens und diesen einen Strich, und
+ *     an keiner der drei Zahlen aendert sich etwas.
+ */
 #dock button.dock-button {
   background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
   border-radius: {{STYLE_RADIUS_CARD}};
   border-bottom: 1px solid transparent;
   padding: {{STYLE_DOCK_PADDING}}px;
