@@ -147,6 +147,25 @@ $overlay-border: $border;
   }
 }
 
+// Die Gruppenueberschrift der Seitenleiste - VERBINDUNGEN, SYSTEM,
+// EINSTELLUNGEN.
+//
+// ZENTRIERT SEIT DEM 19.08.2026, auf Ansage des Nutzers ("sorge auch
+// dafuer das die titel in der sidebar zentriert sind"). Hier stand
+// keine Ausrichtung, die Ueberschrift erbte also linksbuendig.
+//
+// GEMEINT SIND DIE UEBERSCHRIFTEN UND NICHT DIE EINTRAEGE: ein Eintrag
+// traegt Symbol links und Beschriftung rechts daneben - das ist am
+// selben Tag ausdruecklich so bestellt worden ("das icon im navlink
+// sollte links sein und rechts davon der text"). Ihn zu zentrieren
+// wuerde derselben Ansage widersprechen.
+//
+// DIE AUSRICHTUNG STEHT NICHT HIER, und das ist keine Nachlaessigkeit:
+// in GTK4 ist sie eine Widget-Eigenschaft und keine CSS-Regel. Sie
+// steht bei zepSectionLabel in ags-kit.template als `xalign: 0.5`.
+// Wer sie hier sucht, sucht am falschen Ort - eine CSS-Regel dafuer
+// wuerde GTK4 klaglos annehmen und ignorieren, also sichtbar nichts
+// tun.
 .zep-section {
   font-size: {{STYLE_FONT_CAPTION}};
   color: $subtext;

@@ -209,7 +209,21 @@ export function zepToggle(
 
 // Die Marke ueber einer Gruppe. Klein, gedaempft, gesperrt gesetzt.
 export function zepSectionLabel(text: string): Gtk.Label {
-  const marke = new Gtk.Label({ label: text, xalign: 0 })
+  // ZENTRIERT SEIT DEM 19.08.2026, auf Ansage des Nutzers: "sorge auch
+  // dafuer das die titel in der sidebar zentriert sind".
+  //
+  // Hier stand `xalign: 0` - das ist die Zeile, die den Text links
+  // festnagelt, und nicht das Stylesheet. In GTK4 ist die Ausrichtung
+  // eines Labels eine Widget-Eigenschaft; wer sie in .zep-section
+  // sucht, findet sie nicht und aendert am Bildschirm nichts.
+  //
+  // GEMEINT SIND DIE UEBERSCHRIFTEN UND NICHT DIE EINTRAEGE: ein
+  // Eintrag traegt Symbol links und Beschriftung rechts daneben, am
+  // selben Tag ausdruecklich so bestellt ("das icon im navlink sollte
+  // links sein und rechts davon der text"). Ihn zu zentrieren wuerde
+  // derselben Ansage widersprechen - darum steht die Aenderung hier
+  // und nicht in zepRow.
+  const marke = new Gtk.Label({ label: text, xalign: 0.5 })
   marke.add_css_class("zep-section")
   return marke
 }
