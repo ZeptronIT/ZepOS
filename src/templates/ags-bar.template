@@ -118,6 +118,9 @@
 
 import Astal from "gi://Astal?version=4.0"
 import GLib from "gi://GLib"
+// Nur fuer signal_connect - siehe tonVerbinden(): Wp.Core traegt eine
+// eigene Methode `connect()`, die die des Signalsystems verdeckt.
+import GObject from "gi://GObject"
 import Pango from "gi://Pango"
 import { Gtk, Gdk } from "ags/gtk4"
 import { execAsync } from "ags/process"
@@ -386,6 +389,54 @@ function moduleBox(name: string): { box: Gtk.Box; label: Gtk.Label } {
 // Fehlerbilder, zwischen denen niemand unterscheiden koennte.
 const STATUS_BROKEN_ICON = "{{ICON_ALERT}}"
 
+/** Wie ein Leistenskript gestartet wird - und warum nicht einfach `bash`.
+ *
+ * `env -u LD_PRELOAD` DAVOR, UND DAS IST DIE TEUERSTE ZEILE DER LEISTE
+ * GEWESEN
+ *
+ *     GEMESSEN am 20.08.2026, waehrend der Suche nach dem Verzug der
+ *     Lautstaerkeanzeige. Dasselbe status.sh, derselbe Rechner:
+ *
+ *         aus einer Shell heraus                     87 ms
+ *         aus dem AGS-Prozess ueber execAsync       694 ms
+ *
+ *     Der Unterschied ist EINE Umgebungsvariable. `ags` startet die
+ *     Oberflaeche als
+ *
+ *         LD_PRELOAD="/usr/lib/libgtk4-layer-shell.so" gjs -m ...
+ *
+ *     (nachgesehen in /usr/bin/ags und, wichtiger, am laufenden Prozess
+ *     dieser Sitzung: /proc/<pid>/environ traegt es). LD_PRELOAD wird
+ *     VERERBT. Jedes Kind, das die Leiste startet, laedt damit
+ *     libgtk4-layer-shell - und mit ihr GTK4 - bevor es seine erste
+ *     Zeile ausfuehrt. status.sh startet gut ein Dutzend Prozesse
+ *     (bash, jq, wpctl dreimal, nmcli, bluetoothctl, awk, grep, cut),
+ *     und JEDER von ihnen zahlte das.
+ *
+ *     Gemessen an derselben Stelle, mit derselben Schleife:
+ *
+ *         ["bash", "-c", skript]                      694 ms
+ *         ["env", "-u", "LD_PRELOAD", "bash", ...]     107 ms
+ *
+ *     Keines dieser Kinder ist ein GTK4-Programm, geschweige denn eines
+ *     mit einer Layer-Shell-Flaeche. Die Bibliothek gehoert dem
+ *     gjs-Prozess, und der hat sie laengst geladen - der Lader liest
+ *     LD_PRELOAD beim Start und danach nie wieder. Sie den Kindern
+ *     wegzunehmen nimmt ihm also nichts.
+ *
+ *     WARUM HIER UND NICHT EINMAL PROZESSWEIT: ein GLib.unsetenv beim
+ *     Laden dieses Moduls waere kuerzer und wuerde auch fuer jedes
+ *     andere Modul der Oberflaeche gelten - genau deshalb steht es
+ *     nicht da. Diese Vorlage baut die LEISTE; die Umgebung des ganzen
+ *     Prozesses ist nicht ihre, und eine Aenderung daran waere von
+ *     ags-network.tsx oder ags-vpn.tsx aus nicht mehr zu sehen.
+ *
+ * `env` und nicht `/usr/bin/env`: execAsync startet argv[0] ueber PATH,
+ * und env ist coreutils - dieselbe Klasse wie `timeout` und `cat`, auf
+ * die sich bar-status-config.template schon verlaesst.
+ */
+const SKRIPT_START = ["env", "-u", "LD_PRELOAD", "bash", "-c"]
+
 interface ScriptSpec extends ClickSpec {
   name: string
   /** Der Befehl, der die JSON-Zeile schreibt. */
@@ -406,7 +457,7 @@ function scriptModule(spec: ScriptSpec,
   box.set_visible(false)
 
   const poll = () => {
-    execAsync(["bash", "-c", spec.exec])
+    execAsync([...SKRIPT_START, spec.exec])
       .then((output: string) => {
         const line = output.trim()
         if (!line) { applyPayload(label, box, spec.name, {}); changed(); return }
@@ -469,6 +520,377 @@ interface SharedSink {
   label: Gtk.Label
 }
 
+// ---------------------------------------------------------------------
+// Ton und Mikrofon: sagen lassen statt nachfragen
+// ---------------------------------------------------------------------
+//
+// GEMELDET am 20.08.2026: "wenn ich den lautstärke regler herunter und
+// hoch mache soll der header die prozent zahl genau so aktualisieren".
+//
+// Seit dem 19.08.2026 tragen Ton und Mikrofon ihre Prozentzahl auf der
+// Leiste (siehe den Kopf von bar-status-config.template). Sie kam aber
+// aus dem Takt darunter, und ein Takt ist fuer eine Anzeige, die der
+// Nutzer GERADE SELBST verstellt, immer zu langsam.
+//
+// WIE LANGSAM, GEMESSEN AM 20.08.2026
+//     Werkzeug: eine eigene pipewire/wireplumber-Instanz mit einer
+//     Nullsenke und einer Nullquelle, also OHNE die Lautstaerke des
+//     Nutzers anzufassen. Die Vorlage wurde gerendert und im Takt von
+//     2000 ms aufgerufen, wie sharedStatus() es tut; die Lautstaerke
+//     wurde zwoelfmal an einer zufaelligen Stelle IM Takt verstellt.
+//
+//         status.sh, reine Laufzeit   92 / 94 / 96 ms (min/median/max)
+//         Ton, Verzug                 443 / 1390 / 1790 ms, Mittel 1249
+//         Mikrofon, Verzug            431 / 1359 / 2052 ms, Mittel 1266
+//
+//     Das ist genau die Verteilung, die ein Takt erzeugt: gleichmaessig
+//     ueber die 2000 ms gestreut, plus die Laufzeit des Skripts. Man
+//     kann den Takt kuerzen - aber dann fragt die Maschine dauernd nach
+//     etwas, das sich fast nie aendert.
+//
+// WAS STATTDESSEN GEWAEHLT WURDE, UND WAS DAGEGEN GEPRUEFT WURDE
+//
+//     GEWAEHLT: libwireplumber selbst, ueber seine GObject-Anbindung
+//     (Wp-0.5). Sie meldet `params-changed`/`Props` an jedem Tonknoten,
+//     also genau dann, wenn sich eine Lautstaerke oder ein Stummschalter
+//     aendert. Gemessen am 20.08.2026: verbunden nach 1 ms, und die
+//     Meldung kommt im selben Durchlauf der Ereignisschleife wie die
+//     Aenderung - unter der Aufloesung dieser Messung.
+//
+//     Sie braucht KEINEN zusaetzlichen Dauerprozess: die Anbindung laeuft
+//     IN diesem Prozess. Und sie braucht kein neues Paket: Wp-0.5.typelib
+//     gehoert zu libwireplumber, das mit `wireplumber` kommt - schon
+//     heute eine harte Abhaengigkeit von zepos-desktop, weil status.sh
+//     `wpctl` ruft.
+//
+//     VERWORFEN: AstalWp, Astals eigene Wireplumber-Anbindung.
+//     GEPRUEFT am 20.08.2026 und auf dieser Maschine schlicht NICHT
+//     VORHANDEN: /usr/lib/girepository-1.0/ traegt Astal-3.0, Astal-4.0,
+//     AstalIO und AstalNotifd, kein AstalWp; `aylurs-gtk-shell 3.1.2-1`
+//     bringt in seinen 59 Dateien keine Typelib mit, und `pacman -Ss
+//     astal` findet nichts Installierbares. Sie zu benutzen hiesse, ein
+//     Paket mehr zu fordern - fuer eine Auskunft, die libwireplumber
+//     schon gibt.
+//
+//     VERWORFEN: `pactl subscribe`. Es taete es, kostet aber einen
+//     wachenden Prozess je Leiste, und es haengt eine
+//     Uebersetzungsschicht weiter draussen als die Quelle - dieselbe
+//     Begruendung, aus der status.sh `wpctl` und nicht `pamixer` ruft.
+//     Dazu eine MESSUNG, die den Ausschlag gibt: in der eigenen Instanz
+//     schrieb `pactl subscribe` fuer JEDEN `wpctl`-Aufruf drei Zeilen
+//     ("new", "change", "remove" on client). status.sh ruft `wpctl`
+//     dreimal je Lauf - der Kanal haette sich also selbst angetrieben.
+//     Gegenprobe an derselben Stelle: zwanzig Laeufe von status.sh
+//     ergaben ueber Wp NULL `params-changed`. Es gibt keine
+//     Rueckkopplung.
+//
+// DAS EREIGNIS IST EIN ANLASS UND KEINE QUELLE
+//     Der Horcher rechnet KEINE Prozentzahl aus. Er ruft dieselbe
+//     poll()-Funktion, die der Takt ruft, und die Zahl kommt weiter aus
+//     status.sh. Das ist Absicht: Zeichenwahl (Kopfhoerer, stumm, die
+//     Stufen bei 33 und 66), Rundung und Kurzhinweis stehen dort EINMAL.
+//     Sie hier ein zweites Mal zu schreiben, waere die zweite Fassung
+//     derselben Ausgabe - und ausgerechnet die ungetestete.
+//
+//     Daraus folgt auch, dass DAS MIKROFON VON SELBST MITKOMMT: beide
+//     Zahlen stehen in derselben Antwort. Ein Fenster, in dem eines
+//     sofort reagiert und das andere nicht, kann so gar nicht
+//     entstehen.
+//
+// WAS BEOBACHTET WIRD
+//     Jeder Knoten mit media.class Audio/Sink oder Audio/Source*.
+//     `object-added` und `object-removed` melden mit - ein
+//     eingestoepselter Kopfhoerer aendert die Vorgabesenke und damit das
+//     Zeichen, und auch das stand bisher bis zu zwei Sekunden falsch da.
+//     Stroeme (Stream/Output/Audio) sind ausgenommen: ihre eigene
+//     Lautstaerke steht nicht auf der Leiste.
+const AUDIO_KLASSE = /^Audio\/(Sink|Source)/
+
+// Wer geweckt werden will, wenn sich am Ton etwas tut. Eine Liste und
+// nicht ein Rueckruf, weil Bar() je Schirm eine Leiste baut und jede
+// ihren eigenen poll() hat - aber ALLE dieselbe eine Verbindung zu
+// wireplumber teilen sollen. Zwei Schirme sind zwei Leisten, nicht zwei
+// Tonanbindungen.
+const tonHorcher: Array<() => void> = []
+let tonVersucht = false
+
+// DIE BEIDEN ANGABEN, DIE DIE VERBINDUNG UEBERHAUPT AM LEBEN HALTEN
+//
+//     Sie stehen hier oben und nicht als lokale Angaben in versuche(),
+//     und das ist kein Stil, sondern der Unterschied zwischen "es geht"
+//     und "es geht nicht".
+//
+//     GJS gibt ein GObject frei, sobald KEIN JavaScript mehr darauf
+//     zeigt. Ein Kern und ein Verwalter, die nur innerhalb von
+//     versuche() leben, sind nach dessen Ruecksprung unerreichbar - der
+//     naechste Durchlauf des Aufraeumers schliesst dann die Verbindung
+//     zu wireplumber, und zwar ohne ein Wort. Die Signalanmeldungen
+//     halten sie NICHT: sie zeigen VOM Objekt weg, nicht auf es.
+//
+//     GEMESSEN am 20.08.2026, und der Fehler sah aus wie ein ganz
+//     anderer: der Verbindungsaufbau war nachweislich richtig, die
+//     Leiste meldete sogar "wireplumber antwortet wieder" - und die
+//     Lautstaerke brauchte trotzdem 1193 ms und 1675 ms. Zwei
+//     aufeinanderfolgende Messungen lagen 1982 ms auseinander, also
+//     genau einen Takt: es war der Zeitgeber, der die Zahl brachte, und
+//     kein Ereignis. Dieselbe Bauart als eigenstaendiges Programm, aber
+//     mit Angaben auf Modulebene, meldete sauber - bis hin zu
+//     "PARAMS spaet Props" eine Millisekunde nach dem Verstellen.
+let tonKern: any = null
+let tonVerwalter: any = null
+
+function tonMelden(): void {
+  for (const horcher of tonHorcher) horcher()
+}
+
+/** libwireplumber holen - und ueberleben, wenn es das nicht gibt.
+ *
+ * NICHT als `import Wp from "gi://Wp?version=0.5"` oben in der Datei.
+ * Ein Import, der scheitert, nimmt das GANZE Modul mit: auf einer
+ * Maschine ohne libwireplumber gaebe es dann keine Leiste mehr, statt
+ * einer Leiste ohne diese eine Abkuerzung. `globalThis.imports.gi` ist
+ * der Weg, der sich in ein try/catch fassen laesst - gemessen am
+ * 20.08.2026, dass er im gebuendelten AGS-Modul zur Verfuegung steht.
+ */
+function wireplumber(): any | null {
+  try {
+    const gi = (globalThis as any).imports?.gi
+    if (!gi) return null
+    gi.versions.Wp = "0.5"
+    return gi.Wp
+  } catch (error) {
+    console.error("libwireplumber nicht verfuegbar:", String(error))
+    return null
+  }
+}
+
+/** Die eine Verbindung zu wireplumber, samt Rueckweg.
+ *
+ * WAS PASSIERT, WENN WIREPLUMBER NEU STARTET
+ *     Die Verbindung faellt, und ohne Zutun kaeme nie wieder eine
+ *     Meldung - die Anzeige lebte dann still vom Takt weiter, und
+ *     niemandem fiele auf, dass die Abkuerzung weg ist. Deshalb der
+ *     Wiederversuch: `disconnected` setzt einen Zeitgeber, der so lange
+ *     erneut verbindet, bis es klappt.
+ *
+ *     FUENF SEKUNDEN, UND NICHT SCHNELLER: ein Neustart des Tondienstes
+ *     dauert ein bis zwei Sekunden, und in der Zwischenzeit zeigt die
+ *     Leiste, was sie heute auch zeigen wuerde. Ein Rechner ganz ohne
+ *     Tondienst zahlt dafuer zwoelf gescheiterte Verbindungsversuche je
+ *     Minute - das ist ein Funktionsaufruf, der sofort mit `false`
+ *     zurueckkommt, und kein Prozessstart.
+ *
+ * DERSELBE WIEDERVERSUCH GILT FUER DEN ERSTEN VERSUCH, UND DAS IST DER
+ * WICHTIGERE FALL
+ *     Hier stand zuerst nur der Weg ueber `disconnected` - also der
+ *     Wiederversuch NACH einer Verbindung, die es einmal gab. Damit war
+ *     ausgerechnet die wahrscheinlichste Lage ungedeckt: beim Anmelden
+ *     startet Hyprland die Oberflaeche ueber exec-once, waehrend
+ *     wireplumber als systemd-Benutzerdienst hochkommt. Wer zuerst da
+ *     ist, entscheidet niemand. Verliert die Leiste dieses Rennen,
+ *     scheitert `connect()` - und `disconnected` kommt NIE, weil nie
+ *     eine Verbindung bestand. Die Anbindung waere dann fuer die GANZE
+ *     Sitzung weg, und zwar genau auf den Rechnern, auf denen das
+ *     Rennen knapp ist.
+ *
+ *     Deshalb sitzt der Zeitgeber an EINER Stelle, die beide Faelle
+ *     bedient: `versuche()` probiert es und haengt bei Misserfolg den
+ *     naechsten Versuch an - gleich, ob es der erste war oder der
+ *     hundertste.
+ */
+const TON_WIEDERVERSUCH_MS = 5000
+
+function tonVerbinden(): void {
+  const Wp = wireplumber()
+  if (!Wp) {
+    console.error("Ton wird weiter im Takt abgefragt:",
+                  "libwireplumber (Wp-0.5) fehlt")
+    return
+  }
+
+  Wp.init(Wp.InitFlags.PIPEWIRE | Wp.InitFlags.SPA_TYPES)
+
+  const istTongeraet = (node: any): boolean => {
+    try {
+      return AUDIO_KLASSE.test(node.get_property("media.class") ?? "")
+    } catch {
+      return false
+    }
+  }
+
+  let klagteSchon = false
+
+  const spaeterNochmal = (): void => {
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, TON_WIEDERVERSUCH_MS, () => {
+      versuche()
+      return false
+    })
+  }
+
+  /** Ein Verbindungsversuch: KERN UND VERWALTER JE VERSUCH NEU.
+   *
+   * DIE REIHENFOLGE IST DIE GANZE POINTE, UND SIE IST GEMESSEN
+   *     `wp_core_connect()` ist ASYNCHRON. Gemessen am 20.08.2026 an
+   *     einem Kern, der auf ein pipewire wartet, das erst nach sechs
+   *     Sekunden startet:
+   *
+   *         0 ms     connect() = false, is_connected = false
+   *         3003 ms  connect() = false, is_connected = false
+   *         6006 ms  connect() = true,  is_connected = FALSE
+   *         6006 ms  Signal "connected", is_connected = true
+   *
+   *     Der Rueckgabewert sagt also "der Aufbau laeuft", nicht "die
+   *     Verbindung steht" - und genau deshalb muss der Objektverwalter
+   *     VORHER eingehaengt sein.
+   *
+   *     Zwei Bauarten sind daran gescheitert, beide am selben Tag und
+   *     beide LAUTLOS - die Verbindung stand, die Leiste meldete Erfolg,
+   *     und die Lautstaerke brauchte trotzdem weiter 1200 bis 1700 ms:
+   *
+   *       EINMAL VOR DEM ERSTEN VERSUCH eingehaengt. Ueberlebt einen
+   *       gescheiterten `connect()` nicht: beim spaeteren Gelingen kam
+   *       kein einziges "object-added" mehr.
+   *       IM SIGNAL "connected" eingehaengt. Zu spaet - der Verwalter
+   *       bekam ueberhaupt keine Knoten, auch keine schon vorhandenen.
+   *
+   *     Bleibt: vor JEDEM `connect()` einen frischen einhaengen. Und
+   *     weil ein Kern, dessen Versuch gescheitert ist, den Verwalter
+   *     behaelt, waere ein zweiter Versuch am selben Kern ein Verwalter
+   *     mehr - alle fuenf Sekunden einer. Deshalb ist auch der Kern je
+   *     Versuch neu: der gescheiterte faellt samt seinem Verwalter dem
+   *     Aufraeumer zu, statt sich anzusammeln.
+   */
+  const versuche = (): void => {
+    // Auf Modulebene abgelegt, nicht nur hier - siehe tonKern/tonVerwalter
+    // oben. Der vorige Kern faellt damit zugleich weg, und mit ihm sein
+    // Verwalter: es lebt immer genau eine Anbindung.
+    const core = new Wp.Core()
+    const verwalter = new Wp.ObjectManager()
+    tonKern = core
+    tonVerwalter = verwalter
+    verwalter.add_interest_full(Wp.ObjectInterest.new_type(Wp.Node.$gtype))
+    // OBJECT_FEATURES_ALL und keine einzelne Fahne: die Konstante
+    // WP_PIPEWIRE_OBJECT_FEATURE_PARAM_PROPS steht in Wp-0.5.gir gar
+    // nicht (geprueft am 20.08.2026), ihr Zahlenwert stuende hier also
+    // als abgeschriebene Zahl - und eine abgeschriebene Zahl aus einer
+    // fremden Kopfdatei ist genau die Sorte Wert, die beim naechsten
+    // Versionssprung lautlos falsch wird.
+    verwalter.request_object_features(Wp.Node.$gtype, Wp.OBJECT_FEATURES_ALL)
+
+    // GObject.signal_connect und nicht verwalter.connect(...): Wp.Core
+    // traegt eine EIGENE Methode `connect()` - die, die die Verbindung
+    // aufbaut -, und sie verdeckt die des Signalsystems. Gemessen am
+    // 20.08.2026: `core.connect("disconnected", cb)` laeuft in "Too many
+    // arguments to method Wp.Core.connect: expected 0, got 2". EIN Weg
+    // fuer alle Anmeldungen, damit hier nicht zwei Schreibweisen
+    // nebeneinander stehen, von denen nur eine an einer Stelle richtig
+    // ist.
+    GObject.signal_connect(verwalter, "object-added", (_v: any, node: any) => {
+      if (!istTongeraet(node)) return
+      // Ein neues Geraet IST eine Aenderung: der Kopfhoerer, der gerade
+      // eingestoepselt wurde, wird zur Vorgabesenke.
+      tonMelden()
+      GObject.signal_connect(node, "params-changed",
+                             (_n: any, welche: string) => {
+        if (welche === "Props") tonMelden()
+      })
+    })
+    GObject.signal_connect(verwalter, "object-removed", (_v: any, node: any) => {
+      if (istTongeraet(node)) tonMelden()
+    })
+    GObject.signal_connect(core, "disconnected", () => {
+      console.error("wireplumber hat die Verbindung beendet -",
+                    "der Ton kommt bis auf weiteres aus dem Takt")
+      klagteSchon = true
+      spaeterNochmal()
+    })
+
+    core.install_object_manager(verwalter)
+
+    if (!core.connect()) {
+      if (!klagteSchon) {
+        console.error("keine Verbindung zu wireplumber -",
+                      "der Ton kommt aus dem Takt, Wiederversuch alle",
+                      String(TON_WIEDERVERSUCH_MS), "ms")
+        klagteSchon = true
+      }
+      spaeterNochmal()
+      return
+    }
+
+    if (klagteSchon) {
+      console.error("wireplumber antwortet wieder -",
+                    "der Ton kommt wieder sofort an")
+      klagteSchon = false
+    }
+    // Was sich waehrend der Funkstille geaendert hat, hat niemand
+    // gemeldet. Einmal nachsehen, statt auf das naechste Ereignis zu
+    // warten - die Drossel legt es mit dem zusammen, das "object-added"
+    // gleich ausloest.
+    tonMelden()
+  }
+
+  versuche()
+}
+
+/** Eine Drossel mit sofortiger erster Antwort.
+ *
+ * WARUM UEBERHAUPT EINE
+ *     Ein Druck auf XF86AudioRaiseVolume ist ein Ereignis. Ein
+ *     GEHALTENER Druck ist die Tastenwiederholung des Compositors -
+ *     also bis zu fuenfundzwanzig Ereignisse je Sekunde. Ungedrosselt
+ *     waeren das fuenfundzwanzig Starts von status.sh je Sekunde, und
+ *     das Skript braucht selbst 94 ms; die Anzeige liefe dem Nutzer
+ *     davon, statt ihm zu folgen.
+ *
+ * WARUM VORNE UND NICHT HINTEN
+ *     Eine gewoehnliche Entprellung wartet erst und laeuft dann. Damit
+ *     kostete AUSGERECHNET der Einzeldruck - der haeufigste Fall - die
+ *     Wartezeit obendrauf. Diese hier laeuft SOFORT und sperrt danach:
+ *     der einzelne Druck steht nach der blossen Laufzeit des Skripts da,
+ *     und erst ein Schwall wird zusammengefasst.
+ *
+ *     Der letzte Wert kommt IMMER an. Faellt ein Ereignis in die Sperre,
+ *     wird genau ein Nachlauf an ihr Ende gehaengt - sonst bliebe die
+ *     Leiste auf dem vorletzten Wert stehen, und das waere schlimmer als
+ *     der Takt, weil es nicht von selbst aufhoert.
+ *
+ * 250 ms, UND DIE ZAHL IST GERECHNET
+ *     status.sh braucht 94 ms (gemessen am 20.08.2026). Bei 250 ms
+ *     laeuft es waehrend eines gehaltenen Tastendrucks hoechstens
+ *     viermal je Sekunde - die Anzeige folgt sichtbar mit, und die
+ *     Maschine hat zwischen zwei Laeufen mehr Ruhe als Arbeit. Kuerzer
+ *     hiesse, Laeufe zu stapeln, die einander ueberholen; laenger hiesse,
+ *     dass die Zahl beim Halten der Taste ruckelt.
+ */
+function tonDrossel(tun: () => void, sperreMs: number): () => void {
+  let zuletzt = 0
+  let nachlauf = false
+  return () => {
+    if (nachlauf) return
+    const jetzt = GLib.get_monotonic_time() / 1000
+    const rest = zuletzt + sperreMs - jetzt
+    if (rest <= 0) { zuletzt = jetzt; tun(); return }
+    nachlauf = true
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, rest, () => {
+      nachlauf = false
+      zuletzt = GLib.get_monotonic_time() / 1000
+      tun()
+      return false
+    })
+  }
+}
+
+const TON_SPERRE_MS = 250
+
+/** Sich wecken lassen, wenn sich am Ton etwas aendert. */
+function tonBeobachten(melde: () => void): void {
+  tonHorcher.push(tonDrossel(melde, TON_SPERRE_MS))
+  if (tonVersucht) return
+  tonVersucht = true
+  tonVerbinden()
+}
+
 /** Ein Aufruf je Takt, fuenf Module. Siehe bar-status-config.template.
  *
  * EIN SKRIPT, DAS GAR NICHT ANTWORTET, DARF NICHT STILL SEIN
@@ -520,7 +942,7 @@ function sharedStatus(sinks: SharedSink[], intervalMs: number,
   }
 
   const poll = () => {
-    execAsync(["bash", "-c", `${SCRIPTS}/status.sh`])
+    execAsync([...SKRIPT_START, `${SCRIPTS}/status.sh`])
       .then((output: string) => {
         let payloads: Record<string, Payload>
         try {
@@ -537,7 +959,31 @@ function sharedStatus(sinks: SharedSink[], intervalMs: number,
       .catch((error: unknown) => fail(String(error)))
   }
   poll()
+  // DER TAKT BLEIBT, UND ER BLEIBT BEI SEINER ZAHL (20.08.2026)
+  //
+  //     Er ist jetzt zweierlei. Fuer Ton und Mikrofon ist er nur noch
+  //     das Netz darunter: faellt die Anbindung an wireplumber aus -
+  //     Dienst neu gestartet, libwireplumber gar nicht da, Verbindung
+  //     verloren -, steht die Zahl spaetestens nach zwei Sekunden wieder
+  //     richtig da. Die Anzeige ist damit NIE schlechter als vor diesem
+  //     Umbau; sie ist nur meistens viel schneller.
+  //
+  //     Fuer Akku, Netz und Bluetooth ist er dagegen weiter die EINZIGE
+  //     Quelle: fuer die drei gibt es hier keinen Melder. Genau deshalb
+  //     wird er nicht verlaengert, obwohl der Ton ihn nicht mehr
+  //     braeuchte - drei Module langsamer zu machen, um eines zu
+  //     bezahlen, das ohnehin schon schneller geworden ist, waere ein
+  //     schlechter Tausch.
+  //
+  //     Und er wird auch nicht VERKUERZT, obwohl das die naheliegende
+  //     Antwort auf "die Zahl haengt hinterher" gewesen waere: gemessen
+  //     am 20.08.2026 kostet ein Lauf 94 ms, ein halbierter Takt also
+  //     das Doppelte an Prozessstarts - fuer eine Auskunft, die sich
+  //     zwischen zwei Laeufen fast nie aendert. Im Leerlauf bleibt es
+  //     deshalb bei 30 Aufrufen je Minute und Leiste, genau wie vorher.
   interval(intervalMs, poll)
+  // Und ausserdem, sobald wireplumber etwas meldet.
+  tonBeobachten(poll)
 }
 
 // ---------------------------------------------------------------------

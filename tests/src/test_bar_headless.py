@@ -1203,14 +1203,27 @@ def test_the_bar_is_as_thick_as_the_size_table_says(run):
 def test_the_run_produced_no_critical_warning(run):
     """Eine kritische GTK-Meldung ist in diesem Projekt ein Testfehler.
 
-    Zwei sind erlaubt und beide sagen dasselbe: ohne Compositor gibt es
-    keinen Hyprland-Socket, und ohne Sitzungsbus keine Statusablage. Das
-    sind die Antworten dieser Umgebung, nicht Fehler der Leiste - und sie
-    stehen NAMENTLICH hier, damit eine dritte auffaellt.
+    Drei sind erlaubt und alle drei sagen dasselbe: ohne Compositor gibt
+    es keinen Hyprland-Socket, ohne Sitzungsbus keine Statusablage, ohne
+    pipewire-Socket keinen Tondienst. Das sind die Antworten dieser
+    Umgebung, nicht Fehler der Leiste - und sie stehen NAMENTLICH hier,
+    damit eine vierte auffaellt.
+
+    DIE DRITTE KAM AM 20.08.2026 DAZU, und sie ist keine Aufweichung,
+    sondern das Gegenstueck zum Test darunter: die Leiste laesst sich
+    seither von wireplumber wecken, statt die Lautstaerke nur im Takt
+    abzufragen (tonVerbinden() in ags-bar.template). `run` reicht ein
+    EIGENES, leeres XDG_RUNTIME_DIR durch und kein PIPEWIRE_RUNTIME_DIR
+    - dort gibt es garantiert keinen pipewire-Socket, und die Klage ist
+    die RICHTIGE Antwort darauf.
+    test_the_bar_says_so_when_it_cannot_reach_wireplumber haelt fest,
+    dass sie ueberhaupt kommt; dass sie hier stehen DARF, macht sie also
+    nicht unsichtbar.
     """
     expected = (
         "Kein Hyprland-Ereignissocket",
         "org.kde.StatusNotifierWatcher gehoert schon einem anderen Programm",
+        "keine Verbindung zu wireplumber",
     )
     unexpected = [line for line in run.stderr.splitlines()
                   if ("CRITICAL" in line or "WARNING" in line)
@@ -1219,6 +1232,48 @@ def test_the_run_produced_no_critical_warning(run):
     assert unexpected == [], (
         "die Leiste hat sich beklagt:\n" + "\n".join(unexpected))
     assert run.returncode == 0, run.report
+
+
+def test_the_bar_says_so_when_it_cannot_reach_wireplumber(run):
+    """Ohne Tondienst faellt die Leiste auf den Takt zurueck - und SAGT es.
+
+    SEIT DEM 20.08.2026 hat die Leiste zwei Wege zur Lautstaerke: die
+    Meldung von wireplumber und, darunter, den Takt von 2000 ms. Der
+    Rueckfall ist der Sinn der Sache - er ist auch der gefaehrlichste
+    Teil daran, denn er funktioniert LAUTLOS. Eine Maschine, auf der die
+    Anbindung nie zustande kommt, saehe genau aus wie eine, auf der sie
+    laeuft, nur langsamer; und "die Anzeige haengt manchmal" ist die
+    Sorte Fehler, die niemand meldet und niemand findet.
+
+    Dieser Lauf IST diese Maschine: eigenes, leeres XDG_RUNTIME_DIR, kein
+    pipewire-Socket. Geprueft wird deshalb beides zusammen -
+
+        die Klage steht auf stderr, mit dem Grund und mit dem, was
+        stattdessen passiert ("aus dem Takt"),
+
+    und, im selben Lauf, dass die fuenf Module aus status.sh trotzdem
+    dastehen. Ein Rueckfall, der die Leiste mitnimmt, waere keiner.
+    """
+    beschwerde = [line for line in run.stderr.splitlines()
+                  if "wireplumber" in line]
+
+    assert beschwerde, (
+        "ohne pipewire-Socket muss die Leiste sagen, dass sie den Ton "
+        "nur noch im Takt bekommt - sie hat geschwiegen:\n" + run.report)
+    assert any("Takt" in line for line in beschwerde), (
+        "die Klage nennt den Grund, aber nicht die Folge - ohne sie weiss "
+        "niemand, ob die Anzeige noch stimmt:\n" + "\n".join(beschwerde))
+
+    # Und Ton und Mikrofon stehen trotzdem da - aus dem Takt, wie eh und
+    # je. `pulseaudio` und `pulseaudio#microphone` sind ihre Waybar-Namen,
+    # STATUS_KEYS gibt die Texte vor.
+    shown = dict(entry.split("=", 1) for entry in run.mark("shown").split(",")
+                 if "=" in entry)
+    for name, text in (("pulseaudio", "TON"),
+                       ("pulseaudio#microphone", "MIKRO")):
+        assert shown.get(name) == text, (
+            f"ohne wireplumber zeigt {name} {shown.get(name)!r} statt "
+            f"{text!r} - der Rueckfall traegt nicht:\n" + run.report)
 
 
 
