@@ -1068,8 +1068,37 @@ tooltip label {
  * Das Dock - dieselbe Leiste noch einmal, an der unteren Kante
  * ===================================================================*/
 
+/* DIE SCHRIFTFAMILIE STEHT SEIT DEM 20.08.2026 HIER (Aufgabe 50).
+ *
+ * Sie war der ERSTE von zwei Befunden, die der Bericht zu Aufgabe 47
+ * aufgeschrieben und ausdruecklich nicht mitrepariert hat ("ags-dock.
+ * template gehoert einem anderen Auftrag, der gerade daran arbeitet").
+ * Der Auftrag ist dieser, also wird sie hier nachgetragen.
+ *
+ * DER GRUND IST DERSELBE WIE BEI DEN ZWEI KNOEPFEN WEITER UNTEN: der
+ * Fuss ist ein EIGENES Fenster und erbt nichts von window.bar-window.
+ *
+ * GEMESSEN am 20.08.2026 bei 35 px am Ersatzzeichen des Fusses
+ * (label.dock-unknown, ICON_DOCK_WINDOW, U+F10AC): ohne diese Zeile
+ * waehlt GTK `JetBrainsMonoNL Nerd Font`, mit ihr `JetBrainsMono Nerd
+ * Font` - Tinte beide Male 30 x 25, Zeile beide Male 47. Heute also
+ * ohne sichtbaren Unterschied.
+ *
+ * SIE STEHT TROTZDEM DA, und das ist gemessen und nicht vorsichtshalber:
+ * derselbe Zufall hat am 20.08.2026 am Starterknopf nicht einmal
+ * dasselbe ZEICHEN ergeben (Adwaita Sans zeichnete bei U+EE56 einen
+ * anderen Glyph, Tinte 15 x 17 statt 24 x 17). Welcher Glyph
+ * herauskommt, entscheidet ohne diese Zeile eine fremde Schriftliste.
+ *
+ * font-weight steht hier NICHT, und auch das ist eine Entscheidung: die
+ * Symbole des Fusses sind Bilder und keine Schrift, der Fuss zeigt
+ * ausser ihnen keinen Text, und die zwei Knopffenster haben ihren
+ * Schnitt bekommen, weil sie GENAU EIN Zeichen tragen und mit dem
+ * Abschaltknopf auf den Punkt gleich aussehen sollen. Eine dritte Zeile
+ * ohne Leser waere hier nur eine dritte Zeile. */
 window.dock-window {
   background: transparent;
+  font-family: {{STYLE_FONT_FAMILY}};
 }
 
 /* Die Platte des Fusses - dieselbe wie die des Kopfes.

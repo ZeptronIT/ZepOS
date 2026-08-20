@@ -970,10 +970,26 @@ function zeigeMenue(anker: Gtk.Widget,
   if (!eintraege.length) return null
 
   const liste = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-  liste.add_css_class("dock-menu")
 
+  // OHNE EIGENE KLASSEN, SEIT DEM 20.08.2026 (Aufgabe 50)
+  //
+  // Hier standen `liste.add_css_class("dock-menu")` und
+  // `menue.add_css_class("dock-menu-popover")`. Beide hatten repo-weit
+  // NULL Leser - `grep -rn "dock-menu" src/` fand genau diese zwei
+  // Zeilen -, und das war der ganze Grund, aus dem das Menue am
+  // 20.08.2026 weiss war: es gab zwei Handgriffe und keine Regel daran.
+  //
+  // Die Regel steht jetzt in ags-style.template, und sie steht dort auf
+  // `popover > contents` und nicht auf einem dieser Namen. Das ist
+  // Absicht und im Kopf jener Regel begruendet: es gibt in diesem Baum
+  // ein zweites eigenes Popover (der Ueberlauf der Ablage,
+  // ags-bar.template) und die Kontextmenues jeder Gtk.Entry, und alle
+  // haben dieselbe weisse Platte. Ein Name, der nur hier gilt, haette
+  // eines von drei Menues gerichtet.
+  //
+  // Damit sind die zwei Klassen ohne Leser - und eine Klasse ohne Leser
+  // ist genau die Falle, in die dieses Menue schon einmal getreten ist.
   const menue = new Gtk.Popover({ has_arrow: false })
-  menue.add_css_class("dock-menu-popover")
   menue.set_child(liste)
   menue.set_parent(anker)
   // Nach OBEN, weil der Fuss am unteren Bildschirmrand steht. GTK

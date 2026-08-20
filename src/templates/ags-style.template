@@ -171,6 +171,215 @@ $overlay-border: $border;
   &:hover, &:active, &:focus, &:checked {
     background: transparent;
   }
+
+  // GEDRUECKT UND MIT DER TASTATUR AUSGEWAEHLT - NACHGETRAGEN am
+  // 20.08.2026 (Aufgabe 50).
+  //
+  // WARUM DIE ZUSTAENDE AN DER HUELLE STEHEN UND NICHT AN .zep-row
+  //     Weil GTK4 sie nicht nach unten weiterreicht. `:hover` bekommt
+  //     .zep-row von SELBST - GtkWindow setzt GTK_STATE_FLAG_PRELIGHT
+  //     auf jeden Knoten der Kette, in der der Zeiger steht, und die
+  //     Zeile fuellt die Huelle ganz aus. `:active` und `:focus` setzt
+  //     GTK dagegen an genau EINEM Widget, dem Knopf, und
+  //     gtk_widget_propagate_state gibt nach unten nur INSENSITIVE und
+  //     BACKDROP weiter. Eine Regel `.zep-row:active` stuende also da
+  //     und wirkte nie - dieselbe Sorte toter Zeile wie die
+  //     Tastaturumschaltung, die in ags-dock.template beschrieben ist.
+  //
+  // WARUM ES SIE UEBERHAUPT BRAUCHT
+  //     Die vier Zeilen darueber machen die Huelle in JEDEM Zustand
+  //     durchsichtig, damit sie keinen zweiten Kasten malt. Das ist
+  //     richtig und war zugleich das Ende jeder sichtbaren Reaktion auf
+  //     Druck und auf den Tastaturfokus: eine Zeile, die man mit Tab
+  //     erreicht, sah aus wie jede andere. Beim Rechtsklick-Menue des
+  //     Fusses (Aufgabe 50) ist das keine Feinheit - der Popup bekommt
+  //     den Tastaturfokus (`wl_keyboard.enter` auf seine eigene
+  //     Flaeche, gemessen am 20.08.2026), Tab ist dort also der zweite
+  //     Bedienweg neben der Maus.
+  //
+  // DIE ZWEI FARBEN SIND KEINE NEUEN
+  //     `rgba($surface, 0.75)` ist der Zeigergrund, den .zep-btn-umrandet
+  //     weiter oben schon fuehrt - eine Stufe kraeftiger als
+  //     $item-hover, und genau das soll "gedrueckt" gegenueber
+  //     "ueberfahren" sein. $accent ist der Ring, den .net-pw-entry und
+  //     .vpn-entry-row fuer denselben Zweck an ihren Rand legen.
+  //
+  // GEMESSEN am 20.08.2026, ueber der hellsten denkbaren Tapete unter
+  // der Platte aus {{STYLE_GLASS_SOLO}} (dieselbe Rechnung wie in
+  // src/brand.py bei glass_solo_alpha):
+  //
+  //     $text auf dem Zeigergrund      11.28:1
+  //     $text auf dem Druckgrund        9.60:1
+  //     $accent gegen die Platte        5.27:1   (WCAG 1.4.11: 3:1)
+  //
+  // `:focus-visible` und nicht `:focus`: ein Mausklick setzt in GTK4
+  // ebenfalls den Fokus, und ein Ring, der bei jedem Klick aufblitzt,
+  // ist genau das Rauschen, wegen dem GTK die zweite Pseudoklasse
+  // ueberhaupt fuehrt.
+  &:active > .zep-row {
+    background: rgba($surface, 0.75);
+  }
+
+  &:focus-visible > .zep-row {
+    background: $item-hover;
+    outline: 2px solid $accent;
+    outline-offset: -2px;
+  }
+}
+
+// ── DIE FLAECHE EINES AUFKLAPPMENUES ────────────────────────────────
+//
+// GEMELDET am 20.08.2026, woertlich: "was an dem fenster rechtsklick bei
+// der dock falsch ist ist folgendes: es ist komplett weiss und passt
+// nicht zum style".
+//
+// WAS GEMESSEN WURDE, UND WORAN
+//     tests/render/, verschachteltes Hyprland 1920x1080, das
+//     Rechtsklick-Menue des Fusses aufgeklappt und abgebildet. Der
+//     bemalte Kasten war 262 x 136 Punkte, und darin:
+//
+//         #FFFFFF   83.84 %   der Grund
+//         #DCEEF4    3.17 %   die Schrift - $text
+//
+//     Also die Schrift dieses Schreibtischs auf GTKs weissem Grund:
+//     1.19:1 fuer den Text und 1.80:1 fuer das Zeichen ($subtext).
+//     WCAG 2.1 verlangt 4.5:1. Das Menue war nicht nur hell, es war
+//     unlesbar.
+//
+// WARUM DAS STYLESHEET DIESES HAUSES DARAN VORBEIGELAUFEN IST
+//     Es lief NICHT vorbei: die Zeilen im Menue trugen ihre Farben
+//     bereits ($text, $subtext, der Trenner in $border - alle drei auf
+//     dem Bild). Was fehlte, ist der GRUND, und den malt in GTK4 nicht
+//     der `popover`-Knoten, sondern sein Kind `contents`. Fuer dieses
+//     Kind hatte keine Regel dieses Baums je einen Wahlausdruck; also
+//     galt die des Themas, und zwar nicht, weil sie staerker waere,
+//     sondern weil ihr niemand widersprochen hat.
+//
+//     GEMESSEN am 20.08.2026, GTKs eingebautes Thema, wortwoertlich aus
+//     `gresource extract /usr/lib/libgtk-4.so.1
+//     /org/gtk/libgtk/theme/Default/Default-light.css`:
+//
+//         popover.background { background-color: transparent;
+//                              font: initial; }
+//         popover.background > arrow, popover.background > contents {
+//             background-color: #ffffff;
+//             border: 1px solid rgba(0, 0, 0, 0.23);
+//             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+//         popover.background > contents { padding: 8px;
+//                                         border-radius: 9px; }
+//
+//     Die HELLE Fassung, weil dieser Schreibtisch fuer GTK4 kein Thema
+//     setzt (`grep gtk-theme-name src/templates/`: nur die GTK3-Route in
+//     gtk-theme-fix-config.template) - ohne Namen nimmt GTK sein
+//     eingebautes "Default", und dessen Vorgabe ist hell.
+//
+// UND `font: initial` IST DIE ZWEITE HAELFTE DESSELBEN BEFUNDS
+//     Ein Popover ist eine eigene Wayland-Flaeche (siehe den Kopf von
+//     ags-dock.template), und diese eine Zeile des Themas nimmt seinem
+//     Inhalt zusaetzlich Familie, Groesse UND Schnitt weg. Das ist
+//     dieselbe Luecke, die am 19./20.08.2026 dreimal an den beiden
+//     freistehenden Knopffenstern zugeschlagen hat (Bericht Aufgabe 47)
+//     - nur dass ein Popover sie nicht bloss nicht erbt, sondern
+//     ausdruecklich zurueckgesetzt bekommt. Alle drei stehen deshalb
+//     unten, und tests/src/test_placement.py bewacht sie fuer JEDES
+//     Popover dieses Systems statt fuer dieses eine.
+//
+// DIESELBE SPRACHE WIE DIE UEBERLAGERUNGEN, UND KEINE ZWEITE
+//     Grund, Rahmen und Ecke sind Zeile fuer Zeile die von
+//     `.overlay-outer` weiter unten - die Platte, die alle zwoelf
+//     Ueberlagerungsfenster tragen. Ein Aufklappmenue ist eine Flaeche
+//     dieses Schreibtischs wie sie, und zwei Plattenrezepte waeren zwei
+//     Schreibtische.
+//
+//     GEMESSEN, ueber der hellsten denkbaren Tapete (dieselbe Rechnung
+//     wie bei glass_solo_alpha() in src/brand.py; WCAG 2.1 verlangt
+//     4.5:1 fuer Fliesstext):
+//
+//         $text auf der Platte      8.64:1
+//         $subtext auf der Platte   5.73:1
+//         $accent auf der Platte    5.27:1
+//
+//     Dieselben drei Zahlen, die .overlay-outer schon nennt - es IST
+//     dieselbe Platte.
+//
+// DER SCHATTEN FAELLT WEG, UND DAS IST EINE ENTSCHEIDUNG
+//     Keine Flaeche dieses Schreibtischs traegt einen box-shadow;
+//     getrennt wird mit dem Haarstrich in $border, so wie #dock und
+//     .overlay-outer es tun. Ein Schlagschatten NUR am Aufklappmenue
+//     waere die eine Flaeche, die anders aussieht.
+//
+// WARUM `popover` UND NICHT `.dock-menu-popover`
+//     Weil es zwei gibt: das Rechtsklick-Menue des Fusses und der
+//     Ueberlauf der Ablage (ags-bar.template, `overflow.set_popover`).
+//     Und weil jede Gtk.Entry dieses Baums (Netzpasswort, VPN,
+//     Stil-Editor) auf Rechtsklick ihr eigenes GTK-Menue aufklappt, das
+//     dieselbe weisse Platte bekaeme - dort steht die Schrift des
+//     THEMAS darauf, und die waere auf unserem dunklen Grund genauso
+//     unlesbar, wie unsere auf seinem hellen war. Deshalb steht
+//     `modelbutton` gleich mit hier; der Anmeldebildschirm loest genau
+//     dieselbe Aufgabe seit dem 13.08.2026 auf genau diesem Weg
+//     (src/greeter.py, _menu()).
+popover {
+  background: transparent;
+}
+
+popover > contents {
+  background: {{STYLE_GLASS_SOLO}};
+  color: $text;
+  border: 1px solid $border;
+  border-radius: {{STYLE_RADIUS_PANEL}};
+  box-shadow: none;
+  padding: {{STYLE_SPACE_4}};
+  font-family: {{STYLE_FONT_FAMILY}};
+  font-size: {{STYLE_FONT_BODY}};
+  // `normal` und nicht {{STYLE_FONT_WEIGHT}} - das ist "bold", der
+  // Schnitt der LEISTE. Dieselbe zepRow-Zeile steht in den zwoelf
+  // Ueberlagerungen mager, weil .overlay-outer keinen Schnitt nennt und
+  // GTKs Vorgabe mager ist; ein Menue, das fetter schreibt als dieselbe
+  // Zeile im Kontrollzentrum, waere zweierlei Zeile. Die Zeile pinnt
+  // also fest, was `font: initial` des Themas gerade ohnehin liefert -
+  // GEMESSEN am 20.08.2026: die Tinte ist mit und ohne sie dieselbe.
+  // Ohne sie haengt der Schnitt an einer fremden Datei.
+  font-weight: normal;
+}
+
+// Der Zeiger eines Popovers, der einen fuehrt. Das Menue des Fusses hat
+// keinen (`has_arrow: false`), der Ueberlauf der Ablage schon - und ein
+// weisses Dreieck an einer petrolfarbenen Platte waere derselbe Fehler
+// noch einmal, nur kleiner.
+popover > arrow {
+  background: {{STYLE_GLASS_SOLO}};
+  border: 1px solid $border;
+  box-shadow: none;
+}
+
+// Die Zeile eines Menues, das GTK SELBST zeichnet - jedes
+// Gtk.PopoverMenu aus einem Gio.MenuModel, also die Kontextmenues der
+// Eingabefelder. `background-image: none` aus demselben Grund, den
+// src/greeter.py nennt: GTKs Thema legt hier ein Bild an, und eine
+// Farbe darunter saehe niemand.
+//
+// Die eigenen Menues dieses Hauses brauchen davon nichts - sie sind aus
+// zepRow gebaut (siehe den Kopfabschnitt "DAS RECHTSKLICK-MENUE" in
+// ags-dock.template) und tragen die Zeile, die dieser Schreibtisch
+// ueberall traegt.
+modelbutton {
+  background: transparent;
+  background-image: none;
+  color: $text;
+  border-radius: {{STYLE_RADIUS_CONTROL}};
+  padding: 0 {{STYLE_SPACE_8}};
+  min-height: {{STYLE_NAV_ROW_HEIGHT}};
+  font-size: {{STYLE_FONT_BODY}};
+
+  &:hover { background: $item-hover; }
+  &:active { background: rgba($surface, 0.75); }
+  &:focus-visible {
+    outline: 2px solid $accent;
+    outline-offset: -2px;
+  }
+  &:checked, &:selected { background: rgba($accent, 0.15); }
+  &:disabled { color: $subtext; }
 }
 
 // Die Gruppenueberschrift der Seitenleiste - VERBINDUNGEN, SYSTEM,
@@ -2757,8 +2966,33 @@ $overlay-border: $border;
 //     Grund gerechnet; unter Glas bleibt davon nicht genug. Das Rot
 //     steht deshalb am RAND, wo WCAG 1.4.11 drei zu eins verlangt und
 //     wo dieselben 4.33:1 reichlich sind.
+//
+// UND DIE SCHRIFTFAMILIE, NACHGETRAGEN am 20.08.2026 (Aufgabe 50)
+//     Sie stand im Bericht zu Aufgabe 47 als zweiter von zwei Befunden,
+//     die dort nicht mitrepariert wurden: der Einblendstapel ist ein
+//     EIGENES Fenster und erbt nichts von window.bar-window. GEMESSEN
+//     am 20.08.2026 bei 20 px fuer seine vier Zeichen (ICON_BELL,
+//     ICON_BELL_SLASH, ICON_CLOSE, ICON_TRASH): ohne Familie waehlt GTK
+//     `JetBrainsMonoNL Nerd Font`, mit der Liste `JetBrainsMono Nerd
+//     Font` - Tinte und Zeilenhoehe heute identisch, also keine
+//     sichtbare Folge.
+//
+//     Genau derselbe Zufall hat beim Starterknopf am 20.08.2026 aber
+//     nicht einmal dasselbe ZEICHEN ergeben (Adwaita Sans bei U+EE56).
+//     Eine Zeile, die heute nichts aendert und morgen einen fremden
+//     Glyph verhindert, ist billiger als der Befund noch einmal.
+//
+//     WARUM HEUTE NIEMAND ETWAS SIEHT, und das ist nachgesehen und
+//     nicht gehofft: der Baum dieses Fensters ist .notif-window >
+//     .notif-container > .notif-card (GEPRUEFT in
+//     ags-notifications.template - `container` bekommt ausser Karten
+//     nichts), und `.notif-card` weiter unten NENNT die Familie. Jeder
+//     Text steht also schon auf einer Flaeche, die sie fuehrt. Diese
+//     Zeile schliesst die Luecke da, wo GTK zuerst nachsieht - fuer das
+//     naechste Kind, das nicht auf einer Karte sitzt.
 .notif-window {
   background: transparent;
+  font-family: {{STYLE_FONT_FAMILY}};
 }
 
 // Das MELDUNGSZENTRUM, seit dem 12.08.2026 (Aufgabe #94).

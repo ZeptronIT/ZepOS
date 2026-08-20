@@ -627,6 +627,198 @@ def test_both_buttons_beside_the_dock_name_their_own_font_and_size():
 
 
 # --------------------------------------------------------------------
+# Ein Aufklappmenue ist auch eine eigene Flaeche
+# --------------------------------------------------------------------
+
+# WAS GEMELDET WURDE, am 20.08.2026 und woertlich: "was an dem fenster
+# rechtsklick bei der dock falsch ist ist folgendes: es ist komplett weiß
+# und passt nicht zum style".
+#
+# DASSELBE MUSTER WIE DREI ZEILEN WEITER OBEN, UND EINE STUFE SCHAERFER
+#     Die zwei Knopffenster ERBEN nichts von window.bar-window. Ein
+#     Gtk.Popover bekommt seine drei Schriftangaben zusaetzlich
+#     ausdruecklich WEGGENOMMEN - GTKs eingebautes Thema fuehrt
+#     `popover.background { font: initial; }` (GEMESSEN am 20.08.2026 mit
+#     `gresource extract /usr/lib/libgtk-4.so.1
+#     /org/gtk/libgtk/theme/Default/Default-light.css`) - und seinen
+#     Grund malt es auf dem Kindknoten `contents`, fuer den in diesem
+#     Baum kein Wahlausdruck stand. Ergebnis: #FFFFFF unter $text, also
+#     1.19:1 (WCAG 2.1 verlangt 4.5:1).
+#
+# WARUM DIESER WAECHTER NICHT NACH "dock-menu" SUCHT
+#     Weil es mehr als ein Popover gibt und die naechsten schon
+#     geschrieben sind, bevor jemand an diese Datei denkt: der Ueberlauf
+#     der Ablage fuehrt eines, und jede Gtk.Entry dieses Baums klappt auf
+#     Rechtsklick das Kontextmenue von GTK auf. Er sucht die Popover
+#     deshalb SELBST in den Vorlagen und prueft die eine Regel, die sie
+#     alle tragen.
+POPOVER_CALL = re.compile(r"new\s+Gtk\.Popover(?:Menu)?\s*\(")
+
+# Die Flaeche, an der gemessen wird, was "der Grund dieses Systems" ist -
+# und zwar so, dass die zwei nicht auseinanderlaufen koennen: die
+# erwarteten Werte werden aus .overlay-outer GELESEN und stehen nicht
+# hier. .overlay-outer ist die Platte aller zwoelf Ueberlagerungsfenster,
+# also die Antwort auf "wie sieht eine Flaeche dieses Schreibtischs aus".
+AGS_STYLE = SRC / "templates" / "ags-style.template"
+OVERLAY_PLATE = ".overlay-outer"
+
+# Der Knoten, den GTK4 wirklich bemalt. NICHT `popover`: dort steht in
+# jedem Thema `background-color: transparent`, und eine Regel darauf
+# faerbte nichts.
+POPOVER_SURFACE = "popover > contents"
+
+# Die drei, die ein Popover nicht erben KANN. Dieselbe Liste wie im
+# Bericht zu Aufgabe 47, nur dass sie hier nicht bloss fehlen, sondern
+# zurueckgesetzt werden.
+POPOVER_FONT = ("font-family", "font-size", "font-weight")
+
+
+def _templates_with_a_popover() -> dict[str, str]:
+    """Jede Vorlage, die selbst ein Aufklappmenue oeffnet."""
+    gefunden = {}
+    for template in sorted((SRC / "templates").glob("ags-*.template")):
+        code = _code(template, "//")
+        # Und die Blockkommentare dazu: der Kopf von ags-dock.template
+        # ERKLAERT auf zwei Bildschirmseiten, welches Popover er baut und
+        # welches nicht. Eine Suche, die den Kommentar mitliest, findet
+        # den Satz und nicht den Aufruf.
+        code = re.sub(r"/\*.*?\*/", "", code, flags=re.DOTALL)
+        if POPOVER_CALL.search(code):
+            gefunden[template.name] = code
+    return gefunden
+
+
+def _declaration(body: str, name: str) -> str | None:
+    """Der Wert EINER Eigenschaft aus einem Regelrumpf."""
+    match = re.search(rf"^\s*{re.escape(name)}\s*:\s*([^;]+);", body,
+                      re.MULTILINE)
+    return match.group(1).strip() if match else None
+
+
+def _named_rule(css: str, selector: str) -> str:
+    """Wie _rule, nur mit einer Meldung statt eines ValueError.
+
+    Der haeufigste Weg, diesen Waechter zu brechen, ist das LOESCHEN der
+    Regel - und ein `substring not found` sagt darueber nichts.
+    """
+    assert selector + " {" in css, (
+        f"es gibt keine Regel fuer {selector!r} mehr. Ohne sie faellt "
+        "jedes Aufklappmenue dieses Schreibtischs auf GTKs weisse Platte "
+        "zurueck - der Befund vom 20.08.2026")
+    return _rule(css, selector)
+
+
+def test_the_popover_surface_carries_the_ground_of_this_desktop():
+    """Ein Aufklappmenue sieht aus wie jede andere Flaeche dieses Hauses.
+
+    Verglichen wird gegen `.overlay-outer` und nicht gegen drei Werte in
+    dieser Datei: Grund, Rahmen und Ecke sollen DIESELBEN sein, nicht
+    zufaellig gleiche. Wer die Platte der Ueberlagerungen aendert, aendert
+    damit die des Menues mit - oder faellt hier hin.
+    """
+    css = _code(AGS_STYLE, "//")
+    platte = _named_rule(css, OVERLAY_PLATE)
+    flaeche = _named_rule(css, POPOVER_SURFACE)
+
+    for name in ("background", "border", "border-radius"):
+        erwartet = _declaration(platte, name)
+        assert erwartet, (
+            f"{OVERLAY_PLATE} nennt kein {name} mehr - dann sagt dieser "
+            "Vergleich nichts")
+        assert _declaration(flaeche, name) == erwartet, (
+            f"{POPOVER_SURFACE} traegt {name}: "
+            f"{_declaration(flaeche, name)!r}, die Platte dieses "
+            f"Schreibtischs ({OVERLAY_PLATE}) traegt {erwartet!r}. Genau "
+            "so sah das Rechtsklick-Menue des Fusses am 20.08.2026 aus "
+            "wie ein zweites Programm")
+
+    # Und KEIN Schlagschatten: keine Flaeche dieses Schreibtischs traegt
+    # einen, GTKs Vorgabe fuer einen Popover schon.
+    assert _declaration(flaeche, "box-shadow") == "none", (
+        f"{POPOVER_SURFACE} laesst GTKs Schlagschatten stehen "
+        f"({_declaration(flaeche, 'box-shadow')!r}) - er waere die eine "
+        "Flaeche dieses Schreibtischs mit einem")
+
+
+def test_the_popover_surface_names_the_three_fonts_the_theme_takes_away():
+    """Familie, Groesse und Schnitt - alle drei, an der Flaeche selbst.
+
+    Ein eigenes Fenster ERBT sie nicht; ein Popover bekommt sie
+    ausserdem weggenommen (`font: initial`). Die Liste ist deshalb
+    dieselbe wie bei den zwei Knopffenstern weiter oben, und sie ist
+    vollzaehlig: fehlt eine, entscheidet eine fremde Datei, welcher
+    Glyph erscheint - genau der Fall vom 20.08.2026 am Starterknopf.
+    """
+    flaeche = _named_rule(_code(AGS_STYLE, "//"), POPOVER_SURFACE)
+
+    for name in POPOVER_FONT:
+        assert _declaration(flaeche, name), (
+            f"{POPOVER_SURFACE} nennt kein {name}. GTKs Thema setzt an "
+            "einem Popover `font: initial` - was hier nicht steht, "
+            "kommt aus dem Thema und nicht aus diesem Projekt")
+
+    assert "{{STYLE_FONT_FAMILY}}" in flaeche, (
+        f"{POPOVER_SURFACE} nennt eine Schriftfamilie, die nicht die "
+        "ausgelieferte ist")
+    assert "{{STYLE_FONT_" in _declaration(flaeche, "font-size"), (
+        f"{POPOVER_SURFACE} traegt eine Schriftgroesse neben der Leiter: "
+        f"{_declaration(flaeche, 'font-size')!r}")
+
+
+def test_every_popover_this_project_opens_is_covered_by_that_one_rule():
+    """Die Gegenprobe: der Waechter sieht wirklich alle an.
+
+    Ohne sie waere er gruen, sobald jemand ein Popover mit einer EIGENEN
+    Klasse faerbt - das naechste haette dann wieder GTKs weisse Platte,
+    und diese Datei saehe zwei gute Regeln und schwiege.
+    """
+    popover = _templates_with_a_popover()
+    assert len(popover) >= 2, (
+        "es sind weniger als zwei Vorlagen mit einem eigenen Popover "
+        f"gefunden worden ({sorted(popover)}) - erwartet sind mindestens "
+        "das Rechtsklick-Menue des Fusses (ags-dock.template) und der "
+        "Ueberlauf der Ablage (ags-bar.template). Findet diese Suche "
+        "nichts mehr, ist sie gruen und wertlos")
+
+    css = _code(AGS_STYLE, "//")
+    grund = _declaration(_named_rule(css, POPOVER_SURFACE), "background")
+
+    for name, code in popover.items():
+        for klasse in re.findall(r'add_css_class\("([^"]+)"\)', code):
+            eigen = f".{klasse} > contents"
+            assert eigen not in css, (
+                f"{name} faerbt sein Popover ueber {eigen} statt ueber "
+                f"{POPOVER_SURFACE}. Dann traegt GENAU DIESES Menue den "
+                "Grund dieses Schreibtischs und jedes andere weiter GTKs "
+                "weisse Platte - der Befund vom 20.08.2026, nur an einer "
+                "Stelle weniger")
+
+    # Und die Zeilen, die GTK in einem PopoverMenu selbst zeichnet,
+    # brauchen ihre Farbe ebenfalls: auf dem Grund dieses Hauses stuende
+    # sonst die Schrift des Themas, und die ist fuer eine weisse Platte
+    # gerechnet.
+    zeile = _named_rule(css, "modelbutton")
+    assert _declaration(zeile, "color"), (
+        "modelbutton nennt keine Schrift-Farbe. Der Grund dieses "
+        f"Schreibtischs ({grund}) ist dunkel, GTKs Vorgabe fuer diese "
+        "Zeile ist fuer eine weisse Platte gemacht - das waere derselbe "
+        "unlesbare Zustand, nur andersherum")
+
+
+def test_the_popover_scan_finds_a_menu_that_is_planted_for_it(tmp_path):
+    """Und die Suche findet wirklich einen Aufruf und nicht ein Wort.
+
+    Der Kopf von ags-dock.template SCHREIBT ueber zwei Bildschirmseiten,
+    welches Popover er baut und welches ausdruecklich nicht. Eine Suche,
+    die Kommentare mitliest, waere von der Erklaerung wahr.
+    """
+    assert POPOVER_CALL.search("const m = new Gtk.Popover({ has_arrow: false })")
+    assert POPOVER_CALL.search("new Gtk.PopoverMenu()")
+    assert not POPOVER_CALL.search(
+        " *     NICHT Gtk.PopoverMenu, SONDERN Gtk.Popover MIT ZEILEN")
+
+
+# --------------------------------------------------------------------
 # Der EINE Abstand zum Rand
 # --------------------------------------------------------------------
 
