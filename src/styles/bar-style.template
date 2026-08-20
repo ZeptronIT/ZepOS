@@ -656,7 +656,26 @@ tooltip label {
  * dieser Leiste ist ICON_WIFI_1..4 mit 20 px. STYLE_BAR_SYMBOL_WIDTH
  * ist 20 px (roh 13, ueber STYLE_ICON_CAPTION verankert) - die Zelle
  * fasst also das breiteste Zeichen genau, und kein Zeichen wird
- * beschnitten. */
+ * beschnitten.
+ *
+ * SEIT DEM 20.08.2026 TRAGEN AUCH DIE ZWEI KNOEPFE AM DOCK DIESE ZELLE
+ * (Aufgabe 47), und die Mindestbreite ist dort ohne Wirkung - das ist
+ * kein Versehen, sondern der Grund, aus dem sie mitkommen darf.
+ *
+ *     GEMELDET: "die 6 punkte sind nicht zentriert".
+ *
+ *     Auf der Leiste steht die Zelle in einer Reihe: mehrere Zeichen
+ *     nebeneinander sollen fluchten, also brauchen sie alle DIESELBE
+ *     Breite, und das ist diese Zeile. Ein Knopf steht allein - er hat
+ *     keinen Nachbarn, mit dem er fluchten muesste, und sein eigener
+ *     Innenraum ist ohnehin breiter (STYLE_DOCK_ICON_SIZE, 35 px gegen
+ *     diese 20).
+ *
+ *     Was die Knoepfe brauchen, ist die andere Haelfte der Zelle, und
+ *     die steht gar nicht hier: dass die TINTE in ihr mittig sitzt und
+ *     nicht der Vorschub (SymbolCell in src/templates/ags-bar.template).
+ *     Sie kommen deshalb nicht "auch noch" hierher - sie kommen hierher,
+ *     WEIL es genau ein Bauteil dafuer gibt und nicht zwei. */
 .bar-symbol {
   min-width: {{STYLE_BAR_SYMBOL_WIDTH}};
 }
@@ -1323,9 +1342,43 @@ window.dock-window {
 window.power-button-window {
   background: transparent;
   font-family: {{STYLE_FONT_FAMILY}};
+  font-weight: {{STYLE_FONT_WEIGHT}};
 }
 
-/* DIE ZEILE font-family IST AM 20.08.2026 DAZUGEKOMMEN, UND ZWAR AUS
+/* UND DIE ZEILE font-weight AM 20.08.2026 DAZU (Aufgabe 47), AUS
+ * DERSELBEN LUECKE ZUM DRITTEN MAL.
+ *
+ * DIE LISTE IST DURCHGESEHEN WORDEN UND NICHT ABGEWARTET. window.bar-
+ * window nennt fuenf Eigenschaften; drei davon vererbt ein Fenster an
+ * seine Beschriftungen, und ein EIGENES Fenster erbt keine davon:
+ *
+ *     Eigenschaft    die Leiste            diese zwei Flaechen
+ *     font-size      window.bar-window     ...btn label (19.08.2026)
+ *     font-family    window.bar-window     hier         (20.08.2026)
+ *     font-weight    window.bar-window     hier         (heute)
+ *     color          window.bar-window     ...btn, als DOCK_ICON_COLOR
+ *     background     window.bar-window     hier, durchsichtig
+ *
+ * color steht ABSICHTLICH nicht hier: der Knopf setzt sie selbst auf
+ * STYLE_DOCK_ICON_COLOR, weil er neben dem Dock steht und nicht auf der
+ * Leiste. Das ist eine Entscheidung, keine Luecke - und die Zeile darf
+ * deshalb auch nicht "der Vollstaendigkeit halber" nachgezogen werden.
+ *
+ * GEMESSEN am 20.08.2026 mit Pango, {{STYLE_ICON_LEAD}}, beide Zeichen,
+ * mager gegen fett: die Tinte ist BEIDE MALE dieselbe (ICON_POWER
+ * 20 x 21, ICON_APPS_GRID 24 x 17) - die Nerd-Font-Schrift fuehrt fuer
+ * diese Zeichen in beiden Schnitten denselben Umriss. Diese Zeile
+ * aendert heute also NICHTS an dem, was zu sehen ist, und das steht hier
+ * ausdruecklich, damit niemand sie fuer die Behebung der Meldung haelt.
+ *
+ * Sie steht trotzdem da: ohne sie haengt der Schnitt an der Vorgabe des
+ * GTK-Themas, also an einer Zahl, die dieses Projekt nicht setzt. Ein
+ * Zeichen, das auf einer anderen Maschine in einen anderen Schnitt
+ * faellt, ist genau der Fehler, den die Zeile darueber am 20.08.2026
+ * schon einmal aufgedeckt hat - dort war es nicht einmal dasselbe
+ * ZEICHEN.
+ *
+ * DIE ZEILE font-family IST AM 20.08.2026 DAZUGEKOMMEN, UND ZWAR AUS
  * EINER MESSUNG AM ZWEITEN KNOPF (Aufgabe 44).
  *
  * DIESELBE LUECKE WIE BEI DER SCHRIFTGROESSE WEITER UNTEN: window.bar-
@@ -1495,6 +1548,7 @@ window.power-button-window {
 window.starter-button-window {
   background: transparent;
   font-family: {{STYLE_FONT_FAMILY}};
+  font-weight: {{STYLE_FONT_WEIGHT}};
 }
 
 #starter-button {

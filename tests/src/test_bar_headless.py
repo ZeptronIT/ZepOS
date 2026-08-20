@@ -83,6 +83,10 @@ CHILD = Path(__file__).resolve().parent / "bar_headless_child.tsx"
 # ob der Inhalt in die Flaeche PASST - daher bar_fit_child.
 FIT_CHILD = Path(__file__).resolve().parent / "bar_fit_child.tsx"
 DOCK_CHILD = Path(__file__).resolve().parent / "dock_headless_child.tsx"
+# Die zwei freistehenden Knoepfe am Dock. Sie stehen NICHT auf der
+# Leiste, also baut FIT_CHILD sie nicht - und genau deshalb ist derselbe
+# Fehler an ihnen dreimal unbemerkt geblieben (20.08.2026, Aufgabe 47).
+CORNER_CHILD = Path(__file__).resolve().parent / "corner_button_child.tsx"
 
 # Eigene Anzeigenummern. 11 und 12 gehoeren tests/installer, 21 bis 98
 # tests/menu.
@@ -97,8 +101,21 @@ RENDERED = {
     "templates/ags-i18n.template": "utils/i18n.ts",
     "templates/ags-hyprland.template": "utils/hyprland.ts",
     "templates/ags-tray.template": "utils/tray.ts",
+    # Dock.tsx holt zepRow und zepDivider daraus. Ohne diese Zeile
+    # meldet `ags bundle` "Could not resolve ../utils/kit" und KEIN Kind
+    # dieser Datei startet mehr - auch die, die mit dem Dock nichts zu
+    # tun haben, denn die Leiste und die zwei Knoepfe importieren es
+    # ueber Dock.tsx mit.
+    "templates/ags-kit.template": "utils/kit.ts",
     "templates/ags-bar.template": "widget/Bar.tsx",
     "templates/ags-dock.template": "widget/Dock.tsx",
+    # Die zwei Knoepfe am Dock, fuer CORNER_CHILD. Sie stehen in
+    # DERSELBEN Liste und nicht in einer zweiten daneben: der Buendler
+    # folgt Importen, also kostet eine Datei, die kein Kind importiert,
+    # nichts ausser dem Erzeugen - und zwei Listen waeren zwei, die
+    # auseinanderlaufen.
+    "templates/ags-power-button.template": "widget/PowerButton.tsx",
+    "templates/ags-starter-button.template": "widget/StarterButton.tsx",
     "styles/bar-style.template": "bar.css",
 }
 
@@ -2414,6 +2431,312 @@ def test_the_bar_keeps_the_same_edge_on_both_sides(fit):
                 f"die Leiste haelt auf {width} px ({phase}) links "
                 f"{links_rand} und rechts {rechts_rand} Punkte Abstand "
                 "zur Kante der Platte:\n" + fit["report"])
+
+
+# --------------------------------------------------------------------
+# Die zwei Ecken: ein Zeichen, das in KEINEM dieser Laeufe vorkommt
+# --------------------------------------------------------------------
+#
+# GEMELDET am 20.08.2026, woertlich: "die 6 punkte sind nicht zentriert"
+# - der Starterknopf unten rechts (Aufgabe 47).
+#
+# DIE ZUSICHERUNGEN DARUEBER KONNTEN DAS NICHT SEHEN, UND ZWAR AUS EINEM
+# EINZIGEN GRUND: sie bauen BarContent(). Was in einem EIGENEN Fenster
+# steht, kommt in keiner ihrer Zeilen vor.
+#
+# DAS IST DERSELBE GRUND ZUM VIERTEN MAL. Dreimal ist an genau diesen
+# zwei Knoepfen dasselbe passiert, und jedes Mal hat es der Nutzer
+# gemeldet und keine Zusicherung:
+#
+#     19.08.2026  keine Schriftgroesse  Zeichen 10 x 11 statt 20 x 22
+#     20.08.2026  keine Schriftfamilie  Adwaita Sans statt Nerd Font,
+#                                       Platte 53 x 54 statt 53 x 57
+#     20.08.2026  keine Zelle           Tinte 3,5 Punkte rechts der Mitte
+#
+# Die gemeinsame Ursache ist EINE: ein eigenes Fenster erbt nichts von
+# window.bar-window. Deshalb ist der Waechter hier unten allgemein
+# gefasst - er fragt nicht "sitzen DIESE zwei Zeichen mittig", sondern
+# "tut es JEDES freistehende Knopffenster, das es gibt", und er sucht
+# sich die Liste selbst aus den Vorlagen.
+
+# Was ein freistehendes Knopffenster ist, in Merkmalen und nicht in
+# Namen: eine Vorlage, die ihre Astal.Window SELBST baut (die fuenf aus
+# tests/src/test_modal_rule.py), darin GENAU EINEN Gtk.Button aufstellt
+# und GENAU EIN Zeichen fuehrt.
+#
+# Das trennt sie von den anderen dreien: die Leiste fuehrt zwanzig
+# Zeichen, das Dock und die Benachrichtigungen bauen je zwei Knoepfe.
+# Und es ist keine Aufzaehlung - ein dritter Knopf in einer dritten Ecke
+# faellt am Tag, an dem er geschrieben wird, in dieselbe Menge.
+CORNER_WINDOW = "new Astal.Window("
+CORNER_BUTTON = "new Gtk.Button("
+CORNER_ICON = re.compile(r"\{\{ICON_[A-Z0-9_]+\}\}")
+
+# Die Fabrik faellt heraus, und das ist keine Ausnahme fuer diesen
+# Waechter, sondern DIE Grenze, die dieses Projekt ohnehin zieht:
+# tests/src/test_modal_rule.py teilt die Vorlagen genau hier in "baut
+# sich sein Fenster selbst" und "geht durch die Fabrik". Ein Fenster,
+# das die Fabrik fuer einen AUFRUFER baut, ist keine feste Ecke am
+# Bildschirmrand - es hat einen Kopf, eine Bildlaufleiste und einen
+# Schliessknopf, und dessen Zeichen ist das eine, das sie hier sonst
+# faelschlich hereinzoege.
+CORNER_FACTORY = "ags-overlay-utils.template"
+
+# Das Bauteil, das die Leiste benutzt - und damit das, was die Knoepfe
+# benutzen. Keine zweite Fassung von centreInk(): die Rechnung ist an
+# EINEM Tag dreimal falsch gewesen, eine Abschrift davon waere die
+# vierte.
+CORNER_CELL = "SymbolCell"
+
+
+def _template_code(path: Path) -> str:
+    """Die Vorlage ohne ihre Zeilenkommentare.
+
+    Dieselbe Vorsicht wie in tests/src/test_modal_rule.py: jede Datei in
+    diesem Baum ERKLAERT, was sie nicht mehr tut. Eine Suche nach
+    `new Gtk.Label` wuerde von der Erklaerung wahr, in der steht, dass
+    dort kein `new Gtk.Label` mehr steht.
+    """
+    return "\n".join(
+        line for line in path.read_text(encoding="utf-8").splitlines()
+        if not line.lstrip().startswith("//"))
+
+
+def _corner_templates() -> dict[str, str]:
+    """Jede Vorlage, die ein freistehendes Knopffenster baut."""
+    gefunden = {}
+    for template in sorted((SRC / "templates").glob("ags-*.template")):
+        if template.name == CORNER_FACTORY:
+            continue
+        code = _template_code(template)
+        if CORNER_WINDOW not in code:
+            continue
+        if code.count(CORNER_BUTTON) != 1:
+            continue
+        if len(set(CORNER_ICON.findall(code))) != 1:
+            continue
+        gefunden[template.name] = code
+    return gefunden
+
+
+def _corner_run(root: Path) -> dict:
+    """Die zwei Platten bauen und vermessen - je in einem eigenen Fenster."""
+    display_server = broadwayd()
+    if display_server is None:
+        pytest.skip("gtk4-broadwayd fehlt; es kommt mit dem Paket gtk4")
+
+    bundle, ags = _bundle(CORNER_CHILD, root)
+    runtime = root / "run"
+    runtime.mkdir()
+    runtime.chmod(0o700)
+
+    trace = root / "trace"
+    display = next(_DISPLAYS)
+    server, _socket = start_broadwayd(display_server, runtime, display)
+    try:
+        result = subprocess.run(
+            [str(bundle)],
+            env={
+                "PATH": _stub_hyprctl(root),
+                "HOME": str(root),
+                "GDK_BACKEND": "broadway",
+                "BROADWAY_DISPLAY": f":{display}",
+                "XDG_RUNTIME_DIR": str(runtime),
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "DBUS_SESSION_BUS_ADDRESS": f"unix:path={root}/kein-bus",
+                "ZEPOS_TRACE": str(trace),
+                "ZEPOS_CSS": str(ags / "bar.css"),
+            },
+            capture_output=True, text=True, timeout=CHILD_TIMEOUT,
+        )
+    finally:
+        stop_broadwayd(server)
+
+    spur = trace.read_text() if trace.exists() else ""
+    report = (f"rueckgabewert: {result.returncode}\nstderr:\n{result.stderr}"
+              f"\nspur:\n{spur}")
+    assert result.returncode == 0, report
+
+    gemessen: dict = {"report": report}
+    aktuell = None
+    for line in spur.splitlines():
+        head, _, tail = line.partition(" ")
+        if head == "knopf":
+            aktuell = gemessen.setdefault(tail, {})
+        elif aktuell is not None and line.startswith("  "):
+            key, _, value = line.strip().partition(" ")
+            aktuell[key] = value
+    return gemessen
+
+
+@pytest.fixture(scope="module")
+def corner(tmp_path_factory) -> dict:
+    """Ein Lauf, der die zwei Knoepfe am Dock baut und vermisst."""
+    return _corner_run(tmp_path_factory.mktemp("ecken"))
+
+
+def _corner_measured(corner: dict) -> list[str]:
+    """Die Platten, die der Lauf wirklich gemessen hat."""
+    return sorted(name for name in corner if name != "report")
+
+
+def _pair(corner: dict, name: str, key: str) -> tuple[int, int]:
+    """Eine Zeile der Form `links:rechts`."""
+    left, _, right = corner[name][key].partition(":")
+    return int(left), int(right)
+
+
+def test_a_freestanding_button_centres_the_ink_of_its_symbol(corner):
+    """Die TINTE sitzt mittig in der Platte - bei JEDEM der Knoepfe.
+
+    GEMELDET am 20.08.2026: "die 6 punkte sind nicht zentriert".
+
+    GEMESSEN am selben Tag mit diesem Lauf, Vorgabegroesse, Lage der
+    Tinte in der Platte (53 x 57), VORHER -> NACHHER:
+
+        starter-button   17:12  ->  14:15    Tinte 24 x 18, Versatz +3
+        power-button     17:16  ->  16:17    Tinte 20 x 22, Versatz +1
+
+    Eine Gtk.Label mittet den VORSCHUB (hier 18 Punkte), gesehen wird
+    die TINTE. Beim Rastersymbol ist sie ein Drittel breiter als er,
+    also sass sie drei Punkte rechts der Mitte - fuenf Punkte
+    Unterschied zwischen den Raendern. Das ist die Meldung.
+
+    DER ABSCHALTKNOPF FAELLT DABEI UNTER DIE TOLERANZ, VORHER WIE
+    NACHHER, und das ist eine Eigenschaft SEINES Zeichens und keine
+    Schwaeche dieser Zeile: bei zwei Punkten Unterschied zwischen Tinte
+    und Vorschub bleibt in einem 35 Punkte breiten Knopf ohnehin ein
+    ungerader Punkt uebrig. Dass auch er die Zelle traegt, haelt der
+    Waechter darunter fest - an der Quelle, wo die Frage nicht von der
+    Breite eines einzelnen Glyphs abhaengt.
+
+    Gemessen wird gegen die PLATTE und nicht gegen die Zelle: die Platte
+    ist das, was der Nutzer sieht.
+    """
+    gemessen = _corner_measured(corner)
+    assert len(gemessen) >= 2, (
+        "dieser Lauf hat weniger als zwei Platten gemessen - dann sagt "
+        "die Zeile darunter nichts:\n" + corner["report"])
+    for name in gemessen:
+        left, right = _pair(corner, name, "tinte")
+        assert abs(left - right) <= CENTRED_TOLERANCE, (
+            f"das Zeichen von {name} sitzt nicht mittig in seiner "
+            f"Platte: links {left}, rechts {right} - gemessen an der "
+            "TINTE, also an dem, was zu sehen ist:\n" + corner["report"])
+
+
+def test_every_freestanding_button_window_uses_the_cell_the_bar_uses(corner):
+    """Es gibt EIN Bauteil fuer die Mitte eines Zeichens, nicht drei.
+
+    Die Behebung vom 20.08.2026 (dea3f0b) hat die Zelle gebaut und jedem
+    Modul der LEISTE gegeben. Die zwei freistehenden Knoepfe haben davon
+    nichts abbekommen - nicht aus einer Entscheidung, sondern weil das
+    Bauteil in ags-bar.template eingeschlossen war und niemand es
+    importieren konnte.
+
+    Diese Zusicherung zaehlt keine Namen auf: sie sucht in den Vorlagen
+    nach dem MERKMAL - eine eigene Astal.Window, ein Knopf, ein Zeichen.
+    Ein dritter Knopf in einer dritten Ecke faellt an dem Tag darunter,
+    an dem er geschrieben wird, und nicht an dem, an dem es jemand
+    meldet.
+    """
+    knoepfe = _corner_templates()
+    assert len(knoepfe) >= 2, (
+        "es sind weniger als zwei freistehende Knopffenster gefunden "
+        f"worden ({sorted(knoepfe)}) - erwartet sind mindestens der "
+        "Abschaltknopf und der Starterknopf am Dock. Findet diese Suche "
+        "nichts mehr, ist sie gruen und wertlos")
+
+    for name, code in knoepfe.items():
+        assert f'import {{ {CORNER_CELL} }} from "./Bar"' in code, (
+            f"{name} baut ein freistehendes Knopffenster, importiert aber "
+            f"{CORNER_CELL} nicht aus ./Bar - dann mittet es sein Zeichen "
+            "entweder gar nicht oder in einer zweiten Fassung derselben "
+            "Rechnung")
+        assert f"new {CORNER_CELL}(" in code, (
+            f"{name} importiert {CORNER_CELL}, benutzt es aber nicht")
+        assert "set_child(new Gtk.Label(" not in code, (
+            f"{name} setzt eine blanke Gtk.Label in seinen Knopf. Genau "
+            "das ist die Meldung vom 20.08.2026: eine Gtk.Label mittet "
+            "den Vorschub, gesehen wird die Tinte")
+
+    # Und das Messgeraet muss jeden davon auch WIRKLICH bauen. Ohne diese
+    # Zeile koennte ein dritter Knopf dazukommen, die Quellenpruefung
+    # oben bestehen und trotzdem nie gemessen werden.
+    platten = {name.removeprefix("ags-").removesuffix(".template")
+               for name in knoepfe}
+    assert platten == set(_corner_measured(corner)), (
+        f"die Vorlagen bauen {sorted(platten)}, gemessen wurden "
+        f"{_corner_measured(corner)} - tests/src/corner_button_child.tsx "
+        "muss jeden freistehenden Knopf bauen, sonst ist er ungehalten:\n"
+        + corner["report"])
+
+
+def test_every_freestanding_button_names_the_font_it_cannot_inherit(corner):
+    """Familie, Schnitt und Groesse - alle drei, gemessen am Widget.
+
+    DIE DREI SIND EINE LISTE UND KEIN ZUFALL. window.bar-window nennt
+    sie, und ein EIGENES Fenster erbt keine davon; genau diese Luecke
+    hat an diesen zwei Knoepfen dreimal zugeschlagen:
+
+        19.08.2026  Groesse fehlte    Tinte 10 x 11 statt 20 x 22
+        20.08.2026  Familie fehlte    Adwaita Sans zeichnete bei U+EE56
+                                      einen ANDEREN Glyph (15 x 17)
+        20.08.2026  Schnitt fehlte    (heute nachgetragen)
+
+    GEMESSEN WIRD, WAS DAS WIDGET BEKOMMEN HAT, und nicht, was in
+    bar.css steht: `get_pango_context().get_font_description()` gibt die
+    Schrift, die GTK aus dem Stil gemacht hat. Eine Regel, die den
+    Wahlausdruck verfehlt, steht in der Datei und wirkt nicht - und
+    genau das war der Fall vom 19.08.2026.
+
+    Verglichen wird gegen die Tabellen dieses Hauses (STYLE_FONT_FAMILY,
+    STYLE_FONT_WEIGHT, STYLE_ICON_LEAD) und nicht gegen eine Zahl hier.
+    """
+    styles = _renderer().styles
+    familie = [teil.strip().strip('"')
+               for teil in styles["STYLE_FONT_FAMILY"].split(",")]
+    schnitte = {"normal": 400, "bold": 700}
+    schnitt = schnitte.get(styles["STYLE_FONT_WEIGHT"].strip(),
+                           styles["STYLE_FONT_WEIGHT"].strip())
+    groesse = styles["STYLE_ICON_LEAD"].strip()
+
+    for name in _corner_measured(corner):
+        roh = corner[name]["schrift"]
+        hat_familie, hat_schnitt, hat_groesse, absolut = roh.split("|")
+        assert [teil.strip() for teil in hat_familie.split(",")] == familie, (
+            f"{name} zeichnet sein Zeichen in {hat_familie!r} statt in "
+            f"der ausgelieferten Schriftliste. Ein eigenes Fenster erbt "
+            "die Familie nicht - sie muss in seinem eigenen "
+            "Wahlausdruck stehen:\n" + corner["report"])
+        assert int(hat_schnitt) == int(schnitt), (
+            f"{name} zeichnet im Schnitt {hat_schnitt} statt "
+            f"{schnitt} - derselbe Posten wie die Familie, nur der "
+            "dritte:\n" + corner["report"])
+        assert f"{hat_groesse}{absolut}".replace(".0", "") == groesse, (
+            f"{name} zeichnet in {hat_groesse}{absolut} statt in "
+            f"{groesse}. Ohne eigene Zeile faellt die Groesse auf die "
+            "Vorgabe des GTK-Themas zurueck, und das war die Meldung "
+            "'etwas zu klein' vom 19.08.2026:\n" + corner["report"])
+
+
+def test_the_freestanding_buttons_are_all_the_same_plate(corner):
+    """"Genauso" ist eine Anweisung: gleiche Platte, auf den Punkt.
+
+    BESTELLT am 20.08.2026: "ich will wie shutdown icon unten links,
+    will ich ein icon ganz unten rechts genauso".
+
+    Diese Zeile hat einen gemessenen Anlass. Bevor
+    window.starter-button-window seine Schriftfamilie bekam, war der
+    Starterknopf 53 x 54 und der Abschaltknopf 53 x 57 - drei Punkte
+    auseinander, weil das GTK-Thema fuer U+EE56 eine andere Zeilenhoehe
+    fuehrt. Die Groesse der Platte ist damit der billigste Beweis, dass
+    beide Fenster wirklich dieselbe Schrift bekommen haben.
+    """
+    platten = {name: corner[name]["platte"] for name in _corner_measured(corner)}
+    assert len(set(platten.values())) == 1, (
+        f"die freistehenden Knoepfe haben verschiedene Platten: "
+        f"{platten} - sie sollen 'genauso' sein:\n" + corner["report"])
 
 
 # --------------------------------------------------------------------

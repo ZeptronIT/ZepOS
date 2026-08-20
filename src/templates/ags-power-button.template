@@ -84,6 +84,10 @@
 import Astal from "gi://Astal?version=4.0"
 import { Gtk, Gdk } from "ags/gtk4"
 import { faehrtMitDemDock } from "./Dock"
+// Die Zelle, in der ein Zeichen mittig sitzt - dieselbe, die jedes Modul
+// der Leiste traegt. Siehe PowerButtonContent() unten, warum sie
+// importiert und nicht nachgebaut wird.
+import { SymbolCell } from "./Bar"
 import { _ } from "../utils/i18n"
 
 // Dasselbe Zeichen wie der Kopf von ags-logout.template - derselbe
@@ -94,6 +98,71 @@ const ICON_POWER = "{{ICON_POWER}}"
 // und ags-kit.template als EDGE_GAP liest - siehe den Dateikopf, warum
 // hier keine dritte Konstante daraus wird.
 const EDGE_GAP = {{STYLE_GAPS_OUT}}
+
+/** Die Platte mit ihrem einen Knopf - alles ausser der Flaeche.
+ *
+ * DIESELBE TRENNUNG WIE BarContent() UND DockContent(), UND AUS
+ * DEMSELBEN GRUND (20.08.2026, Aufgabe 47)
+ *     Astal.Window ruft in ihrem Konstruktor gtk_layer_init_for_window
+ *     auf, und das verlangt einen Wayland-Compositor. Ein Messgeraet auf
+ *     einer gewoehnlichen GTK4-Anzeige kann diese Funktion also nicht
+ *     aufrufen - die ganze Begruendung steht im Kopf von
+ *     tests/src/bar_headless_child.tsx.
+ *
+ *     Bis heute gab es hier nichts zu importieren: der Knopf entstand
+ *     mitten in der Schleife ueber die Schirme. Damit war die Frage "wo
+ *     sitzt das Zeichen in seiner Platte" nur an einem echten Compositor
+ *     zu stellen, und genau deshalb ist sie zwischen dem 19. und dem
+ *     20.08.2026 dreimal falsch beantwortet worden (Schriftgroesse,
+ *     Schriftfamilie, Mitte des Zeichens). Der Teil, der von einem
+ *     Compositor abhaengt, ist jetzt klein und benannt; alles andere ist
+ *     messbar - tests/src/corner_button_child.tsx baut GENAU diese
+ *     Funktion und nicht einen Nachbau davon.
+ */
+export function PowerButtonContent(toggle: (name: string) => void): Gtk.Box {
+  const plate = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
+  plate.set_name("power-button")
+
+  const button = new Gtk.Button({ can_focus: true })
+  button.add_css_class("power-btn")
+  button.set_tooltip_text(_("Session"))
+  // DAS ZEICHEN BEKOMMT DIESELBE ZELLE WIE JEDES ZEICHEN DER LEISTE
+  // (20.08.2026, Aufgabe 47).
+  //
+  // Hier stand `new Gtk.Label({ label: ICON_POWER })`, und eine
+  // Gtk.Label mittet die LOGISCHE Breite - den Vorschub. Gesehen wird
+  // die TINTE. GEMESSEN am 20.08.2026 mit
+  // tests/src/corner_button_child.tsx an der erzeugten bar.css,
+  // Vorgabegroesse, Lage der Tinte in der Platte (links:rechts):
+  //
+  //     Platte 53 x 57     vorher   nachher   Tinte
+  //     power-button        17:16    16:17    20 x 22
+  //     starter-button      17:12    14:15    24 x 18
+  //
+  // DIESER KNOPF WAR DABEI NICHT DER AUFFAELLIGE, UND DAS STEHT HIER,
+  // DAMIT NIEMAND MEHR ERWARTET, ALS ZU SEHEN IST: seine Tinte ist zwei
+  // Punkte breiter als sein Vorschub (20 gegen 18), der Versatz also
+  // +1,0 - und ein Punkt ist genau das, was GTKs ganzzahlige Mittung in
+  // einem 35 Punkte breiten Knopf ohnehin uebriglaesst. Vorher wie
+  // nachher steht das Zeichen einen Punkt neben der Mitte, nur auf der
+  // anderen Seite. Beim Starterknopf sind es fuenf Punkte, und DAS ist
+  // die Meldung.
+  //
+  // Er bekommt die Zelle trotzdem, aus demselben Grund, aus dem die
+  // Schriftfamilie in seinem Wahlausdruck steht: der Versatz haengt am
+  // ZEICHEN. Ein anderes Symbol in diesem Knopf, und die Meldung waere
+  // seine.
+  //
+  // SymbolCell aus ags-bar.template ist DIESELBE Zelle, die seit der
+  // Behebung vom 20.08.2026 (dea3f0b) jedes Modul der Leiste traegt -
+  // kein zweiter Weg, ein Zeichen zu mitten. Die ganze Rechnung, warum
+  // ein Aussenrand von 2e das leistet und warum es ein Gtk.CenterBox
+  // sein muss, steht dort und nur dort.
+  button.set_child(new SymbolCell(ICON_POWER).cell)
+  button.connect("clicked", () => toggle("logout"))
+  plate.append(button)
+  return plate
+}
 
 /** Eine kleine, eigene Flaeche je Schirm, unten links am Rand.
  *
@@ -116,15 +185,7 @@ export default function PowerButton(toggle: (name: string) => void): void {
   for (let index = 0; index < monitors.get_n_items(); index++) {
     const monitor = monitors.get_item(index) as Gdk.Monitor
 
-    const plate = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
-    plate.set_name("power-button")
-
-    const button = new Gtk.Button({ can_focus: true })
-    button.add_css_class("power-btn")
-    button.set_tooltip_text(_("Session"))
-    button.set_child(new Gtk.Label({ label: ICON_POWER }))
-    button.connect("clicked", () => toggle("logout"))
-    plate.append(button)
+    const plate = PowerButtonContent(toggle)
 
     const window = new Astal.Window({
       namespace: "zepos-power",

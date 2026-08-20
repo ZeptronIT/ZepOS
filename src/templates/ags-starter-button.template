@@ -174,6 +174,10 @@ import Astal from "gi://Astal?version=4.0"
 import { Gtk, Gdk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import { faehrtMitDemDock } from "./Dock"
+// Die Zelle, in der ein Zeichen mittig sitzt - dieselbe, die jedes Modul
+// der Leiste traegt. Siehe StarterButtonContent() unten, warum sie
+// importiert und nicht nachgebaut wird.
+import { SymbolCell } from "./Bar"
 import { ask } from "../utils/hyprland"
 import { _ } from "../utils/i18n"
 
@@ -218,6 +222,49 @@ function oeffneDenStarter(): void {
   })
 }
 
+/** Die Platte mit ihrem einen Knopf - alles ausser der Flaeche.
+ *
+ * Das Gegenstueck zu PowerButtonContent(); warum es diese Funktion
+ * ueberhaupt gibt und was sie messbar macht, steht dort und nicht hier.
+ */
+export function StarterButtonContent(): Gtk.Box {
+  const plate = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
+  plate.set_name("starter-button")
+
+  const button = new Gtk.Button({ can_focus: true })
+  button.add_css_class("starter-btn")
+  button.set_tooltip_text(_("Applications"))
+  // DIESELBE ZELLE WIE DIE LEISTE - UND HIER IST SIE DIE MELDUNG SELBST
+  // (20.08.2026, Aufgabe 47).
+  //
+  // GEMELDET, woertlich: "die 6 punkte sind nicht zentriert".
+  //
+  // Hier stand `new Gtk.Label({ label: ICON_APPS })`, und eine Gtk.Label
+  // mittet den VORSCHUB. GEMESSEN am 20.08.2026 mit
+  // tests/src/corner_button_child.tsx an der erzeugten bar.css,
+  // Vorgabegroesse - im Knopf, mit {{STYLE_ICON_LEAD}}:
+  //
+  //     ICON_APPS_GRID   Vorschub 18   Tinte 24 x 18   Versatz +3,0
+  //     ICON_POWER       Vorschub 18   Tinte 20 x 22   Versatz +1,0
+  //
+  // Die Tinte dieses Zeichens ist EIN DRITTEL BREITER als sein Vorschub
+  // - das schlechteste Verhaeltnis der ganzen Oberflaeche, und deshalb
+  // ist es hier zuerst aufgefallen. Die sechs Punkte sassen drei Punkte
+  // rechts der Mitte: Tinte 17:12 in einer 53 Punkte breiten Platte,
+  // fuenf Punkte Unterschied zwischen linkem und rechtem Rand.
+  // NACHGEMESSEN mit der Zelle: 14:15.
+  //
+  // Senkrecht ist nichts zu holen und deshalb steht auch nichts da:
+  // GEMESSEN am selben Tag mit Pango ist der senkrechte Versatz beider
+  // Zeichen 0,0 - die Zeile ist 39 Punkte hoch, die Tinte sitzt bei
+  // y=11 (17 hoch) beziehungsweise y=9 (21 hoch), beide Male genau
+  // mittig. Eine senkrechte Zelle waere eine Regel ohne Gegenstand.
+  button.set_child(new SymbolCell(ICON_APPS).cell)
+  button.connect("clicked", () => oeffneDenStarter())
+  plate.append(button)
+  return plate
+}
+
 /** Eine kleine, eigene Flaeche je Schirm, unten rechts am Rand.
  *
  * Das Gegenstueck zu PowerButton() aus ags-power-button.template, bis
@@ -242,15 +289,7 @@ export default function StarterButton(): void {
   for (let index = 0; index < monitors.get_n_items(); index++) {
     const monitor = monitors.get_item(index) as Gdk.Monitor
 
-    const plate = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
-    plate.set_name("starter-button")
-
-    const button = new Gtk.Button({ can_focus: true })
-    button.add_css_class("starter-btn")
-    button.set_tooltip_text(_("Applications"))
-    button.set_child(new Gtk.Label({ label: ICON_APPS }))
-    button.connect("clicked", () => oeffneDenStarter())
-    plate.append(button)
+    const plate = StarterButtonContent()
 
     const window = new Astal.Window({
       namespace: "zepos-starter",

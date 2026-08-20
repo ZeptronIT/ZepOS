@@ -480,21 +480,37 @@ function splitSymbol(text: string): [string, string] {
   return [text.slice(0, cut), text.slice(cut).replace(/^\s+/, "")]
 }
 
-/** Die Beschriftung eines Moduls: ein Zeichen in seiner Zelle, ein Wert
- * daneben.
+/** Eine Zelle mit EINEM Zeichen darin, dessen TINTE mittig liegt.
+ *
+ * SIE IST SEIT DEM 20.08.2026 EXPORTIERT, UND DAS IST EINE MELDUNG
+ * (Aufgabe 47)
+ *     GEMELDET: "die 6 punkte sind nicht zentriert" - der Starterknopf
+ *     unten rechts, also ein Zeichen, das gar nicht auf der Leiste
+ *     steht.
+ *
+ *     Die Behebung vom selben Tag (dea3f0b) hat diese Zelle gebaut und
+ *     JEDEM MODUL DER LEISTE gegeben. Die beiden freistehenden Knoepfe
+ *     am Dock haben davon nichts abbekommen: sie bauen ihre eigene
+ *     Flaeche und trugen ihr Zeichen in einer blanken Gtk.Label. Dass
+ *     sie es nicht taten, lag nicht an einer Entscheidung, sondern
+ *     daran, dass dieses Bauteil hier eingeschlossen war.
+ *
+ *     Es ist EIN Bauteil und keine Bauanleitung, die man zweimal
+ *     befolgt: ags-power-button.template und ags-starter-button.template
+ *     importieren es. Eine zweite Fassung von centreInk() waere eine
+ *     zweite, die auseinanderlaufen kann - und diese Rechnung ist an
+ *     einem Tag schon dreimal falsch gewesen.
  *
  * KEIN Gtk.Widget und kein GObject: dieses Ding hat keine eigene
- * Darstellung, es haelt zwei Widgets zusammen und beantwortet die eine
- * Frage, die die Module ihm stellen - `set_label`. Ein eigener GTyp
- * waere ein drittes Widget in jedem Modul, das nichts zeichnet.
+ * Darstellung. Ein eigener GTyp waere ein Widget mehr in jedem Modul,
+ * das nichts zeichnet.
  */
-class ModuleLabel {
+export class SymbolCell {
   readonly cell: Gtk.CenterBox
   readonly symbol: Gtk.Label
-  readonly value: Gtk.Label
 
-  constructor() {
-    this.symbol = new Gtk.Label({ label: "" })
+  constructor(text = "") {
+    this.symbol = new Gtk.Label({ label: text })
     // EIN Gtk.CenterBox UND KEIN Gtk.Box, und das ist gemessen.
     //
     // Ein Gtk.Box teilt seinem Kind die NATUERLICHE Breite zu und
@@ -510,29 +526,31 @@ class ModuleLabel {
     // Gtk.CenterBox mittet sein mittleres Kind dagegen in seiner
     // ganzen Zuteilung - ohne hexpand, das sonst durch jeden
     // Elternteil bis zum CenterBox der Leiste hochwanderte.
+    //
+    // In einem Knopf ist es dieselbe Eigenschaft, nur eine Ebene
+    // hoeher: ein Gtk.Button teilt seinem Kind den ganzen Innenraum zu,
+    // und das CenterBox mittet das Zeichen darin. Deshalb sitzt die
+    // Tinte dort mittig IN DER PLATTE, ohne dass jemand die
+    // Plattenbreite kennt.
     this.cell = new Gtk.CenterBox()
     this.cell.add_css_class("bar-symbol")
     this.cell.set_center_widget(this.symbol)
-    this.cell.set_visible(false)
-    this.value = new Gtk.Label({ label: "" })
-    this.value.add_css_class("bar-value")
-    this.value.set_visible(false)
     // NOCH EINMAL BEIM EINBLENDEN, und das ist keine Vorsicht, sondern
     // eine Messung: die Schrift eines Widgets kommt aus dem Stil, und
     // den hat es erst, wenn es an einer Anzeige haengt. Ein
     // PangoLayout, das VORHER gelesen wird, traegt die Vorgabeschrift
     // des GTK-Themas - und damit eine Tinte, die es auf der Leiste nie
     // gibt.
+    //
+    // Fuer die zwei Knoepfe am Dock ist genau das der ganze Weg: ihr
+    // Zeichen steht beim Bauen fest und aendert sich nie, also ist
+    // dieses eine Mal beim Einblenden auch das einzige Mal.
     this.symbol.connect("map", () => this.centreInk())
   }
 
-  set_label(text: string): void {
-    const [symbol, value] = splitSymbol(text)
-    this.symbol.set_label(symbol)
-    this.cell.set_visible(symbol !== "")
-    this.value.set_label(value)
-    this.value.set_visible(value !== "")
-    if (symbol !== "") this.centreInk()
+  set_symbol(text: string): void {
+    this.symbol.set_label(text)
+    if (text !== "") this.centreInk()
   }
 
   /** Das Zeichen so ruecken, dass seine TINTE mittig in der Zelle liegt. */
@@ -544,6 +562,37 @@ class ModuleLabel {
     const versatz = ink.x + ink.width / 2 - logical.width / 2
     this.symbol.set_margin_start(versatz < 0 ? Math.round(-2 * versatz) : 0)
     this.symbol.set_margin_end(versatz > 0 ? Math.round(2 * versatz) : 0)
+  }
+}
+
+/** Die Beschriftung eines Moduls: ein Zeichen in seiner Zelle, ein Wert
+ * daneben.
+ *
+ * KEIN Gtk.Widget und kein GObject: dieses Ding hat keine eigene
+ * Darstellung, es haelt zwei Widgets zusammen und beantwortet die eine
+ * Frage, die die Module ihm stellen - `set_label`. Ein eigener GTyp
+ * waere ein drittes Widget in jedem Modul, das nichts zeichnet.
+ */
+class ModuleLabel {
+  readonly zelle: SymbolCell
+  readonly cell: Gtk.CenterBox
+  readonly value: Gtk.Label
+
+  constructor() {
+    this.zelle = new SymbolCell()
+    this.cell = this.zelle.cell
+    this.cell.set_visible(false)
+    this.value = new Gtk.Label({ label: "" })
+    this.value.add_css_class("bar-value")
+    this.value.set_visible(false)
+  }
+
+  set_label(text: string): void {
+    const [symbol, value] = splitSymbol(text)
+    this.zelle.set_symbol(symbol)
+    this.cell.set_visible(symbol !== "")
+    this.value.set_label(value)
+    this.value.set_visible(value !== "")
   }
 
   /** Nur der Wert ellipsiert - eine Zelle hat genau ein Zeichen drin. */
