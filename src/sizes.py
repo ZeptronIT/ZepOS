@@ -1407,6 +1407,12 @@ TABLE: dict[str, Size] = {
     # Mindestbreite (siehe STYLE_BAR_SYMBOL_WIDTH-Leser in
     # bar-style.template).
     #
+    # DIESE AUSNAHME IST DER FEHLER GEWESEN, UND SIE GILT SEIT DEM
+    # 20.08.2026 NICHT MEHR - der letzte Absatz dieses Blocks sagt,
+    # warum. Ein Modul mit Text hat sein Zeichen genauso in einer Zelle
+    # wie eines ohne; abgeschnitten wird nichts, weil der Text NEBEN der
+    # Zelle steht und nicht darin.
+    #
     # ZWEI DER VIER SIND AM SPAETEN 19.08.2026 IN DIE ANDERE GRUPPE
     # GEWECHSELT: #pulseaudio und #pulseaudio#microphone tragen seither
     # ihre Prozentzahl neben dem Zeichen ("auf wie viel prozent sie
@@ -1458,6 +1464,31 @@ TABLE: dict[str, Size] = {
     #
     # GEGENGEPRUEFT im selben Aufbau, nach der Aenderung: #network
     # 51 -> 36 px, das Zeichen darin 12:12 statt 8:31.
+    #
+    # DER WERT BLEIBT 13 UND SEIN LESER IST AM 20.08.2026 UMGEZOGEN
+    # (Aufgabe 41).
+    #
+    #     GEMELDET, zum dritten Mal: "wlan symbol immernoch nicht
+    #     zentriert". Die Absaetze oben beschreiben zwei Reparaturen an
+    #     derselben Sache, und beide haben an der Beschriftung gehangen -
+    #     erst am Kasten, dann an der Gtk.Label. Beide Male stand neben
+    #     dem Zeichen unter Umstaenden noch Text, und dann zentriert die
+    #     Mindestbreite die ZEICHENKETTE statt des Zeichens.
+    #
+    #     Der Leser ist deshalb `.bar-symbol` (bar-style.template): eine
+    #     Zelle, die nur das Zeichen enthaelt, gebaut von ModuleLabel in
+    #     ags-bar.template. Damit gilt diese Breite fuer JEDES Modul und
+    #     nur fuer das Zeichen darin, und nicht mehr fuer die zwei, drei
+    #     oder vier, die gerade kein Wort daneben tragen.
+    #
+    #     DIE HERLEITUNG DARUEBER IST DABEI NACHGEMESSEN WORDEN, mit
+    #     Pango und nicht mit dem Auge, "Fira Code, JetBrainsMono Nerd
+    #     Font" bei STYLE_FONT_BODY (20 px). Die breiteste Zeichentinte
+    #     dieser Leiste ist ICON_WIFI_1..4 mit genau 20 px, und 20 px
+    #     ist auch der gemessene Wert dieser Sprosse - die Zelle fasst
+    #     das breiteste Zeichen also genau. Dass die 13 roh weiter an
+    #     STYLE_ICON_CAPTION haengt, ist damit belegt und nicht mehr nur
+    #     plausibel.
     "STYLE_BAR_SYMBOL_WIDTH": Size(13, PX, SCALED),
 
     # Die Fenstertitelleiste von hyprbars. Nackte Zahlen, weil Hyprland

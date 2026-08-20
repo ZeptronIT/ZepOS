@@ -610,9 +610,90 @@ tooltip label {
  *     erscheint, WEIL kein Platz mehr ist; ihm eine Mindestbreite zu
  *     geben, kostet dort Platz, wo keiner ist, und richtet nichts aus:
  *     er steht allein und neben keinem zweiten Zeichen, mit dem er
- *     fluchten muesste. */
-#modules-right .bar-module > label {
+ *     fluchten muesste.
+ *
+ * UND AM 20.08.2026 IST DIESE REGEL GEFALLEN - SIE HAT DIE HAELFTE DER
+ * MODULE NIE ERREICHT (Aufgabe 41).
+ *
+ *     GEMELDET, zum dritten Mal: "wlan symbol immernoch nicht
+ *     zentriert".
+ *
+ *     Der Wahlausdruck traf die Beschriftung EINES Moduls, und in ihr
+ *     standen Zeichen UND Wert zusammen. Was die Mindestbreite dann
+ *     zentriert, ist die ZEICHENKETTE - das Zeichen steht an ihrem
+ *     Anfang. GEMESSEN am 20.08.2026, Lage des Zeichens im Modul,
+ *     links:rechts: #bluetooth 8:33, #pulseaudio 8:70, #battery 8:58,
+ *     waehrend die Zeile `zentriert` fuer alle drei 8:8 meldete.
+ *
+ *     Und selbst wo sie traf, zentrierte sie die falsche Sache: eine
+ *     Gtk.Label mittet den VORSCHUB, sichtbar ist die TINTE. Bei
+ *     ICON_WIFI_1..4 sind das 12 gegen 20 Punkte - das Zeichen sass
+ *     4 Punkte zu weit rechts, gemessen `tinte network=12:5` bei 36 px
+ *     Modul, und genau darum war es "immernoch nicht zentriert".
+ *
+ *     An ihre Stelle tritt `.bar-symbol` weiter unten: die Zelle steht
+ *     jetzt im Widgetbaum (ags-bar.template, ModuleLabel), also
+ *     erreicht die Mindestbreite jedes Modul und nur das Zeichen darin.
+ *     Der Einklapp-Knopf braucht dafuer keinen Ausschluss mehr - er hat
+ *     keine Zelle, weil er kein Modul ist. */
+
+/* DIE ZELLE DES ZEICHENS - EINE REGEL FUER JEDES MODUL, BEIDE HAELFTEN.
+ *
+ * Sie ersetzt seit dem 20.08.2026 den Block darueber. Die ganze Messung
+ * und die zwei Ursachen stehen im Kopf von ModuleLabel in
+ * src/templates/ags-bar.template; hier steht nur, was der Stil dazu
+ * beitraegt: WIE BREIT die Zelle ist.
+ *
+ * BEIDE HAELFTEN, und das ist keine stillschweigende Ausweitung der
+ * Bestellung vom 19.08.2026 ("ich rede hier nur von der rechten
+ * seite"). Die damalige Bestellung war "enger nebeneinander", und die
+ * bleibt rechts - sie steht unveraendert in #modules-right .bar-module.
+ * Was hier steht, ist die MITTE des Zeichens, und die ist am 20.08.2026
+ * ohne Seitenangabe gemeldet worden. Eine Regel, die nur rechts mittet,
+ * waere die dritte Fassung derselben Frage.
+ *
+ * GEMESSEN am 20.08.2026, Vorgabegroesse: die breiteste Zeichentinte
+ * dieser Leiste ist ICON_WIFI_1..4 mit 20 px. STYLE_BAR_SYMBOL_WIDTH
+ * ist 20 px (roh 13, ueber STYLE_ICON_CAPTION verankert) - die Zelle
+ * fasst also das breiteste Zeichen genau, und kein Zeichen wird
+ * beschnitten. */
+.bar-symbol {
   min-width: {{STYLE_BAR_SYMBOL_WIDTH}};
+}
+
+/* DER ABSTAND ZWISCHEN DEM ZEICHEN UND SEINEM WERT (20.08.2026).
+ *
+ * Er stand bis heute IN DEN SKRIPTEN, als Leerzeichen im Text: date.sh
+ * schreibt zwei, status.sh eines. Ein Leerzeichen dieser Schrift ist
+ * 12 Punkte breit, zwei sind 24 - zwoelf Skripte, die denselben Abstand
+ * jedes fuer sich festlegen, und keines von ihnen weiss etwas von der
+ * Abstandsleiter.
+ *
+ * splitSymbol() (ags-bar.template) wirft ihn weg, hier steht er EINMAL.
+ *
+ * STYLE_SPACE_4 IST NICHT GEWAEHLT, SONDERN NACHGEMESSEN: die Sprosse
+ * soll das EINE Leerzeichen ersetzen, das elf der zwoelf Skripte
+ * schreiben. Die beiden mit zweien - date.sh und hypr-shortcuts -
+ * ruecken damit auf dasselbe Mass wie alle anderen, und das ist die
+ * Bestellung vom 19.08.2026 ("jedes icon in der liste hat den gleichen
+ * abstand") und nicht ihr Gegenteil.
+ *
+ * GEMESSEN am 20.08.2026, sichtbarer Abstand von der Tinte des
+ * Zeichens bis zum Wert:
+ *
+ *     ein Leerzeichen, bisher   12 Vorschub - 3 Tintenueberhang = 9,0
+ *     STYLE_SPACE_4              6 Rand + 2,5 Luft in der Zelle = 8,5
+ *
+ * Die Luft in der Zelle ist, was ein Zeichen uebriglaesst, das
+ * schmaler ist als das breiteste: ICON_BLUETOOTH_CONNECTED laesst
+ * 2 Punkte, ICON_CALENDAR 2,5, ICON_MIC 4, ICON_BATTERY_HIGH 5.
+ *
+ * Ein Wert OHNE Zelle - der Fenstertitel, das einzige Modul ohne
+ * Zeichen - traegt die 6 Punkte ebenfalls. Sie sind dort der Abstand
+ * zur Polsterung und nicht zu sehen; ihn ueber einen Nachbarwahlausdruck
+ * abzuwaehlen ginge in GTK4s CSS-Teilmenge ohnehin nicht. */
+.bar-value {
+  margin-left: {{STYLE_SPACE_4}};
 }
 
 /* ENGER NEBENEINANDER, UND NUR RECHTS (19.08.2026, Aufgabe 33).
@@ -635,6 +716,84 @@ tooltip label {
  * Fugen in der rechten Haelfte, 60 Punkte vorher, 30 nachher. */
 #modules-right .bar-module {
   margin-left: {{STYLE_SPACE_4}};
+}
+
+/* DER RAND DER PLATTE, LINKS WIE RECHTS - AN EINER STELLE (20.08.2026).
+ *
+ * BESTELLT, mehrfach: "das control zentrum icon soll genau platziert
+ * werden rechts wie links der kalender, aktuell geht er rechts in die
+ * sidebar".
+ *
+ * ER HAT RECHT, UND DIE URSACHE IST DAS ABSTANDSMODELL DIESER LEISTE.
+ *
+ *     Jedes Modul traegt seine Fuge LINKS (.bar-module, margin-left);
+ *     rechts traegt es nichts. Fuer alles ZWISCHEN zwei Modulen geht
+ *     die Rechnung auf. An den beiden Enden nicht: das erste Modul der
+ *     linken Haelfte bekommt seinen Rand zur Plattenkante geschenkt -
+ *     es ist derselbe margin-left -, das letzte Modul der rechten
+ *     Haelfte hat keinen linken Nachbarn, an den es sich lehnen
+ *     koennte, und liegt an der Kante an.
+ *
+ *     GEMESSEN am 20.08.2026 mit tests/src/test_bar_headless.py,
+ *     Vorgabegroesse, Schirm 1920, VOR der Aenderung:
+ *
+ *         Platte             24 .. 1896
+ *         #custom-date       ab 36        also 12 Punkte Rand
+ *         #custom-system     bis 1896     also  0 Punkte Rand
+ *
+ *         Bis zur Tinte des Zeichens: links 20, rechts 8 Punkte.
+ *
+ *     Zwoelf Punkte Unterschied, und sie liegen alle rechts - das ist
+ *     das "geht rechts in die sidebar".
+ *
+ * WARUM ZWEI REGELN UND NICHT EINE
+ *     Die linke sagt heute dasselbe wie .bar-module und sieht deshalb
+ *     ueberfluessig aus. Sie ist es nicht: SIE ist die Stelle, an der
+ *     der Plattenrand seinen Namen bekommt. Ohne sie haengt er links
+ *     an der Fuge ZWISCHEN zwei Modulen, und wer die Fuge aendert -
+ *     rechts ist sie am 19.08.2026 schon auf STYLE_SPACE_4 gefallen -,
+ *     verschiebt stillschweigend eine Kante, ueber die er gar nicht
+ *     nachgedacht hat. Zwei Regeln mit derselben Sprosse sagen: das
+ *     hier sind die beiden Raender, und sie sind gleich.
+ *
+ *     STYLE_SPACE_8 und nicht STYLE_SPACE_4, weil der Nutzer die LINKE
+ *     Seite als Vorbild genannt hat ("rechts wie links der kalender") -
+ *     dort sind es 12 Punkte. Die engere Fuge der rechten Haelfte
+ *     bleibt davon unberuehrt; sie steht ueber uns und gilt zwischen
+ *     den Modulen, nicht an der Kante.
+ *
+ * AN DER GRUPPE UND NICHT AM LETZTEN MODUL, UND DAS IST GEMESSEN
+ *     Hier stand zuerst `#modules-right > .bar-module:last-child`, also
+ *     der Rand am letzten Modul. Das ist richtig, solange das letzte
+ *     Modul auch dasteht - und genau das ist es nicht immer.
+ *
+ *     GEMESSEN am 20.08.2026 auf 1024 px: dort klappen alle neun
+ *     sichtbaren Module ein, und im Kasten bleiben die UNSICHTBAREN
+ *     (custom-updates, custom-privacy, die Ablage - Module, die gerade
+ *     nichts zu sagen haben und deshalb `visible false` sind, aber
+ *     Kinder bleiben). :last-child traf eines davon, der Rand lag an
+ *     einem Widget ohne Flaeche, und der Einklapp-Knopf - das einzige
+ *     Sichtbare - klebte wieder an der Kante: modules-right endete auf
+ *     Punkt 1000 und die Platte auch.
+ *
+ *     Der Rand der GRUPPE kennt dieses Problem nicht. Er gilt, was
+ *     immer gerade darin steht, und ueberlebt jedes Ein- und
+ *     Ausklappen.
+ *
+ * WARUM LINKS KEINE ZWEITE REGEL STEHT
+ *     Weil sie nichts hinzufuegte. Links traegt JEDES Modul seinen
+ *     margin-left aus .bar-module, also auch das erste - der
+ *     Plattenrand entsteht dort von selbst und wandert beim Einklappen
+ *     zum naechsten Modul mit. Eine Regel an der linken Gruppe kaeme
+ *     zu diesen 12 Punkten hinzu und machte 24 daraus.
+ *
+ *     Dass die beiden Seiten trotzdem nicht auseinanderlaufen koennen,
+ *     haelt kein Kommentar, sondern eine Messung fest:
+ *     test_the_bar_keeps_the_same_edge_on_both_sides in
+ *     tests/src/test_bar_headless.py vergleicht die beiden Raender auf
+ *     jeder gemessenen Schirmbreite. */
+#modules-right {
+  margin-right: {{STYLE_SPACE_8}};
 }
 
 /* NACHGETRAGEN am 19.08.2026 (Aufgabe 25). GEMELDET: "einige icon ohne
@@ -856,13 +1015,29 @@ tooltip label {
  *     linke Haelfte stellen (BAR_MODULES_AVAILABLE, style_definition.py),
  *     und dort ist es kein Endblock, sondern ein Modul wie jedes
  *     andere - es bekommt dann den gewoehnlichen Rand. */
+/*
+ *     UND AM 20.08.2026 IST `margin-right: 0` HIER GEFALLEN (Aufgabe 41).
+ *
+ *     Es hat nie etwas GETAN: .bar-module traegt `margin:
+ *     STYLE_MARGIN_VERTICAL`, also "3px 0px" - der rechte Rand jedes
+ *     Moduls ist ohnehin null, die ganze Fuge kommt aus margin-left.
+ *     Die Zeile war eine Wiederholung der Vorgabe.
+ *
+ *     Schaden konnte sie trotzdem: mit ZWEI Kennungen im Wahlausdruck
+ *     schlaegt sie jede Regel, die einem dieser vier Module einen Rand
+ *     nach rechts geben will - und genau so eine bestellt der Nutzer am
+ *     20.08.2026 ("das control zentrum icon soll genau platziert werden
+ *     rechts wie links der kalender"). Der Rand liegt heute an der
+ *     Gruppe (#modules-right weiter oben) und stiesse mit ihr nicht
+ *     zusammen; die Zeile faellt, weil sie nichts sagt, was
+ *     .bar-module nicht schon sagt - und weil die naechste Regel, die
+ *     hier etwas will, sonst wieder unerklaerlich wirkungslos waere. */
 #modules-right #custom-disk,
 #modules-right #custom-wallpaper,
 #modules-right #custom-theme,
 #modules-right #custom-system {
   border-radius: {{STYLE_RADIUS_CONTROL}};
   margin-left: 0;
-  margin-right: 0;
 }
 
 #custom-wallpaper {

@@ -226,7 +226,7 @@ interface Payload {
 // Modul, dessen Text ein "&" oder ein "<" enthaelt - ein SSID-Name
 // genuegt -, faerbt mit set_markup() die ganze Leiste mit einer
 // GLib-Warnung ein und zeigt nichts an.
-function applyPayload(label: Gtk.Label, box: Gtk.Widget, name: string,
+function applyPayload(label: ModuleLabel, box: Gtk.Widget, name: string,
                       payload: Payload): void {
   const text = payload.text ?? ""
   label.set_label(text)
@@ -373,13 +373,187 @@ function attachClicks(widget: Gtk.Widget, spec: ClickSpec,
  * #battery -, also bleiben sie gueltig, statt dass 60 Regeln
  * umgeschrieben werden muessten.
  */
-function moduleBox(name: string): { box: Gtk.Box; label: Gtk.Label } {
-  const label = new Gtk.Label({ label: "" })
+function moduleBox(name: string): { box: Gtk.Box; label: ModuleLabel } {
+  const label = new ModuleLabel()
   const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
   box.set_name(name.replace("/", "-"))
   box.add_css_class("bar-module")
-  box.append(label)
+  box.append(label.cell)
+  box.append(label.value)
   return { box, label }
+}
+
+// ---------------------------------------------------------------------
+// Das Zeichen bekommt eine Zelle - und die Zelle sitzt auf der Tinte
+// ---------------------------------------------------------------------
+//
+// GEMELDET am 20.08.2026, zum dritten Mal: "wlan symbol immernoch nicht
+// zentriert", davor "bluetooth icon oben im header ist nicht zentriert
+// auch das wlan icon nicht".
+//
+// "IMMERNOCH" TRIFFT ZU, UND ZWEI VERSCHIEDENE URSACHEN HALTEN ES AM
+// LEBEN. Beide sind am 20.08.2026 mit tests/src/test_bar_headless.py
+// gemessen worden, Vorgabegroesse, echte Zeichen, VOR jeder Aenderung:
+//
+//   1. ZENTRIERT WIRD DER VORSCHUB, GESEHEN WIRD DIE TINTE.
+//
+//      Die Behebung vom 19.08.2026 haengte die Mindestbreite an die
+//      Beschriftung, damit eine Gtk.Label ihren Satz mittig hineinsetzt
+//      (xalign 0.5). Eine Gtk.Label zentriert dabei die LOGISCHE
+//      Breite - den Vorschub, den die Schrift fuer das Zeichen
+//      vorsieht. Was der Nutzer sieht, ist die TINTE.
+//
+//      Bei den Zeichen dieser Leiste fallen die beiden auseinander,
+//      und zwar weit. GEMESSEN mit Pango, "Fira Code, JetBrainsMono
+//      Nerd Font", 20 px, Vorschub jeweils 12 px:
+//
+//          ICON_WIFI_1..4        Tinte 20 px   Versatz +4,0
+//          ICON_DISCONNECTED     Tinte 19 px   Versatz +3,5
+//          ICON_ALERT            Tinte 19 px   Versatz +3,5
+//          ICON_ETHERNET         Tinte 17 px   Versatz +2,5
+//          ICON_SETTINGS         Tinte 17 px   Versatz +2,5
+//          ICON_BLUETOOTH_CONN.  Tinte 16 px   Versatz +2,0
+//          ICON_CALENDAR/CPU/..  Tinte 15 px   Versatz +1,5
+//          ICON_BLUETOOTH        Tinte 12 px   Versatz  0,0
+//
+//      Die Tinte beginnt bei jedem dieser Zeichen am Stift (ink.x = 0)
+//      und laeuft nach RECHTS ueber den Vorschub hinaus. Ein Zeichen,
+//      dessen Vorschub mittig sitzt, sitzt also um den halben Ueberhang
+//      zu weit rechts - beim WLAN-Zeichen um 4 von 36 Punkten. Genau
+//      das ist die Meldung, und genau das hat die Messung vom
+//      19.08.2026 nicht gesehen: sie las die logischen Ausmasse.
+//
+//   2. ZENTRIERT WIRD DER GANZE SATZ, GEMEINT IST DAS ZEICHEN.
+//
+//      Ein Modul, dessen Text aus Zeichen UND Wert besteht, trug beides
+//      in EINER Beschriftung. Zentriert wurde damit die Zeichenkette,
+//      und das Zeichen steht an ihrem Anfang. GEMESSEN, Lage des
+//      Zeichens im Modul, links:rechts:
+//
+//          bluetooth  "<Zeichen> 2"      8:33
+//          pulseaudio "<Zeichen> 100%"   8:70
+//          battery    "<Zeichen> 87%"    8:58
+//
+//      Die Zeile `zentriert` meldete fuer alle drei 8:8 und hat sie
+//      damit als "schon symmetrisch" durchgewinkt. Symmetrisch war die
+//      POLSTERUNG; das Zeichen sass am Rand.
+//
+// DIE ANTWORT AUF BEIDE IST DIESELBE UND GILT FUER JEDES MODUL: das
+// Zeichen bekommt eine eigene Zelle fester Breite (.bar-symbol,
+// STYLE_BAR_SYMBOL_WIDTH), der Wert steht daneben (.bar-value), und in
+// der Zelle wird die TINTE zentriert und nicht der Vorschub.
+//
+// WIE DIE TINTE ZENTRIERT WIRD, OHNE DASS JEMAND DIE ZELLENBREITE KENNT
+//     Die Beschriftung haengt mittig in der Zelle (halign CENTER). Ihr
+//     Versatz e = Tintenmitte - Vorschubmitte haengt NUR am Zeichen und
+//     nicht an der Zelle. Ein Aussenrand von 2e auf der Gegenseite
+//     verschiebt eine mittig haengende Beschriftung um genau e zurueck -
+//     damit liegt die Tintenmitte auf der Zellenmitte, und zwar bei
+//     jeder Zellenbreite. Die Breite steht deshalb weiter allein im
+//     Stylesheet, wo die Groessen dieses Hauses stehen.
+//
+//     KEIN xalign: das braeuchte die ZUGETEILTE Breite der Beschriftung,
+//     also eine zweite Fassung von STYLE_BAR_SYMBOL_WIDTH in
+//     TypeScript - eine Zahl, die beim naechsten Drehen an der Sprosse
+//     stillschweigend falsch waere.
+//
+// WAS EIN ZEICHEN IST: ein Punkt ab U+E000. Die Nerd-Font-Zeichen
+// liegen samt und sonders in den beiden privaten Bereichen (U+E000 bis
+// U+F8FF und Ebene 15/16); Buchstaben, Ziffern und Satzzeichen liegen
+// darunter. Ein Fenstertitel faengt damit KEIN Zeichen ein und bekommt
+// keine Zelle - er ist reiner Wert und sieht aus wie bisher.
+const SYMBOL_FIRST_POINT = 0xe000
+
+/** Zeichen und Wert trennen: der fuehrende Zeichenlauf, dann der Rest. */
+function splitSymbol(text: string): [string, string] {
+  let cut = 0
+  for (const character of text) {
+    if ((character.codePointAt(0) ?? 0) < SYMBOL_FIRST_POINT) break
+    cut += character.length
+  }
+  // Der Trenner faellt: die Skripte schreiben ein oder zwei Leerzeichen
+  // zwischen Zeichen und Wert (date.sh zwei, status.sh eines), und ein
+  // Leerzeichen dieser Schrift ist 12 Punkte breit. Der Abstand steht
+  // seither EINMAL im Stylesheet (.bar-value) statt ein- oder zweimal
+  // in zwoelf Skripten - und die Leiste wird davon schmaler, nicht
+  // breiter.
+  return [text.slice(0, cut), text.slice(cut).replace(/^\s+/, "")]
+}
+
+/** Die Beschriftung eines Moduls: ein Zeichen in seiner Zelle, ein Wert
+ * daneben.
+ *
+ * KEIN Gtk.Widget und kein GObject: dieses Ding hat keine eigene
+ * Darstellung, es haelt zwei Widgets zusammen und beantwortet die eine
+ * Frage, die die Module ihm stellen - `set_label`. Ein eigener GTyp
+ * waere ein drittes Widget in jedem Modul, das nichts zeichnet.
+ */
+class ModuleLabel {
+  readonly cell: Gtk.CenterBox
+  readonly symbol: Gtk.Label
+  readonly value: Gtk.Label
+
+  constructor() {
+    this.symbol = new Gtk.Label({ label: "" })
+    // EIN Gtk.CenterBox UND KEIN Gtk.Box, und das ist gemessen.
+    //
+    // Ein Gtk.Box teilt seinem Kind die NATUERLICHE Breite zu und
+    // packt es an den Anfang; was die Mindestbreite darueber hinaus
+    // fordert, bleibt hinten liegen. GEMESSEN am 20.08.2026 mit genau
+    // diesem Aufbau: `zeichen ...=0:8` fuer JEDES Modul - das Zeichen
+    // klebte links, die 8 Punkte der Zelle lagen rechts. Es ist
+    // dieselbe Eigenschaft, an der schon der Versuch vom 19.08.2026
+    // gescheitert ist, nur eine Ebene tiefer.
+    //
+    // halign CENTER allein hilft nicht: eine Ausrichtung wirkt
+    // innerhalb der ZUTEILUNG, und die war die natuerliche Breite. Ein
+    // Gtk.CenterBox mittet sein mittleres Kind dagegen in seiner
+    // ganzen Zuteilung - ohne hexpand, das sonst durch jeden
+    // Elternteil bis zum CenterBox der Leiste hochwanderte.
+    this.cell = new Gtk.CenterBox()
+    this.cell.add_css_class("bar-symbol")
+    this.cell.set_center_widget(this.symbol)
+    this.cell.set_visible(false)
+    this.value = new Gtk.Label({ label: "" })
+    this.value.add_css_class("bar-value")
+    this.value.set_visible(false)
+    // NOCH EINMAL BEIM EINBLENDEN, und das ist keine Vorsicht, sondern
+    // eine Messung: die Schrift eines Widgets kommt aus dem Stil, und
+    // den hat es erst, wenn es an einer Anzeige haengt. Ein
+    // PangoLayout, das VORHER gelesen wird, traegt die Vorgabeschrift
+    // des GTK-Themas - und damit eine Tinte, die es auf der Leiste nie
+    // gibt.
+    this.symbol.connect("map", () => this.centreInk())
+  }
+
+  set_label(text: string): void {
+    const [symbol, value] = splitSymbol(text)
+    this.symbol.set_label(symbol)
+    this.cell.set_visible(symbol !== "")
+    this.value.set_label(value)
+    this.value.set_visible(value !== "")
+    if (symbol !== "") this.centreInk()
+  }
+
+  /** Das Zeichen so ruecken, dass seine TINTE mittig in der Zelle liegt. */
+  private centreInk(): void {
+    const layout = this.symbol.get_layout()
+    if (!layout) return
+    const [ink, logical] = layout.get_pixel_extents()
+    if (logical.width === 0) return
+    const versatz = ink.x + ink.width / 2 - logical.width / 2
+    this.symbol.set_margin_start(versatz < 0 ? Math.round(-2 * versatz) : 0)
+    this.symbol.set_margin_end(versatz > 0 ? Math.round(2 * versatz) : 0)
+  }
+
+  /** Nur der Wert ellipsiert - eine Zelle hat genau ein Zeichen drin. */
+  set_ellipsize(mode: Pango.EllipsizeMode): void {
+    this.value.set_ellipsize(mode)
+  }
+
+  set_max_width_chars(chars: number): void {
+    this.value.set_max_width_chars(chars)
+  }
 }
 
 // Was auf der Leiste steht, wenn ein Skript selbst nicht antwortet -
@@ -517,7 +691,7 @@ function scriptModule(spec: ScriptSpec,
 interface SharedSink {
   key: string
   box: Gtk.Box
-  label: Gtk.Label
+  label: ModuleLabel
 }
 
 // ---------------------------------------------------------------------

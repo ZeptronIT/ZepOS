@@ -59,6 +59,36 @@ function bell(): Gtk.Widget | null {
   return null
 }
 
+/** Was ein Modul sagt - aus seiner Zelle und seinem Wert zusammen.
+ *
+ * ZWEI STUECKE SEIT DEM 20.08.2026 (Aufgabe 41). Hier stand
+ * `widget.get_first_child() as Gtk.Label`, also die Annahme, ein Modul
+ * sei EINE Beschriftung. Seit die Glocke ihr Zeichen in einer eigenen
+ * Zelle traegt (ModuleLabel in src/templates/ags-bar.template, die
+ * ganze Messung steht dort), ist das erste Kind ein Gtk.CenterBox und
+ * `get_label` gibt es darauf nicht.
+ *
+ * GEAENDERT HAT SICH DAS MESSGERAET UND KEINE ZUSICHERUNG: was diese
+ * Datei aufschreibt, ist unveraendert "was steht auf der Leiste", und
+ * die Zeilen in test_bar_notifications.py fragen unveraendert danach.
+ * Der Trenner ist ein Leerzeichen - genau das, was zwischen Zeichen und
+ * Wert stand, bevor splitSymbol() es dem Stylesheet ueberliess.
+ */
+function shown(widget: Gtk.Widget): string {
+  const stuecke: string[] = []
+  let piece = widget.get_first_child()
+  while (piece) {
+    const label = piece instanceof Gtk.Label ? piece
+      : (piece.has_css_class("bar-symbol")
+         ? piece.get_first_child() : null)
+    if (label instanceof Gtk.Label && piece.visible && label.get_label()) {
+      stuecke.push(label.get_label())
+    }
+    piece = piece.get_next_sibling()
+  }
+  return stuecke.join(" ")
+}
+
 /** Sichtbarkeit, Beschriftung und Klassen - in einer Zeile. */
 function record(label: string): void {
   const widget = bell()
@@ -66,7 +96,7 @@ function record(label: string): void {
     lines.push(`${label}:FEHLT::`)
     return
   }
-  const text = (widget.get_first_child() as Gtk.Label).get_label()
+  const text = shown(widget)
   const state = widget.visible ? "sichtbar" : "verborgen"
   lines.push(`${label}:${state}:${text}:${widget.get_css_classes().join(" ")}`)
 }

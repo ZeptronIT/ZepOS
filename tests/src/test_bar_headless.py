@@ -1784,6 +1784,60 @@ WIDTHS = (1024, 1280, 1366, 1600, 1680, 1920)
 #         Zahl hier eine Behauptung statt einer Messung. 1600 ist
 #         weiterhin die kleinste GEMESSENE Breite, auf der alles steht -
 #         mit 95 px Luft statt 14.
+#
+#     UND AM 20.08.2026 SIND ES 1504 PUNKTE - EINER WENIGER, UND DIE
+#     ZAHL HIER BLEIBT WIEDER 1600 (Aufgabe 41).
+#
+#         BESTELLT: "wlan symbol immernoch nicht zentriert" und "das
+#         control zentrum icon soll genau platziert werden rechts wie
+#         links der kalender". Das Zeichen sitzt seither in einer
+#         eigenen Zelle (ModuleLabel in ags-bar.template, .bar-symbol in
+#         bar-style.template), und der Trenner zwischen Zeichen und Wert
+#         kommt aus der Abstandsleiter statt als Leerzeichen aus zwoelf
+#         Skripten.
+#
+#         GEMESSEN mit genau diesem Aufbau (Vorgabegroesse, zehn
+#         Arbeitsbereiche, echte Zeichen), vorher und nachher:
+#
+#             Schirm   vorher   nachher   eingeklappt (nachher)
+#              1024     1016      1020     9
+#              1280     1262      1256     5
+#              1366     1346      1341     4
+#              1600     1505      1504     0
+#              1680     1505      1504     0
+#              1920     1505      1504     0
+#
+#         DIE EINZELNEN MODULE MIT WERT, im selben Lauf - sie sind es,
+#         die der Trenner betrifft:
+#
+#             custom-date            299 px -> 289 px
+#             custom-hardware        151 px -> 153 px
+#             custom-hypr-shortcuts   78 px ->  67 px
+#             bluetooth               53 px ->  55 px
+#             pulseaudio              90 px ->  92 px
+#             pulseaudio#microphone   78 px ->  79 px
+#             battery                 78 px ->  79 px
+#
+#         Die reinen Zeichenmodule bleiben Punkt fuer Punkt gleich
+#         (36 px): ihre Zelle ist genau so breit, wie ihre Beschriftung
+#         vorher mindestens war. Die beiden Module mit ZWEI Leerzeichen
+#         (Datum, Tastenkuerzel) werden schmaler, die fuenf mit einem
+#         um zwei Punkte breiter - STYLE_SPACE_4 ist eine halbe Sprosse
+#         schmaler als ein Leerzeichen, aber die Zelle ist um zweieinhalb
+#         breiter als der Vorschub eines Zeichens.
+#
+#         DAZU ZWOELF PUNKTE FUER DEN RECHTEN PLATTENRAND, und die sind
+#         die zweite Bestellung: #modules-right traegt jetzt
+#         margin-right, damit rechts derselbe Abstand zur Plattenkante
+#         steht wie links (test_the_bar_keeps_the_same_edge_on_both_
+#         sides). Auf 1024 px, wo neun Module eingeklappt sind und die
+#         Ersparnis der Zellen deshalb gar nicht anfaellt, kosten sie
+#         vier Punkte netto - die Leiste will dort 1020 statt 1016 und
+#         passt weiter auf den Schirm.
+#
+#         WARUM DIE ZAHL HIER WIEDER STEHENBLEIBT: 1504 passt nicht auf
+#         1366, also bliebe jede kleinere Zahl eine Behauptung. Die Luft
+#         auf 1600 bleibt bei 96 Punkten.
 COMPLETE_FROM = 1600
 
 # Der verbreitetste Notebookschirm, und auf ihm reicht es seit dem
@@ -1851,6 +1905,15 @@ COMMON_NOTEBOOK = 1366
 #     ab. Vorher waren es fuenf bei 1298 px.
 #
 #     Auf 1280 sind es aus demselben Grund fuenf statt sechs.
+#
+# AM 20.08.2026 NACHGEMESSEN UND UNVERAENDERT GEBLIEBEN - DIESELBEN VIER,
+# in derselben Reihenfolge (Aufgabe 41). Die Leiste will auf 1366 px an
+# diesem Tag 1341 statt 1346 Punkte (die ganze Zeile steht bei
+# COMPLETE_FROM), und fuenf Punkte reichen weder fuer ein fuenftes Modul
+# noch dafuer, dass ein viertes zurueckkommt: das schmalste eingeklappte
+# ist #custom-disk mit 36 Punkten plus Fuge. Dass die Liste trotz einer
+# Aenderung an JEDEM Modul gleich bleibt, ist die Aussage dieses
+# Nachmessens.
 FOLDED_ON_COMMON_NOTEBOOK = ("custom-disk", "network", "bluetooth",
                              "pulseaudio")
 
@@ -2004,6 +2067,41 @@ def _breadth(measured, width, phase="breite"):
     return entries
 
 
+def _sides(measured, width, key, phase="breite"):
+    """Eine Zeile aus Paaren: Name -> (links, rechts).
+
+    Drei Zeilen des Kindes haben diese Form, und sie beantworten drei
+    verschiedene Fragen ueber DASSELBE Modul:
+
+        zentriert   der ganze Satz im Modul - sagt, ob die POLSTERUNG
+                    symmetrisch liegt, und sonst nichts.
+        zeichen     das Zeichen in seiner Zelle, nach VORSCHUB.
+        tinte       das Zeichen in seiner Zelle, nach TINTE - das, was
+                    der Nutzer sieht.
+
+    Dass es drei sind und nicht eine, ist die Lehre aus dem 19.08.2026:
+    damals stand nur `zentriert` zur Verfuegung, meldete fuer jedes
+    Modul mit Text 8:8 und hat die Meldung des Nutzers damit als behoben
+    ausgewiesen, obwohl das Zeichen am Rand sass.
+    """
+    entries = {}
+    for token in measured[phase][width][key].split():
+        name, _, pair = token.partition("=")
+        left, _, right = pair.partition(":")
+        entries[name] = (int(left), int(right))
+    return entries
+
+
+def _groups(measured, width, phase="breite"):
+    """Wo die Platte und die drei Gruppen liegen: Name -> (links, Breite)."""
+    entries = {}
+    for token in measured[phase][width]["gruppen"].split():
+        name, _, geometry = token.partition("@")
+        left, _, size = geometry.partition("+")
+        entries[name] = (int(left), int(size))
+    return entries
+
+
 # --------------------------------------------------------------------
 # laengs: passt die Summe in die Breite
 # --------------------------------------------------------------------
@@ -2083,6 +2181,156 @@ def test_the_bar_never_asks_for_more_room_than_the_screen_is_wide(fit):
         assert minimum <= width, (
             f"die Leiste will mindestens {minimum} px Breite und hat "
             f"{width}:\n" + fit["report"])
+
+
+# --------------------------------------------------------------------
+# die Mitte: sitzt das Zeichen dort, wo man es sieht
+# --------------------------------------------------------------------
+#
+# DREI MELDUNGEN UEBER DIESELBE SACHE, UND KEINE DAVON HATTE EINEN
+# WAECHTER
+#
+#     19.08.2026 vormittags  "sie sind viel zu weit voneinander
+#                            entfernt und auch nicht zentriert in ihrer
+#                            box"
+#     19.08.2026 abends      "die icon im header sind immernoch nicht
+#                            zentreirt in ihrem kaestchen"
+#     20.08.2026             "wlan symbol immernoch nicht zentriert",
+#                            davor "bluetooth icon oben im header ist
+#                            nicht zentriert auch das wlan icon nicht"
+#
+#     Zweimal ist repariert und zweimal gemessen worden, und beide Male
+#     ist die Messung in einem Bericht stehengeblieben statt in einer
+#     Zusicherung. Eine Messung, die niemand wiederholt, faellt beim
+#     naechsten Umbau lautlos - genau das ist zwischen dem 19. und dem
+#     20.08.2026 passiert.
+#
+# DIE ZWEI ZUSICHERUNGEN HIER SIND DIE BEIDEN URSACHEN, JEDE FUER SICH
+#
+#     Die erste haelt fest, dass das Zeichen in seiner Zelle mittig
+#     sitzt - nach TINTE gemessen. Sie faellt, wenn jemand wieder den
+#     Vorschub zentriert (der Fall vom 20.08.2026, ICON_WIFI: Vorschub
+#     12 px, Tinte 20 px).
+#
+#     Die zweite haelt fest, dass das AUCH fuer ein Modul mit Wert gilt.
+#     Sie faellt, wenn Zeichen und Wert wieder in EINER Beschriftung
+#     landen (der Fall vom 19.08.2026, #bluetooth: Zeichen 8:33 im Modul,
+#     waehrend `zentriert` 8:8 meldete).
+
+# Ein halber Bildpunkt, und mehr ist nicht zu holen: die Zelle ist
+# STYLE_BAR_SYMBOL_WIDTH breit (gemessene 20 px), ein Zeichen darin 10
+# bis 20 px - bleibt eine ungerade Zahl uebrig, teilt GTK sie nicht in
+# Halbe. Das Kind rundet ausserdem beide Kanten fuer sich, also koennen
+# aus zweimal 1,5 einmal 2 und einmal 1 werden.
+CENTRED_TOLERANCE = 1
+
+
+def _with_value(measured, width, phase="breite"):
+    """Die Module, die ein Zeichen UND einen Wert tragen.
+
+    Gemessen und nicht aufgezaehlt: welches Modul gerade etwas neben
+    seinem Zeichen sagt, entscheidet sein Skript. Eine Liste von Namen
+    hier waere eine zweite Wahrheit darueber und ginge beim naechsten
+    Wechsel auseinander - #pulseaudio hat seinen Wert am 12.08.2026
+    verloren und am 19.08.2026 zurueckbekommen.
+    """
+    zellen = _sides(measured, width, "tinte", phase)
+    werte = {}
+    for token in measured[phase][width]["wert"].split():
+        name, _, breite = token.partition("=")
+        werte[name] = int(breite)
+    return [name for name in werte if name in zellen]
+
+
+def test_a_module_puts_its_symbol_in_the_middle_of_its_cell(fit):
+    """Die TINTE liegt mittig in der Zelle - nicht der Vorschub.
+
+    GEMESSEN am 20.08.2026 mit Pango, "Fira Code, JetBrainsMono Nerd
+    Font" bei 20 px: jedes Zeichen dieser Leiste hat einen Vorschub von
+    12 px, seine Tinte ist 10 bis 20 px breit und beginnt am Stift.
+    Ein Zeichen, dessen VORSCHUB mittig sitzt, sitzt damit bis zu vier
+    Punkte zu weit rechts - beim WLAN-Zeichen genau vier, und das ist
+    die Meldung "wlan symbol immernoch nicht zentriert".
+
+    Die Zeile `zentriert` sieht das nicht: sie misst logische Ausmasse.
+    Deshalb liest diese Zusicherung `tinte`.
+    """
+    for width in WIDTHS:
+        for phase in ("breite", "wieder"):
+            for name, (left, right) in _sides(
+                    fit, width, "tinte", phase).items():
+                assert abs(left - right) <= CENTRED_TOLERANCE, (
+                    f"das Zeichen von {name} sitzt auf {width} px "
+                    f"({phase}) nicht mittig in seiner Zelle: links "
+                    f"{left}, rechts {right} - gemessen an der TINTE, "
+                    "also an dem, was zu sehen ist:\n" + fit["report"])
+
+
+def test_a_module_with_a_value_centres_its_symbol_too(fit):
+    """Ein Zeichen NEBEN einem Wert sitzt genauso mittig.
+
+    Das ist die Zusicherung, die am 19.08.2026 gefehlt hat. Damals
+    wurde die Mindestbreite an die Beschriftung gehaengt, und die trug
+    Zeichen UND Wert: zentriert wurde die Zeichenkette, das Zeichen
+    stand an ihrem Anfang. GEMESSEN am 20.08.2026, VOR der Behebung,
+    Lage des Zeichens im Modul: #bluetooth 8:33, #pulseaudio 8:70,
+    #battery 8:58 - waehrend `zentriert` fuer alle drei 8:8 meldete und
+    sie damit als in Ordnung auswies.
+
+    Dass hier ueberhaupt Module geprueft werden, ist Teil der
+    Zusicherung: faende der Aufbau keines mit Wert, waere die Zeile
+    darunter leer und gruen.
+    """
+    for width in WIDTHS:
+        if width < COMPLETE_FROM:
+            continue
+        mit_wert = _with_value(fit, width)
+        assert len(mit_wert) >= 4, (
+            "auf dieser Leiste tragen weniger als vier Module einen Wert "
+            "neben ihrem Zeichen - dann misst diese Zusicherung nichts:\n"
+            + fit["report"])
+        tinte = _sides(fit, width, "tinte")
+        for name in mit_wert:
+            left, right = tinte[name]
+            assert abs(left - right) <= CENTRED_TOLERANCE, (
+                f"{name} traegt einen Wert neben seinem Zeichen, und das "
+                f"Zeichen sitzt auf {width} px nicht mittig in seiner "
+                f"Zelle: links {left}, rechts {right}:\n" + fit["report"])
+
+
+def test_the_bar_keeps_the_same_edge_on_both_sides(fit):
+    """Links wie rechts derselbe Abstand zur Kante der Platte.
+
+    BESTELLT am 20.08.2026: "das control zentrum icon soll genau
+    platziert werden rechts wie links der kalender, aktuell geht er
+    rechts in die sidebar".
+
+    GEMESSEN an diesem Tag, VOR der Behebung, Vorgabegroesse, 1920 px:
+    die Platte lag von 24 bis 1896, das erste Modul der linken Haelfte
+    begann bei 36 (also 12 Punkte Rand), das letzte der rechten endete
+    bei 1896 (also null). Die Ursache ist das Abstandsmodell: jedes
+    Modul traegt seine Fuge LINKS, also bekommt das erste links seinen
+    Plattenrand geschenkt und das letzte rechts hat keinen.
+
+    Gemessen wird gegen die GRUPPE und nicht gegen das letzte Modul:
+    was gerade das letzte ist, entscheidet der Einklapper, und auf
+    1024 px bleiben nur unsichtbare Module im Kasten stehen.
+    """
+    for width in WIDTHS:
+        for phase in ("breite", "wieder"):
+            gruppen = _groups(fit, width, phase)
+            platte_links, platte_breit = gruppen["bar"]
+            platte_rechts = platte_links + platte_breit
+            erstes = min(
+                (links for links, _ in _placed(fit, width, phase).values()),
+                default=platte_links)
+            rechts_links, rechts_breit = gruppen["modules-right"]
+            links_rand = erstes - platte_links
+            rechts_rand = platte_rechts - (rechts_links + rechts_breit)
+            assert links_rand == rechts_rand, (
+                f"die Leiste haelt auf {width} px ({phase}) links "
+                f"{links_rand} und rechts {rechts_rand} Punkte Abstand "
+                "zur Kante der Platte:\n" + fit["report"])
 
 
 # --------------------------------------------------------------------

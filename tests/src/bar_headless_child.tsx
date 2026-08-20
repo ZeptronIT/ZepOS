@@ -117,13 +117,36 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
   mark("thickness", String(BAR_THICKNESS))
 
   // Was ein Modul WIRKLICH anzeigt, nachdem sein Skript geantwortet hat.
+  //
+  // ZWEI STUECKE SEIT DEM 20.08.2026 (Aufgabe 41): ein Modul traegt
+  // sein Zeichen in einer eigenen Zelle (.bar-symbol) und seinen Wert
+  // daneben (.bar-value) - die ganze Begruendung steht bei ModuleLabel
+  // in src/templates/ags-bar.template. Hier werden beide wieder
+  // zusammengesetzt, weil die Frage dieser Zeile unveraendert ist:
+  // WAS steht auf der Leiste. Der Trenner ist ein Leerzeichen, also
+  // genau das, was die Skripte zwischen Zeichen und Wert schreiben und
+  // was splitSymbol() ihnen abnimmt.
   const shown: string[] = []
   for (const side of [centre.get_start_widget(), centre.get_end_widget()]) {
     let child = side ? (side as Gtk.Box).get_first_child() : null
     while (child) {
-      const label = (child as Gtk.Box).get_first_child()
-      if (label instanceof Gtk.Label && child.visible) {
-        shown.push(`${child.get_name()}=${label.label}`)
+      const stuecke: string[] = []
+      let piece = (child as Gtk.Box).get_first_child()
+      while (piece) {
+        // Nur in die Zelle hinein und in nichts anderes: die Ablage
+        // (#tray) ist ebenfalls ein .bar-module und ihre Kinder sind
+        // Knoepfe fremder Programme. Wer blind eine Ebene tiefer geht,
+        // schriebe deren Beschriftungen hierher.
+        const label = piece instanceof Gtk.Label ? piece
+          : (piece.has_css_class("bar-symbol")
+             ? piece.get_first_child() : null)
+        if (label instanceof Gtk.Label && piece.visible && label.label) {
+          stuecke.push(label.label)
+        }
+        piece = piece.get_next_sibling()
+      }
+      if (stuecke.length > 0 && child.visible) {
+        shown.push(`${child.get_name()}=${stuecke.join(" ")}`)
       }
       child = child.get_next_sibling()
     }

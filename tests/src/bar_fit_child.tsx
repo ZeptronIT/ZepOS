@@ -242,6 +242,45 @@ function snapshot(prefix: string): void {
     // Satzes, in denselben Koordinaten wie `gestellt`. Gleich heisst
     // zentriert; ungleich nennt die Seite, auf der es klemmt.
     const centred: string[] = []
+    // WO DAS ZEICHEN SITZT, WENN NEBEN IHM NOCH TEXT STEHT (20.08.2026).
+    //
+    // `zentriert` oben misst den GANZEN Satz, und genau daran ist die
+    // Behebung vom 19.08.2026 vorbeigegangen: ein Modul aus Zeichen UND
+    // Text - #bluetooth traegt "<Zeichen> 2", #pulseaudio
+    // "<Zeichen> 100%" - meldet dort 8:8 und gilt damit als zentriert.
+    // Zentriert ist aber die ZEICHENKETTE und nicht das Zeichen: das
+    // Zeichen steht an ihrem Anfang und damit um die halbe Textbreite
+    // links der Mitte. Die Zeile hat "schon symmetrisch" gemeldet und
+    // die falsche Sache gemessen.
+    //
+    // Geschrieben wird je Modul `name=links:rechts`: die Lage des
+    // Zeichens in SEINER ZELLE (.bar-symbol) und nicht im ganzen Modul.
+    // Die Zelle ist das Kaestchen, von dem der Nutzer spricht - bei
+    // einem Modul ohne Wert ist sie der ganze Innenraum, bei einem mit
+    // Wert die linke Haelfte davon. Gemessen wird gegen die Zelle,
+    // damit beide Faelle dieselbe Zahl liefern.
+    const symbols: string[] = []
+    // UND WO DIE TINTE LIEGT, nicht nur der Vorschub.
+    //
+    // Ein Gtk.Label zentriert nach LOGISCHER Breite, also nach dem
+    // Vorschub, den die Schrift fuer das Zeichen vorsieht. Was der
+    // Nutzer sieht, ist die TINTE. Fallen die beiden auseinander - und
+    // bei Nerd-Font-Zeichen tun sie das -, steht ein rechnerisch
+    // zentriertes Zeichen sichtbar daneben, und keine Messung dieses
+    // Hauses haette den Unterschied je gesehen.
+    //
+    // Geschrieben wird die Tinte des ersten Clusters, also des
+    // Zeichens: `name=links:rechts` zur Kante des Moduls.
+    const inked: string[] = []
+    // WELCHES MODUL NEBEN SEINEM ZEICHEN NOCH ETWAS SAGT.
+    //
+    // Die Zusicherung "auch ein Modul MIT Wert mittet sein Zeichen"
+    // braucht die Liste derer, die einen tragen - und die entscheidet
+    // das Skript und nicht der Aufbau: #pulseaudio hat seinen Wert am
+    // 12.08.2026 verloren und am 19.08.2026 zurueckbekommen. Sie wird
+    // deshalb GEMESSEN und nicht aufgezaehlt: `name=breite` fuer jede
+    // sichtbare .bar-value.
+    const values: string[] = []
     // Und was DIE PLATTE INNEN tragen muss.
     //
     // `tallest` oben ist die Messung des CenterBox, und die zaehlt
@@ -258,11 +297,25 @@ function snapshot(prefix: string): void {
     // sie es nicht mehr, und die Zusicherung hat die Aenderung nicht
     // mitbekommen.
     let inner = 0
+    // WO DIE DREI GRUPPEN UND DIE PLATTE LIEGEN (20.08.2026).
+    //
+    // BESTELLT: "das control zentrum icon soll genau platziert werden
+    // rechts wie links der kalender, aktuell geht er rechts in die
+    // sidebar". Die Frage ist der ABSTAND ZUM RAND auf beiden Seiten,
+    // und `gestellt` beantwortet sie nur halb: es nennt die Lage der
+    // Module, aber nicht die der Platte, gegen deren Kante der Nutzer
+    // sie sieht. Ohne diese Zeile muesste jede Rechnung ueber die
+    // Raender die Plattenkante ANNEHMEN statt sie zu lesen.
+    const groups: string[] = []
+    const [bx, bw] = bounds(probe.bar, probe.surface)
+    groups.push(`bar@${bx}+${bw}`)
     for (const box of [probe.bar.get_start_widget(),
                        probe.bar.get_center_widget(),
                        probe.bar.get_end_widget()]) {
       if (box) {
         inner = Math.max(inner, box.measure(Gtk.Orientation.VERTICAL, -1)[0])
+        const [gx, gw] = bounds(box, probe.surface)
+        groups.push(`${box.get_name()}@${gx}+${gw}`)
       }
       let child = box ? (box as Gtk.Box).get_first_child() : null
       while (child) {
@@ -270,18 +323,50 @@ function snapshot(prefix: string): void {
           const [x, w] = bounds(child, probe.surface)
           placed.push(`${child.get_name()}@${x}+${w}`)
           // Nur Module, die WIRKLICH eine Beschriftung tragen -
-          // moduleBox() in ags-bar.template baut genau das. Die
-          // Arbeitsbereiche, die Ablage und der Einklapp-Knopf haben
-          // andere Kinder; fuer sie ist die Frage nach der Mitte eines
-          // Zeichens gegenstandslos.
-          const inside = child.get_first_child()
-          if (inside instanceof Gtk.Label && inside.get_text()) {
-            const [lx] = bounds(inside, probe.surface)
-            const [ox] = inside.get_layout_offsets()
-            const [, logical] = inside.get_layout().get_pixel_extents()
-            const links = lx + ox + logical.x - x
-            const rechts = x + w - (lx + ox + logical.x + logical.width)
-            centred.push(`${child.get_name()}=${links}:${rechts}`)
+          // moduleBox() in ags-bar.template baut genau das: eine Zelle
+          // fuer das Zeichen (.bar-symbol) und eine Beschriftung fuer
+          // den Wert (.bar-value), jede fuer sich sichtbar oder nicht.
+          // Die Arbeitsbereiche, die Ablage und der Einklapp-Knopf
+          // haben andere Kinder; fuer sie ist die Frage nach der Mitte
+          // eines Zeichens gegenstandslos.
+          const first = child.get_first_child()
+          const cell = (first && first.has_css_class("bar-symbol"))
+            ? first : null
+          const after = cell ? cell.get_next_sibling() : first
+          const value = (after instanceof Gtk.Label && after.visible
+                         && after.get_text()) ? after : null
+          // Der ganze Satz im Modul: von der linken Kante des ersten
+          // sichtbaren Stuecks bis zur rechten des letzten. Gleich
+          // heisst: die Polsterung liegt symmetrisch. Das ist die
+          // Aussage, die diese Zeile seit dem 19.08.2026 macht - und
+          // seit dem 20.08.2026 steht daneben, was sie NICHT sagt.
+          const parts: Gtk.Widget[] = []
+          if (cell && cell.visible) parts.push(cell)
+          if (value) parts.push(value)
+          if (parts.length > 0) {
+            const [px] = bounds(parts[0], probe.surface)
+            const [lx, lw] = bounds(parts[parts.length - 1], probe.surface)
+            centred.push(
+              `${child.get_name()}=${px - x}:${x + w - (lx + lw)}`)
+          }
+          if (value) {
+            const [, vw] = bounds(value, probe.surface)
+            values.push(`${child.get_name()}=${vw}`)
+          }
+          // Und wo das ZEICHEN in seiner Zelle sitzt - einmal nach
+          // Vorschub und einmal nach Tinte. Die zweite Zahl ist die,
+          // nach der der Nutzer gefragt hat: gesehen wird die Tinte.
+          if (cell && cell.visible) {
+            const symbol = cell.get_first_child() as Gtk.Label
+            const [cx, cw] = bounds(cell, probe.surface)
+            const [sx] = bounds(symbol, probe.surface)
+            const [ox] = symbol.get_layout_offsets()
+            const [tinte, vorschub] = symbol.get_layout().get_pixel_extents()
+            const anfang = sx + ox - cx
+            const vl = anfang + vorschub.x
+            symbols.push(`${child.get_name()}=${vl}:${cw - vl - vorschub.width}`)
+            const tl = anfang + tinte.x
+            inked.push(`${child.get_name()}=${tl}:${cw - tl - tinte.width}`)
           }
         }
         breadth.push(
@@ -310,8 +395,12 @@ function snapshot(prefix: string): void {
     lines.push(`  innen ${inner}`)
     lines.push(`  dicke ${BAR_THICKNESS}`)
     lines.push(`  knopf ${overflow && overflow.visible ? "sichtbar" : "aus"}`)
+    lines.push(`  gruppen ${groups.join(" ")}`)
     lines.push(`  gestellt ${placed.join(" ")}`)
     lines.push(`  zentriert ${centred.join(" ")}`)
+    lines.push(`  zeichen ${symbols.join(" ")}`)
+    lines.push(`  tinte ${inked.join(" ")}`)
+    lines.push(`  wert ${values.join(" ")}`)
     lines.push(`  eingeklappt ${folded.join(" ")}`)
     lines.push(`  breite ${breadth.join(" ")}`)
   }
