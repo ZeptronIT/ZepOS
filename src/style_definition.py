@@ -2834,18 +2834,128 @@ _modules_left += ["custom/hypr-shortcuts"]
 # ags-bar.template): der rechte Kasten geht von innen nach aussen. Was
 # vorn steht, verschwindet zuerst.
 #
-# Geordnet nach dem, was am ehesten entbehrlich ist: zuerst das Breiteste
-# und Fluechtigste (was gerade spielt), dann die Messwerte, dann die
-# Geraete, dann die Ablage, zuletzt die drei, die nur bei einem Anlass
-# etwas sagen. Ganz aussen das Kontrollzentrum - der Knopf, ueber den
-# alles Eingeklappte ohnehin erreichbar bleibt.
+# Geordnet nach dem, was am ehesten entbehrlich ist: zuerst das
+# Wachsende - was gerade spielt und die Ablage -, dann die Messwerte und
+# die Geraete, zuletzt die beiden, die nur bei einem Anlass etwas sagen.
+# Ganz aussen das Kontrollzentrum - der Knopf, ueber den alles
+# Eingeklappte ohnehin erreichbar bleibt.
+#
+# VIER GRUPPEN, VON INNEN NACH AUSSEN, UND SEIT DEM 20.08.2026 IN DIESER
+# ORDNUNG (Aufgabe 42)
+#
+#     BESTELLT, woertlich: "ich wollte auch das du sie zentrierst die
+#     icon und sie anders anordnest logisch gesehen im header". Die
+#     Zentrierung ist der Tag davor (siehe dea3f0b); hier steht die
+#     ANORDNUNG. Der Nutzer hat aus drei Entwuerfen diesen gewaehlt:
+#
+#         media tray | disk net bt vol mic bat | priv upd | theme Zahnrad
+#         Programme  |         Zustand         | Hinweise |  Aktionen
+#         waechst    |       feste Breite      |          |    fest
+#
+#     BEWEGT HAT SICH DABEI GENAU EIN MODUL: `tray` stand zwischen dem
+#     Akku und den festen Knoepfen und steht jetzt als zweites, direkt
+#     hinter `custom/media`. Die uebrigen elf behalten ihren Platz und
+#     ihre Nachbarn.
+#
+# UND DER GRUND IST KEIN GESCHMACK: WACHSENDE MODULE VERSCHIEBEN
+# KLICKZIELE
+#
+#     Die Ablage waechst um ein ganzes Symbol, sobald irgendein fremdes
+#     Programm eines hineinstellt - `box.append(item.button)` je Dienst
+#     in Tray() (ags-tray.template), ohne Obergrenze, und niemand fragt
+#     die Leiste vorher.
+#
+#     IN WELCHE RICHTUNG DAS SCHIEBT, IST GEMESSEN UND NICHT GERATEN
+#     (20.08.2026, tests/src/test_bar_headless.py, 1920 px,
+#     Vorgabegroesse). Der rechte Kasten ist das Endstueck eines
+#     Gtk.CenterBox und haengt damit an der RECHTEN Kante: seine rechte
+#     Seite steht fest, seine linke wandert. Waechst ein Modul, geht das
+#     Wachstum also nach INNEN - alles LINKS davon rueckt weg, alles
+#     rechts davon bleibt stehen.
+#
+#     Nachgestellt an genau dem Platz, an dem die Ablage bis heute
+#     stand (dem achten, zwischen Akku und Datenschutz): ein Modul dort
+#     um 160 Punkte verbreitert, und SECHS Klickziele wandern mit -
+#
+#         custom-disk            1405 -> 1245   (-160)
+#         network                1447 -> 1287   (-160)
+#         bluetooth              1489 -> 1329   (-160)
+#         pulseaudio             1550 -> 1390   (-160)
+#         pulseaudio#microphone  1648 -> 1488   (-160)
+#         battery                1733 -> 1573   (-160)
+#         custom-theme           1812 -> 1812   (steht)
+#         custom-system          1848 -> 1848   (steht)
+#
+#     Sechs Ziele, die man anklickt, und jedes von ihnen sitzt nach dem
+#     naechsten Ablagesymbol woanders. Ein Klickziel, das sich unter dem
+#     Zeiger bewegt, ist der Fehler - nicht seine Breite.
+#
+#     DIESELBE MESSUNG AM INNERSTEN PLATZ, und sie ist der ganze Beleg:
+#     custom/media mit 121 Punkten aufgestellt, und KEIN Modul bewegt
+#     sich um einen Punkt - custom-disk bleibt auf 1405, custom-system
+#     auf 1848. Das Wachstum verschwindet in der Luecke zur Mitte, wo
+#     nichts steht, das man anklickt.
+#
+#     DASSELBE GILT DESHALB FUER custom/media, und es steht aus diesem
+#     Grund weiter ganz vorn: es ist ueberhaupt nur da, solange ein
+#     Spieler laeuft, und es traegt einen TITEL - auf
+#     STYLE_MEASURE_LINE Zeichen geschnitten (TITLE_LIMIT in
+#     ags-media-scripts.template), also alles zwischen null und einer
+#     halben Zeile.
+#
+#     NACH DEM UMBAU STEHT ALLES WACHSENDE INNEN, und das Einzige, was
+#     ein neues Ablagesymbol noch verschiebt, ist custom/media - selbst
+#     ein fluechtiges Modul und kein Ziel, das man blind anfaehrt.
+#
+#     DASS DAS SO BLEIBT, HAELT EIN WAECHTER:
+#     test_kein_wachsendes_modul_steht_rechts_von_einem_festen_klickziel
+#     in tests/src/test_bar_headless.py. Er liest beide Listen aus der
+#     Quelle - die Reihenfolge aus shipped_bar_imprint(), die Einteilung
+#     in "waechst" und "festes Klickziel" aus den `case`-Zweigen von
+#     ags-bar.template und den Skripten, die sie nennen. Eine
+#     abgeschriebene Liste veraltet still; dieser Baum hat daran an
+#     einem Tag drei schlafende Tests gefunden.
+#
+#     ES IST AUCH EIN GEWINN AUF DEM SCHMALEN SCHIRM. Die Ablage ist
+#     jetzt das zweite, was der Einklapper abgibt, statt des achten -
+#     und sie ist der Posten, dessen Inhalt man am ehesten entbehrt:
+#     jedes Ablagesymbol gehoert zu einem laufenden Programm, das man
+#     auch ueber sein Fenster erreicht.
+#
+# WAS DAS AN BREITE KOSTET: NICHTS, UND DAS IST GEMESSEN am 20.08.2026
+# mit tests/src/test_bar_headless.py (Vorgabegroesse, zehn
+# Arbeitsbereiche, echte Zeichen):
+#
+#         Schirm   vorher   nachher   eingeklappt (nachher)
+#          1024     1020      1020     9
+#          1280     1256      1256     5
+#          1366     1341      1341     4
+#          1600     1504      1504     0
+#          1680     1504      1504     0
+#          1920     1504      1504     0
+#
+#     Punkt fuer Punkt dieselbe Leiste, und der Grund steht in
+#     ags-tray.template: eine LEERE Ablage ist unsichtbar
+#     (`box.set_visible(items.size > 0)`), und ein unsichtbares Widget
+#     beantwortet gtk_widget_measure mit 0. Sie kostet im Ruhezustand
+#     nichts, egal wo sie steht - ein Umzug ohne Preis.
+#
+#     Der Unterschied faellt an, sobald ein Symbol darin liegt, und
+#     genau dann ist er der bestellte: die Ablage geht als zweite hinter
+#     den Knopf, und nicht der Akku.
 _modules_right = ["custom/media"]
 # custom/hardware stand hier und steht seit dem 17.08.2026 links neben
 # dem Datum - siehe den Block ueber _modules_left.
+#
+# DIE ABLAGE STEHT SEIT DEM 20.08.2026 HIER und nicht mehr hinter dem
+# Akku - die ganze Begruendung steht im Block darueber. Kurz: sie ist
+# das einzige Modul der Leiste, dessen Breite ein FREMDES Programm
+# bestimmt, ihr Wachstum geht nach INNEN, und deshalb darf nichts, was
+# man anklickt, links von ihr stehen.
+_modules_right += ["tray"]
 _modules_right += ["custom/disk"]
 _modules_right += ["network", "bluetooth", "pulseaudio",
                    "pulseaudio#microphone", "battery"]
-_modules_right += ["tray"]
 # custom/theme steht DIREKT VOR dem Kontrollzentrum, und beides ist eine
 # Entscheidung.
 #
@@ -2880,6 +2990,28 @@ _modules_right += ["tray"]
 #
 #         Die Grenze aus COMPLETE_FROM bleibt bei 1600, und der Schirm
 #         des Nutzers ist 1920x1200 bei Faktor 1.00 - dort steht alles.
+#
+# GEMELDET UND NICHT ENTSCHIEDEN am 20.08.2026 (Aufgabe 42): custom/privacy
+# UND custom/updates STEHEN HIER ANDERSHERUM, ALS DER BLOCK OBEN SAGT.
+#
+#     Im Absatz "DIE VIER BEDINGTEN MODULE" weiter oben steht woertlich:
+#     "custom/privacy HINTER updates, also noch spaeter dran. Es ist die
+#     einzige Auskunft der Leiste, die etwas kostet, das man nicht
+#     zurueckbekommt." Diese Liste stellt sie umgekehrt auf - erst
+#     Datenschutz, dann Aktualisierungen -, der Datenschutz klappt also
+#     FRUEHER ein und nicht spaeter.
+#
+#     DAS IST AELTER ALS DIESE AUFGABE UND WIRD VON IHR NICHT BERUEHRT:
+#     `git log -S` findet die Zeile unveraendert seit edb20e2, der ersten
+#     oeffentlichen Fassung, und der Umbau vom 20.08.2026 bewegt allein
+#     `tray`. Der vom Nutzer gewaehlte Entwurf schreibt an dieser Stelle
+#     "priv upd" und bestaetigt damit die Reihenfolge, wie sie hier steht.
+#
+#     Aufgeloest wird der Widerspruch trotzdem nicht im Vorbeigehen: der
+#     Kommentar oben nennt einen GRUND, und ihn zu streichen oder die
+#     Liste zu drehen waere beides eine Entscheidung ueber eine
+#     Sicherheitsanzeige, die dem Nutzer gehoert und nicht dieser Zeile.
+#     Er steht im Bericht zu Aufgabe 42.
 _modules_right += ["custom/privacy", "custom/updates",
                    "custom/theme", "custom/system"]
 

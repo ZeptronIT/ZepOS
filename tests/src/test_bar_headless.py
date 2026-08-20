@@ -373,16 +373,40 @@ BAR_EVERYTHING = {"bar": {
     # weg", woertlich) - sein Zweig bleibt aber gebaut (siehe
     # _bar_optional in src/style_definition.py), also bleibt es auch
     # hier stehen, jetzt am Ende bei den anderen Nicht-Vorgabe-Modulen.
+    #
+    # UND AM 20.08.2026 IST DIE RECHTE HAELFTE NACHGEZOGEN WORDEN, GLEICH
+    # AN DREI STELLEN (Aufgabe 42).
+    #
+    #     Der Waechter darueber prueft nur die LINKE Haelfte - er hiess
+    #     _vorgabe_links() und las auch nur die. Die rechte Abschrift ist
+    #     deshalb still veraltet, und zwar zweifach, seit es sie gibt:
+    #
+    #         custom/disk    stand hier hinter `tray`, in der Vorgabe
+    #                        aber an zweiter Stelle, direkt hinter
+    #                        custom/media.
+    #         custom/updates stand hier VOR custom/privacy, in der
+    #                        Vorgabe aber dahinter.
+    #
+    #     Genau die Sorte Fehler, gegen die dieser Block seit dem
+    #     17.08.2026 gewarnt hat - nur eben in der Haelfte, die der
+    #     Waechter nicht ansah. Er sieht seit heute beide (siehe
+    #     test_die_nachbarschaft_ist_die_der_vorgabe unten).
+    #
+    #     DAZU DER UMZUG DES TAGES: `tray` steht in der Vorgabe jetzt an
+    #     zweiter Stelle, direkt hinter custom/media - die Ablage
+    #     waechst, und nichts, was man anklickt, darf rechts davon
+    #     stehen. Die ganze Begruendung steht bei _modules_right in
+    #     src/style_definition.py.
     "modules_left": ["custom/date", "custom/hardware",
                      "custom/weather", "custom/clocks",
                      "custom/notifications", "custom/hypr-shortcuts",
                      "custom/keyboard", "hyprland/window"],
-    "modules_right": ["custom/media",
+    "modules_right": ["custom/media", "tray",
                       "custom/floating-layouts", "custom/helpers",
+                      "custom/disk", "custom/wallpaper",
                       "network", "bluetooth",
                       "pulseaudio", "pulseaudio#microphone", "battery",
-                      "tray", "custom/disk", "custom/wallpaper",
-                      "custom/updates", "custom/privacy",
+                      "custom/privacy", "custom/updates",
                       "custom/theme", "custom/system"],
 }}
 
@@ -1047,20 +1071,28 @@ def test_the_bar_builds_every_module_in_its_place(run):
     # das breiteste der vier neuen, weil es einen Titel traegt und kein
     # Zeichen.
     #
-    # custom-updates und custom-privacy stehen ganz hinten, kurz vor
+    # custom-privacy und custom-updates stehen ganz hinten, kurz vor
     # dem Kontrollzentrum, aus demselben Grund umgekehrt.
+    #
+    # tray STEHT SEIT DEM 20.08.2026 DIREKT HINTER custom-media und nicht
+    # mehr hinter dem Akku (Aufgabe 42): die Ablage waechst um ein ganzes
+    # Symbol, sobald ein fremdes Programm eines hineinstellt, und das
+    # Wachstum geht nach INNEN - an ihrem alten Platz hat es GEMESSEN
+    # sechs Klickziele um dieselben 160 Punkte nach links geschoben. Die
+    # ganze Begruendung mit der Messung steht bei _modules_right in
+    # src/style_definition.py.
     assert run.mark("right").split(",") == [
         "bar-overflow",
-        "custom-media",
+        "custom-media", "tray",
         "custom-floating-layouts", "custom-helpers",
         # custom-hardware stand hier, zwischen bluetooth und pulseaudio.
         # Es steht seit dem 17.08.2026 LINKS neben dem Datum - bestellt:
         # "hardware monitor icon soll nach links recht neben die zeit
         # anzeige".
-        "network", "bluetooth",
-        "pulseaudio", "pulseaudio#microphone", "battery", "tray",
         "custom-disk", "custom-wallpaper",
-        "custom-updates", "custom-privacy",
+        "network", "bluetooth",
+        "pulseaudio", "pulseaudio#microphone", "battery",
+        "custom-privacy", "custom-updates",
         # custom-theme steht zwischen den beiden bedingten Modulen und
         # dem Kontrollzentrum, also GANZ AUSSEN und damit als vorletztes
         # in der Einklappreihenfolge. Der Nutzer hat das Zeichen fuer das
@@ -1838,6 +1870,39 @@ WIDTHS = (1024, 1280, 1366, 1600, 1680, 1920)
 #         WARUM DIE ZAHL HIER WIEDER STEHENBLEIBT: 1504 passt nicht auf
 #         1366, also bliebe jede kleinere Zahl eine Behauptung. Die Luft
 #         auf 1600 bleibt bei 96 Punkten.
+#
+#     UND AM 20.08.2026 IST DIE RECHTE HAELFTE UMGERAEUMT WORDEN, OHNE
+#     DASS SICH EINE EINZIGE DIESER ZAHLEN BEWEGT HAT (Aufgabe 42).
+#
+#         BESTELLT: "ich wollte auch das du sie zentrierst die icon und
+#         sie anders anordnest logisch gesehen im header". Bewegt hat
+#         sich dabei genau ein Modul - `tray` steht jetzt an zweiter
+#         Stelle statt an achter, weil es das einzige ist, dessen Breite
+#         ein fremdes Programm bestimmt. Die ganze Begruendung steht bei
+#         _modules_right in src/style_definition.py.
+#
+#         GEMESSEN im selben Aufbau, vorher und nachher:
+#
+#             Schirm   vorher   nachher   eingeklappt (nachher)
+#              1024     1020      1020     9
+#              1280     1256      1256     5
+#              1366     1341      1341     4
+#              1600     1504      1504     0
+#              1680     1504      1504     0
+#              1920     1504      1504     0
+#
+#         Punkt fuer Punkt dieselbe Leiste, und der Grund steht in
+#         ags-tray.template: eine LEERE Ablage macht sich unsichtbar
+#         (`box.set_visible(items.size > 0)`), und ein unsichtbares
+#         Widget beantwortet gtk_widget_measure mit 0. Der Messaufbau
+#         hier hat keinen Sitzungsbus, also ist sie in JEDER Zeile
+#         dieser Tabelle leer - ein Umzug, der im Ruhezustand nichts
+#         kostet und nichts spart.
+#
+#         WAS SICH AENDERT, SOBALD EIN SYMBOL DARIN LIEGT, steht
+#         deshalb nicht in dieser Tabelle, sondern in der Messung bei
+#         _modules_right: an ihrem alten Platz hat die Ablage sechs
+#         Klickziele geschoben, an ihrem neuen schiebt sie keines.
 COMPLETE_FROM = 1600
 
 # Der verbreitetste Notebookschirm, und auf ihm reicht es seit dem
@@ -1914,6 +1979,24 @@ COMMON_NOTEBOOK = 1366
 # ist #custom-disk mit 36 Punkten plus Fuge. Dass die Liste trotz einer
 # Aenderung an JEDEM Modul gleich bleibt, ist die Aussage dieses
 # Nachmessens.
+#
+# UND AM 20.08.2026 EIN ZWEITES MAL NACHGEMESSEN, NACH DEM UMBAU DER
+# RECHTEN HAELFTE (Aufgabe 42) - WIEDER DIESELBEN VIER, in derselben
+# Reihenfolge, bei denselben 1341 Punkten.
+#
+#     `tray` ist an die zweite Stelle gewandert und damit an den
+#     zweiten Platz der EINKLAPPREIHENFOLGE. In dieser Liste taucht es
+#     trotzdem nicht auf, und das ist kein Versehen: die Regel
+#     ueberspringt unsichtbare Module (`if (!entry.widget.visible)` in
+#     foldingOf(), ags-bar.template), und ohne Sitzungsbus ist die
+#     Ablage leer und damit unsichtbar. Sie wird hier also weder
+#     eingeklappt noch gezaehlt.
+#
+#     AUF EINER ECHTEN MASCHINE MIT ABLAGESYMBOLEN steht sie in dieser
+#     Liste an erster Stelle, noch vor custom-disk - und genau das ist
+#     der Sinn des Umbaus: was der schmale Schirm zuerst abgibt, ist die
+#     Ablage und nicht der Akku. Der Akku steht in dieser Liste
+#     unveraendert NICHT.
 FOLDED_ON_COMMON_NOTEBOOK = ("custom-disk", "network", "bluetooth",
                              "pulseaudio")
 
@@ -2831,23 +2914,46 @@ def test_the_whole_shell_still_compiles(tmp_path):
 # keine Meldung, nur ein Messgeraet, das eine andere Sache misst als die,
 # die ausgeliefert wird.
 
-def _vorgabe_links() -> list[str]:
-    """Die ausgelieferte linke Modulliste, aus der Quelle gelesen."""
+# UND ER HAT BIS ZUM 20.08.2026 NUR DIE LINKE HAELFTE ANGESEHEN
+# (Aufgabe 42).
+#
+#     _vorgabe_links() hiess so, weil es auch nur die linke las - der
+#     Anlass am 17.08.2026 war ein Tausch links, und der Waechter ist
+#     genau so weit gebaut worden, wie der Anlass reichte. Die rechte
+#     Abschrift war damit von Anfang an ungehalten, und sie war auch von
+#     Anfang an falsch: custom/disk stand darin hinter `tray` statt an
+#     zweiter Stelle, und custom/updates vor custom/privacy statt
+#     dahinter.
+#
+#     Ein Waechter, der die HAELFTE seines Gegenstandes ansieht, ist
+#     kein halber Waechter, sondern eine ganze Zusicherung ueber die
+#     falsche Sache. Er liest seit heute beide Haelften.
+_SEITEN = {"left": "linke", "right": "rechte"}
+
+
+def _vorgabe(seite: str) -> list[str]:
+    """Eine ausgelieferte Modulliste, aus der Quelle gelesen.
+
+    `seite` ist "left" oder "right".
+    """
     import style_definition
     daten = style_definition.shipped_bar_imprint()
-    for schluessel in ("modules_left", "bar_left"):
+    namen = (f"modules_{seite}", f"bar_{seite}")
+    for schluessel in namen:
         if schluessel in daten:
             return list(daten[schluessel])
     # Die Aufteilung kann verschachtelt sein - dann eine Ebene tiefer.
     leiste = daten.get("bar", {})
-    for schluessel in ("modules_left", "bar_left"):
+    for schluessel in namen:
         if schluessel in leiste:
             return list(leiste[schluessel])
     raise AssertionError(
-        f"in der Vorgabe steht keine linke Modulliste: {sorted(daten)}")
+        f"in der Vorgabe steht keine {_SEITEN[seite]} Modulliste: "
+        f"{sorted(daten)}")
 
 
-def test_die_nachbarschaft_ist_die_der_vorgabe():
+@pytest.mark.parametrize("seite", sorted(_SEITEN))
+def test_die_nachbarschaft_ist_die_der_vorgabe(seite):
     """Wo ein Modul steht, wird von der Vorgabe abgelesen - so sagt es
     der Kommentar an BAR_EVERYTHING, und so wird es hier gehalten.
 
@@ -2857,35 +2963,293 @@ def test_die_nachbarschaft_ist_die_der_vorgabe():
     zugleich die Einklappreihenfolge, also keine Kosmetik - sie
     entscheidet, was auf einem engen Schirm zuerst verschwindet.
     """
-    vorgabe = _vorgabe_links()
-    abschrift = BAR_EVERYTHING["bar"]["modules_left"]
+    vorgabe = _vorgabe(seite)
+    abschrift = BAR_EVERYTHING["bar"][f"modules_{seite}"]
 
     gemeinsam_vorgabe = [m for m in vorgabe if m in abschrift]
     gemeinsam_abschrift = [m for m in abschrift if m in vorgabe]
 
     assert gemeinsam_vorgabe, (
-        "die Abschrift und die Vorgabe haben kein Modul gemeinsam - eine "
-        "von beiden meint etwas voellig anderes")
+        f"die {_SEITEN[seite]} Abschrift und die Vorgabe haben kein Modul "
+        "gemeinsam - eine von beiden meint etwas voellig anderes")
     assert gemeinsam_abschrift == gemeinsam_vorgabe, (
-        "BAR_EVERYTHING ist gegenueber src/style_definition.py veraltet.\n"
+        f"BAR_EVERYTHING ist in der {_SEITEN[seite]}n Haelfte gegenueber "
+        "src/style_definition.py veraltet.\n"
         f"  Vorgabe:   {gemeinsam_vorgabe}\n"
         f"  Abschrift: {gemeinsam_abschrift}\n"
         "Jede Breitenzusicherung in dieser Datei misst damit eine Leiste, "
         "die so nicht ausgeliefert wird.")
 
 
-def test_that_guard_would_notice_a_swap():
+@pytest.mark.parametrize("seite", sorted(_SEITEN))
+def test_that_guard_would_notice_a_swap(seite):
     """Der Waechter selbst, gegen eine verfaelschte Abschrift gehalten.
 
     Ein Test, der auch dann gruen bleibt, wenn man die Sache kaputtmacht,
     ist keiner - und dieser hier ist erst entstanden, weil sein Gegenstand
     unbemerkt kaputtgegangen war.
+
+    GEAENDERT am 20.08.2026: er hielt bloss fest, dass ein Tausch die
+    Liste veraendert - das haette auch eine Zusicherung ueber `list`
+    getan. Jetzt laeuft der VERGLEICH des Waechters gegen die
+    verfaelschte Abschrift, und er muss ihn abweisen.
     """
-    vorgabe = _vorgabe_links()
-    gemeinsam = [m for m in vorgabe if m in BAR_EVERYTHING["bar"]["modules_left"]]
+    vorgabe = _vorgabe(seite)
+    abschrift = BAR_EVERYTHING["bar"][f"modules_{seite}"]
+    gemeinsam = [m for m in vorgabe if m in abschrift]
     if len(gemeinsam) < 2:
         pytest.skip("weniger als zwei gemeinsame Module - nichts zu tauschen")
 
     vertauscht = list(gemeinsam)
     vertauscht[0], vertauscht[1] = vertauscht[1], vertauscht[0]
     assert vertauscht != gemeinsam, "der Tausch hat nichts veraendert"
+    # Und genau das ist der Vergleich, den der Test darueber anstellt.
+    assert [m for m in vertauscht if m in vorgabe] != gemeinsam, (
+        "der Waechter vergleicht die Reihenfolge nicht - eine vertauschte "
+        "Abschrift kaeme bei ihm durch")
+
+
+# ---------------------------------------------------------------------
+# Was waechst, steht innen
+# ---------------------------------------------------------------------
+# BESTELLT am 20.08.2026 (Aufgabe 42): "ich wollte auch das du sie
+# zentrierst die icon und sie anders anordnest logisch gesehen im
+# header". Der gewaehlte Entwurf stellt alles Wachsende nach innen -
+# `custom/media` und `tray` -, damit die Knoepfe am Rand stillstehen.
+#
+# WAS DABEI SCHIEBT, UND IN WELCHE RICHTUNG - GEMESSEN an diesem Tag mit
+# dem `fit`-Aufbau dieser Datei, 1920 px, Vorgabegroesse:
+#
+#     Der rechte Kasten ist das Endstueck eines Gtk.CenterBox und haengt
+#     an der RECHTEN Kante. Ein Modul dort um 160 Punkte verbreitert -
+#     an genau dem Platz, an dem die Ablage bis dahin stand -, und sechs
+#     Klickziele wandern um dieselben 160 Punkte nach links
+#     (custom-disk, network, bluetooth, pulseaudio,
+#     pulseaudio#microphone, battery), waehrend custom-theme und
+#     custom-system auf ihrem Punkt bleiben.
+#
+#     Dieselbe Verbreiterung am INNERSTEN Platz bewegt KEIN einziges
+#     Modul: custom-media mit 121 Punkten aufgestellt, und custom-disk
+#     steht weiter auf 1405, custom-system weiter auf 1848.
+#
+# DARAUS DIE REGEL, UND SIE IST FUER JEDE HAELFTE EINE ANDERE RICHTUNG:
+# ein wachsendes Modul schiebt alles, was zwischen ihm und der KANTE
+# steht, an der sein Kasten haengt. Rechts ist das alles VOR ihm in der
+# Liste, links alles DAHINTER. Ein festes Klickziel darf dort nicht
+# stehen.
+#
+# WARUM DIE EINTEILUNG AUS DER QUELLE KOMMT UND NICHT AUS EINER LISTE
+# HIER: eine abgeschriebene Liste veraltet still. Diese Datei hat am
+# selben Tag drei solche Abschriften gefunden - zwei in der rechten
+# Haelfte von BAR_EVERYTHING und eine im Kommentar bei _modules_right.
+# Gelesen wird deshalb, was die Leiste WIRKLICH baut: die `case`-Zweige
+# aus ags-bar.template und die Skripte, die sie namentlich nennen.
+
+BAR_VORLAGE = SRC / "templates" / "ags-bar.template"
+ERZEUGER = SRC / "generate_config.sh"
+
+# Ein Text, der auf eine Sprosse der Messleiter geschnitten wird, ist
+# genau einer, der von sich aus keine Grenze hat - sonst brauchte er den
+# Schnitt nicht. Das ist das Kennzeichen, an dem ein wachsendes Modul in
+# dieser Quelle zu erkennen ist, und es steht an genau zwei Stellen:
+# TITLE_LIMIT in ags-media-scripts.template und set_max_width_chars() in
+# windowModule().
+MASS_GRENZE = re.compile(r"\{\{STYLE_MEASURE_[A-Z_]+\}\}")
+
+
+def _modulzweige() -> dict[str, str]:
+    """Name -> Quelltext seines `case`-Zweiges in ags-bar.template."""
+    text = BAR_VORLAGE.read_text(encoding="utf-8")
+    zweige = {}
+    for stueck in re.split(r'\n\s*case "', text)[1:]:
+        name, _, rest = stueck.partition('"')
+        # Der letzte Zweig laeuft sonst in `default:` und den Rest der
+        # Datei hinein.
+        zweige[name] = re.split(r"\n\s*default:", rest)[0]
+    return zweige
+
+
+def _skriptvorlagen() -> dict[str, str]:
+    """Dateiname eines Leistenskripts -> Quelltext seiner Vorlage.
+
+    Gelesen aus src/generate_config.sh, weil dort steht, welche Vorlage
+    welche Datei erzeugt. Eine zweite Zuordnung an dieser Stelle waere
+    die vierte Abschrift in dieser Sache.
+    """
+    erzeuger = ERZEUGER.read_text(encoding="utf-8")
+    # Zwischen dem Namen der Route und ihren Zeilen duerfen Kommentare
+    # stehen, und bei bar-weather-config tun sie es auch.
+    kommentar = r"(?:\s*#[^\n]*\n)*"
+    routen = re.findall(
+        r'\n    ([a-z0-9-]+)\)\n' + kommentar
+        + r'\s*CONFIG_DIR="\$ZEPOS_OUTPUT_ROOT/ags/scripts"\n' + kommentar
+        + r'\s*CONFIG_FILE="([^"]+)"', erzeuger)
+    vorlagen = {}
+    for route, datei in routen:
+        quelle = SRC / "templates" / f"{route}.template"
+        if quelle.is_file():
+            vorlagen[datei] = quelle.read_text(encoding="utf-8")
+    return vorlagen
+
+
+def _feste_klickziele(zweige: dict[str, str]) -> set[str]:
+    """Module, die ein Zeichen und einen Klick sind und sonst nichts.
+
+    staticModule() bekommt das Zeichen als Zeichenkette aus der Vorlage
+    und ruft kein Skript. Seine Breite steht damit im Baum und nicht in
+    der Laufzeit - es ist das Ziel, das man blind anfaehrt.
+    """
+    return {name for name, text in zweige.items()
+            if "staticModule(" in text}
+
+
+def _wachsende(zweige: dict[str, str],
+               skripte: dict[str, str]) -> set[str]:
+    """Module, deren Breite etwas ausserhalb dieses Baumes bestimmt.
+
+    Zwei Kennzeichen, beide aus der Quelle:
+
+        Tray(          die Ablage haengt ihre Kinder an, eines je
+                       fremdem Dienst, ohne Obergrenze.
+        eine Sprosse   der Text muss geschnitten werden, hat also von
+        der Messleiter sich aus keine Grenze - im Zweig selbst oder in
+                       dem Skript, das er namentlich ruft.
+    """
+    wachsend = set()
+    for name, text in zweige.items():
+        if "Tray(" in text or MASS_GRENZE.search(text):
+            wachsend.add(name)
+            continue
+        gerufen = re.search(r"\$\{SCRIPTS\}/([\w.-]+)", text)
+        if gerufen and MASS_GRENZE.search(skripte.get(gerufen.group(1), "")):
+            wachsend.add(name)
+    return wachsend
+
+
+def _verschobene_klickziele(reihe: list[str], wachsend: set[str],
+                            fest: set[str], seite: str) -> list[str]:
+    """Jedes Paar aus wachsendem Modul und Klickziel, das es schiebt."""
+    treffer = []
+    for platz, modul in enumerate(reihe):
+        if modul not in wachsend:
+            continue
+        if seite == "right":
+            geschoben, versatz = reihe[:platz], 0
+        else:
+            geschoben, versatz = reihe[platz + 1:], platz + 1
+        for weiter, ziel in enumerate(geschoben):
+            if ziel in fest:
+                treffer.append(
+                    f"{modul} (Platz {platz}) waechst und schiebt "
+                    f"{ziel} (Platz {versatz + weiter})")
+    return treffer
+
+
+def test_kein_wachsendes_modul_steht_rechts_von_einem_festen_klickziel():
+    """Die Zusicherung zu "sie anders anordnest logisch gesehen".
+
+    Sie faellt, sobald jemand ein wachsendes Modul zwischen die festen
+    Knoepfe stellt - und genau das war bis zum 20.08.2026 der Fall: die
+    Ablage stand an achter Stelle, und jedes neue Ablagesymbol hat sechs
+    Klickziele unter dem Zeiger weggezogen. Die Messung dazu steht im
+    Kopf dieses Abschnitts.
+    """
+    zweige = _modulzweige()
+    fest = _feste_klickziele(zweige)
+    wachsend = _wachsende(zweige, _skriptvorlagen())
+
+    # Ohne diese drei Zeilen waere alles darunter mit einer Einteilung
+    # erfuellt, die nichts gefunden hat.
+    assert fest, ("in ags-bar.template steht kein einziger "
+                  "staticModule()-Zweig - die Einteilung hat nichts "
+                  "gefunden, also misst dieser Test nichts")
+    assert wachsend, ("kein einziges wachsendes Modul gefunden - "
+                      "entweder ist Tray() umbenannt oder die Messleiter "
+                      "heisst nicht mehr STYLE_MEASURE_*")
+    assert "tray" in wachsend, (
+        "die Ablage gilt der Einteilung nicht als wachsend, obwohl sie "
+        "je fremdem Dienst ein Symbol anhaengt - dann taugt die "
+        "Einteilung nicht:\n" + repr(sorted(wachsend)))
+
+    for seite in sorted(_SEITEN):
+        reihe = _vorgabe(seite)
+        fehlt = [modul for modul in reihe if modul not in zweige]
+        assert fehlt == [], (
+            f"die {_SEITEN[seite]} Vorgabe nennt {fehlt}, und "
+            "ags-bar.template hat dafuer keinen `case`-Zweig - die "
+            "Einteilung kann ueber diese Module nichts sagen")
+        verstoesse = _verschobene_klickziele(reihe, wachsend, fest, seite)
+        assert verstoesse == [], (
+            f"in der {_SEITEN[seite]}n Haelfte steht ein wachsendes Modul "
+            "zwischen der Kante und einem festen Klickziel:\n  "
+            + "\n  ".join(verstoesse)
+            + "\n\nWachsend: " + ", ".join(sorted(wachsend))
+            + "\nFeste Klickziele: " + ", ".join(sorted(fest))
+            + "\nReihe: " + ", ".join(reihe)
+            + "\n\nDas Klickziel wandert dann bei jeder Aenderung des "
+              "wachsenden Moduls unter dem Zeiger weg. Siehe "
+              "_modules_right in src/style_definition.py.")
+
+    # UND DASS DIE RECHTE HAELFTE BEIDE SORTEN UEBERHAUPT TRAEGT.
+    #
+    # Sie ist die Haelfte, um die es geht: dort stehen die Ablage, die
+    # Wiedergabe und die beiden Knoepfe. Waere eine der beiden Sorten
+    # dort leer, waere die Schleife oben auf dieser Seite gruen, ohne
+    # etwas verglichen zu haben.
+    rechts = _vorgabe("right")
+    assert [m for m in rechts if m in wachsend], (
+        "die rechte Vorgabe traegt kein wachsendes Modul - dann sagt "
+        "dieser Test ueber sie nichts:\n" + ", ".join(rechts))
+    assert [m for m in rechts if m in fest], (
+        "die rechte Vorgabe traegt kein festes Klickziel - dann sagt "
+        "dieser Test ueber sie nichts:\n" + ", ".join(rechts))
+
+    # DIE EINE LUECKE DIESER EINTEILUNG, MIT NAMEN.
+    #
+    # hyprland/window traegt einen Fenstertitel und ist damit von
+    # derselben Sorte wie custom/media - seine Obergrenze steht aber in
+    # windowModule() und nicht im `case`-Zweig, also findet die
+    # Einteilung es nicht. Es ist nicht ausgeliefert (siehe
+    # _bar_optional in src/style_definition.py), die Luecke trifft also
+    # heute nichts. Diese Zeile faellt an dem Tag, an dem jemand es
+    # aufstellt - und dann gehoert die Einteilung erweitert und nicht
+    # diese Zeile gestrichen.
+    for seite in sorted(_SEITEN):
+        assert "hyprland/window" not in _vorgabe(seite), (
+            "hyprland/window steht in der Vorgabe, und die Einteilung "
+            "oben erkennt es nicht als wachsend - seine Obergrenze steht "
+            "in windowModule() statt im `case`-Zweig")
+
+
+def test_der_waechter_faende_die_ablage_an_ihrem_alten_platz():
+    """Der Waechter gegen die Reihenfolge von gestern gehalten.
+
+    Bis zum 20.08.2026 stand `tray` zwischen dem Akku und
+    custom/privacy, also RECHTS von custom/disk. Ein Waechter, der das
+    durchgehen liesse, haette den Umbau des Tages nicht gehalten,
+    sondern nur begleitet.
+    """
+    zweige = _modulzweige()
+    fest = _feste_klickziele(zweige)
+    wachsend = _wachsende(zweige, _skriptvorlagen())
+
+    vorher = ["custom/media", "custom/disk", "network", "bluetooth",
+              "pulseaudio", "pulseaudio#microphone", "battery", "tray",
+              "custom/privacy", "custom/updates", "custom/theme",
+              "custom/system"]
+    verstoesse = _verschobene_klickziele(vorher, wachsend, fest, "right")
+    assert verstoesse, (
+        "der Waechter findet an der Reihenfolge vom 19.08.2026 nichts - "
+        "dann findet er auch nichts, wenn sie jemand wiederherstellt:\n"
+        + ", ".join(vorher))
+    # Namentlich, und nicht als Anzahl: "es hat etwas gefunden" waere
+    # auch mit einem ganz anderen Fund erfuellt.
+    assert any("tray" in treffer and "custom/disk" in treffer
+               for treffer in verstoesse), (
+        "der Waechter meldet etwas, aber nicht die Ablage vor "
+        "custom/disk - und genau das war der Fund:\n  "
+        + "\n  ".join(verstoesse))
+
+    # Und an der HEUTIGEN Reihenfolge findet derselbe Aufruf nichts.
+    assert _verschobene_klickziele(_vorgabe("right"), wachsend, fest,
+                                   "right") == []
