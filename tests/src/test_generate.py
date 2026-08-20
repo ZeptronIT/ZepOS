@@ -40,6 +40,7 @@ WHAT IS NOT
 """
 import ast
 import errno
+import hashlib
 import json
 import os
 import re
@@ -1479,3 +1480,614 @@ def test_no_bar_is_started_when_there_is_no_screen_to_draw_on(run_generator):
     assert result.returncode == 0, output
     assert _executed(result) == [], (
         "a bar was started with no display server:\n" + output)
+
+
+# --------------------------------------------------------------------
+# was sich nicht geaendert hat, wird nicht neu erzeugt (Aufgabe 39)
+# --------------------------------------------------------------------
+#
+# GEMESSEN AM 20.08.2026, bevor eine Zeile geaendert wurde: ein voller
+# --all-Lauf dauert 7,8 s, davon 5055 ms fuer die 94 Erzeugungen. Die
+# Verteilung ueber die Ziele ist FLACH - Median 48 ms, min 45, max 131;
+# 80 % der Zeit stecken in 73 der 94 Ziele. Es gibt also nichts zu
+# beschleunigen, nur etwas wegzulassen. Teuer ist an einem Ziel fast nur
+# der Python-Prozess: `import style_definition` allein kostet 36 ms.
+#
+# WAS DIESE TESTS BEWACHEN, ist aber nicht die Geschwindigkeit, sondern
+# ihr Preis. Ein faelschlich uebersprungenes Ziel gibt dem Nutzer eine
+# alte Konfiguration OHNE Fehlermeldung - der schlimmste denkbare
+# Rueckschritt fuer jemanden, der gerade zwei Tage damit verloren hat,
+# dass Aenderungen ihn nicht erreichen. Deshalb prueft jeder Test unten
+# eine Art, auf die eine Aenderung ankommen muss, und nicht eine Art,
+# auf die eine Erzeugung ausbleiben darf.
+
+
+def _outcomes(result) -> dict[str, str]:
+    """Was der Lauf ueber jedes Ziel gemeldet hat: Name -> Ausgang.
+
+    Aus den Fortschrittszeilen, die generate_all_configs() fuer
+    src/update.py schreibt - dieselbe Quelle, aus der die Anzeige beim
+    Aktualisieren gespeist wird. Damit pruefen diese Tests nebenbei, dass
+    es die Zeilen ueberhaupt gibt und dass sie parsbar bleiben.
+    """
+    found = {}
+    for line in (result.stdout or "").splitlines():
+        match = re.fullmatch(
+            r"zepos-generate: (\d+)/(\d+) (generated|unchanged|failed) (.+)", line)
+        if match:
+            found[match.group(4)] = match.group(3)
+    return found
+
+
+def _skip_test_root(tmp_path: Path) -> Path:
+    """Ein Systemwurzelverzeichnis mit zwei Vorlagen, wie oben.
+
+    Beide erzeugen eine Datei ohne Nachbearbeitung und ohne
+    Sitzungsbefehl, damit die Tests unten ueber das Ueberspringen
+    sprechen und ueber nichts sonst.
+    """
+    return _two_template_system_root(tmp_path, {
+        "kitty-config": "font_size 12\n",
+        "ncspot-config": "[theme]\nbackground = \"black\"\n",
+    })
+
+
+@pytest.mark.allow_subprocess
+def test_a_second_run_generates_nothing_when_nothing_changed(
+        run_generator, tmp_path):
+    """Der Anmeldefall: nichts hat sich bewegt, also gibt es nichts zu tun.
+
+    Das ist die ganze Aufgabe - src/bin/zepos-session ruft --all vor dem
+    Compositor, und der Nutzer wartet auf jedes Ziel.
+    """
+    system = _skip_test_root(tmp_path)
+
+    first = run_generator("--all", system_root=system)
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert _outcomes(first) == {"kitty-config": "generated",
+                                "ncspot-config": "generated"}
+
+    second = run_generator("--all", system_root=system)
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert _outcomes(second) == {"kitty-config": "unchanged",
+                                 "ncspot-config": "unchanged"}
+    assert (run_generator.home / ".config" / "kitty" / "kitty.conf").read_text() == (
+        "font_size 12\n"), "die Datei ist beim Ueberspringen verschwunden"
+
+
+@pytest.mark.allow_subprocess
+def test_a_changed_template_is_generated_and_its_neighbour_is_not(
+        run_generator, tmp_path):
+    """Der Fall des Menschen, der gerade eine Vorlage bearbeitet hat.
+
+    Sein Ziel muss ankommen, ohne dass er etwas dazusagen muss - und die
+    93 anderen duerfen nicht mitlaufen.
+    """
+    system = _skip_test_root(tmp_path)
+    assert run_generator("--all", system_root=system).returncode == 0
+
+    (system / "templates" / "kitty-config.template").write_text("font_size 20\n")
+
+    result = run_generator("--all", system_root=system)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _outcomes(result) == {"kitty-config": "generated",
+                                 "ncspot-config": "unchanged"}
+    assert (run_generator.home / ".config" / "kitty" / "kitty.conf").read_text() == (
+        "font_size 20\n"), "die Aenderung an der Vorlage ist nicht angekommen"
+
+
+@pytest.mark.allow_subprocess
+def test_a_changed_ssot_module_regenerates_everything_it_touches(
+        run_generator, tmp_path):
+    """Der Fall nach einer Aktualisierung, und der gefaehrlichste.
+
+    src/update.py ruft --all, nachdem sich die Quellen bewegt haben. Eine
+    einzige geaenderte SSOT-Datei kann JEDEN {{STYLE_*}}-Wert verschieben,
+    ohne dass sich eine einzige Vorlage bewegt haette. Wuerde das nicht
+    zu einem vollstaendigen Neuerzeugen fuehren, waere die Aktualisierung
+    still wirkungslos.
+
+    Geprueft an brand.py, weil es kein Modul ist, das der
+    Template-Prozessor direkt importiert - style_definition zieht es
+    ueber theme nach. Genau deshalb wird nicht aufgezaehlt, welche
+    Module zaehlen, sondern JEDES .py der Wurzel gehasht.
+    """
+    system = _skip_test_root(tmp_path)
+    assert run_generator("--all", system_root=system).returncode == 0
+
+    module = system / "brand.py"
+    module.write_text(module.read_text() + "\n# eine Aenderung\n")
+
+    result = run_generator("--all", system_root=system)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _outcomes(result) == {"kitty-config": "generated",
+                                 "ncspot-config": "generated"}
+
+
+@pytest.mark.allow_subprocess
+def test_a_changed_theme_regenerates_everything(run_generator, tmp_path):
+    """Der Fund dieser Aufgabe: eine Eingabe, die in keinem der beiden
+    Wurzelverzeichnisse liegt.
+
+    theme.read_name() liest ${ZEPOS_MACHINE_ROOT:-/etc/zepos}/theme, und
+    ihr Inhalt bestimmt die Palette und damit fast jeden
+    {{STYLE_*}}-Wert. Gemessen an bar-style.template: dieselbe Vorlage
+    ergibt #DCEEF4 unter "zeptronit" und #071115 unter "tageslicht".
+
+    Ein Merkzettel, der nur Vorlagen und Wurzelverzeichnisse kennt, wuerde
+    einen Themenwechsel schweigend verschlucken. Beide Richtungen werden
+    geprueft: die Datei ANLEGEN ist genauso eine Aenderung wie sie
+    umschreiben - deshalb ist "es gibt sie nicht" im Fingerabdruck ein
+    eigener Wert und nicht die Abwesenheit eines Wertes.
+    """
+    system = _skip_test_root(tmp_path)
+    machine = tmp_path / "machine"
+    machine.mkdir()
+    environment = {"ZEPOS_MACHINE_ROOT": str(machine)}
+
+    assert run_generator("--all", system_root=system,
+                         extra_environment=environment).returncode == 0
+    assert set(_outcomes(run_generator(
+        "--all", system_root=system,
+        extra_environment=environment)).values()) == {"unchanged"}
+
+    # Anlegen.
+    (machine / "theme").write_text("tageslicht\n")
+    created = run_generator("--all", system_root=system,
+                            extra_environment=environment)
+    assert created.returncode == 0, created.stdout + created.stderr
+    assert set(_outcomes(created).values()) == {"generated"}, (
+        "ein neu gesetztes Thema ist nicht angekommen")
+
+    # Umschreiben.
+    (machine / "theme").write_text("zeptronit\n")
+    switched = run_generator("--all", system_root=system,
+                             extra_environment=environment)
+    assert switched.returncode == 0, switched.stdout + switched.stderr
+    assert set(_outcomes(switched).values()) == {"generated"}, (
+        "ein Themenwechsel ist nicht angekommen")
+
+
+@pytest.mark.allow_subprocess
+def test_changed_user_settings_regenerate_everything(run_generator, tmp_path):
+    """Die vierte Eingabe: was der Nutzer eingestellt hat.
+
+    Jeder {{STYLE_*}}-Wert kommt aus dieser Datei; sie hat denselben
+    Rang wie die SSOT-Module und liegt in einem anderen Verzeichnis.
+    """
+    system = _skip_test_root(tmp_path)
+    user_root = run_generator.home / ".config" / "zepos"
+    user_root.mkdir(parents=True, exist_ok=True)
+
+    assert run_generator("--all", system_root=system).returncode == 0
+
+    (user_root / "user-settings.json").write_text('{"schema_version": 1}\n')
+
+    result = run_generator("--all", system_root=system)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert set(_outcomes(result).values()) == {"generated"}
+
+
+@pytest.mark.allow_subprocess
+def test_a_user_template_that_beats_the_packaged_one_is_generated(
+        run_generator, tmp_path):
+    """Eine Vorlage, die nur im Nutzerwurzelverzeichnis dazukommt.
+
+    Gleicher Name, anderer Pfad, anderer Inhalt - und find_template gibt
+    ihr den Vorrang. Der Merkzettel haelt deshalb nicht nur den Hash der
+    Vorlage fest, sondern auch, WELCHE Datei es war.
+    """
+    system = _skip_test_root(tmp_path)
+    assert run_generator("--all", system_root=system).returncode == 0
+
+    user_root = run_generator.home / ".config" / "zepos"
+    (user_root / "templates").mkdir(parents=True, exist_ok=True)
+    (user_root / "templates" / "kitty-config.template").write_text(
+        "font_size 44\n")
+
+    result = run_generator("--all", system_root=system)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _outcomes(result)["kitty-config"] == "generated"
+    assert (run_generator.home / ".config" / "kitty" / "kitty.conf").read_text() == (
+        "font_size 44\n")
+
+
+@pytest.mark.allow_subprocess
+def test_the_force_switch_generates_every_target(run_generator, tmp_path):
+    """Der Notausgang.
+
+    Er ist der Schalter und nicht die Vorgabe, weil bei allen drei Rufern
+    - zepos-session, update.py, ein Mensch an einer Vorlage - die
+    Inhaltspruefung von sich aus richtig entscheidet. Er steht trotzdem
+    da, weil "sieht komisch aus" mit EINEM Befehl ausraeumbar sein muss,
+    ohne dass jemand einen Zwischenspeicher suchen gehen muss.
+    """
+    system = _skip_test_root(tmp_path)
+    assert run_generator("--all", system_root=system).returncode == 0
+    assert set(_outcomes(run_generator(
+        "--all", system_root=system)).values()) == {"unchanged"}
+
+    forced = run_generator("--force", "--all", system_root=system)
+    assert forced.returncode == 0, forced.stdout + forced.stderr
+    assert set(_outcomes(forced).values()) == {"generated"}, (
+        "--force hat trotzdem uebersprungen")
+
+    # Auch in der anderen Reihenfolge, weil beide getippt werden.
+    behind = run_generator("--all", "--force", system_root=system)
+    assert behind.returncode == 0, behind.stdout + behind.stderr
+    assert set(_outcomes(behind).values()) == {"generated"}
+
+
+@pytest.mark.allow_subprocess
+def test_a_generated_file_that_was_deleted_comes_back(run_generator, tmp_path):
+    """Der Merkzettel spricht ueber die PLATTE, nicht ueber die
+    Vergangenheit.
+
+    Alle Eingaben unveraendert - trotzdem muss erzeugt werden, weil die
+    Datei nicht mehr da ist. Ein Merkzettel, der nur Eingaben
+    vergleicht, wuerde hier "unveraendert" sagen und eine Datei fehlen
+    lassen, die vorher da war.
+    """
+    system = _skip_test_root(tmp_path)
+    assert run_generator("--all", system_root=system).returncode == 0
+
+    written = run_generator.home / ".config" / "kitty" / "kitty.conf"
+    written.unlink()
+
+    result = run_generator("--all", system_root=system)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _outcomes(result)["kitty-config"] == "generated"
+    assert written.read_text() == "font_size 12\n"
+
+
+@pytest.mark.allow_subprocess
+def test_a_generated_file_that_was_edited_by_hand_is_restored(
+        run_generator, tmp_path):
+    """Dieselbe Bedingung, die andere Haelfte.
+
+    Jede erzeugte Datei traegt "DO NOT EDIT DIRECTLY" im Kopf. Wer es
+    trotzdem tut, bekommt seine Aenderung beim naechsten Lauf
+    ueberschrieben - das war vorher so und muss so bleiben, sonst ist
+    das Ueberspringen ein Weg, eine Handaenderung dauerhaft zu machen.
+    """
+    system = _skip_test_root(tmp_path)
+    assert run_generator("--all", system_root=system).returncode == 0
+
+    written = run_generator.home / ".config" / "kitty" / "kitty.conf"
+    written.write_text("font_size 99\n")
+
+    result = run_generator("--all", system_root=system)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _outcomes(result)["kitty-config"] == "generated"
+    assert written.read_text() == "font_size 12\n"
+
+
+@pytest.mark.allow_subprocess
+def test_a_generated_script_that_lost_its_executable_bit_is_generated_again(
+        run_generator, tmp_path):
+    """Ein Skript ohne x-Bit ist eine Datei, die niemand ausfuehrt, und
+    der Inhalt sagt darueber nichts.
+
+    Deshalb steht im Merkzettel eine sechste Zeile, und deshalb prueft
+    das Ueberspringen sie.
+    """
+    system = _two_template_system_root(tmp_path, {
+        "bar-weather-config": "#!/bin/bash\necho ok\n",
+    })
+    assert run_generator("--all", system_root=system).returncode == 0
+
+    written = (run_generator.home / ".config" / "ags" / "scripts"
+               / "weather.sh")
+    assert os.access(written, os.X_OK)
+    written.chmod(0o644)
+
+    result = run_generator("--all", system_root=system)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _outcomes(result)["bar-weather-config"] == "generated"
+    assert os.access(written, os.X_OK), "das x-Bit ist nicht zurueckgekommen"
+
+
+@pytest.mark.allow_subprocess
+def test_a_run_that_published_nothing_does_not_let_the_next_one_skip(
+        run_generator, tmp_path):
+    """Die Selbstkorrektur, und der Grund, warum der Merkzettel VOR dem
+    Veroeffentlichen geschrieben werden darf.
+
+    Ein --all-Lauf, bei dem EIN Ziel scheitert, veroeffentlicht NICHTS -
+    obwohl die geglueckten Ziele ihren Merkzettel mit dem neuen Hash
+    schon geschrieben haben. Auf der Platte liegt weiterhin die alte
+    Datei. Der naechste Lauf muss das merken.
+
+    Ohne diesen Test waere die Reihenfolge im Generator eine Behauptung.
+    Gemessen: ohne die Bedingung, die die AUSGABE prueft, bleibt kitty.conf
+    hier auf "font_size 12" stehen und niemand erfaehrt es.
+    """
+    system = _two_template_system_root(tmp_path, {
+        "kitty-config": "font_size 12\n",
+        "bar-weather-config": "#!/bin/bash\necho ok\n",
+    })
+    assert run_generator("--all", system_root=system).returncode == 0
+    written = run_generator.home / ".config" / "kitty" / "kitty.conf"
+    assert written.read_text() == "font_size 12\n"
+
+    # Eine echte Aenderung, und daneben ein Ziel, das den Lauf umwirft.
+    (system / "templates" / "kitty-config.template").write_text("font_size 20\n")
+    (system / "templates" / "bar-weather-config.template").write_text(
+        "#!/bin/bash\nif [ -z ; then\n")
+
+    failed = run_generator("--all", system_root=system)
+    assert failed.returncode != 0, failed.stdout + failed.stderr
+    assert written.read_text() == "font_size 12\n", (
+        "ein gescheiterter Lauf hat trotzdem veroeffentlicht")
+
+    # Repariert - und jetzt muss kitty-config neu erzeugt werden, obwohl
+    # sein Merkzettel schon den neuen Hash traegt.
+    (system / "templates" / "bar-weather-config.template").write_text(
+        "#!/bin/bash\necho ok\n")
+
+    healed = run_generator("--all", system_root=system)
+    assert healed.returncode == 0, healed.stdout + healed.stderr
+    assert _outcomes(healed)["kitty-config"] == "generated", (
+        "der Merkzettel eines nie veroeffentlichten Laufs wurde geglaubt")
+    assert written.read_text() == "font_size 20\n", (
+        "die Aenderung ist nach dem reparierten Lauf immer noch nicht da")
+
+
+@pytest.mark.allow_subprocess
+def test_the_progress_lines_count_every_target(run_generator, tmp_path):
+    """Die Tatsachen, aus denen src/update.py seine Anzeige baut.
+
+    Eine Zeile beim Anfangen und eine beim Fertigwerden, beide mit
+    laufender Nummer und Gesamtzahl, ohne Farbcodes, mit dem Namen am
+    Ende. Ohne sie kann der Aktualisierer nur eine drehende Scheibe
+    zeigen.
+    """
+    system = _skip_test_root(tmp_path)
+    result = run_generator("--all", system_root=system)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    lines = [line for line in result.stdout.splitlines()
+             if line.startswith("zepos-generate: ")]
+
+    # Eine start-Zeile je Ziel, ohne Zahl: mit mehreren gleichzeitig
+    # laufenden Zielen waere eine Zahl darin eine Reihenfolge, die es
+    # nicht gibt.
+    starts = sorted(line for line in lines if line.startswith("zepos-generate: start "))
+    assert starts == ["zepos-generate: start kitty-config",
+                      "zepos-generate: start ncspot-config"], lines
+
+    # Die Zahl auf den Ergebniszeilen ist die laufende Nummer der
+    # FERTIGEN Ziele - monoton, von 1 bis zur Gesamtzahl. Genau das
+    # braucht ein Fortschrittsbalken, und nur das ist unter
+    # Nebenlaeufigkeit noch wahr.
+    numbered = [re.fullmatch(
+        r"zepos-generate: (\d+)/2 (?:generated|unchanged|failed) (\S+)", line)
+        for line in lines
+        if not line.startswith(("zepos-generate: start ", "zepos-generate: done "))]
+    assert all(numbered), lines
+    assert [int(m.group(1)) for m in numbered] == [1, 2], lines
+
+    assert any(re.fullmatch(
+        r"zepos-generate: done 2 total, 2 generated, 0 unchanged, 0 failed",
+        line) for line in lines), lines
+
+
+def test_the_targets_that_ask_the_machine_are_never_skipped():
+    """ALWAYS_GENERATE, abgeleitet statt geglaubt.
+
+    Zwei Ziele bekommen nach dem Platzhalter-Ersetzen einen zweiten
+    Schritt, der die MASCHINE befragt statt eine Datei zu lesen:
+    plugins.py sucht .so-Dateien in /usr/lib/hyprland/plugins, apps.py
+    liest packaging/*/PKGBUILD und sucht *.desktop-Dateien. Ein neu
+    installiertes Plugin oder eine deinstallierte Anwendung veraendert
+    ihre Ausgabe, ohne dass sich eine Vorlage oder ein Hash bewegt
+    haette - sie duerfen also nie uebersprungen werden.
+
+    Aus der Quelle gelesen, damit ein DRITTER solcher Schritt ein roter
+    Test ist und keine Entdeckung: wer ihn einbaut und die Liste
+    vergisst, baut eine Konfiguration, die still veraltet.
+    """
+    text = (SRC / "generate_config.sh").read_text(encoding="utf-8")
+
+    listed = re.search(r'^ALWAYS_GENERATE="([^"]*)"', text, re.MULTILINE)
+    assert listed, "ALWAYS_GENERATE steht nicht mehr im Generator"
+    never_skipped = set(listed.group(1).split())
+
+    # Die Verzweigungen, die einen Nachbearbeitungsschritt auf die
+    # erzeugte Datei loslassen. Kommentare vorher weg, damit die
+    # Erklaerung ueber einen Schritt nicht als Schritt zaehlt.
+    without_prose = _SHELL_COMMENT.sub(" ", text)
+    post_processed = set(re.findall(
+        r'\[\s*"\$CONFIG_NAME"\s*=\s*"([^"]+)"\s*\]', without_prose))
+
+    assert post_processed, (
+        "keine einzige Nachbearbeitung gefunden - die Suche liest den "
+        "Generator nicht, ihr Ergebnis bedeutet also nichts")
+    assert post_processed <= never_skipped, (
+        "diese Ziele fragen nach dem Erzeugen die Maschine und stehen "
+        "trotzdem nicht in ALWAYS_GENERATE, koennten also mit einer "
+        "veralteten Antwort uebersprungen werden: "
+        + ", ".join(sorted(post_processed - never_skipped)))
+
+
+# --------------------------------------------------------------------
+# mehrere Ziele gleichzeitig (Aufgabe 39, Nachtrag)
+# --------------------------------------------------------------------
+#
+# GEMESSEN an 94 echten Kindaufrufen, bevor eine Zeile geschrieben wurde:
+# 1 gleichzeitig 5182 ms, 2 -> 2738, 4 -> 1642, 8 -> 1020, 12 -> 907,
+# 14 -> 910. Die Verteilung ueber die Ziele ist flach und jedes Ziel ist
+# ein eigener, rechenlastiger Prozess - der Idealfall.
+#
+# WAS DIESE TESTS BEWACHEN ist nicht die Geschwindigkeit, sondern die
+# eine Art, auf die Nebenlaeufigkeit hier schiefgehen KANN: zwei Ziele,
+# die um dieselbe Datei rennen. Ein Generator, der bei jedem Lauf ein
+# anderes Ergebnis liefert, waere weit schlimmer als ein langsamer.
+
+
+def _human_blocks_are_attributable(result) -> list[tuple[str, str]]:
+    """Jede "→ Processing: X"-Zeile bis zu ihrem Ergebnis, ohne dass eine
+    zweite dazwischenfaellt.
+
+    Das ist die Zusicherung, die src/update.py braucht und die acht
+    gleichzeitig auf dieselbe Leitung schreibende Kinder von sich aus
+    NICHT geben: der Generator sammelt die Ausgabe jedes Kindes in einer
+    eigenen Datei und gibt sie am Stueck aus. Antwortet die Liste der
+    Stellen, an denen das misslungen ist.
+    """
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout or "")
+    interleaved = []
+    open_block = None
+    for line in plain.splitlines():
+        if line.startswith("→ Processing:"):
+            if open_block is not None:
+                interleaved.append((open_block, line))
+            open_block = line
+        elif line.strip().startswith(("✓ Success", "✗ Failed", "✓ Unchanged")):
+            open_block = None
+    return interleaved
+
+
+def _published_tree(home: Path) -> dict[str, str]:
+    """Jede erzeugte Datei mit ihrem Inhalt, ohne den Zwischenspeicher."""
+    found = {}
+    for path in sorted(home.rglob("*")):
+        if path.is_file() and ".cache" not in path.relative_to(home).parts:
+            found[str(path.relative_to(home))] = hashlib.sha256(
+                path.read_bytes()).hexdigest()
+    return found
+
+
+@pytest.mark.allow_subprocess
+def test_several_targets_at_once_produce_exactly_the_serial_result(
+        run_generator, tmp_path):
+    """Die Zusicherung, an der alles haengt.
+
+    Vier Vorlagen, einmal streng nacheinander und einmal zu viert
+    gleichzeitig - und zwar in DASSELBE Ausgabeverzeichnis, weil zwei
+    verschiedene Verzeichnisse sich schon durch die eingesetzten Pfade
+    unterscheiden wuerden und der Vergleich dann nichts hiesse.
+
+    Mehrfach wiederholt: ein Wettlauf, der einmal gutgeht, beweist
+    nichts.
+    """
+    system = _two_template_system_root(tmp_path, {
+        "kitty-config": "font_size 12\n",
+        "ncspot-config": "[theme]\nbackground = \"black\"\n",
+        "mako-config": "font=Sans 10\n",
+        "bar-weather-config": "#!/bin/bash\necho ok\n",
+    })
+
+    serial = run_generator("--all", system_root=system,
+                           extra_environment={"ZEPOS_JOBS": "1"})
+    assert serial.returncode == 0, serial.stdout + serial.stderr
+    reference = _published_tree(run_generator.home)
+    assert len(reference) >= 4, reference
+
+    for round_number in range(4):
+        # Neu erzeugen erzwingen, sonst misst der zweite Lauf nur das
+        # Ueberspringen und ueber die Nebenlaeufigkeit ist nichts gesagt.
+        result = run_generator("--force", "--all", system_root=system,
+                               extra_environment={"ZEPOS_JOBS": "4"})
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert set(_outcomes(result).values()) == {"generated"}
+        assert _published_tree(run_generator.home) == reference, (
+            f"Durchgang {round_number}: nebenlaeufig kam etwas anderes heraus "
+            "als nacheinander")
+
+
+@pytest.mark.allow_subprocess
+def test_several_targets_at_once_keep_the_output_attributable(
+        run_generator, tmp_path):
+    """Die zweite Sorte Schaden, und sie ist still.
+
+    Acht Kinder, die gleichzeitig auf dieselbe Leitung schreiben,
+    verschraenken ihre Zeilen. Ein Mensch kann die Ausgabe dann keinem
+    Ziel mehr zuordnen, und die Fortschrittsanzeige, die src/update.py
+    daraus baut, zaehlt Zeilen, die zu niemandem gehoeren.
+    """
+    system = _two_template_system_root(tmp_path, {
+        "kitty-config": "font_size 12\n",
+        "ncspot-config": "[theme]\nbackground = \"black\"\n",
+        "mako-config": "font=Sans 10\n",
+        "bar-weather-config": "#!/bin/bash\necho ok\n",
+    })
+
+    result = run_generator("--all", system_root=system,
+                           extra_environment={"ZEPOS_JOBS": "4"})
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    assert _human_blocks_are_attributable(result) == [], (
+        "die Ausgabe zweier Ziele ist ineinandergelaufen:\n" + result.stdout)
+
+
+@pytest.mark.allow_subprocess
+def test_one_broken_target_still_stops_a_parallel_run(run_generator, tmp_path):
+    """Ein Lauf ist auch nebenlaeufig ganz oder gar nicht.
+
+    Das Ziel, das scheitert, laeuft in derselben Welle wie die, die
+    gelingen - es darf trotzdem nichts veroeffentlicht werden, und der
+    Fehler muss beim richtigen Namen stehen.
+    """
+    system = _two_template_system_root(tmp_path, {
+        "kitty-config": "font_size 12\n",
+        "ncspot-config": "[theme]\n{{ICON_GIBT_ES_NICHT}}\n",
+        "mako-config": "font=Sans 10\n",
+        "bar-weather-config": "#!/bin/bash\necho ok\n",
+    })
+    kitty = run_generator.home / ".config" / "kitty"
+    kitty.mkdir(parents=True)
+    (kitty / "kitty.conf").write_text("die alte Fassung\n")
+
+    result = run_generator("--all", system_root=system,
+                           extra_environment={"ZEPOS_JOBS": "4"})
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert _outcomes(result)["ncspot-config"] == "failed", output
+    assert _outcomes(result)["kitty-config"] == "generated", output
+    assert (kitty / "kitty.conf").read_text() == "die alte Fassung\n", (
+        "ein nebenlaeufiger Lauf hat trotz eines Fehlers veroeffentlicht")
+    assert "ICON_GIBT_ES_NICHT" in output, (
+        "die Meldung des gescheiterten Kindes ist unterwegs verlorengegangen")
+
+
+@pytest.mark.allow_subprocess
+def test_one_target_at_a_time_still_works(run_generator, tmp_path):
+    """ZEPOS_JOBS=1 - der Rueckweg auf streng nacheinander.
+
+    Er ist derselbe Code-Pfad mit einer Welle der Breite eins, damit es
+    nicht zwei Bauweisen gibt, von denen nur eine geprueft wird. Dass er
+    trotzdem eine eigene Zusicherung bekommt, liegt daran, dass er die
+    Vorgabe ist, wenn `nproc` fehlt.
+    """
+    system = _skip_test_root(tmp_path)
+
+    result = run_generator("--all", system_root=system,
+                           extra_environment={"ZEPOS_JOBS": "1"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert set(_outcomes(result).values()) == {"generated"}
+    assert (run_generator.home / ".config" / "kitty" / "kitty.conf").read_text() == (
+        "font_size 12\n")
+    assert _human_blocks_are_attributable(result) == []
+
+
+@pytest.mark.allow_subprocess
+def test_a_nonsense_job_count_falls_back_to_one_at_a_time(
+        run_generator, tmp_path):
+    """Was bei einem unbrauchbaren ZEPOS_JOBS passieren muss.
+
+    `while [ "${#wave_pids[@]}" -lt "$jobs" ]` mit einem $jobs, das keine
+    Zahl ist, ist ein Vergleichsfehler in jeder Runde - und eine Welle,
+    die nie ein Kind anschiebt, ist eine Endlosschleife. Deshalb wird der
+    Wert geprueft und im Zweifel auf 1 gesetzt.
+    """
+    system = _skip_test_root(tmp_path)
+
+    for value in ("0", "-3", "acht", ""):
+        result = run_generator("--force", "--all", system_root=system,
+                               extra_environment={"ZEPOS_JOBS": value})
+        assert result.returncode == 0, (
+            f"ZEPOS_JOBS={value!r}: " + result.stdout + result.stderr)
+        assert set(_outcomes(result).values()) == {"generated"}, (
+            f"ZEPOS_JOBS={value!r} hat nicht alles erzeugt")

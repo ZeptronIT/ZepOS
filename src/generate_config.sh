@@ -95,6 +95,275 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # =========================================
+# UEBERSPRINGEN (20.08.2026, Aufgabe 39)
+# =========================================
+#
+# WARUM UEBERHAUPT
+#     Gemessen am 20.08.2026: ein voller --all-Lauf braucht 7,8 s, davon
+#     5055 ms fuer die 94 Erzeugungen. Die Verteilung ueber die Ziele ist
+#     FLACH - Median 48 ms, Minimum 45 ms, Maximum 131 ms; 80 % der Zeit
+#     stecken in 73 der 94 Ziele. Es gibt also keine drei Ziele zu
+#     beschleunigen, es gibt nur 94 gleich teure wegzulassen.
+#
+#     Teuer ist an einem Ziel fast nur der Python-Prozess: `import
+#     style_definition` allein kostet 36 ms von 48, weil es sizes.py
+#     (92 KB), brand.py (45 KB), theme.py, audio, clocks, monitors und
+#     vpn nachzieht - 94 Mal von vorn. Die Bash-Huelle darum kostet 2 ms.
+#     Genau deshalb wird die Entscheidung "ueberspringen?" HIER in der
+#     Shell getroffen und nicht in Python: eine Entscheidung, die den
+#     Interpreter startet, hat schon verloren.
+#
+# DIE GEFAHR, UND SIE IST GROESSER ALS DER GEWINN
+#     Ein faelschlich uebersprungenes Ziel gibt dem Nutzer eine ALTE
+#     Konfiguration, ohne eine einzige Fehlermeldung. Deshalb entscheidet
+#     hier nichts anhand von Zeitstempeln - eine Paketinstallation setzt
+#     beliebige mtimes, und ein `git`-Wechsel setzt sie zurueck; ein
+#     aelterer Zeitstempel auf neuem Inhalt waere ein stilles Nein.
+#     Entschieden wird ausschliesslich ueber INHALTE (sha256), und die
+#     letzte Bedingung prueft nicht die Eingaben, sondern die AUSGABE,
+#     die tatsaechlich auf der Platte liegt.
+#
+# WAS DIE EINGABEN EINES ZIELS SIND - gemessen, nicht geraten
+#     Unter einem sys.addaudithook mitgeschrieben, welche Dateien eine
+#     Erzeugung oeffnet (siehe aufgabe-39-report.md, Abschnitt 2):
+#
+#       * die Vorlage selbst - und WELCHE es ist, denn eine Vorlage im
+#         Nutzerwurzelverzeichnis schlaegt die ausgelieferte;
+#       * jedes .py im Systemwurzelverzeichnis. Nicht die elf, die heute
+#         geladen werden, sondern ALLE: eine Aufzaehlung waere die Stelle,
+#         an der ein neuer Import irgendwann vergessen wird, und ein
+#         vergessener Einfluss ist genau der stille Fehler von oben. Alle
+#         zu hashen kostet einmal je Lauf rund 5 ms.
+#       * generate_config.sh selbst - hier stehen die Ziel-PFADE;
+#       * $ZEPOS_USER_ROOT/user-settings.json - die Nutzereinstellungen;
+#       * ${ZEPOS_MACHINE_ROOT:-/etc/zepos}/theme - der Name des Themas.
+#         DER FUND DIESER AUFGABE: theme.read_name() liest die Datei,
+#         ihr Inhalt bestimmt die Palette und damit fast jeden
+#         {{STYLE_*}}-Wert. Nachgewiesen an bar-style.template, dieselbe
+#         Vorlage, zwei Themen: #DCEEF4 gegen #071115. Eine Datei
+#         ausserhalb des Repos und ausserhalb von ~/.config, die kein
+#         Zeitstempel einer Vorlage je verraten haette.
+#       * die Wurzeln SELBST als Zeichenketten: {{ZEPOS_SYSTEM_ROOT}}
+#         wird in die Ausgabe eingesetzt, und HOME/XDG_CONFIG_HOME
+#         entscheiden, WOHIN geschrieben wird.
+#
+#     Nachgemessen ist auch die Voraussetzung dafuer, dass das ueberhaupt
+#     etwas heissen darf: die Erzeugung ist deterministisch. Zweimal
+#     dieselbe Vorlage, gleiche Umgebung, `cmp` sagt identisch.
+#
+# WAS NIE UEBERSPRUNGEN WIRD
+#     Zwei Ziele haengen an Maschinenzustand, den keine Datei mit einem
+#     Hash festhaelt - siehe ALWAYS_GENERATE unten.
+
+# Alles, was einen Lauf als Ganzes bestimmt, zu EINEM Hash.
+#
+# Einmal je Lauf berechnet und an die Kinder vererbt: 94 Kinder, die
+# jeweils 600 KB Python neu hashen, waeren 94 x 5 ms - also genau der
+# Aufwand zurueck, den das Ueberspringen einspart.
+#
+# Eine FEHLENDE Datei ist ein eigener, stabiler Wert und nicht "nichts":
+# sonst waere das Anlegen von /etc/zepos/theme oder der
+# Einstellungsdatei eine Aenderung, die den Fingerabdruck nicht bewegt.
+zepos_fingerprint() {
+    local machine_root="${ZEPOS_MACHINE_ROOT:-/etc/zepos}"
+    local extra path
+    {
+        # Die Wurzeln als Text. Sie stehen im Ergebnis (ZEPOS_SYSTEM_ROOT
+        # wird eingesetzt) beziehungsweise bestimmen die Zielpfade.
+        printf 'system=%s\nuser=%s\noutput=%s\nhome=%s\nmachine=%s\n' \
+            "$ZEPOS_SYSTEM_ROOT" "$ZEPOS_USER_ROOT" "$ZEPOS_OUTPUT_ROOT" \
+            "$HOME" "$machine_root"
+
+        # Jedes .py der Wurzel, plus dieses Skript. `sha256sum` bekommt
+        # sie in EINEM Aufruf; die Reihenfolge ist die des Globs und
+        # damit stabil.
+        sha256sum "$ZEPOS_SYSTEM_ROOT"/*.py "$SELF" 2>/dev/null
+
+        # Die drei Dateien, die es geben kann und nicht geben muss.
+        for path in "$ZEPOS_USER_ROOT/user-settings.json" \
+                    "$machine_root/theme"; do
+            if [ -f "$path" ]; then
+                sha256sum "$path" 2>/dev/null
+            else
+                printf 'absent  %s\n' "$path"
+            fi
+        done
+    } | sha256sum | cut -d' ' -f1
+}
+
+# Der Inhalt einer Datei als Hash, oder "absent", wenn es sie nicht gibt.
+zepos_hash_file() {
+    if [ -f "$1" ]; then
+        sha256sum "$1" 2>/dev/null | cut -d' ' -f1
+    else
+        printf 'absent\n'
+    fi
+}
+
+# Ziele, die NIE uebersprungen werden.
+#
+# Beide bekommen nach dem Platzhalter-Ersetzen einen zweiten Schritt, der
+# die MASCHINE befragt statt eine Datei zu lesen - siehe die beiden
+# Bloecke weiter unten, die plugins.py und apps.py aufrufen:
+#
+#   hyprland-plugins-config  plugins.py filter sucht .so-Dateien in
+#                            /usr/lib/hyprland/plugins. Ein neu
+#                            installiertes Plugin veraendert die Ausgabe,
+#                            ohne dass sich eine Vorlage bewegt haette.
+#   ags-dock                 apps.py filter liest packaging/*/PKGBUILD und
+#                            sucht *.desktop-Dateien. Eine deinstallierte
+#                            Anwendung veraendert die Ausgabe genauso
+#                            still.
+#
+# Sie kosten zusammen 179 ms von 5055 - der Preis dafuer, die Frage gar
+# nicht erst stellen zu muessen. tests/src/test_generate.py haelt fest,
+# dass die Liste dieselbe ist wie die der Ziele mit Nachbearbeitung.
+ALWAYS_GENERATE=" hyprland-plugins-config ags-dock "
+
+# Wo die Merkzettel liegen. Neben der Ablage, aus demselben Grund: es ist
+# ein Zwischenspeicher. Wird er geloescht, wird alles neu erzeugt - die
+# sichere Richtung.
+ZEPOS_STAMP_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/zepos/stamps"
+
+# Der Merkzettel eines Ziels: sechs Zeilen in fester Reihenfolge.
+#
+# Feste Reihenfolge und nicht `schluessel=wert`, weil in vier der sechs
+# Zeilen ein PFAD steht und Pfade dieses Projekts Leerzeichen enthalten
+# duerfen - tests/src/test_generate.py haelt einen ganzen Lauf aus einem
+# Verzeichnis mit Leerzeichen im Namen fest.
+#
+#   1 Fingerabdruck des Laufs
+#   2 Pfad der Vorlage, aus der erzeugt wurde
+#   3 sha256 dieser Vorlage
+#   4 Pfad der erzeugten Datei
+#   5 sha256 dessen, was hineingeschrieben wurde
+#   6 true, wenn die Datei ausfuehrbar sein muss
+zepos_write_stamp() {
+    local name="$1" template="$2" output="$3" staged="$4" executable="$5"
+
+    # `mkdir` und `rm` sind eigene Programme, keine Bash-Eingebauten: bei
+    # 94 Zielen ist jeder unnoetige Aufruf rund 1 ms x 94. Deshalb wird
+    # vorher gefragt, statt blind zu rufen.
+    [ -d "$ZEPOS_STAMP_DIR" ] || mkdir -p "$ZEPOS_STAMP_DIR" 2>/dev/null || return 0
+
+    # Erst vollstaendig danebenschreiben, dann an Ort und Stelle
+    # schieben. Ein halb geschriebener Merkzettel waere sonst einer, den
+    # der naechste Lauf einliest: die ersten Zeilen passen, die letzte
+    # fehlt - und was dann verglichen wird, ist Zufall. `mv` ist auf
+    # demselben Dateisystem ein rename(2) und damit unteilbar.
+    local temporary="$ZEPOS_STAMP_DIR/.$name.$$"
+    {
+        printf '%s\n' "$ZEPOS_FINGERPRINT"
+        printf '%s\n' "$template"
+        printf '%s\n' "$(zepos_hash_file "$template")"
+        printf '%s\n' "$output"
+        printf '%s\n' "$(zepos_hash_file "$staged")"
+        printf '%s\n' "$executable"
+    } > "$temporary" 2>/dev/null && mv -f "$temporary" "$ZEPOS_STAMP_DIR/$name" 2>/dev/null
+    [ -e "$temporary" ] && rm -f "$temporary" 2>/dev/null
+    return 0
+}
+
+# Darf dieses Ziel uebersprungen werden? 0 heisst ja.
+#
+# EINE Stelle, an der die Frage beantwortet wird, benutzt von der
+# --all-Schleife (die das Kind dann gar nicht erst startet, was 2 ms je
+# Ziel spart) UND vom einzelnen Lauf. Zwei Kopien dieser Bedingungen
+# waeren zwei Gelegenheiten, verschieden falsch zu liegen.
+#
+# JEDE Bedingung, die nicht mit Sicherheit "unveraendert" sagt, endet in
+# `return 1` - erzeugen. Es gibt hier keinen Zweifelsfall, der zugunsten
+# des Ueberspringens ausgeht: ein fehlender Merkzettel, ein unlesbarer,
+# ein zu kurzer, eine verschwundene Ausgabe, ein Hash, der nicht passt -
+# alles fuehrt zum Erzeugen.
+zepos_can_skip() {
+    local name="$1" template="$2"
+
+    # Der Notausgang.
+    [ "$ZEPOS_FORCE" = true ] && return 1
+
+    # Die beiden, die die Maschine befragen statt eine Datei zu lesen.
+    case "$ALWAYS_GENERATE" in
+        *" $name "*) return 1 ;;
+    esac
+
+    # Ohne Fingerabdruck ist nichts vergleichbar. Kann nur passieren,
+    # wenn sha256sum fehlt - dann wird eben immer erzeugt.
+    [ -n "$ZEPOS_FINGERPRINT" ] || return 1
+
+    [ -n "$template" ] && [ -f "$template" ] || return 1
+
+    local stamp="$ZEPOS_STAMP_DIR/$name"
+    [ -f "$stamp" ] || return 1
+
+    local was_fingerprint was_template was_template_hash
+    local was_output was_output_hash was_executable
+    {
+        IFS= read -r was_fingerprint &&
+        IFS= read -r was_template &&
+        IFS= read -r was_template_hash &&
+        IFS= read -r was_output &&
+        IFS= read -r was_output_hash &&
+        IFS= read -r was_executable
+    } < "$stamp" || return 1
+
+    # Der Lauf als Ganzes: SSOT, dieses Skript, Einstellungen, Thema,
+    # Wurzeln.
+    [ "$was_fingerprint" = "$ZEPOS_FINGERPRINT" ] || return 1
+
+    # Die Vorlage - welche es ist UND was drinsteht. Der Pfad zaehlt mit,
+    # weil eine neu angelegte Vorlage im Nutzerwurzelverzeichnis die
+    # ausgelieferte schlaegt: gleicher Name, anderer Inhalt, und ohne
+    # diesen Vergleich waere das ein stilles Nein.
+    [ "$was_template" = "$template" ] || return 1
+
+    # DIE ENTSCHEIDENDE BEDINGUNG, und sie prueft nicht die Eingaben,
+    # sondern die AUSGABE.
+    #
+    # Alles darueber sagt nur "es kaeme dasselbe heraus wie beim letzten
+    # Mal". Das genuegt nicht: zwischen damals und jetzt kann die Datei
+    # von Hand geaendert, geloescht oder von einem abgebrochenen
+    # Veroeffentlichen nie geschrieben worden sein. Erst der Vergleich
+    # mit dem, was WIRKLICH auf der Platte liegt, macht aus dem
+    # Ueberspringen eine Aussage ueber den Zustand des Rechners statt
+    # ueber die Vergangenheit.
+    #
+    # Damit korrigiert sich der Merkzettel auch selbst: ein --all-Lauf,
+    # bei dem ein Ziel scheitert, veroeffentlicht NICHTS, obwohl die
+    # geglueckten Ziele ihren Merkzettel schon geschrieben haben. Beim
+    # naechsten Lauf passt deren Ausgabe-Hash nicht zur alten Datei auf
+    # der Platte - und sie werden neu erzeugt.
+    [ -n "$was_output_hash" ] || return 1
+    [ -f "$was_output" ] || return 1
+
+    # Beide Hashes in EINEM Aufruf. `sha256sum` ist ein eigenes Programm,
+    # und dieser Weg wird bei einem Anmeldelauf 94 Mal gegangen: zwei
+    # Aufrufe statt einem waren gemessen rund 90 ms je Lauf, also ein
+    # Fuenftel der ganzen Entscheidungsphase.
+    #
+    # Die Antwort sind zwei Zeilen "<hash>  <pfad>" in der Reihenfolge
+    # der Argumente. Traegt ein Pfad ein Zeilenende oder einen
+    # Rueckstrich, stellt GNU der Zeile einen Rueckstrich voran und
+    # verschiebt damit alles - dann wird nicht geraten, sondern erzeugt.
+    local both first second
+    both="$(sha256sum "$template" "$was_output" 2>/dev/null)" || return 1
+    first="${both%%$'\n'*}"
+    second="${both#*$'\n'}"
+    case "$first" in '\'*) return 1 ;; esac
+    case "$second" in '\'*) return 1 ;; esac
+    [ "${first%% *}" = "$was_template_hash" ] || return 1
+    [ "${second%% *}" = "$was_output_hash" ] || return 1
+
+    # Ein Skript ohne x-Bit ist eine Datei, die niemand ausfuehrt, und der
+    # Inhalt sagt darueber nichts.
+    if [ "$was_executable" = true ] && [ ! -x "$was_output" ]; then
+        return 1
+    fi
+
+    return 0
+}
+
+# =========================================
 # STAGING
 # =========================================
 #
@@ -202,12 +471,29 @@ generate_all_configs() {
     local success_count=0
     local fail_count=0
     local total_count=0
+    local skipped_count=0
 
     # Every config that generated cleanly, in the order it was generated.
     # Their post-generation actions - the restarts and the merges - run
     # after the whole run has been published, against files that are
     # actually in place.
+    #
+    # EIN UEBERSPRUNGENES ZIEL STEHT HIER MIT DRIN (20.08.2026). Sein
+    # Nachlauf ist keine Wiederholung des Erzeugens, sondern eine eigene
+    # Frage an die Maschine: -hyprland-universal-config legt die sieben
+    # Platzhalterdateien an, die hyprland.conf sourced und die jemand
+    # geloescht haben kann, und -bar-workspace-detect-config faehrt die
+    # Arbeitsbereiche der GERADE angeschlossenen Bildschirme nach. Beides
+    # haengt nicht an der Vorlage. Wuerde der Nachlauf mit uebersprungen,
+    # waere genau das der stille Rueckschritt, den diese Aufgabe
+    # vermeiden soll. Gemessen kostet der ganze Nachlauf 450 ms fuer 94
+    # Ziele - 4,8 ms je Ziel.
     local generated_names=()
+
+    # Der Fingerabdruck des Laufs, EINMAL berechnet und an alle Kinder
+    # vererbt. Siehe zepos_fingerprint() weiter oben.
+    ZEPOS_FINGERPRINT="$(zepos_fingerprint)"
+    export ZEPOS_FINGERPRINT
 
     # One staging area for the entire run, exported so every child stages
     # into it instead of publishing on its own.
@@ -240,46 +526,266 @@ generate_all_configs() {
         [ -n "$name" ] && all_templates+=("system:$name")
     done < <(list_template_names system)
 
-    # Process each template
+    # Die veralteten Profilnamen fallen HIER heraus und nicht erst in der
+    # Schleife darunter (20.08.2026): sonst stuende die Gesamtzahl erst
+    # am Ende fest, und eine Fortschrittszeile kann kein "von wievielen"
+    # nennen, das sie noch nicht kennt.
     local entry
+    local kept=()
     for entry in "${all_templates[@]}"; do
-        local subdir="${entry%%:*}"
-        local base_name="${entry#*:}"
+        local candidate="${entry#*:}"
 
         # Skip OLD profile-specific Hyprland configs (replaced by universal config)
-        if [[ "$base_name" =~ ^hyprland-(gaming|work-home|work-office)-config$ ]]; then
-            echo -e "${YELLOW}→ Skipping:${NC} ${base_name} (deprecated - using universal config)"
+        if [[ "$candidate" =~ ^hyprland-(gaming|work-home|work-office)-config$ ]]; then
+            echo -e "${YELLOW}→ Skipping:${NC} ${candidate} (deprecated - using universal config)"
             continue
         fi
 
         # Skip OLD start-hyprland-* scripts (replaced by universal start-hyprland)
-        if [[ "$base_name" =~ ^start-hyprland-(gaming|home|office)-config$ ]]; then
-            echo -e "${YELLOW}→ Skipping:${NC} ${base_name} (deprecated - using universal start-hyprland)"
+        if [[ "$candidate" =~ ^start-hyprland-(gaming|home|office)-config$ ]]; then
+            echo -e "${YELLOW}→ Skipping:${NC} ${candidate} (deprecated - using universal start-hyprland)"
             continue
         fi
 
-        ((total_count++))
-        echo -e "${GREEN}→ Processing:${NC} ${base_name%-config}"
+        kept+=("$entry")
+    done
+    all_templates=("${kept[@]}")
+    total_count=${#all_templates[@]}
 
-        # Tell the child which of the two template directories to look in
-        ZEPOS_TEMPLATE_SUBDIR="$subdir" "$SELF" -"$base_name"
+    # Die Fortschrittsmeldung (20.08.2026, Aufgabe 39).
+    #
+    # Ohne Farbcodes, zeilenweise, mit dem NAMEN AM ENDE, damit er alles
+    # enthalten darf. src/update.py baut daraus die Anzeige; hier stehen
+    # nur die Tatsachen:
+    #
+    #     zepos-generate: start ags-bar
+    #     zepos-generate: 47/94 generated ags-bar
+    #     zepos-generate: 48/94 unchanged ags-battery
+    #     zepos-generate: 49/94 failed ags-kaputt
+    #     zepos-generate: done 94 total, 3 generated, 91 unchanged, 0 failed
+    #
+    # ZWEI SORTEN ZEILEN, weil die Anzeige zwei verschiedene Dinge
+    # braucht: welche Ziele GERADE laufen (start), und wie weit der Lauf
+    # ist (die Zahl vor dem Schraegstrich).
+    #
+    # Die Zahl ist die laufende Nummer der FERTIGEN Ziele, nicht die
+    # Stelle des Ziels in der Liste. Das ist der Unterschied, den die
+    # Nebenlaeufigkeit erzwingt: es laufen bis zu $jobs Ziele
+    # gleichzeitig, "das zwoelfte Ziel" sagt also nichts darueber, wie
+    # weit der Lauf ist. Die laufende Nummer ist monoton und genau das,
+    # was ein Fortschrittsbalken braucht. Deshalb traegt die
+    # start-Zeile gar keine Zahl - sie wuerde eine Reihenfolge
+    # behaupten, die es nicht mehr gibt.
 
-        if [ $? -eq 0 ]; then
-            echo -e "  ${GREEN}✓ Success${NC}"
+    # WIEVIELE ZIELE GLEICHZEITIG (20.08.2026, Nachtrag des Nutzers:
+    # "kann man generate all nicht irgendwie parallel machen?").
+    #
+    # WARUM ES SICH LOHNT, und zwar aus derselben Messung, die das
+    # Ueberspringen begruendet: die Verteilung ueber die 94 Ziele ist
+    # FLACH (Median 48 ms, min 45, max 131), und jedes Ziel ist ein
+    # eigener Prozess, der zu ueber 90 % Python-Import ist - also
+    # rechenlastig und voneinander unabhaengig. Das ist der Idealfall
+    # fuer Nebenlaeufigkeit. GEMESSEN an 94 echten Kindaufrufen:
+    # 1 gleichzeitig 5182 ms, 2 -> 2738, 4 -> 1642, 8 -> 1020,
+    # 12 -> 907, 14 -> 910.
+    #
+    # Es wirkt auf den Fall, den das Ueberspringen NICHT erreicht: die
+    # erste Erzeugung nach einer Neuinstallation, wo es nichts zu
+    # ueberspringen gibt, weil noch nichts da ist.
+    #
+    # WARUM DAS SICHER IST - die Ziele sind nachweislich unabhaengig:
+    #   * Jedes Ziel legt GENAU EINE Datei ab, unter seinem eigenen
+    #     absoluten Pfad. Gemessen: 94 Ziele, 94 abgelegte Dateien, bei
+    #     jedem Grad von 1 bis 14. Zwei Ziele, die um dieselbe Datei
+    #     rennen, gibt es nicht - und die Gegenprobe darunter laesst den
+    #     Lauf scheitern, falls je eines dazukaeme.
+    #   * Kein Ziel liest, was ein anderes schreibt. Vorlagen und SSOT
+    #     sind waehrend des Laufs nur-lesend; die einzigen gemeinsamen
+    #     Schreibzugriffe sind `mkdir -p`, das nebenlaeufig sicher ist.
+    #   * Die Merkzettel haben je Ziel einen eigenen Namen und werden
+    #     ueber eine Zwischendatei mit dem eigenen $$ geschrieben.
+    #   * Die Sicherungen entstehen erst beim Veroeffentlichen, und das
+    #     laeuft nach der Schleife in EINEM Prozess.
+    #   * Das Beenden und Neustarten von AGS steht ganz am Ende und
+    #     bleibt unberuehrt seriell.
+    #
+    # WARUM STAPEL UND KEIN GLEITENDES FENSTER: gerechnet aus den
+    # gemessenen 94 Einzelzeiten kostet die einfachere Bauweise bei 8
+    # gleichzeitigen Zielen 908 ms statt der 632 ms eines idealen
+    # Fensters - und liegt damit immer noch unter den 1020 ms, die ein
+    # echtes Fenster (xargs -P 8) samt seinem eigenen Aufwand gebraucht
+    # hat. Die Verteilung ist flach genug, dass ein Stapel kaum auf
+    # einen Nachzuegler wartet. Dafuer braucht es kein `wait -n`, die
+    # Reihenfolge der Ausgabe ist fest, und es gibt nichts, was bei
+    # einem Fehler halb aufgeraeumt zurueckbleibt.
+    #
+    # Die Voreinstellung folgt der Maschine und ist bei 8 gedeckelt: ein
+    # Python-Prozess dieses Projekts belegt rund 30-40 MB, und ein Login
+    # auf einem kleinen Laptop ist der falsche Moment fuer vierzehn
+    # davon. ZEPOS_JOBS=1 schaltet auf streng nacheinander.
+    local jobs="${ZEPOS_JOBS:-}"
+    if [ -z "$jobs" ]; then
+        jobs="$(nproc 2>/dev/null)" || jobs=""
+        case "$jobs" in
+            ''|*[!0-9]*) jobs=1 ;;
+        esac
+        [ "$jobs" -lt 1 ] && jobs=1
+        [ "$jobs" -gt 8 ] && jobs=8
+    fi
+    case "$jobs" in
+        ''|*[!0-9]*|0) jobs=1 ;;
+    esac
+
+    # Die Ausgabe jedes Kindes wird eingesammelt statt durchgereicht.
+    #
+    # DAS IST DER PREIS DER NEBENLAEUFIGKEIT UND ER MUSS BEZAHLT WERDEN:
+    # acht Kinder, die gleichzeitig auf dieselbe Leitung schreiben,
+    # verschraenken ihre Zeilen, und aus "→ Generating config from
+    # template..." wird eine Ausgabe, die niemand einem Ziel zuordnen
+    # kann - auch die Fortschrittsanzeige nicht, die src/update.py
+    # gerade daraus baut. Jedes Kind schreibt deshalb in seine eigene
+    # Datei, und der Elternprozess gibt sie AM STUECK und in fester
+    # Reihenfolge aus, sobald das Kind fertig ist.
+    #
+    # Neben files/ und nicht darin: validate_output.py prueft und
+    # veroeffentlicht ausschliesslich, was unter files/ liegt (siehe
+    # dort files_root()), ein Protokoll daneben wird also weder geprueft
+    # noch irgendwohin geschoben. Es verschwindet mit der Ablage - und
+    # bleibt bei einem gescheiterten Lauf zusammen mit ihr stehen, was
+    # genau dann hilft.
+    local child_logs="$ZEPOS_STAGE_DIR/logs"
+    mkdir -p "$child_logs" || {
+        echo -e "${RED}✗ Could not create a log directory${NC}" >&2
+        return 1
+    }
+
+    # ------------------------------------------------------------------
+    # Durchgang 1: entscheiden, was ueberhaupt zu tun ist
+    # ------------------------------------------------------------------
+    #
+    # Getrennt vom Erzeugen, weil ein Ziel, das uebersprungen wird, gar
+    # nicht erst in eine Welle gehoert - sonst warteten sieben Kinder auf
+    # einen Prozess, der nur "nein danke" sagt.
+    #
+    # Die Frage wird HIER gestellt und nicht im Kind: ein Kind, das nur
+    # startet, um sie zu beantworten, kostet die 2 ms bash-Start, die es
+    # zu sparen gilt. Dasselbe zepos_can_skip() steht im Kind noch
+    # einmal, fuer den Aufruf eines einzelnen Ziels von Hand.
+    local entry
+    local done_count=0
+    local todo_names=()
+    local todo_subdirs=()
+    for entry in "${all_templates[@]}"; do
+        local subdir="${entry%%:*}"
+        local base_name="${entry#*:}"
+
+        local template_file
+        template_file="$(find_template "$base_name" "$subdir")" || template_file=""
+
+        if zepos_can_skip "$base_name" "$template_file"; then
+            ((done_count++))
+            ((skipped_count++))
             ((success_count++))
             generated_names+=("$base_name")
-        else
-            echo -e "  ${RED}✗ Failed${NC}"
-            ((fail_count++))
+            printf 'zepos-generate: %d/%d unchanged %s\n' \
+                "$done_count" "$total_count" "$base_name"
+            echo -e "${GREEN}→ Processing:${NC} ${base_name%-config}"
+            echo -e "  ${GREEN}✓ Unchanged${NC}"
+            continue
         fi
+
+        todo_names+=("$base_name")
+        todo_subdirs+=("$subdir")
     done
 
+    # ------------------------------------------------------------------
+    # Durchgang 2: erzeugen, bis zu $jobs Ziele gleichzeitig
+    # ------------------------------------------------------------------
+    local todo_count=${#todo_names[@]}
+    local position=0
+    while [ "$position" -lt "$todo_count" ]; do
+        local wave_pids=()
+        local wave_names=()
+
+        while [ "${#wave_pids[@]}" -lt "$jobs" ] && [ "$position" -lt "$todo_count" ]; do
+            local name="${todo_names[$position]}"
+            local subdir="${todo_subdirs[$position]}"
+
+            # Die maschinenlesbare Zeile faellt HIER, beim Anschieben -
+            # sie sagt "dieses Ziel laeuft jetzt", und mit acht
+            # gleichzeitig laufenden Zielen ist das eine Aussage, die nur
+            # hier stimmt. Die Zeile FUER MENSCHEN faellt dagegen erst
+            # unten, unmittelbar vor der Ausgabe des Kindes, damit ein
+            # Protokoll weiterhin "Name, dann was dabei herauskam"
+            # liest statt acht Namen und danach acht Bloecke.
+            printf 'zepos-generate: start %s\n' "$name"
+
+            # Tell the child which of the two template directories to look in
+            ZEPOS_TEMPLATE_SUBDIR="$subdir" "$SELF" -"$name" \
+                > "$child_logs/$name.log" 2>&1 &
+            wave_pids+=("$!")
+            wave_names+=("$name")
+            ((position++))
+        done
+
+        local slot=0
+        while [ "$slot" -lt "${#wave_pids[@]}" ]; do
+            local finished_name="${wave_names[$slot]}"
+            local status=0
+            wait "${wave_pids[$slot]}" || status=$?
+
+            # Name, dann die Ausgabe des Kindes AM STUECK, dann das
+            # Ergebnis - genau die Reihenfolge, die ein serieller Lauf
+            # hatte.
+            echo -e "${GREEN}→ Processing:${NC} ${finished_name%-config}"
+            [ -f "$child_logs/$finished_name.log" ] && cat "$child_logs/$finished_name.log"
+
+            ((done_count++))
+            if [ "$status" -eq 0 ]; then
+                printf 'zepos-generate: %d/%d generated %s\n' \
+                    "$done_count" "$total_count" "$finished_name"
+                echo -e "  ${GREEN}✓ Success${NC}"
+                ((success_count++))
+                generated_names+=("$finished_name")
+            else
+                printf 'zepos-generate: %d/%d failed %s\n' \
+                    "$done_count" "$total_count" "$finished_name"
+                echo -e "  ${RED}✗ Failed${NC}"
+                ((fail_count++))
+            fi
+            ((slot++))
+        done
+    done
+
+    # Die Gegenprobe gegen den einen Fehler, den Nebenlaeufigkeit
+    # einfuehren koennte, und den man sonst NIE bemerkt: zwei Ziele, die
+    # in dieselbe Datei schreiben. Seriell gewinnt dabei das letzte und
+    # es fehlt nur eine Datei; nebenlaeufig koennen sich zwei Schreiber
+    # ueberlagern und eine zerrissene Datei hinterlassen.
+    #
+    # Jedes erzeugte Ziel legt genau eine Datei ab, also muessen es
+    # genauso viele sein wie erzeugte Ziele. Nur bei einem fehlerfreien
+    # Lauf gefragt: ein Ziel, das NACH dem Ablegen scheitert, laesst
+    # seine Datei stehen und wuerde die Rechnung verschieben - und ein
+    # Lauf mit Fehlern veroeffentlicht ohnehin nichts.
+    local staged_count
+    staged_count="$(find "$ZEPOS_STAGE_DIR/files" -type f 2>/dev/null | wc -l)"
+    if [ "$fail_count" -eq 0 ] && [ "$staged_count" -ne "$((success_count - skipped_count))" ]; then
+        echo -e "${RED}✗ ${staged_count} Dateien abgelegt, aber $((success_count - skipped_count)) Ziele erzeugt.${NC}" >&2
+        echo -e "${RED}  Zwei Ziele schreiben in dieselbe Datei. Nichts wurde geschrieben.${NC}" >&2
+        echo -e "${YELLOW}  Die erzeugten Dateien liegen zur Ansicht in:${NC}" >&2
+        echo -e "${YELLOW}  $ZEPOS_STAGE_DIR/files${NC}" >&2
+        return 1
+    fi
 
     # Summary
     echo ""
+    printf 'zepos-generate: done %d total, %d generated, %d unchanged, %d failed\n' \
+        "$total_count" "$((success_count - skipped_count))" "$skipped_count" "$fail_count"
     echo -e "${YELLOW}=== Summary ===${NC}"
     echo -e "Total configs: ${total_count}"
     echo -e "Successful: ${GREEN}${success_count}${NC}"
+    echo -e "Unchanged (nothing to do): ${GREEN}${skipped_count}${NC}"
     if [ $fail_count -gt 0 ]; then
         echo -e "Failed: ${RED}${fail_count}${NC}"
     fi
@@ -416,6 +922,7 @@ show_help() {
     echo ""
     echo "Special options:"
     echo "  --all           Generate all configs"
+    echo "  --force         Generate every target, even unchanged ones"
     echo ""
     echo "Available configs:"
     list_template_names templates | sed 's/^/  -/'
@@ -438,6 +945,40 @@ error_exit() {
 if [ -n "$ZEPOS_STAGE_DIR" ] && [ ! -f "$ZEPOS_STAGE_DIR/.zepos-stage" ]; then
     error_exit "ZEPOS_STAGE_DIR=$ZEPOS_STAGE_DIR is not a ZepOS staging directory"
 fi
+
+# Der Notausgang (20.08.2026, Aufgabe 39).
+#
+# WARUM DAS UEBERSPRINGEN DIE VORGABE IST UND DIES DER SCHALTER, und
+# nicht andersherum. Es gibt drei Rufer, und bei allen dreien gibt die
+# Inhaltspruefung von sich aus die richtige Antwort:
+#
+#   src/bin/zepos-session beim Anmelden - nichts hat sich geaendert, es
+#     wird nichts erzeugt, der Nutzer wartet nicht. Das ist die Aufgabe.
+#   src/update.py nach einer Aktualisierung - die SSOT-Dateien haben sich
+#     geaendert, der Fingerabdruck kippt, es wird ALLES erzeugt. Ohne
+#     dass in update.py eine Zeile stehen muesste.
+#   Ein Mensch, der gerade eine Vorlage bearbeitet hat - der Hash SEINER
+#     Vorlage stimmt nicht mehr, genau sein Ziel wird erzeugt.
+#
+# Waere der Schalter noetig, um Richtiges zu bekommen, muesste jeder
+# dieser drei ihn setzen - und zwei davon sind Dateien, die diese Aufgabe
+# nicht anfasst. Ein Vorgabewert, den alle ueberschreiben muessen, ist
+# keine Vorgabe, sondern eine Falle.
+#
+# Er steht trotzdem da, weil "sieht komisch aus" ein legitimer Zustand
+# ist, der mit einem Befehl ausraeumbar sein muss. Vererbt an die Kinder,
+# damit `--force --all` auch in den 94 Kindprozessen gilt.
+ZEPOS_FORCE="${ZEPOS_FORCE:-false}"
+_arguments=()
+for _argument in "$@"; do
+    if [ "$_argument" = "--force" ]; then
+        ZEPOS_FORCE=true
+    else
+        _arguments+=("$_argument")
+    fi
+done
+set -- "${_arguments[@]}"
+export ZEPOS_FORCE
 
 # Main logic
 if [ $# -eq 0 ]; then
@@ -1170,6 +1711,26 @@ if [ "$POST_ONLY" != true ]; then
     TEMPLATE_FILE="$(find_template "$CONFIG_NAME" "$ZEPOS_TEMPLATE_SUBDIR")" || error_exit \
         "Template not found: $CONFIG_NAME (looked in $ZEPOS_USER_ROOT/$ZEPOS_TEMPLATE_SUBDIR and $ZEPOS_SYSTEM_ROOT/$ZEPOS_TEMPLATE_SUBDIR)"
 
+    # Der Fingerabdruck, falls ihn kein --all-Lauf vererbt hat - also bei
+    # einem Aufruf von Hand fuer ein einzelnes Ziel.
+    if [ -z "$ZEPOS_FINGERPRINT" ]; then
+        ZEPOS_FINGERPRINT="$(zepos_fingerprint)"
+    fi
+
+    # Dieselbe Frage wie in der --all-Schleife, aus derselben Funktion.
+    # Sie steht hier fuer den Aufruf von Hand: `zepos-generate -ags-bar`
+    # zweimal hintereinander soll beim zweiten Mal genauso wenig zu tun
+    # haben wie ein --all-Lauf.
+    if zepos_can_skip "$CONFIG_NAME" "$TEMPLATE_FILE"; then
+        echo -e "${GREEN}✓ Unchanged, nothing to generate: $FULL_CONFIG_PATH${NC}"
+        # Kein `exit 0`: der Nachlauf darunter - die Platzhalterdateien,
+        # die Arbeitsbereiche - fragt die MASCHINE und nicht die Vorlage
+        # und muss auch dann laufen, wenn nichts erzeugt wurde.
+        SKIPPED=true
+    fi
+fi
+
+if [ "$POST_ONLY" != true ] && [ "${SKIPPED:-false}" != true ]; then
     # Check whether the config directory exists
     #
     # CONFIG_DIR_MODE ist fuer das eine Verzeichnis, dem seine Rechte
@@ -1257,6 +1818,23 @@ if [ "$POST_ONLY" != true ]; then
     if [ "$MAKE_EXECUTABLE" = true ]; then
         chmod +x "$STAGED_FILE" || error_exit "Could not make $FULL_CONFIG_PATH executable"
     fi
+
+    # Der Merkzettel, geschrieben BEVOR veroeffentlicht wird.
+    #
+    # Das sieht nach der falschen Reihenfolge aus und ist die richtige.
+    # Er haelt fest, was in die ABLAGE geschrieben wurde; ob das je an
+    # seinem Ziel ankommt, entscheidet der Prueflauf danach - und wenn
+    # nicht, liegt am Ziel weiterhin die alte Datei. Der naechste Lauf
+    # vergleicht den notierten Hash mit genau dieser alten Datei, findet
+    # den Unterschied und erzeugt neu. Der Merkzettel kann also nach
+    # einem gescheiterten Lauf nicht luegen, ohne dass es auffaellt.
+    #
+    # Andersherum - erst veroeffentlichen, dann notieren - waere es
+    # umgekehrt: das Kind eines --all-Laufs veroeffentlicht gar nicht
+    # selbst, es muesste die Notiz also dem Elternprozess ueberlassen,
+    # der dafuer alle 94 Dateien noch einmal hashen muesste.
+    zepos_write_stamp "$CONFIG_NAME" "$TEMPLATE_FILE" "$FULL_CONFIG_PATH" \
+        "$STAGED_FILE" "$MAKE_EXECUTABLE"
 
     if [ "$STAGE_OWNER" != true ]; then
         # A --all run owns the staging area. It checks the whole run,
