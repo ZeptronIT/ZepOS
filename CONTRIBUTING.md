@@ -61,9 +61,10 @@ python -m venv .venv          # Python 3.14
 .venv/bin/python -m pytest
 ```
 
-The full suite is 2931 tests in 110 files and takes about seven minutes. It
-needs nothing but Python and pytest; tests that would need QEMU, OVMF, a built
-package repository or a real Hyprland skip themselves when those are absent.
+The full suite is 3121 tests in 121 files (counted 20.08.2026 with
+`pytest --collect-only`) and takes several minutes. It needs nothing but Python
+and pytest; tests that would need QEMU, OVMF, a built package repository or a
+real Hyprland skip themselves when those are absent.
 
 ### The isolation guard
 
@@ -186,7 +187,7 @@ plugins/        ZepOS' own patches only. Upstream sources are fetched at
                 build time from a pinned commit, not vendored here -
                 see plugins/LICENSE for who wrote what, and under what.
 po/             gettext: zepos-installer and zepos-desktop domains
-tests/          110 test files and one isolation guard
+tests/          121 test files and one isolation guard
 docs/specs/     design document and roadmap (German)
 ```
 
