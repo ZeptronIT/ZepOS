@@ -581,6 +581,170 @@ def test_ein_seitenleisten_eintrag_ist_nicht_die_knopfhoehe_hoch(schale):
         f"STYLE_NAV_ROW_HEIGHT={zeilenhoehe}px.")
 
 
+# DIE FLAECHE - DER INHALT NEBEN DER SEITENLEISTE
+#
+# NACHGETRAGEN am 20.08.2026 (Aufgabe 49). GEMELDET vom Nutzer, ZWEIMAL:
+# "der außen abstand, das hast du immernoch nicht verändert in dem
+# sidebar mit inner content ags fenster", und danach noch einmal "die
+# abstände in dem inner content neben der sidebar, das custom ags fenster
+# was wir gemacht haben, sind auch nicht richtig". Beim dritten Mal soll
+# ein Test es vorher sagen.
+#
+# WOGEGEN GEMESSEN WIRD, UND WARUM GEGEN DEN TRENNER
+#     Der Trenner unter dem Zustandskopf (zepDivider, ags-kit.template)
+#     ist ein Kind DERSELBEN Saeule wie die Flaeche darunter und laeuft
+#     von Kante zu Kante durch. Seine beiden Enden sind damit exakt die
+#     Kanten des Sichtfensters, in dem die Flaeche sitzt - einschliesslich
+#     dessen, was die Bildlaufleiste sich gerade nimmt. GEMESSEN am
+#     20.08.2026: ohne senkrechte Leiste laeuft er von Versatz 210 bis
+#     878, mit ihr endet er 24 Punkte frueher.
+#
+#     Genau deshalb steht hier der Trenner und nicht die Fensterkante:
+#     die Rinne der Bildlaufleiste kommt aus dem GTK-Thema, und ein Test,
+#     der sie abschreibt, liegt beim naechsten Thema falsch - dieselbe
+#     Lehre, an der der Boden `.zep-shell-page` dreimal gescheitert ist
+#     (siehe der Block dazu in ags-style.template). Als Nebenwirkung
+#     liegt der Schieber der Leiste AUSSERHALB des gemessenen Streifens
+#     und kann den Waechter nicht faelschlich ausloesen.
+#
+# NUR DIE ZWEI SEITEN MIT EINEM TRENNER
+#     "general" und "vpn" tragen keinen Zustandskopf mit Trennlinie;
+#     ihre Flaeche laesst sich hier also nicht gegen etwas messen, das
+#     aus derselben Saeule kommt. Ihre Polsterung haelt
+#     tests/src/test_schale.py fest (dieselben zwei Sprossen, an der
+#     Vorlage geprueft).
+_FLAECHEN_SEITEN = ("bluetooth", "network")
+
+# KEINE TOLERANZ, UND DAS IST EINE MESSUNG UND KEINE STRENGE
+#
+#     Der erste Entwurf dieses Waechters liess zwei Punkte Unschaerfe zu
+#     - und wurde damit GRUEN auf dem kaputten Baum. GEMESSEN am
+#     20.08.2026 vor der Reparatur: der aeusserste Bildpunkt stand 23
+#     Punkte vor dem rechten Ende des Trenners, obwohl die Seite
+#     ueberhaupt keine Polsterung trug. Die 23 sind das Innenpolster des
+#     Zahnradknopfs - es verdeckt den Fehlbetrag fast vollstaendig, und
+#     zwei Punkte Nachsicht verdecken den Rest.
+#
+#     Die gemessenen Abstaende NACH der Reparatur liegen weit weg von der
+#     Schwelle: 48 rechts (beide Seiten), 65 links (Bluetooth), 181 links
+#     (Netzwerk, mittige Ueberschrift) gegen eine Erwartung von 25. Ein
+#     Zuschlag hat hier nichts zu glaetten, er kann nur etwas
+#     durchlassen.
+
+
+def _trenner(bild: measure.Image,
+             platte: tuple[int, int, int, int]) -> tuple[int, int, int] | None:
+    """(y, x_links, x_rechts) der durchlaufenden Trennlinie unter dem
+    Zustandskopf - alles absolut, nicht als Versatz.
+
+    Gesucht wird die erste Zeile unterhalb des Fensterkopfs, die auf
+    ihrer ganzen Breite anders aussieht als drei Punkte darueber. Drei
+    und nicht einer, weil die Linie einen Punkt breit ist und ihre
+    Nachbarn schon mit anfaerbt.
+    """
+    x_pruef = range(platte[0] + 260, platte[0] + platte[2] - 60, 7)
+    for y in range(platte[1] + 85, platte[1] + platte[3] - 40):
+        if all(max(abs(a - b) for a, b in
+                   zip(bild.at(x, y)[:3], bild.at(x, y - 3)[:3])) > 12
+               for x in x_pruef):
+            links = rechts = None
+            for x in range(platte[0] + 210, platte[0] + platte[2]):
+                if max(abs(a - b) for a, b in
+                       zip(bild.at(x, y)[:3], bild.at(x, y - 3)[:3])) > 12:
+                    links = x
+                    break
+            for x in range(platte[0] + platte[2] - 1, platte[0] + 210, -1):
+                if max(abs(a - b) for a, b in
+                       zip(bild.at(x, y)[:3], bild.at(x, y - 3)[:3])) > 12:
+                    rechts = x
+                    break
+            if links is not None and rechts is not None and rechts - links > 400:
+                return (y, links, rechts)
+    return None
+
+
+def _tinte(bild: measure.Image, x_von: int, x_bis: int,
+           y_von: int, y_bis: int) -> tuple[int, int] | None:
+    """Erste und letzte Spalte im Streifen, in der ueberhaupt etwas
+    gemalt ist - gefunden ueber den SENKRECHTEN Kontrast innerhalb der
+    Spalte und nicht ueber einen Farbvergleich mit dem Grund.
+
+    Der Grund der Schale ist Glas: er zeigt die Tapete darunter und
+    aendert seine Farbe von Spalte zu Spalte. Ein Schwellenwert gegen
+    eine feste Grundfarbe waere darum entweder taub oder ueberall
+    ausgeloest. Der senkrechte Kontrast INNERHALB einer Spalte kennt das
+    Problem nicht: der Verlauf des Glases ist weich (GEMESSEN: unter 3
+    Punkte je Schritt), jede Kante einer Zeile, eines Knopfs oder einer
+    Glyphe ist hart.
+    """
+    treffer = [x for x in range(x_von, x_bis + 1)
+               if any(max(abs(a - b) for a, b in
+                          zip(bild.at(x, y)[:3], bild.at(x, y + 1)[:3])) > 14
+                      for y in range(y_von, y_bis))]
+    return (treffer[0], treffer[-1]) if treffer else None
+
+
+def test_die_flaeche_haelt_ihre_polsterung_zu_beiden_kanten(schale):
+    """Der Inhalt unter dem Zustandskopf klebt an keiner der beiden
+    Kanten - er haelt mindestens eine Sprosse Abstand.
+
+    DASS ER UEBERHAUPT AUSLOEST, IST NACHGEMESSEN UND NICHT BEHAUPTET
+        Die Bilder VOR der Reparatur dieser Aufgabe liegen noch (ein
+        eigener Lauf am 20.08.2026, `--basetemp`), und _trenner()/
+        _tinte() sind gegen genau diese Dateien gehalten worden:
+
+            bluetooth   links 40   rechts 23   -> ROT
+            network     links 181  rechts 23   -> ROT
+
+        Gegen dieselben Funktionen auf den Bildern NACH der Reparatur:
+
+            bluetooth   links 65   rechts 48   -> gruen
+            network     links 181  rechts 48   -> gruen
+
+        Die 23 sind das Innenpolster des Zahnradknopfs - mehr Abstand
+        hatte der Inhalt nicht, die Seiten trugen ueberhaupt keine
+        Polsterung. Die 25 Punkte Unterschied sind genau das, was
+        `.zep-shell-flaeche` seither beisteuert.
+    """
+    sprosse = _px("STYLE_SPACE_16")
+    fehler = []
+    for name in _FLAECHEN_SEITEN:
+        info = schale["seiten"][name]
+        bild, platte = info["bild"], info["platte"]
+        linie = _trenner(bild, platte)
+        assert linie, (
+            f"'{name}': keine durchlaufende Trennlinie unter dem "
+            f"Zustandskopf gefunden - siehe schale-{name}.png")
+        y, x_links, x_rechts = linie
+        # DIE UNTERSTEN PUNKTE BLEIBEN AUSSEN VOR, UND DAS IST KEINE
+        # BEQUEMLICHKEIT - GEMESSEN am 20.08.2026 beim ersten Lauf dieses
+        # Waechters: er meldete "rechts 1px" auf beiden Seiten, obwohl
+        # der Inhalt laengst gepolstert war. Gefunden hatte er die
+        # RUNDE UNTERE ECKE der Platte (.overlay-outer, border-radius
+        # STYLE_RADIUS_PANEL) - eine harte Kante wie jede andere, nur
+        # gehoert sie dem Fenster und nicht der Flaeche. Ein Streifen von
+        # der Hoehe des Radius bleibt darum ungemessen; die Polsterung
+        # steht dort ohnehin nicht zur Debatte.
+        tinte = _tinte(bild, x_links, x_rechts, y + 3,
+                       platte[1] + platte[3] - _px("STYLE_RADIUS_PANEL") - 2)
+        assert tinte, (
+            f"'{name}': unter dem Trenner ist ueberhaupt nichts gemalt - "
+            f"das misst keine Polsterung, sondern eine leere Seite")
+        links = tinte[0] - x_links
+        rechts = x_rechts - tinte[1]
+        if links < sprosse:
+            fehler.append(f"{name}: links {links}px statt {sprosse}px")
+        if rechts < sprosse:
+            fehler.append(f"{name}: rechts {rechts}px statt {sprosse}px")
+    assert not fehler, (
+        "der Inhalt neben der Seitenleiste klebt an einer Kante - genau "
+        "das hat der Nutzer zweimal gemeldet ('die abstände in dem inner "
+        "content neben der sidebar ... sind auch nicht richtig'). "
+        "Erwartet wird mindestens STYLE_SPACE_16 auf jeder Seite, so wie "
+        "das Musterblatt ('Die Schale') die Flaeche zeichnet:\n  "
+        + "\n  ".join(fehler))
+
+
 # Die Zeile, die createOverlayWindow() (ags-overlay-utils.template,
 # notify::upper, Aufgabe 19/d766b7a) NUR dann schreibt, wenn der Inhalt
 # einer Seite tatsaechlich mehr Breite verlangt als das Fenster ihr

@@ -39,6 +39,103 @@ def test_die_seitenleiste_ist_208_breit():
     assert "208px" in block.group(0)
 
 
+# DIE FLAECHEN DER SCHALE - die Inhaltskaesten NEBEN der Seitenleiste.
+#
+# NACHGETRAGEN am 20.08.2026 (Aufgabe 49), weil der Nutzer den fehlenden
+# Abstand dort ZWEIMAL melden musste: "der außen abstand, das hast du
+# immernoch nicht verändert in dem sidebar mit inner content ags
+# fenster", und danach "die abstände in dem inner content neben der
+# sidebar, das custom ags fenster was wir gemacht haben, sind auch nicht
+# richtig". Beim dritten Mal soll ein Test es vorher sagen.
+#
+# GEMESSEN am 20.08.2026 am Bild (tests/render/, schale-*.png, Fenster
+# 880x430), VOR der Reparatur - vier Seiten, drei verschiedene
+# Antworten, zwei davon "gar keine":
+#
+#     bluetooth  0/0     network  0/0     general  18/18     vpn  25/25
+#
+# Die Erwartung kommt aus dem Musterblatt ("Die Schale", 19.08.2026, vom
+# Nutzer bestaetigt mit "genau so soll das aussehen"): `.flaeche {
+# padding: 18px 25px }` - und 18/25 sind SPACE_12/SPACE_16 der
+# Abstandsleiter aus src/sizes.py, nicht zwei getippte Zahlen.
+_FLAECHEN = (
+    # Die eine Regel, die Bluetooth, Netzwerk, Kontrolle, Ton und Anzeige
+    # seit dem 20.08.2026 teilen.
+    ".zep-shell-flaeche",
+    # Die VPN-Seite und das Einstellungsfenster tragen ihre Flaeche noch
+    # unter dem eigenen alten Namen - dieselbe Rolle, dieselben zwei
+    # Sprossen, und darum stehen sie hier daneben statt darunter.
+    ".vpn-container",
+    ".set-container",
+)
+
+
+def test_jede_flaeche_der_schale_polstert_auf_denselben_zwei_sprossen():
+    """Der Inhalt neben der Seitenleiste haelt 18/25 - auf JEDER Seite.
+
+    Waagerecht SPACE_16, senkrecht SPACE_12, und beide als Platzhalter
+    und nicht als Zahl: eine Flaeche, die dem Groessenregler nicht folgt,
+    steht bei der naechsten Einstellung wieder falsch da.
+    """
+    text = STIL.read_text(encoding="utf-8")
+    for name in _FLAECHEN:
+        block = re.search(rf"^{re.escape(name)}\s*\{{(.*?)^\}}",
+                          text, re.M | re.S)
+        assert block, f"{name} fehlt im Stylesheet"
+        polster = re.search(r"^\s*padding:\s*([^;]+);", block.group(1), re.M)
+        assert polster, f"{name} traegt keine Polsterung"
+        assert polster.group(1).strip() == "{{STYLE_SPACE_12}} {{STYLE_SPACE_16}}", (
+            f"{name} polstert mit {polster.group(1).strip()!r} statt mit den "
+            "zwei Sprossen des Musterblatts (18/25 = SPACE_12/SPACE_16)")
+
+
+def test_keine_seite_der_schale_gibt_ihren_inhalt_ohne_flaeche_heraus():
+    """Wer eine Seite baut, gibt sie gepolstert zurueck.
+
+    GEMESSEN, warum dieser Waechter noetig ist: ags-bluetooth.template
+    und ags-network.template lieferten ihre Seite bis zum 20.08.2026 als
+    nackte Gtk.Box ohne eine einzige Klasse aus - der Inhalt klebte
+    dadurch an der Trennlinie der Seitenleiste und an der rechten
+    Fensterkante. Eine Seite ohne Flaechenklasse faellt hier auf, bevor
+    sie jemand sieht.
+    """
+    kaesten = tuple(name.lstrip(".") for name in _FLAECHEN)
+    # Eine DEKLARATION und kein blosses Vorkommen des Wortes: mehrere
+    # Vorlagen erwaehnen "ShellSeite" nur in ihrem Kopfkommentar
+    # (ags-config.template etwa erklaert dort die Umstellung), ohne selbst
+    # je eine Seite zu bauen. `(?!>)` haelt die Rueckgabetypen der Fabrik
+    # heraus - `(id: string): ShellSeite => {` in ags-overlay-utils.
+    # template BAUT keine Seite, es sucht eine heraus.
+    baut_eine_seite = re.compile(r":\s*ShellSeite(?:\[\])?\s*=(?!>)")
+    gepruefte = 0
+    for vorlage in sorted((WURZEL / "src" / "templates").glob("ags-*.template")):
+        text = vorlage.read_text(encoding="utf-8")
+        if not baut_eine_seite.search(text):
+            continue
+        gepruefte += 1
+        assert any(f'add_css_class("{kasten}")' in text for kasten in kaesten), (
+            f"{vorlage.name} baut Seiten fuer die Schale, nennt aber keinen "
+            f"der gepolsterten Inhaltskaesten {kaesten}")
+    # GEMESSEN am 20.08.2026: fuenf Vorlagen deklarieren eine ShellSeite -
+    # Bluetooth, Netzwerk, VPN, das Kontrollzentrum (drei Seiten) und die
+    # Einstellungen. Faellt eine davon aus der Suche, prueft die Schleife
+    # oben weniger, als ihr Name verspricht, und sagt nichts dazu.
+    assert gepruefte == 5, (
+        f"nur {gepruefte} Vorlagen mit einer ShellSeite-Deklaration gefunden, "
+        "erwartet 5 - der Ausdruck findet nicht mehr, was er finden soll")
+
+
+def test_dieser_flaechen_waechter_wuerde_ueberhaupt_ausloesen():
+    """Der Ausdruck oben findet eine Polsterung, die nicht auf den zwei
+    Sprossen sitzt - sonst haelt er nichts fest, sondern schweigt nur."""
+    text = ".zep-probe {\n  padding: 20px;\n}\n"
+    block = re.search(r"^\.zep-probe\s*\{(.*?)^\}", text, re.M | re.S)
+    assert block
+    polster = re.search(r"^\s*padding:\s*([^;]+);", block.group(1), re.M)
+    assert polster and polster.group(1).strip() != (
+        "{{STYLE_SPACE_12}} {{STYLE_SPACE_16}}")
+
+
 def test_kein_fenster_baut_sich_eine_eigene_seitenleiste():
     # Wer eine Navigationsspalte braucht, ruft zepSidebar auf. Eine
     # zweite Antwort auf dieselbe Frage ist der Fehler, den dieses

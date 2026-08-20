@@ -689,13 +689,24 @@ export default function ControlCenter(
       let volumeSlider: Gtk.Scale, volumeIcon: Gtk.Label, volumeLabel: Gtk.Label
       let micSlider: Gtk.Scale, micIcon: Gtk.Label, micLabel: Gtk.Label
 
-      const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
-      mainBox.add_css_class("cc-container")
+      // KOPF AUSSERHALB DER FLAECHE - GEAENDERT am 20.08.2026 (Aufgabe
+      // 49). Bis hierher hing der zepStateHeader IN `.cc-container`
+      // (Polsterung 18) und rueckte damit doppelt ein: 18 vom Kasten
+      // plus die eigenen 25 von `.zep-state-head` = 43, waehrend
+      // Bluetooth und Netzwerk ihren Kopf bei 25 stehen haben. Das
+      // Musterblatt ("Die Schale", 19.08.2026) baut die Inhaltsseite
+      // aus ZWEI Bloecken - `.zustandskopf` mit eigener Polsterung und
+      // darunter `.flaeche` (18/25) -, und genau so steht es jetzt hier.
+      const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
       // KEIN Mindestbreiten-Boden hier - siehe der Block bei der
       // entfernten mitSeitenboden() weiter oben.
 
       headerWrap = new Gtk.Box({})
       mainBox.append(headerWrap)
+
+      const flaeche = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+      flaeche.add_css_class("zep-shell-flaeche")
+      mainBox.append(flaeche)
 
       // Zeile: die Lautstaerke - unveraendert aus "general" uebernommen
       // (Aufgabe 6/Task D, 18.08.2026). set_child() ueberschreibt die
@@ -751,8 +762,8 @@ export default function ControlCenter(
       micRow.append(micSlider)
       micRow.append(micLabel)
 
-      mainBox.append(volRow)
-      mainBox.append(micRow)
+      flaeche.append(volRow)
+      flaeche.append(micRow)
 
       const updateSound = async () => {
         const vol = await getVolumeStatus()
@@ -798,13 +809,20 @@ export default function ControlCenter(
       let headerWrap: Gtk.Box
       let brightnessSlider: Gtk.Scale, brightnessLabel: Gtk.Label
 
-      const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
-      mainBox.add_css_class("cc-container")
+      // KOPF AUSSERHALB DER FLAECHE - GEAENDERT am 20.08.2026 (Aufgabe
+      // 49), dieselbe Umstellung wie bei "sound" darueber und aus
+      // demselben Grund: der zepStateHeader rueckte in `.cc-container`
+      // doppelt ein (18 + 25 = 43 statt 25).
+      const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
       // KEIN Mindestbreiten-Boden hier - siehe der Block bei der
       // entfernten mitSeitenboden() weiter oben.
 
       headerWrap = new Gtk.Box({})
       mainBox.append(headerWrap)
+
+      const flaeche = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+      flaeche.add_css_class("zep-shell-flaeche")
+      mainBox.append(flaeche)
 
       // Zeile: die Helligkeit - unveraendert aus "general" uebernommen
       // (Aufgabe 6/Task D, 18.08.2026): kein Knopf, weil Helligkeit -
@@ -830,7 +848,7 @@ export default function ControlCenter(
       brightRow.append(brightnessSlider)
       brightRow.append(brightnessLabel)
 
-      mainBox.append(brightRow)
+      flaeche.append(brightRow)
 
       const updateBrightness = async () => {
         const brightness = await getBrightness()
@@ -967,8 +985,29 @@ export default function ControlCenter(
       closeFn = schliessen
 
       // Die Oberflaeche bauen
+      //
+      // `.zep-shell-flaeche` STATT `.cc-container` - GEAENDERT am
+      // 20.08.2026 (Aufgabe 49). Diese Seite traegt keinen
+      // zepStateHeader und keinen Trenner; ihr ganzer Inhalt IST die
+      // Flaeche des Musterblatts ("Die Schale", 19.08.2026), und die
+      // polstert 18/25. `.cc-container` polsterte 18 RUNDHERUM -
+      // GEMESSEN am Bild (tests/render/, schale-general.png): links 18
+      // statt 25, waehrend die VPN-Seite daneben 25 trug. Zwei
+      // Antworten auf dieselbe Frage.
+      //
+      // `.cc-container` BLEIBT IM STYLESHEET UND WIRD NICHT UMGESTELLT:
+      // ags-notifications.template haengt dieselbe Klasse an sein
+      // Fenster (GEPRUEFT: `grep -rn 'add_css_class("cc-container")'
+      // src/templates/`), und das ist KEINE Seite der Schale - eine
+      // Aenderung an der Polsterung dort waere eine Aenderung an einem
+      // fremden Fenster. Was diese Seite von `.cc-container` sonst noch
+      // bekam, braucht sie nicht: `background: transparent` und
+      // `border: none` sind die Vorgabe einer Gtk.Box, der
+      // `border-radius` bleibt auf einer durchsichtigen Flaeche
+      // unsichtbar, und die `min-width: 320px` ist seit dem 20.08.2026
+      // ohne Aufgabe (siehe der Block darunter).
       const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
-      mainBox.add_css_class("cc-container")
+      mainBox.add_css_class("zep-shell-flaeche")
       // NACHGETRAGEN Aufgabe 17 (19.08.2026): "general" erreichte 672+
       // bisher NUR, weil sein eigener Inhalt zufaellig breit genug war
       // (Aufgabe 15, siehe der Kommentar bei .zep-shell-page,

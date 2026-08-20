@@ -804,7 +804,16 @@ export const networkSeite: ShellSeite = {
     passwordBox.append(passwordErrorLabel)
 
     // ----- Die Hauptansicht -----
-    mainContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
+    //
+    // `spacing: 0` SEIT DEM 20.08.2026 (Aufgabe 49), vorher 12: dieser
+    // Kasten haelt seither nur noch DREI Kinder - Zustandskopf,
+    // Trenner, Flaeche -, und alle drei bringen ihren Abstand selbst
+    // mit (.zep-state-head 18/25, .zep-divider `margin:
+    // {{STYLE_SPACE_8}} 0`, .zep-shell-flaeche 18/25, alle in
+    // ags-style.template). Ein Abstand von 12 obendrauf zaehlte den des
+    // Trenners ein zweites Mal. Die 12 zwischen den Zeilen stehen jetzt
+    // an der Flaeche darunter.
+    mainContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
 
     // Der Zustandskopf: eine zepRow statt der alten .net-current-Box
     // (18.08.2026, task-C). Die BREITESTE der gemessenen Zeilen - 660
@@ -914,11 +923,33 @@ export const networkSeite: ShellSeite = {
     // waehrend des Wartens.
     sucheWrap = new Gtk.Box({ visible: false })
 
+    // DIE FLAECHE UNTER DEM TRENNER - NACHGETRAGEN am 20.08.2026
+    // (Aufgabe 49), wortgleich zu ags-bluetooth.template (siehe die
+    // Herleitung dort). GEMELDET, zum zweiten Mal: "die abstände in dem
+    // inner content neben der sidebar ... sind auch nicht richtig".
+    //
+    // GEMESSEN am Bild vor dieser Aenderung (tests/render/,
+    // schale-network.png, Fenster 880x430): das Zahnrad rechts stand
+    // NULL Punkte von der rechten Fensterkante entfernt (nur die 24
+    // Punkte Rinne der Bildlaufleiste lagen dazwischen), die Liste
+    // ebenso an der Trennlinie der Seitenleiste - die Seite trug
+    // ueberhaupt keine Polsterung.
+    //
+    // Eine eigene Huelle und NICHT `mainContent` selbst, damit der
+    // Zustandskopf (der schon 18/25 polstert) nicht doppelt einrueckt
+    // und der Trenner weiter von Kante zu Kante laeuft - das Bild des
+    // Musterblatts ("Die Schale", 19.08.2026).
+    const flaeche = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL, spacing: 12,
+    })
+    flaeche.add_css_class("zep-shell-flaeche")
+    flaeche.append(toggleRow)
+    flaeche.append(sucheWrap)
+    flaeche.append(networkList)
+
     mainContent.append(statusWrap)
     mainContent.append(divider)
-    mainContent.append(toggleRow)
-    mainContent.append(sucheWrap)
-    mainContent.append(networkList)
+    mainContent.append(flaeche)
 
     // ----- Die Detailansicht -----
     detailBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, visible: false })

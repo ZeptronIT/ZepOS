@@ -658,8 +658,19 @@ export const bluetoothSeite: ShellSeite = {
       return row
     }
 
+    // `spacing: 0` SEIT DEM 20.08.2026 (Aufgabe 49), vorher 12: dieser
+    // Kasten haelt seit derselben Aufgabe nur noch DREI Kinder -
+    // Zustandskopf, Trenner, Flaeche -, und alle drei bringen ihren
+    // Abstand selbst mit (.zep-state-head polstert 18/25, .zep-divider
+    // traegt `margin: {{STYLE_SPACE_8}} 0`, .zep-shell-flaeche polstert
+    // 18/25, alle in ags-style.template). Ein Abstand von 12 obendrauf
+    // zaehlte den des Trenners ein zweites Mal - GEMESSEN am Bild:
+    // 24 Punkte ueber und unter der Linie statt der 12, die
+    // .zep-divider fuer sich selbst anmeldet. Die 12 zwischen den
+    // Zeilen der Liste stehen jetzt an der Flaeche selbst, wo sie
+    // hingehoeren.
     const container = new Gtk.Box({
-      orientation: Gtk.Orientation.VERTICAL, spacing: 12,
+      orientation: Gtk.Orientation.VERTICAL, spacing: 0,
     })
     // KEIN Mindestbreiten-Boden mehr an dieser Seite - GEAENDERT am
     // 20.08.2026.
@@ -805,12 +816,39 @@ export const bluetoothSeite: ShellSeite = {
     // Auge waehrend des Wartens.
     sucheWrap = new Gtk.Box({ visible: false })
 
+    // DIE FLAECHE UNTER DEM TRENNER - NACHGETRAGEN am 20.08.2026
+    // (Aufgabe 49). GEMELDET, zum zweiten Mal: "die abstände in dem
+    // inner content neben der sidebar ... sind auch nicht richtig".
+    //
+    // GEMESSEN am Bild vor dieser Aenderung (tests/render/,
+    // schale-bluetooth.png, Fenster 880x430): Knopfzeile, Geraeteliste
+    // und Zahnrad standen NULL Punkte von der Trennlinie der
+    // Seitenleiste und NULL von der rechten Fensterkante entfernt - die
+    // Seite hatte ueberhaupt keine Polsterung, nur der Zustandskopf
+    // (zepStateHeader) trug seine eigene.
+    //
+    // Das Musterblatt ("Die Schale", 19.08.2026) baut den Inhalt aus
+    // ZWEI Bloecken: `.zustandskopf` (eigene Polsterung 18/25) und
+    // darunter `.flaeche` (18/25). Zwischen beiden laeuft die
+    // Trennlinie von Kante zu Kante durch. Genau deshalb bekommt hier
+    // eine eigene Huelle die Polsterung und nicht `container`: eine
+    // Polsterung auf `container` rueckte den Kopf ein zweites Mal ein
+    // (25 + 25) und zoege den Trenner von beiden Kanten weg.
+    //
+    // `spacing: 12` ist der `gap: 12px` des Musterblatts - dieselbe
+    // Zahl, die `container` schon trug, nur eine Ebene tiefer.
+    const flaeche = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL, spacing: 12,
+    })
+    flaeche.add_css_class("zep-shell-flaeche")
+    flaeche.append(toolRow)
+    flaeche.append(sucheWrap)
+    flaeche.append(deviceList)
+    flaeche.append(emptyLabel)
+
     container.append(statusWrap)
     container.append(divider)
-    container.append(toolRow)
-    container.append(sucheWrap)
-    container.append(deviceList)
-    container.append(emptyLabel)
+    container.append(flaeche)
 
     // DER TAKT LAEUFT FUER DIE LEBENSDAUER DER SCHALE, NICHT MEHR NUR
     // "SOLANGE DIESE SEITE OFFEN IST" - UND TROTZDEM OHNE DIE 300

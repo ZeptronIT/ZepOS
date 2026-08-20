@@ -358,6 +358,69 @@ $overlay-border: $border;
   .zep-btn { font-weight: normal; }
 }
 
+// DIE FLAECHE - DER INHALTSBEREICH NEBEN DER SEITENLEISTE
+//
+// NACHGETRAGEN am 20.08.2026 (Aufgabe 49). GEMELDET vom Nutzer, zum
+// ZWEITEN Mal: "die abstände in dem inner content neben der sidebar, das
+// custom ags fenster was wir gemacht haben, sind auch nicht richtig",
+// und frueher schon "der außen abstand, das hast du immernoch nicht
+// verändert in dem sidebar mit inner content ags fenster".
+//
+// AM 19.08.2026 (cadb681, Aufgabe 27) BEKAM NUR DIE SEITENLEISTE IHRE
+// POLSTERUNG. Der Inhaltsbereich daneben blieb unberuehrt - und auf zwei
+// von vier Seiten der Schale trug er UEBERHAUPT KEINE. GEMESSEN am
+// 20.08.2026 am Bild (tests/render/, schale-*.png, 1920x1080,
+// Vorgabegroesse, Fenster 880x430 bei (520,186)):
+//
+//     Seite        links vom Trenner    rechts (ohne Rinne)
+//     bluetooth                    0                      0
+//     network                      0                      0
+//     general                     18                     18
+//     vpn                         25                     25
+//
+// Drei verschiedene Antworten auf dieselbe Frage, und zwei davon sind
+// "gar keine": auf Bluetooth und Netzwerk stossen Geraetezeile,
+// Zahnradknopf und Liste ohne einen Punkt Luft an die Trennlinie der
+// Seitenleiste und an die rechte Fensterkante.
+//
+// DAS MUSTERBLATT ("Die Schale", 19.08.2026, vom Nutzer bestaetigt mit
+// "genau so soll das aussehen") zeichnet den Inhalt als ZWEI Bloecke
+// untereinander, nicht als einen:
+//
+//     .zustandskopf { padding: 18px 25px; border-bottom: 1px ... }
+//     .flaeche      { padding: 18px 25px; gap: 12px }
+//
+// Der Kopf traegt seine Polsterung selbst (.zep-state-head oben, 18/25 -
+// GEMESSEN am Bild: der Titel steht auf Bluetooth und Netzwerk heute
+// schon exakt 25 Punkte rechts der Trennlinie, der Kopf ist also
+// RICHTIG), und die TRENNLINIE zwischen beiden Bloecken laeuft im
+// Musterblatt von Kante zu Kante durch. Genau deshalb sitzt die
+// Polsterung hier auf einer eigenen Flaeche UNTER dem Trenner und nicht
+// auf der ganzen Seite: eine Polsterung auf dem Seitenbehaelter wuerde
+// den Kopf ein zweites Mal einruecken (25 + 25 = 50) UND den Trenner um
+// 25 Punkte von beiden Kanten wegziehen. Beides steht so nicht im Blatt.
+//
+// 18/25 SIND SPACE_12 UND SPACE_16, NICHT ZWEI GETIPPTE ZAHLEN: die
+// Abstandsleiter des Musterblatts (3 · 6 · 12 · 18 · 25) ist Sprosse
+// fuer Sprosse die aus src/sizes.py (GEPRUEFT ueber sizes.value_of():
+// SPACE_2=3, SPACE_4=6, SPACE_8=12, SPACE_12=18, SPACE_16=25 bei
+// scale=20/13). Dieselben beiden Sprossen, die .zep-state-head darueber
+// und .overlay-header ganz oben schon tragen - der Inhalt steht damit in
+// derselben Spalte wie der Kopf ueber ihm.
+//
+// KEINE min-width AN DIESER REGEL, UND DAS IST ABSICHT: "GTK rechnet
+// Polster IMMER oben auf eine gesetzte min-width drauf" (siehe
+// .zep-sidebar oben und der geloeschte .zep-shell-page-Block unten - die
+// Falle, in die dieses Fenster dreimal gelaufen ist). Der Boden der
+// Schale wird seit dem 20.08.2026 in createOverlayWindow() GEMESSEN und
+// auf den RUMPF gesetzt, nicht auf eine Seite; eine Polsterung hier kann
+// sich deshalb auf nichts mehr draufrechnen. GEMESSEN nach dieser
+// Aenderung: der waagerechte Ueberhang bleibt 0 (tests/render/
+// test_schale_stil.py::test_keine_seite_der_schale_scrollt_waagerecht).
+.zep-shell-flaeche {
+  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
+}
+
 // DER BODEN DER SCHALENSEITEN STEHT SEIT DEM 20.08.2026 NICHT MEHR HIER
 //
 // Hier stand `.zep-shell-page { min-width: 672px }` - der Boden, der den
@@ -2138,11 +2201,22 @@ $overlay-border: $border;
 // INHALTSKASTEN der Seite, keine Fensterhuelle, und traegt weiterhin
 // die Eckenrundung, die die Schale von der Seite erwartet (siehe
 // tests/src/test_overlay_windows.py, _INHALTSKAESTEN).
+// SENKRECHT SPACE_12 STATT SPACE_16 - GEAENDERT am 20.08.2026 (Aufgabe
+// 49). Diese Regel ist die `.flaeche` der VPN-Seite (die Seite traegt
+// keinen zepStateHeader und keinen Trenner, siehe der Kopf von
+// ags-vpn.template - ihr ganzer Inhalt IST die Flaeche). Sie polsterte
+// rundherum mit SPACE_16, das Musterblatt ("Die Schale", 19.08.2026)
+// zeichnet die Flaeche aber mit `padding: 18px 25px` - waagerecht 25
+// (SPACE_16, unveraendert), senkrecht 18 (SPACE_12). GEMESSEN am Bild
+// vor der Aenderung: links 25, rechts 25 - waagerecht war die Seite als
+// einzige schon richtig, oben/unten trug sie sieben Punkte zu viel.
+// Dieselben beiden Sprossen wie .zep-shell-flaeche oben; die
+// min-width bleibt unberuehrt (sie ist kein Abstand).
 .vpn-container {
   background: transparent;
   border: none;
   border-radius: {{STYLE_RADIUS_PANEL}};
-  padding: {{STYLE_SPACE_16}};
+  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
   min-width: 400px;
 }
 
@@ -2548,8 +2622,22 @@ $overlay-border: $border;
 // ags-overlay-utils.template) und wird bei jedem Aufgehen gemessen. Eine
 // Zahl hier wuerde von GTK ohnehin um das eigene Polster ueberschritten
 // - gemessen am 19.08.2026 (Aufgabe 23).
+// SENKRECHT SPACE_12 STATT SPACE_16 - GEAENDERT am 20.08.2026 (Aufgabe
+// 49), dieselbe Umstellung wie bei .vpn-container und aus demselben
+// Grund: das ist die `.flaeche` einer Schalenseite, und das Musterblatt
+// ("Die Schale", 19.08.2026) zeichnet sie mit `padding: 18px 25px` -
+// waagerecht SPACE_16 (25, unveraendert), senkrecht SPACE_12 (18).
+// Rundherum 25 waren sieben Punkte zu viel oben und unten.
+//
+// NICHT MITBEHOBEN, WEIL AUSSERHALB DIESER AUFGABE UND NICHT GEMESSEN:
+// zeichneSeite() (ags-settings.template) haengt seinen zepStateHeader
+// IN diesen Kasten, statt ihn wie Bluetooth/Netzwerk/Ton/Anzeige
+// darueber zu setzen - der Kopf rueckt damit doppelt ein (25 + 25).
+// Das zu beheben heisst, zeichneSeite() in Kopf und Flaeche zu teilen
+// (zehn behaelter.append()-Stellen), und das Einstellungsfenster hat
+// kein Bild in tests/render/, an dem sich das nachmessen liesse.
 .set-container {
-  padding: {{STYLE_SPACE_16}};
+  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_16}};
 }
 
 // Die Prosa der Seiten - die Texte, die model.py als NOTE_* fuehrt und
