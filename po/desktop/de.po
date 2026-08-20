@@ -518,6 +518,22 @@ msgstr "Speicheranalyse mit Baobab"
 msgid "Analyze"
 msgstr "Analyse"
 
+#: src/templates/ags-dock.template:1231
+msgid "New window"
+msgstr "Neues Fenster"
+
+#: src/templates/ags-dock.template:1236
+msgid "Remove from dock"
+msgstr "Vom Dock entfernen"
+
+#: src/templates/ags-dock.template:1293
+msgid "Add to dock"
+msgstr "Zum Dock hinzufügen"
+
+#: src/templates/ags-dock.template:1299
+msgid "Close"
+msgstr "Schließen"
+
 #: src/templates/ags-logout.template:132
 msgid "Lock"
 msgstr "Sperren"
@@ -666,6 +682,7 @@ msgstr "Den ganzen Verlauf löschen"
 msgid "Clear all"
 msgstr "Alle löschen"
 
+#: src/templates/ags-dock.template:827
 #: src/templates/ags-settings.template:263
 msgid "{command} did not answer."
 msgstr "{command} hat nicht geantwortet."

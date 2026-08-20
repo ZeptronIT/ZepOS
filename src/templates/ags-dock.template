@@ -337,6 +337,84 @@
 //     aus, waehrend das Programm laeuft, und ein Klick startete ein
 //     zweites - dieselbe Sorte Fehler wie die Fork-Bombe vom 17.08.2026,
 //     nur langsamer.
+//
+// DER FUSS, DER NICHT MEHR SCHMALER WURDE (20.08.2026)
+//     BESTELLT, woertlich: "ausserdem passt sich die dock nicht an die
+//     aktuelle zahl der icons an. wenn wir neue terminals haben und sie
+//     entfernt werden bleibt die dock gleich lang".
+//
+//     Die Ursache steht bei fordereFlaecheNeuAn() weiter unten, mit
+//     beiden Messreihen. Kurz: der INHALT hat immer richtig gerechnet,
+//     die FLAECHE hat nie neu gefragt. Ein Gtk.Window fordert beim
+//     Compositor Platz an, wenn es mehr braucht - weniger zu brauchen
+//     ist kein Anlass. Bei einem gewoehnlichen Fenster zieht der Mensch
+//     es kleiner; eine Layer-Shell-Flaeche hat niemanden dafuer.
+//
+//     Der Preis stand nicht nur in der Breite: der Fuss haelt eine
+//     EXKLUSIVE Zone, und die blieb mit ihm stehen. Gemessen 96 statt
+//     84 Punkte, nachdem beide Fenster geschlossen waren - zwoelf
+//     Punkte Bildschirmhoehe, die kein Fenster mehr bekam, fuer einen
+//     Knopf, den es nicht mehr gab.
+//
+// DAS RECHTSKLICK-MENUE, UND WOFUER ES DIE ANTWORT IST (20.08.2026)
+//     GEMELDET, woertlich: "rechtsklick funktioniert nicht bei
+//     hyprlaunch. kann ich rechtsklick auf die dock icons machen? wie
+//     füge ich sonst anwendungen hinzu?"
+//
+//     Die dritte Frage ist die tragende, und ihre Antwort war bis heute
+//     unzumutbar: ueber `zepos-settings-gui`, Seite "Leiste", die
+//     Reihenfolge "Angeheftete Anwendungen" - also ein Fenster
+//     oeffnen, eine Seite finden, eine Liste bedienen, um ein Symbol
+//     anzuheften, das man gerade vor sich sieht.
+//
+//     VIER PUNKTE, UND JEDER EINZELNE IST GEBAUT. Was ein Menuepunkt
+//     nicht tut, steht nicht darin - Spec §7.4, dieselbe Regel, aus der
+//     eine fehlende Anwendung im Fuss keinen ausgegrauten Knopf bekommt:
+//
+//       auf einem FENSTER      Zum Dock hinzufuegen   (wenn es geht -
+//                                                     siehe anheftbar())
+//                              Schliessen
+//       auf einer ANHEFTUNG    Neues Fenster
+//                              Vom Dock entfernen
+//
+//     "Schliessen" ist derselbe Befehl wie der Mittelklick, und das ist
+//     sein zweiter Zweck: eine Geste ohne Beschriftung findet nur, wer
+//     sie schon kennt. "Neues Fenster" ist der einzige Weg zu einem
+//     zweiten Fenster einer laufenden Anwendung - der Linksklick holt
+//     das erste nach vorn, und das soll er.
+//
+//     WAS DAS MENUE SCHREIBT, UND WOHIN
+//         `zepos-settings-gui --json set '{"bar.dock_pins": [...]}'` -
+//         die Nutzerliste aus Aufgabe 45 (973d9d3), kein zweiter Ort
+//         und keine zweite Datei. Gelesen wird vorher aus derselben
+//         Quelle (`--json get`, `.effective`), damit eine Aenderung aus
+//         dem Einstellungsfenster nicht stillschweigend zurueckgenommen
+//         wird.
+//
+//     DAS SYMBOL STEHT SOFORT DA, und das ist gemessen: setzePins()
+//     baut die Reihe neu und update() laeuft im selben Zug. Kein
+//     Neustart der Oberflaeche, kein Erzeugungslauf.
+//
+//         WAS DAFUER EINEN LAUF BRAUCHT, ist die erzeugte Zeile PINNED
+//         in dieser Datei. Sie ist der Abzug, den src/apps.py beim
+//         Erzeugen hineinschreibt - `zepos-settings-gui --json set`
+//         legt dafuer die Marke `regenerate-required`, und
+//         src/bin/zepos-session laesst beim naechsten Anmelden
+//         `zepos-generate` darueber laufen. Bis dahin steht die
+//         Anheftung in user-settings.json und auf dem Schirm, aber
+//         nicht in der erzeugten Datei: wer die Oberflaeche in
+//         derselben Sitzung neu startet (`ags quit`, dann `ags run`),
+//         ohne neu zu erzeugen, sieht die alte Reihe wieder. Verloren
+//         ist dabei nichts - beim naechsten Anmelden ist sie zurueck.
+//
+// DAS MENUE UEBER DEM FUSS - DASS ES DAS DARF, IST GEMESSEN
+//     Ein Fuss ist 60 Punkte hoch (GEMESSEN am 20.08.2026,
+//     (784, 996, 353, 60)). Ein Menue, das in seiner Flaeche bleiben
+//     muesste, waere unbrauchbar. Es bleibt nicht darin: GTK4 legt
+//     einen Gtk.Popover als eigene Wayland-Flaeche an, und
+//     gtk4-layer-shell haengt sie ueber zwlr_layer_surface_v1.get_popup
+//     an die Layer-Flaeche des Fusses. Die Zahlen dazu stehen in
+//     tests/render/test_menue.py.
 
 import Astal from "gi://Astal?version=4.0"
 import Gio from "gi://Gio"
@@ -348,13 +426,38 @@ import GLib from "gi://GLib"
 // wo genau diese Zeile den Lauf hat auffallen lassen.
 import GioUnix from "gi://GioUnix?version=2.0"
 import { Gtk, Gdk } from "ags/gtk4"
+import { execAsync } from "ags/process"
 import * as Hyprland from "../utils/hyprland"
+// Der Bausatz. Das Menue baut KEIN eigenes Zeilenbauteil: zepRow ist
+// die klickbare Zeile dieses Schreibtischs (Symbol links, Text daneben,
+// durchsichtige Huelle), zepDivider der Trenner. Rundung, Farbe und
+// Abstand stehen damit in ags-style.template und nicht hier - siehe den
+// Kopfabschnitt "DAS RECHTSKLICK-MENUE".
+import { zepRow, zepDivider } from "../utils/kit"
+import { _, format } from "../utils/i18n"
 
 const ICON_SIZE = {{STYLE_DOCK_ICON_SIZE}}
 
 // Das Zeichen fuer ein Fenster, dessen Anwendung sich nicht ermitteln
 // laesst. Siehe iconFor() weiter unten, warum es KEIN Zahnrad mehr ist.
 const UNKNOWN_WINDOW_ICON = "{{ICON_DOCK_WINDOW}}"
+
+// Die vier Zeichen des Rechtsklick-Menues. Alle vier standen schon in
+// src/icon_definition.py - kein neues Zeichen fuer dieses Menue.
+//
+//   Anheften    die Reisszwecke, dasselbe Bild, das jede Oberflaeche
+//               fuer "angeheftet" fuehrt
+//   Abnehmen    das Minus, und ausdruecklich NICHT das Kreuz: das
+//               Kreuz steht eine Zeile weiter fuer SCHLIESSEN, und
+//               zwei Kreuze in einem Menue mit zwei verschiedenen
+//               Wirkungen sind ein Bedienfehler mit Ansage
+//   Neu         das Fenster - "Neues Fenster" ist genau das
+//   Schliessen  das Kreuz der Fensterleiste, dasselbe wie am
+//               Fensterknopf
+const PIN_ICON = "{{ICON_PIN}}"
+const UNPIN_ICON = "{{ICON_MINUS}}"
+const NEW_WINDOW_ICON = "{{ICON_WINDOW}}"
+const CLOSE_ICON = "{{ICON_WINDOW_CLOSE}}"
 
 // Der Sonderarbeitsbereich, auf dem die abgelegten Fenster liegen.
 //
@@ -646,6 +749,313 @@ export function terminalCommand(info: GioUnix.DesktopAppInfo): string | null {
   return line ? `${TERMINAL} -e ${line}` : null
 }
 
+/** Eine Anwendung starten - ueber ihren Eintrag, nicht ueber einen Namen.
+ *
+ * Herausgezogen am 20.08.2026, weil es der zweite Aufrufer gibt: der
+ * Klick auf ein angeheftetes Symbol, dessen Anwendung nicht laeuft, UND
+ * der Menuepunkt "Neues Fenster". Zwei Kopien dieser drei Zeilen waeren
+ * zwei Antworten auf "womit startet ein Konsoleneintrag", und eine
+ * davon wuerde beim naechsten Mal vergessen.
+ */
+function starte(info: GioUnix.DesktopAppInfo): void {
+  // Ueber den Compositor und nicht ueber GIO, wenn der Eintrag ein
+  // Terminal braucht - siehe terminalCommand(). Fuer alles andere
+  // bleibt es bei launch(), also bei der Exec-Zeile, die das Paket
+  // vorgesehen hat.
+  const terminal = terminalCommand(info)
+  if (terminal) Hyprland.dispatch(`exec ${terminal}`)
+  else info.launch([], null)
+}
+
+// =====================================================================
+// DIE ANHEFTUNGEN DES NUTZERS
+// =====================================================================
+//
+// Der Befehl, der sie fuehrt, und die Schluessel darin. Beides steht
+// seit Aufgabe 45 (973d9d3) fest und wird hier nur benutzt - es gibt
+// keinen zweiten Namensraum und keine zweite Datei.
+//
+//     lesen     zepos-settings-gui --json get
+//               -> pages[name="leiste"].controls[key="bar.dock_pins"]
+//                  .effective   die gepruefte, gewanderte Reihenfolge
+//     schreiben zepos-settings-gui --json set '{"bar.dock_pins": [...]}'
+//               -> dock_baseline schreibt der Befehl SELBST mit; wer es
+//                  von hier aus mitschickte, ueberschriebe die Vorgabe,
+//                  gegen die der Nutzer sich einmal entschieden hat
+const SETTINGS_COMMAND = "zepos-settings-gui"
+const JSON_FLAG = "--json"
+const PIN_KEY = "bar.dock_pins"
+const BAR_PAGE = "leiste"
+
+/** Ein Aufruf der Bruecke, als Dokument zurueck.
+ *
+ * WORTGLEICH ZU bruecke() IN ags-settings.template, und das ist kein
+ * uebersehenes Doppel: die Begruendung fuer jedes Stueck dieser sechs
+ * Zeilen steht dort ausfuehrlich (die Bruecke endet mit 1, WENN sie
+ * eine Aenderung ablehnt, und legt ihre Klage dabei auf STDOUT;
+ * execAsync verwirft bei jedem Rueckgabewert ungleich 0 und reicht
+ * STDERR weiter, nicht stdout - ein direkter Aufruf verloere die Klage
+ * also genau dann, wenn man sie braucht). `; exit 0` nimmt dem Aufruf
+ * seinen Rueckgabewert; unterschieden wird danach an `ok`.
+ *
+ * Nicht geteilt, weil die beiden Dateien nichts teilen: das Dock ist
+ * ein Widget in widget/, das Einstellungsfenster ein anderes, und ein
+ * gemeinsames utils/settings.ts fuer sechs Zeilen waere ein drittes
+ * Modul, das beide importieren muessten. Aendert sich der Aufruf,
+ * aendert er sich fuer beide - dann findet ihn `grep zepos-settings-gui`
+ * in genau zwei Dateien.
+ */
+async function bruecke(argumente: string[]): Promise<any> {
+  const zeile = [SETTINGS_COMMAND, JSON_FLAG, ...argumente]
+    .map(teil => GLib.shell_quote(teil)).join(" ")
+  let ausgabe = ""
+  try {
+    ausgabe = await execAsync(["bash", "-c", `${zeile}; exit 0`])
+  } catch (fehler) {
+    return { ok: false, problems: [String(fehler)] }
+  }
+  try {
+    return JSON.parse(ausgabe)
+  } catch {
+    // Kein JSON heisst: der Befehl ist gar nicht gelaufen (er fehlt,
+    // eine seiner Wurzeln fehlt) oder er ist abgestuerzt. Beides sagt
+    // der Text, den er hinterlassen hat, besser als ein Satz von hier -
+    // und wenn er gar nichts hinterlassen hat, steht derselbe Satz da
+    // wie im Einstellungsfenster.
+    return {
+      ok: false,
+      problems: [ausgabe || format(_("{command} did not answer."),
+                                   { command: SETTINGS_COMMAND })],
+    }
+  }
+}
+
+/** Die WIRKSAME Anheftungsliste des Nutzers, oder null.
+ *
+ * null heisst "die Bruecke hat nicht geantwortet" und NICHT "der Nutzer
+ * hat nichts angeheftet" - die beiden auseinanderzuhalten ist der ganze
+ * Zweck des Rueckgabetyps: eine leere Liste wuerde geschrieben, ein
+ * fehlgeschlagener Lesevorgang darf nichts schreiben.
+ *
+ * `.effective` und nicht `.value`: die Bruecke rechnet dort die heutige
+ * Auslieferung gegen `dock_baseline` und prueft jeden Namen gegen den
+ * Anwendungseintrag dieser Maschine (siehe den Bericht zu Aufgabe 45).
+ * `.value` waere die rohe Wahl, also die Liste VOR dieser Rechnung.
+ */
+async function gepflegtePins(): Promise<string[] | null> {
+  const zustand = await bruecke(["get"])
+  if (!zustand || !Array.isArray(zustand.pages)) return null
+  const seite = zustand.pages.find((s: any) => s && s.name === BAR_PAGE)
+  if (!seite || !Array.isArray(seite.controls)) return null
+  const bedienelement = seite.controls.find((c: any) => c && c.key === PIN_KEY)
+  const wirksam = bedienelement ? bedienelement.effective : null
+  return Array.isArray(wirksam) ? wirksam.map(String) : null
+}
+
+/** Eine neue Anheftungsliste schreiben. Zurueck kommen die Klagen.
+ *
+ * Eine leere Liste Klagen heisst: geschrieben. Ein Array und kein
+ * boolean, weil die Bruecke ihre Ablehnung BEGRUENDET und die
+ * Begruendung ins Protokoll gehoert - "es hat nicht geklappt" ist die
+ * Sorte Meldung, die niemand melden kann.
+ */
+async function schreibePins(namen: string[]): Promise<string[]> {
+  const antwort = await bruecke(
+    ["set", JSON.stringify({ [PIN_KEY]: namen })])
+  if (antwort && antwort.ok) return []
+  return antwort && Array.isArray(antwort.problems) && antwort.problems.length
+    ? antwort.problems.map(String)
+    : [`${SETTINGS_COMMAND} ${JSON_FLAG} set: ${JSON.stringify(antwort)}`]
+}
+
+// =====================================================================
+// DAS RECHTSKLICK-MENUE
+// =====================================================================
+
+/** Ein Punkt des Menues. */
+interface MenueEintrag {
+  symbol: string
+  text: string
+  tun: () => void
+}
+
+/** Das Menue an einem Knopf aufklappen.
+ *
+ * NICHT Gtk.PopoverMenu, SONDERN Gtk.Popover MIT ZEILEN AUS DEM BAUSATZ
+ *     Gtk.PopoverMenu nimmt ein Gio.MenuModel und zeichnet seine
+ *     Eintraege SELBST - als `modelbutton`, ein Knotentyp, den GTK
+ *     stylt und den ags-style.template nicht kennt. Ein Menue daraus
+ *     saehe aus wie Adwaita und nicht wie ZepOS, und die einzige
+ *     Antwort darauf waere eine zweite Knopfform im Stylesheet, die
+ *     genau eine Stelle benutzt.
+ *
+ *     zepRow IST die klickbare Zeile dieses Schreibtischs - Symbol
+ *     links, Text daneben, durchsichtige Huelle, `.zep-row` mit Radius,
+ *     Polsterung und Zeigergrund aus ags-style.template. Ein Menue ist
+ *     eine Liste solcher Zeilen und braucht dafuer kein eigenes
+ *     Bauteil; dass hier trotzdem KEIN zepMenu() im Bausatz entsteht,
+ *     ist eine Entscheidung und steht im Bericht zu dieser Aufgabe.
+ *
+ * DIE FLAECHE, UND DASS SIE UEBER DEN RAND DARF
+ *     Der Fuss ist eine Layer-Shell-Flaeche von der Groesse seiner
+ *     Knopfreihe - GEMESSEN am 20.08.2026 (784, 996, 353, 60) bei der
+ *     ausgelieferten Auswahl. Ein Menue darin waere 60 Punkte hoch,
+ *     wenn es in der Flaeche bliebe, also unbrauchbar. Es bleibt nicht
+ *     darin: GTK4 legt einen Gtk.Popover als EIGENE Wayland-Flaeche an
+ *     (xdg_popup), und gtk4-layer-shell haengt sie ueber
+ *     zwlr_layer_surface_v1.get_popup an die Layer-Flaeche. Die
+ *     Messung dazu steht im Kopf, "DAS MENUE UEBER DEM FUSS".
+ *
+ * ES GEHT WIEDER ZU, UND ZWAR AUF DREI WEGEN - ALLE DREI AUS `autohide`
+ *     Klick daneben  der Popup haelt einen Griff (xdg_popup.grab). Wer
+ *                    daneben klickt, beendet ihn; GTK meldet "closed".
+ *     Escape         derselbe Griff. Der Compositor gibt dem POPUP den
+ *                    Tastaturfokus, nicht dem Fuss darunter.
+ *     Auswahl        jede Zeile klappt zuerst zu und tut dann ihres.
+ *
+ *     WAS HIER NICHT STEHT, UND WARUM NICHT: eine Umschaltung der
+ *     Tastaturannahme des Fusses (Astal.Keymode.ON_DEMAND, solange das
+ *     Menue steht). Sie stand hier, mit der Begruendung, eine
+ *     Layer-Flaeche auf Keymode.NONE bekomme vom Compositor gar keine
+ *     Tastenereignisse - der Satz stimmt fuer die FLAECHE und gilt
+ *     nicht fuer ihren Popup.
+ *
+ *     GEMESSEN am 20.08.2026 (tests/render/test_menue.py, derselbe
+ *     Lauf einmal mit und einmal ohne die Umschaltung): der
+ *     Wayland-Mitschnitt zeigt `wl_keyboard.enter(..., wl_surface#178)`
+ *     auf die Flaeche des POPUPS, und Escape von aussen (wtype)
+ *     schliesst das Menue in BEIDEN Faellen. Die Umschaltung war also
+ *     wirkungslos - und nicht folgenlos: der Fuss verspricht an drei
+ *     Stellen, die Tastatur NIE zu nehmen (ags-power-button.template,
+ *     ags-starter-button.template, Dock() unten). Ein Versprechen, das
+ *     fuer eine Zeile ohne Wirkung gebrochen wird, ist keines.
+ *
+ * EIN MENUE JE RECHTSKLICK, UND DANACH IST ES WEG
+ *     Zwischendurch stand hier die Gegenrichtung: EIN Popover je Knopf,
+ *     bei seinem Knopf gebaut, aufgeklappt befuellt, zugeklappt
+ *     geleert. Sie ist gemessen und wieder gefallen, und beide Zahlen
+ *     stehen hier, damit niemand denselben Weg noch einmal geht.
+ *
+ *     WAS SIE HEILEN SOLLTE: eine Warnung beim Zugehen. GEMESSEN am
+ *     20.08.2026 (tests/render/test_menue.py):
+ *
+ *         Gtk-CRITICAL: gtk_widget_is_ancestor:
+ *                       assertion 'GTK_IS_WIDGET (widget)' failed
+ *
+ *     WAS SIE NICHT GEHEILT HAT: dieselbe Warnung, gleiche Anzahl. Die
+ *     Eingrenzung danach hat gezeigt, dass sie gar nicht beim Zugehen
+ *     entsteht, sondern beim AUFklappen, und dass sie an `autohide`
+ *     haengt - an einem leeren Popover ohne jede Zeile genauso. Sie
+ *     steht deshalb in GTKs eigener Buchfuehrung und nicht in dieser
+ *     Datei; die Eingrenzung ist in
+ *     test_die_eine_fremde_warnung_bleibt_die_eine_fremde_warnung
+ *     aufgeschrieben.
+ *
+ *     WAS SIE GEKOSTET HAT: sieben neue Warnungen, eine je angeheftetem
+ *     Knopf, beim Beenden der Oberflaeche (GEMESSEN in
+ *     tests/src/test_bar_headless.py):
+ *
+ *         Gtk-WARNING: Finalizing GtkButton 0x..., but it still has
+ *                      children left
+ *
+ *     Ein Popover, das mit set_parent() an einem Knopf haengt, MUSS
+ *     abgenommen sein, bevor der Knopf vergeht - und beim Beenden
+ *     vergehen alle auf einmal. Ein Menue, das nur so lange existiert
+ *     wie es offen ist, hat dieses Problem nicht: es gibt keines,
+ *     solange niemand rechts geklickt hat, und nach dem Zugehen wieder
+ *     keines.
+ */
+function zeigeMenue(anker: Gtk.Widget,
+                    eintraege: MenueEintrag[]): Gtk.Popover | null {
+  if (!eintraege.length) return null
+
+  const liste = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+  liste.add_css_class("dock-menu")
+
+  const menue = new Gtk.Popover({ has_arrow: false })
+  menue.add_css_class("dock-menu-popover")
+  menue.set_child(liste)
+  menue.set_parent(anker)
+  // Nach OBEN, weil der Fuss am unteren Bildschirmrand steht. GTK
+  // richtet sich sonst nach dem Platz und klappte nach unten aus - also
+  // aus dem Schirm heraus.
+  menue.set_position(Gtk.PositionType.TOP)
+
+  eintraege.forEach((eintrag, stelle) => {
+    if (stelle) liste.append(zepDivider())
+    const zeile = zepRow({
+      symbol: eintrag.symbol,
+      titel: eintrag.text,
+      // DIE KOMPAKTE SPROSSE, UND WARUM SIE UND KEINE EIGENE
+      //
+      //     GEMELDET am 20.08.2026: "die icons bei rechtsklick ags
+      //     fenster soll auch abstand zum text haben".
+      //
+      //     `navEintrag` ist kein "Navigationseintrag" im Sinne einer
+      //     Seitenleiste, sondern der EINZEILIGE Zuschnitt derselben
+      //     Zeile - der Bausatz sagt das selbst ("keine zweite
+      //     Zeilenform, nur ein zusaetzlicher CSS-Modifikator auf
+      //     DERSELBEN Zeile"). Ein Menuepunkt ist genau das: eine
+      //     Zeile, ein Satz, kein Untertitel.
+      //
+      //     Und er bringt die Sprosse mit, die am 19.08.2026 (cadb681)
+      //     schon einmal fuer genau diese Frage gewaehlt worden ist -
+      //     GEMESSEN im erzeugten style.scss bei Vorgabegroesse:
+      //
+      //         .zep-row-texts                margin-left 18px
+      //         .zep-row-nav .zep-row-texts   margin-left 12px
+      //
+      //     18px ist die Karte (STYLE_SPACE_12), 12px die kompakte
+      //     Zeile (STYLE_SPACE_8) - die Sprosse, die dem Musterblatt
+      //     mit seinen 10px am naechsten kommt. Eine dritte Zahl fuer
+      //     das Menue waeren zwei Menues mit zwei Abstaenden.
+      //
+      //     WAS DAMIT NICHT BEHOBEN IST, und es ist gemessen: eine
+      //     Gtk.Label mittet den VORSCHUB, sichtbar ist die TINTE.
+      //     GEMESSEN am 20.08.2026 mit Pango, "Fira Code,
+      //     JetBrainsMono Nerd Font" bei 20px - Vorschub bei allen vier
+      //     Zeichen 12px:
+      //
+      //         ICON_PIN           Tinte 15   ragt 2px nach rechts
+      //         ICON_MINUS         Tinte 15   ragt 3px nach rechts
+      //         ICON_WINDOW        Tinte 14   ragt 2px nach rechts
+      //         ICON_WINDOW_CLOSE  Tinte 12   ragt 0px nach rechts
+      //
+      //     Der SICHTBARE Abstand schwankt damit zwischen 9 und 12
+      //     Punkten, obwohl im Stylesheet ueberall 12 steht. Die
+      //     saubere Antwort waere eine eigene Zelle je Zeichen, wie
+      //     .bar-symbol sie in der Leiste hat (dea3f0b) - die saesse
+      //     aber in zepRow und damit in JEDEM Fenster dieses
+      //     Schreibtischs. Siehe den Bericht zu dieser Aufgabe.
+      navEintrag: true,
+      // ERST ZU, DANN TUN. Andersherum stuende das Menue noch, waehrend
+      // das Fenster darunter schon zugeht oder ein Programm startet -
+      // und ein Menue ueber allen Fenstern ist genau das, was diese
+      // Datei nicht bauen soll.
+      aktion: () => {
+        menue.popdown()
+        eintrag.tun()
+      },
+    })
+    liste.append(zeile)
+  })
+
+  // ABGENOMMEN IM LEERLAUF UND NICHT IM RUECKRUF: "closed" laeuft
+  // MITTEN im Abbau des Popovers, GTK reicht danach noch den
+  // Tastaturfokus zurueck. Wer in diesem Augenblick den Widgetbaum
+  // anfasst, nimmt genau dem Widget den Boden weg, nach dem GTK gerade
+  // fragt.
+  menue.connect("closed", () => {
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      if (menue.get_parent()) menue.unparent()
+      return GLib.SOURCE_REMOVE
+    })
+  })
+
+  menue.popup()
+  return menue
+}
+
 interface Pin {
   program: string
   info: GioUnix.DesktopAppInfo
@@ -657,10 +1067,15 @@ interface Pin {
  * Einmal und nicht bei jedem Ereignis: welche Programme installiert
  * sind, aendert sich nicht, waehrend jemand ein Fenster verschiebt, und
  * Gio.AppInfo.get_all() liest jedes .desktop auf der Maschine.
+ *
+ * DIE LISTE STEHT SEIT DEM 20.08.2026 IM AUFRUF und nicht mehr fest in
+ * PINNED: das Rechtsklick-Menue aendert sie zur Laufzeit, und ein
+ * zweites Aufloesen mit derselben Regel ist besser als eine zweite
+ * Regel. PINNED ist der ANFANGSWERT - siehe DockContent().
  */
-function resolvePins(): Pin[] {
+function resolvePins(namen: string[]): Pin[] {
   const pins: Pin[] = []
-  for (const program of PINNED) {
+  for (const program of namen) {
     const info = entryFor(program)
     if (!info) {
       // Kein Fehlschlag der Sitzung: das Programm ist nicht (mehr)
@@ -722,13 +1137,17 @@ export function DockContent(): Gtk.Box {
   const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
   box.set_name("dock")
 
-  const pins = resolvePins()
-  for (const pin of pins) box.append(pin.button)
-
   // Der Trenner zwischen den angehefteten Anwendungen und den uebrigen
   // Fenstern. Er steht auch dann im Kasten, wenn rechts von ihm nichts
   // ist - dann unsichtbar; ein Trenner, der bei jedem Fensterwechsel neu
   // eingehaengt wird, waere ein Kind mehr, dessen Platz sich verschiebt.
+  //
+  // ER STEHT SEIT DEM 20.08.2026 ALS ERSTES IM KASTEN, und das ist die
+  // eine Zeile, die die Anheftungen austauschbar macht: die Symbole
+  // werden VOR ihn gehaengt (insert_child_after mit null = ganz nach
+  // vorn), die losen Fenster dahinter. Wer die Reihe der Anheftungen
+  // neu baut, muss damit weder den Trenner noch ein einziges
+  // Fensterkind anfassen.
   const separator = new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL })
   separator.add_css_class("dock-separator")
   separator.set_visible(false)
@@ -746,6 +1165,298 @@ export function DockContent(): Gtk.Box {
   // muss deshalb mitwandern. Der Schluessel ist der Knopf und nicht die
   // Adresse - dieselbe Begruendung wie unten bei den Anheftungen.
   const handlers = new Map<Gtk.Button, number>()
+
+  // =================================================================
+  // DIE ANGEHEFTETEN SYMBOLE - AUSTAUSCHBAR SEIT DEM 20.08.2026
+  // =================================================================
+  //
+  // `namen` ist die Liste, die auf dem Fuss steht, `pins` sind die
+  // Knoepfe dazu. Beide aendern sich, wenn jemand im Rechtsklick-Menue
+  // anheftet oder abnimmt - und nur dann.
+  //
+  // PINNED IST DER ANFANGSWERT UND NICHT MEHR DIE WAHRHEIT, und das ist
+  // der Unterschied zu jeder Fassung vor heute. Was gilt, steht in
+  // user-settings.json und kommt ueber `zepos-settings-gui --json get`;
+  // PINNED ist der Abzug davon, den der Erzeugungslauf hier
+  // hineingeschrieben hat. Solange niemand etwas aendert, sind die
+  // beiden dasselbe.
+  let namen: string[] = [...PINNED]
+  let pins: Pin[] = []
+
+  /** Die Reihe der Anheftungen neu bauen. */
+  const setzePins = (neue: string[]) => {
+    for (const alt of pins) {
+      box.remove(alt.button)
+      // Und aus der Verbindungstabelle - dieselbe Begruendung wie unten
+      // bei den losen Knoepfen: ein Eintrag ohne Knopf haelt sein
+      // Gtk.Button-Objekt am Leben, solange das Dock laeuft.
+      handlers.delete(alt.button)
+    }
+    namen = neue
+    pins = resolvePins(namen)
+    let vorher: Gtk.Widget | null = null
+    for (const pin of pins) {
+      // null heisst "ganz nach vorn", also vor den Trenner und vor
+      // jedes lose Fenster. Siehe die Begruendung am Trenner oben.
+      box.insert_child_after(pin.button, vorher)
+      vorher = pin.button
+      rechtsklick(pin.button, () => pinMenue(pin))
+    }
+  }
+
+  /** Was ein Rechtsklick auf ein ANGEHEFTETES Symbol anbietet.
+   *
+   * ZWEI PUNKTE, UND BEIDE TUN WIRKLICH ETWAS
+   *     "Neues Fenster"       ruft starte() - genau den Weg, den ein
+   *                           gewoehnlicher Klick nimmt, wenn die
+   *                           Anwendung noch nicht laeuft. Er ist damit
+   *                           kein neuer Code, sondern der vorhandene
+   *                           ohne die Bedingung davor. Er ist der
+   *                           EINZIGE Weg zu einem zweiten Fenster
+   *                           einer laufenden Anwendung: der Linksklick
+   *                           holt das erste nach vorn, und das ist so
+   *                           gewollt ("wie Apple OS").
+   *     "Vom Dock entfernen"  die Bestellung, woertlich.
+   *
+   * WAS ABSICHTLICH FEHLT: "Schliessen". Ein angehefteter Knopf ist
+   * EINER fuer alle Fenster seiner Anwendung (siehe den Kopf) - welches
+   * davon "Schliessen" meinte, koennte niemand beantworten, und ein
+   * Punkt, der bei drei Fenstern irgendeines davon trifft, ist
+   * schlimmer als keiner. Zum Schliessen gibt es den Knopf des
+   * Fensters, hinter dem Trenner.
+   */
+  const pinMenue = (pin: Pin): MenueEintrag[] => [
+    {
+      symbol: NEW_WINDOW_ICON,
+      text: _("New window"),
+      tun: () => starte(pin.info),
+    },
+    {
+      symbol: UNPIN_ICON,
+      text: _("Remove from dock"),
+      tun: () => void aendere(
+        aktuell => aktuell.filter(name => name !== pin.program)),
+    },
+  ]
+
+  /** Der Programmname, unter dem dieses Fenster angeheftet werden kann.
+   *
+   * null heisst: der Punkt "Zum Dock hinzufuegen" wird gar nicht erst
+   * angeboten. Vier Gruende dafuer, und jeder einzelne waere sonst ein
+   * Menuepunkt, der nichts tut - Spec §7.4, dieselbe Regel, aus der
+   * eine fehlende Anwendung im Fuss keinen ausgegrauten Knopf bekommt:
+   *
+   *   kein Programm     /proc/<pid>/comm hat nichts hergegeben. Ohne
+   *                     Programmnamen gibt es nichts zu schreiben.
+   *   schon angeheftet  der Name steht bereits in der Liste.
+   *   schon vertreten   das Fenster gehoert zu einer angehefteten
+   *                     Anwendung und steht nur deshalb hier, weil es
+   *                     ABGELEGT ist (siehe den Kopf). Ein zweiter
+   *                     Eintrag dafuer waere dieselbe Anwendung zweimal
+   *                     im Fuss.
+   *   kein Eintrag      entryFor() findet nichts, oder der Eintrag
+   *                     markiert sich als Dienst. Dann bekaeme der Name
+   *                     beim naechsten resolvePins() ohnehin keinen
+   *                     Knopf - der Punkt schriebe eine Anheftung, die
+   *                     unsichtbar bliebe.
+   */
+  const anheftbar = (client: Hyprland.Client): string | null => {
+    const program = programOf(client.pid)
+    if (!program) return null
+    if (namen.includes(program)) return null
+    if (pins.some(pin => belongsTo(client.class, pin.info, pin.program))) {
+      return null
+    }
+    const info = entryFor(program)
+    if (!info || info.get_nodisplay()) return null
+    return program
+  }
+
+  /** Was ein Rechtsklick auf ein FENSTER anbietet.
+   *
+   * "Schliessen" steht IMMER da, "Zum Dock hinzufuegen" nur, wenn es
+   * etwas anzuheften gibt (siehe anheftbar()). Ein Menue mit einem
+   * einzigen Punkt ist erlaubt und richtig; eines mit einem toten
+   * zweiten waere es nicht.
+   *
+   * "Schliessen" ist derselbe Befehl, den der Mittelklick seit jeher
+   * absetzt - und das ist sein zweiter Zweck: der Mittelklick war eine
+   * Geste ohne Beschriftung, und niemand, der sie nicht kennt, konnte
+   * sie finden.
+   */
+  const fensterMenue = (client: Hyprland.Client): MenueEintrag[] => {
+    const eintraege: MenueEintrag[] = []
+    const program = anheftbar(client)
+    if (program) {
+      eintraege.push({
+        symbol: PIN_ICON,
+        text: _("Add to dock"),
+        tun: () => void aendere(aktuell => [...aktuell, program]),
+      })
+    }
+    eintraege.push({
+      symbol: CLOSE_ICON,
+      text: _("Close"),
+      tun: () => Hyprland.dispatch(`closewindow address:${client.address}`),
+    })
+    return eintraege
+  }
+
+  /** Die Anheftungen aendern: lesen, rechnen, schreiben, zeigen.
+   *
+   * GELESEN WIRD ZUERST, UND ZWAR BEI DER BRUECKE
+   *     `namen` ist der Stand, den DIESE Sitzung kennt. Die Wahrheit
+   *     steht in user-settings.json, und dort kann seit dem letzten
+   *     Erzeugungslauf etwas anderes stehen - das Einstellungsfenster
+   *     schreibt in dieselbe Liste (Seite "Leiste"). Auf `namen`
+   *     aufzubauen hiesse, eine fremde Aenderung beim naechsten
+   *     Anheften stillschweigend zurueckzunehmen.
+   *
+   *     Antwortet die Bruecke nicht, wird `namen` genommen. Das ist die
+   *     schlechtere Grundlage, aber die einzige - und ein Menuepunkt,
+   *     der bei fehlender Bruecke gar nichts tut, waere schlechter.
+   *
+   * GESCHRIEBEN WIRD, BEVOR ETWAS ZU SEHEN IST
+   *     Erst wenn die Bruecke `ok` sagt, wird die Reihe neu gebaut. Ein
+   *     Symbol, das erscheint und beim naechsten Anmelden wieder fort
+   *     ist, waere die schlimmere Haelfte beider Welten.
+   */
+  const aendere = async (wandle: (aktuell: string[]) => string[]) => {
+    const gepflegt = await gepflegtePins()
+    if (!gepflegt) {
+      console.error(
+        `Dock: ${SETTINGS_COMMAND} hat die Anheftungen nicht hergegeben - `
+        + "gerechnet wird mit dem Stand dieser Sitzung")
+    }
+    const neue = wandle(gepflegt ?? namen)
+    const klagen = await schreibePins(neue)
+    if (klagen.length) {
+      console.error("Dock: die Anheftungen liessen sich nicht speichern - "
+        + klagen.join("; "))
+      return
+    }
+    setzePins(neue)
+    // SOFORT UND NICHT BEIM NAECHSTEN EREIGNIS: ohne diese Zeile
+    // stuenden die neuen Knoepfe ohne Klick-Verbindung und ohne
+    // Zustandsklasse da, bis der Nutzer zufaellig ein Fenster bewegt.
+    update(Hyprland.refresh())
+  }
+
+  /** Einen Rechtsklick an einen Knopf haengen.
+   *
+   * `haengen` liefert die Eintraege ERST BEIM KLICK und nicht beim
+   * Verbinden: was ein Menue anbietet, haengt am Zustand in dem Moment,
+   * in dem es aufgeht - ob die Anwendung laeuft, ob dieser Name schon
+   * angeheftet ist. Eine Liste, die beim Bauen des Knopfes entstuende,
+   * waere beim ersten Rechtsklick schon alt.
+   *
+   * EINMAL JE KNOPF, und darum steht dieser Aufruf beim ENTSTEHEN des
+   * Knopfes und nicht in update(): ein Knopf mit zehn Gesten klappt
+   * beim naechsten Rechtsklick zehn Menues uebereinander auf. Dieselbe
+   * Falle wie beim Linksklick, nur sichtbarer - siehe die Fork-Bombe
+   * vom 17.08.2026 weiter unten.
+   */
+  const rechtsklick = (knopf: Gtk.Button,
+                       haengen: () => MenueEintrag[]) => {
+    // Knopf 3 ist die rechte Taste. "pressed" und nicht "released":
+    // ein Menue, das erst beim Loslassen aufgeht, fuehlt sich an wie
+    // eines, das haengt.
+    const geste = new Gtk.GestureClick({ button: 3 })
+    geste.connect("pressed", () => zeigeMenue(knopf, haengen()))
+    knopf.add_controller(geste)
+  }
+
+  setzePins([...PINNED])
+
+  // DIE GROESSE, DIE DER FUSS ZULETZT ANGEFORDERT HAT - "BxH" oder ""
+  //
+  // Siehe fordereFlaecheNeuAn() gleich darunter. Ein Text und nicht zwei
+  // Zahlen, weil verglichen und nicht gerechnet wird.
+  let angefordert = ""
+
+  /** Die Layer-Shell-Flaeche auf die Groesse ihres Inhalts zurueckholen.
+   *
+   * DIE STEHENGEBLIEBENE BREITE, UND WORAN SIE LAG (20.08.2026)
+   *     BESTELLT, woertlich: "ausserdem passt sich die dock nicht an die
+   *     aktuelle zahl der icons an. wenn wir neue terminals haben und
+   *     sie entfernt werden bleibt die dock gleich lang".
+   *
+   *     GEMESSEN am 20.08.2026 im verschachtelten Compositor (Hyprland
+   *     0.56.2, tests/render/desktop_session.py, headless 1920x1080,
+   *     ausgelieferte Groesse), Kasten der Flaeche zepos-dock aus
+   *     `hyprctl layers` und daneben die untere reservierte Zone aus
+   *     `hyprctl monitors`:
+   *
+   *                                     VORHER              NACHHER
+   *       nur die Anheftungen      (784,996,353,60)/84   (784,996,353,60)/84
+   *       ein Fenster dazu         (755,996,411,60)/84   (755,996,411,60)/84
+   *       ein zweites dazu         (730,984,460,72)/96   (730,984,460,72)/96
+   *       eines davon minimiert    (730,984,460,72)/96   (730,984,460,72)/96
+   *       dasselbe GESCHLOSSEN     (730,984,460,72)/96   (755,984,411,72)/96
+   *       das zweite GESCHLOSSEN   (730,984,460,72)/96   (784,996,353,60)/84
+   *
+   *     Der Fuss wuchs also mit jedem Fenster und kam nie zurueck - und
+   *     mit ihm blieb die reservierte Zone auf 96 statt 84 stehen, also
+   *     zwoelf Punkte Bildschirmhoehe, die kein Fenster mehr bekam.
+   *
+   * WELCHER DER BEIDEN VERDAECHTIGEN ES WAR, UND WELCHER NICHT
+   *     Verdaechtig war zuerst die Aenderung von 0e25b63 (dieselbe Nacht,
+   *     "abgelegte Fenster stehen im Fuss"): sie hat den Filter in
+   *     update() geoeffnet, damit ein minimiertes Fenster seinen Knopf
+   *     BEHAELT - und im Bericht dazu steht ausdruecklich, dass die
+   *     Flaeche beim Minimieren nicht mehr schrumpft (411 statt 353).
+   *     Der Verdacht war, dass dieselbe Zeile auch das Schrumpfen beim
+   *     SCHLIESSEN verhindert.
+   *
+   *     ER IST FALSCH, und zwar gemessen. Eine Sonde in update() hat am
+   *     20.08.2026 bei jedem Ereignis die natuerliche Breite des
+   *     Inhalts NEBEN die zugeteilte gestellt:
+   *
+   *       Fenster geht auf    box-nat 411   box-alloc 353 -> 411
+   *       zweites geht auf    box-nat 460   box-alloc 411 -> 460
+   *       eines geschlossen   box-nat 411   box-alloc 460   (bleibt)
+   *       beide geschlossen   box-nat 353   box-alloc 460   (bleibt)
+   *
+   *     Der INHALT schrumpft also tadellos: der Knopf wird entfernt, die
+   *     Reihe misst sich schmaler. Was nicht schrumpft, ist die FLAECHE.
+   *     Damit ist es der zweite Verdacht, und er ist eine Eigenschaft von
+   *     GTK4 und nicht dieser Datei: ein Gtk.Window fordert beim
+   *     Compositor eine Groesse an, wenn es sie BRAUCHT - eine
+   *     Mindestgroesse, die waechst, schiebt die Flaeche auseinander.
+   *     Eine, die faellt, tut nichts: die Flaeche ist gross genug, also
+   *     bleibt sie. Bei einem gewoehnlichen Fenster zieht der Mensch es
+   *     kleiner; eine Layer-Shell-Flaeche hat niemanden, der das tut.
+   *
+   * WARUM set_default_size(-1, -1) UND NICHT queue_resize()
+   *     queue_resize() sagt "miss neu", nicht "fordere neu an" - genau
+   *     das ist bei jeder der stehengebliebenen Messungen oben ohnehin
+   *     passiert (die Sonde zeigt die neue natuerliche Breite). -1
+   *     nimmt die Vorgabegroesse ZURUECK und laesst das Fenster damit
+   *     wieder die natuerliche Groesse seines Inhalts anfordern; das
+   *     Wachsen bleibt unberuehrt (Zeile zwei und drei der Tabelle
+   *     oben).
+   *
+   * NUR BEI EINER AENDERUNG, und darum `angefordert`: der Fuss laeuft
+   * bei JEDEM Hyprland-Ereignis durch update(), also auch bei jedem
+   * Fensterwechsel. Eine Groessenanforderung je Fokuswechsel waere eine
+   * Neuverhandlung mit dem Compositor fuer nichts.
+   *
+   * KEINE FLAECHE, KEINE ANFORDERUNG: waehrend Dock() den Inhalt baut
+   * (`window.set_child(DockContent())`) laeuft update() bereits, und
+   * get_root() ist dann null - GEMESSEN, die ersten zwei Durchlaeufe
+   * jedes Starts. Dann wird auch nichts gemerkt, sonst bliebe die erste
+   * echte Groesse ungefordert.
+   */
+  const fordereFlaecheNeuAn = (inhalt: Gtk.Box) => {
+    const flaeche = inhalt.get_root() as Gtk.Window | null
+    if (!flaeche) return
+    const breite = inhalt.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+    const hoehe = inhalt.measure(Gtk.Orientation.VERTICAL, -1)[1]
+    const jetzt = `${breite}x${hoehe}`
+    if (jetzt === angefordert) return
+    angefordert = jetzt
+    flaeche.set_default_size(-1, -1)
+  }
 
   const update = (state: Hyprland.HyprlandState) => {
     const display = box.get_display()
@@ -865,13 +1576,7 @@ export function DockContent(): Gtk.Box {
           restore(firstPutAway, focused)
           return
         }
-        // Ueber den Compositor und nicht ueber GIO, wenn der Eintrag ein
-        // Terminal braucht - siehe terminalCommand(). Fuer alles andere
-        // bleibt es bei launch(), also bei der Exec-Zeile, die das Paket
-        // vorgesehen hat.
-        const terminal = terminalCommand(pin.info)
-        if (terminal) Hyprland.dispatch(`exec ${terminal}`)
-        else pin.info.launch([], null)
+        starte(pin.info)
       }))
     }
 
@@ -904,6 +1609,10 @@ export function DockContent(): Gtk.Box {
         middle.connect("released", () =>
           Hyprland.dispatch(`closewindow address:${client.address}`))
         button.add_controller(middle)
+
+        // Der Rechtsklick, ebenfalls EINMAL - was er anbietet, wird
+        // beim Klick gerechnet und nicht hier. Siehe rechtsklick().
+        rechtsklick(button, () => fensterMenue(client))
 
         buttons.set(client.address, button)
         box.append(button)
@@ -944,6 +1653,11 @@ export function DockContent(): Gtk.Box {
       box.reorder_child_after(button, previous)
       previous = button
     }
+
+    // ZULETZT, und erst nachdem jeder Knopf steht: die Flaeche neu
+    // anfordern. Siehe fordereFlaecheNeuAn() - ohne diese Zeile behaelt
+    // der Fuss die Breite, die er einmal hatte.
+    fordereFlaecheNeuAn(box)
   }
 
   update(Hyprland.refresh())
