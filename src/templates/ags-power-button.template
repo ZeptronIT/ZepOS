@@ -45,9 +45,45 @@
 //     Dock (beide anchoren BOTTOM mit demselben Rand); waagerecht haelt
 //     er ihn auf demselben Abstand zum linken Bildschirmrand wie jedes
 //     andere Element dieses Projekts.
+//
+// ER FAEHRT MIT DEM DOCK EIN UND AUS, SEIT DEM 20.08.2026
+//     GEMELDET, woertlich: "die dock beim einfahren mit super b soll
+//     auch links der button mit shutdown auch mit verschwinden mit der
+//     selben animation".
+//
+//     GEMESSEN am selben Tag im verschachtelten Compositor (1920x1080,
+//     tests/render/), VOR der Aenderung, ein `ags request dock`: die
+//     Flaeche zepos-dock (784, 996, 353, 60) war fort, zepos-power
+//     (24, 999, 53, 57) stand weiter da, und im unteren Drittel blieben
+//     2717 bemalte Punkte uebrig - genau der Kasten dieses Knopfes.
+//
+//     Die Trennung der Flaechen BLEIBT (siehe oben, "WARUM EINE EIGENE
+//     FLAECHE"): der Knopf gehoert nicht in die Dock-Box, er wandert
+//     sonst mit ihrem Inhalt. Was fehlte, war nicht ein gemeinsames
+//     Fenster, sondern ein gemeinsamer ZUG - und den holt sich diese
+//     Datei bei dem, der ihn ausloest: faehrtMitDemDock() aus
+//     ags-dock.template (dort steht auch, warum die Bewegung dabei
+//     ohne eine einzige Zahl in diesen beiden Dateien dieselbe ist).
+//
+//     UEBER ALLE SCHIRME ZUGLEICH, wie das Dock selbst: dessen
+//     toggle() kennt keinen einzelnen Monitor, es setzt ALLE seine
+//     Flaechen auf denselben Stand. Ein Knopf, der auf Schirm 2 stehen
+//     bliebe, waehrend das Dock ueberall eingefahren ist, waere
+//     derselbe Fehler noch einmal, nur seltener zu sehen.
+//
+//     DER RESERVIERTE STREIFEN GEHT DABEI NICHT VERLOREN UND KOMMT
+//     AUCH NICHT DAZU. GEMESSEN am 20.08.2026 an `hyprctl monitors`:
+//     mit Dock reserviert der Schirm unten 84 px, mit eingefahrenem
+//     Dock 0 px, nach dem Wiederausfahren wieder 84 - das Abmelden der
+//     Flaeche gibt die exklusive Zone von selbst frei. DIESE Flaeche
+//     traegt dazu nichts bei und soll es nicht: sie ist IGNORE (siehe
+//     unten), reservierte also vorher nichts und reserviert nachher
+//     nichts. Genau das zeigt die Messung mit eingefahrenem Dock: 0 px
+//     reserviert, WAEHREND dieser Knopf noch auf dem Schirm stand.
 
 import Astal from "gi://Astal?version=4.0"
 import { Gtk, Gdk } from "ags/gtk4"
+import { faehrtMitDemDock } from "./Dock"
 import { _ } from "../utils/i18n"
 
 // Dasselbe Zeichen wie der Kopf von ags-logout.template - derselbe
@@ -71,6 +107,10 @@ export default function PowerButton(toggle: (name: string) => void): void {
     console.error("Keine Anzeige - es gibt keinen Abschaltknopf")
     return
   }
+
+  // Die eigenen Flaechen, je Schirm eine. Sie stehen hier und nicht
+  // modulweit: was mitfaehrt, sind die Fenster GENAU DIESES Aufrufs.
+  const flaechen: Astal.Window[] = []
 
   const monitors = display.get_monitors()
   for (let index = 0; index < monitors.get_n_items(); index++) {
@@ -127,5 +167,16 @@ export default function PowerButton(toggle: (name: string) => void): void {
     window.set_margin_bottom(EDGE_GAP)
     window.set_margin_left(EDGE_GAP)
     window.set_child(plate)
+    flaechen.push(window)
   }
+
+  // MIT DEM DOCK EIN UND AUS - siehe den Dateikopf, warum das eine
+  // Anmeldung ist und kein zweiter Zweig in app.ts.
+  //
+  // `visible` setzen und nicht show()/hide(): dasselbe, was das Dock in
+  // seinem toggle() tut. Zwei Wege, eine Flaeche abzumelden, waeren zwei
+  // Wege, an denen sich etwas unterscheiden koennte.
+  faehrtMitDemDock(sichtbar => {
+    for (const flaeche of flaechen) flaeche.visible = sichtbar
+  })
 }

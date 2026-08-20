@@ -671,6 +671,123 @@ export interface DockHandle {
   visible: () => boolean
 }
 
+// =====================================================================
+// WER MIT DEM DOCK EIN- UND AUSFAEHRT
+// =====================================================================
+//
+// BESTELLT, woertlich (20.08.2026): "die dock beim einfahren mit super b
+// soll auch links der button mit shutdown auch mit verschwinden mit der
+// selben animation".
+//
+// GEMESSEN am 20.08.2026, VOR dieser Kopplung, im verschachtelten
+// Compositor (Hyprland 0.56.2, 1920x1080, ausgelieferte Groesse,
+// tests/render/desktop_session.py), ein einziges `ags request dock`:
+//
+//     Flaeche       vorher                  nachher
+//     zepos-dock    (784, 996, 353, 60)     fort
+//     zepos-power   ( 24, 999,  53, 57)     STEHT WEITER DA
+//     bemalt im unteren Drittel  23593 Punkte  ->  2717 Punkte
+//
+// Die 2717 uebrigen Punkte sind Punkt fuer Punkt der Kasten des
+// Knopfes. Ein Fuss, der einfaehrt und einen Knopf stehen laesst, sieht
+// aus wie ein Fehler - und er ist einer.
+//
+// WARUM EINE ANMELDUNG BEIM DOCK UND NICHT EIN ZWEITER SCHALTER
+//     Drei Wege waren zu haben, und zwei davon legen eine zweite
+//     Wahrheit an:
+//
+//       ein zweiter Zweig in app.ts   `ags request dock` toggelt das
+//                                     Dock UND ruft den Knopf. Dann
+//                                     tragen ZWEI Stellen den Zustand,
+//                                     und jeder weitere Weg zum Dock
+//                                     (ein Knopf, eine Geste, ein
+//                                     zweites Kuerzel) muss beide
+//                                     wieder von Hand bedienen. Genau
+//                                     die Sorte Kopplung, die beim
+//                                     naechsten Umbau auseinanderfaellt.
+//       ein gemeinsamer Zustand       eine dritte Datei, die beide
+//                                     lesen. Sie waere fuer genau zwei
+//                                     Leser da und muesste trotzdem
+//                                     erklaeren, wem sie gehoert.
+//       DAS DOCK SAGT BESCHEID        <- dieser Weg. Es gibt genau EINE
+//                                     Stelle, an der sich die
+//                                     Sichtbarkeit des Docks aendert
+//                                     (toggle() weiter unten), und die
+//                                     sagt es weiter. Wer mitfahren
+//                                     will, meldet sich an; wer nicht
+//                                     mitfahren will, merkt nichts.
+//                                     Das Dock selbst muss dafuer
+//                                     nichts ueber den Knopf wissen -
+//                                     es kennt nur `Mitfahrer`.
+//
+// WARUM DAS SCHON "DIESELBE ANIMATION" IST, OHNE DASS HIER EINE DAUER
+// ODER EINE KURVE STEHT
+//     Weil die Bewegung nicht dieser Datei gehoert. Weder das Dock noch
+//     der Knopf blendet sich selbst aus: beide setzen `visible`, melden
+//     damit ihre Layer-Shell-Flaeche ab, und was man DANN sieht, malt
+//     der Compositor. Hyprland fuehrt dafuer die Klasse `layers` mit
+//     `layersIn`/`layersOut`, und ZepOS schreibt keine Regel JE
+//     NAMENSRAUM - hyprland-universal-config.template setzt nur den
+//     `animations`-Block, und dessen Dauern und Kurve kommen aus der
+//     Bewegungsleiter (src/sizes.py, MOTION_ROLES und
+//     MOTION_CURVE_POINTS). Zwei Flaechen derselben Art, im selben Zug
+//     abgemeldet, bekommen deshalb zwangslaeufig dieselbe Dauer,
+//     dieselbe Beschleunigung und denselben Anfang.
+//
+//     Eine Dauer in dieser Datei waere eine ZWEITE Bewegung neben der
+//     des Compositors - und die beiden waeren genau so lange gleich,
+//     wie niemand an einer von beiden dreht.
+//
+//     GEMESSEN am 20.08.2026 an demselben Aufbau: `hyprctl animations`
+//     meldet fuer `layersOut` "overridden: 0", also den Erbwert von
+//     `global` (bezier default, speed 8.00 = 800 ms). Die Bilder dazu
+//     zeigen keinen Ruck, sondern ein Ausblenden an Ort und Stelle -
+//     der Kasten des Docks bleibt (784, 996, 353, 60) und wird leerer:
+//     20868 Punkte bei 97 ms, 11513 bei 260 ms, 5988 bei 426 ms, 2344
+//     bei 674 ms. Der Knopf stand dabei unveraendert bei 2717.
+//
+// IM SELBEN ZUG heisst: im selben Durchlauf der Ereignisschleife.
+// melde() laeuft synchron in toggle(), also sind beide Flaechen
+// abgemeldet, bevor GTK das naechste Mal zum Compositor schreibt - und
+// nicht 30 ms spaeter, was schlimmer aussaehe als ein Knopf, der
+// stehenbleibt.
+
+/** Eine Flaeche, die mit dem Dock kommt und geht. */
+export type Mitfahrer = (sichtbar: boolean) => void
+
+const mitfahrer: Mitfahrer[] = []
+
+// Was das Dock zuletzt gemeldet hat - oder null, solange es nichts
+// gemeldet hat. DREI Zustaende und nicht zwei, und beide Zusatzfaelle
+// treten wirklich auf:
+//
+//   null     Dock() ist noch nicht gelaufen oder hat ohne Anzeige
+//            abgebrochen. Dann gibt es nichts, womit man mitfahren
+//            koennte, und ein Mitfahrer bleibt, wie er gebaut wurde -
+//            ein Abschaltknopf, der sich wegen eines FEHLENDEN Docks
+//            versteckt, waere die zweite Beschwerde nach der ersten.
+//   true     das Dock steht. app.ts baut den Knopf NACH dem Dock (siehe
+//            dort, "Der Abschaltknopf, NACH dem Dock"), also ist das
+//            der Normalfall bei der Anmeldung.
+//   false    das Dock ist eingefahren.
+let stand: boolean | null = null
+
+function melde(sichtbar: boolean): void {
+  stand = sichtbar
+  for (const folge of mitfahrer) folge(sichtbar)
+}
+
+/** Diese Funktion mit dem Dock mitfahren lassen.
+ *
+ * Sie wird bei jedem Wechsel gerufen - und einmal sofort, wenn das Dock
+ * schon steht, damit ein spaet gebauter Mitfahrer nicht bis zum ersten
+ * SUPER+B in der Luft haengt.
+ */
+export function faehrtMitDemDock(folge: Mitfahrer): void {
+  mitfahrer.push(folge)
+  if (stand !== null) folge(stand)
+}
+
 /** Ein Dock je Schirm, unten am Rand, sichtbar.
  *
  * Sichtbar, und das ist die zweite Haelfte der Antwort auf "die nwg dock
@@ -724,11 +841,21 @@ export default function Dock(): DockHandle {
     windows.push(window)
   }
 
+  // Der Anfangsstand fuer alle, die mitfahren wollen. Er steht HIER und
+  // nicht als Vorgabe bei `stand`, weil `visible: true` eine Zeile
+  // weiter oben steht: waeren es zwei Stellen, koennte jemand die eine
+  // aendern und die andere vergessen.
+  melde(windows.some(window => window.visible))
+
   return {
     windows,
     toggle: () => {
       const showing = windows.some(window => window.visible)
       for (const window of windows) window.visible = !showing
+      // NACH der Schleife und im selben Durchlauf: erst steht der neue
+      // Stand des Docks fest, dann faehrt alles mit, was mitfaehrt -
+      // und beides, bevor GTK das naechste Mal zum Compositor schreibt.
+      melde(!showing)
     },
     visible: () => windows.some(window => window.visible),
   }

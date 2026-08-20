@@ -52,6 +52,10 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 BAR = SRC / "templates" / "ags-bar.template"
 DOCK = SRC / "templates" / "ags-dock.template"
+# Der Abschaltknopf neben dem Dock. Er steht hier, seit er mit dem Dock
+# ein- und ausfaehrt (20.08.2026) - vorher war seine Lage eine Frage fuer
+# sich, jetzt ist sie eine Frage NACH dem Dock.
+POWER = SRC / "templates" / "ags-power-button.template"
 BAR_STYLE = SRC / "styles" / "bar-style.template"
 HYPRLAND = SRC / "templates" / "hyprland-universal-config.template"
 
@@ -360,6 +364,82 @@ def test_the_footer_keeps_its_margin_from_the_size_table():
         "STYLE_DOCK_MARGIN_BOTTOM am 12.08.2026 dafuer entfallen ist")
     assert "window.set_margin_bottom(DOCK_MARGIN_BOTTOM)" in code, (
         "die Fusszeile setzt einen anderen Abstand, als sie exportiert")
+
+
+def test_the_power_button_rides_with_the_dock():
+    """"die dock beim einfahren mit super b soll auch links der button
+    mit shutdown auch mit verschwinden mit der selben animation" -
+    gemeldet am 20.08.2026.
+
+    WAS HIER GEPRUEFT WIRD, UND WAS NICHT
+        Hier steht, dass die KOPPLUNG in den Vorlagen steht: das Dock
+        sagt seinen Stand weiter, und der Abschaltknopf hoert zu. Dass
+        auf dem Schirm dann wirklich beide zugleich verschwinden, misst
+        tests/render/test_einfahrt.py an Bildpunkten und an hyprctl -
+        dieselbe Trennung wie ueberall in diesem Verzeichnis.
+
+    DREI STUECKE, UND JEDES EINZELNE FEHLT LAUTLOS
+        Ohne den Aufruf in toggle() faehrt nur das Dock. Ohne die
+        Anmeldung im Knopf hoert niemand zu. Und ohne dass die Anmeldung
+        ALLE Flaechen des Knopfes anfasst, bliebe auf dem zweiten Schirm
+        einer stehen - derselbe Fehler, nur seltener zu sehen.
+    """
+    dock = _code(DOCK, "//")
+    knopf = _code(POWER, "//")
+
+    assert "export function faehrtMitDemDock(" in dock, (
+        "das Dock nimmt keine Mitfahrer mehr an - dann gibt es nichts, "
+        "woran der Abschaltknopf haengen koennte")
+
+    # Ab der Zeile, die die Dockfenster wirklich umschaltet, und nicht ab
+    # "toggle: () => {": diese Zeichenfolge steht auch im Notausgang von
+    # Dock() ("toggle: () => {}", wenn es gar keine Anzeige gibt), und
+    # der steht in der Datei ZUERST.
+    toggle = dock[dock.index(
+        "for (const window of windows) window.visible = !showing"):]
+    assert "melde(" in toggle.split("},")[0], (
+        "toggle() sagt seinen neuen Stand nicht weiter. Das ist die EINE "
+        "Stelle, an der sich die Sichtbarkeit des Docks aendert - wer sie "
+        "ueberspringt, laesst alle Mitfahrer stehen")
+
+    assert 'from "./Dock"' in knopf and "faehrtMitDemDock" in knopf, (
+        "der Abschaltknopf meldet sich nicht mehr beim Dock an")
+    mitfahrt = knopf[knopf.index("faehrtMitDemDock("):]
+    assert "for (const flaeche of flaechen) flaeche.visible = sichtbar" \
+        in mitfahrt, (
+        "die Mitfahrt setzt nicht ALLE Flaechen des Knopfes. Das Dock "
+        "toggelt alle seine Fenster zugleich (siehe dessen toggle()); ein "
+        "Knopf, der nur eines anfasst, bleibt auf jedem weiteren Schirm "
+        "stehen")
+
+
+def test_neither_the_dock_nor_the_button_carries_its_own_duration():
+    """Die Bewegung gehoert dem Compositor, nicht diesen zwei Dateien.
+
+    "mit der selben animation" ist erfuellt, WEIL keine der beiden
+    Dateien eine eigene hat: beide setzen `visible` und melden ihre
+    Layer-Shell-Flaeche ab, und Hyprland faehrt jede solche Flaeche ueber
+    `layers`/`layersOut` heraus - ohne Regel je Namensraum, also fuer
+    beide gleich. Die Dauern und die Kurve dazu stehen auf der
+    Bewegungsleiter (src/sizes.py, MOTION_ROLES, MOTION_CURVE_POINTS) und
+    werden in hyprland-universal-config.template eingesetzt.
+
+    Eine Dauer in einer dieser beiden Dateien waere eine ZWEITE Bewegung
+    neben der des Compositors, und die beiden waeren genau so lange
+    gleich, wie niemand an einer von ihnen dreht. Deshalb faellt diese
+    Zusicherung, sobald jemand eine hineinschreibt - auch als
+    Platzhalter: ein {{STYLE_MOTION_*}} hier waere dieselbe zweite
+    Bewegung, nur mit gepflegter Zahl.
+    """
+    for name, code in (("ags-dock.template", _code(DOCK, "//")),
+                       ("ags-power-button.template", _code(POWER, "//"))):
+        for wort in ("setTimeout", "timeout_add", "STYLE_MOTION",
+                     "transition", "cubic-bezier"):
+            assert wort not in code, (
+                f"{name} bringt mit {wort!r} eine eigene Bewegung mit. Das "
+                f"Ein- und Ausfahren malt der Compositor, fuer beide "
+                f"Flaechen mit derselben Regel - eine zweite Dauer hier "
+                f"waere eine, die dazu nicht passt")
 
 
 # --------------------------------------------------------------------
