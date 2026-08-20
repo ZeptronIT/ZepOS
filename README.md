@@ -268,6 +268,29 @@ Anthropic's proprietary CLI under its own licence, not part of ZepOS's GPL, and
 it needs an Anthropic account to do anything. Remove the package if you do not
 want it.
 
+**Ruflo is NOT preinstalled, deliberately.** Ruflo (on npm: `claude-flow`) is
+an orchestrator that drives Claude Code and runs several AI agents in roles. It
+shipped as a package from 19 to 20 August 2026 and was removed again: Ruflo
+drives Claude Code, and Claude Code talks to the Anthropic API — without a
+network connection it does nothing at all. The one advantage preinstalling
+has, independence from the network, therefore does not exist for this
+particular tool, and a package would have pinned it to one version while npm
+keeps shipping new ones.
+
+ZepOS still brings Node and npm, so you can fetch it in one command — without
+`sudo`:
+
+```
+npm i -g claude-flow
+claude-flow --version
+```
+
+`/etc/npmrc` sets npm's prefix to `~/.local`, so the program lands as
+`~/.local/bin/claude-flow`, and that directory is on ZepOS's PATH anyway. A
+global `npm i -g` needs no root here and does not write into pacman's
+`/usr/lib/node_modules/`. If you want your own prefix, set it in `~/.npmrc` —
+your own file wins.
+
 ### What is on the screen, and why we wrote it
 
 | | Replaces | Why |

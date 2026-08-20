@@ -422,6 +422,51 @@ depends=(
     'jq'
     'zsh'                     # zshrc-config generates ~/.zshrc
 
+    # --- die JavaScript-Laufzeit -------------------------------------
+    # NACHGETRAGEN am 20.08.2026, als zepos-ruflo geloescht wurde.
+    #
+    # Node und npm kamen am 19.08. als depends VON zepos-ruflo auf die
+    # Maschine. Das Paket ist weg (packaging/zepos-apps/PKGBUILD sagt an
+    # der Stelle, an der es stand, warum); die Laufzeit bleibt, und zwar
+    # ABSICHTLICH: der Nutzer soll sich Ruflo mit `npm i -g claude-flow`
+    # selbst holen koennen, und ohne Node ist dieser Satz eine Falle.
+    #
+    # WARUM HIER UND NICHT IN zepos-apps
+    #     zepos-apps waere der erste Gedanke - dort steht zepos-claude-
+    #     code, dort stand Ruflo. Es ist trotzdem falsch, und der Grund
+    #     steht in zepos-apps' eigenem package(): sein depends-Block wird
+    #     Zeile fuer Zeile nach /usr/share/zepos/shipped-applications
+    #     geschrieben, und src/apps.py heftet GENAU DIESE Liste ans Dock.
+    #     Eine Laufzeit ohne .desktop-Datei haette dort nichts verloren -
+    #     tests/packaging/test_apps.py haelt daneben fest, dass jeder
+    #     Eintrag dort EINE Anwendung fuer EINE Aufgabe ist. Node ist
+    #     keine Anwendung.
+    #
+    #     Hier dagegen steht bereits, was ein installiertes ZepOS an
+    #     nicht-graphischem Unterbau braucht: zsh, jq, sudo, polkit.
+    #     Eine Laufzeit gehoert in diese Reihe.
+    #
+    # WARUM nodejs-lts-krypton UND NICHT DAS SCHLICHTE nodejs
+    #     GEMESSEN am 19.08.2026 und der Grund, aus dem der Name hier
+    #     ausgeschrieben steht: claude-flows eigene optionale
+    #     Abhaengigkeit better-sqlite3 verlangt "engines": Node
+    #     20.x-25.x. Das schlichte `nodejs` traegt im angehefteten
+    #     Schnappschuss 2026/08/04 die 26.5.1 - npm laesst eine optionale
+    #     Abhaengigkeit mit unpassendem engines-Bereich STILL weg, ohne
+    #     Warnung und ohne Fehlschlag. Ein Ausfall ohne Fehlermeldung ist
+    #     schlimmer als eine aeltere Fassung. nodejs-lts-krypton ist
+    #     24.18.1 und damit die hoechste Fassung, die Arch pflegt UND die
+    #     die Zusage einhaelt.
+    #
+    #     npm traegt `nodejs>=20.17.0`, nicht einen Paketnamen, und jedes
+    #     LTS-Paket bietet `Provides: nodejs` an - es gibt hier also
+    #     keinen Streit zu loesen, nur einen Namen zu waehlen.
+    #
+    #     npm selbst und nicht nur node: `npm i -g` IST npm, und npx
+    #     liegt ebenfalls dort.
+    'nodejs-lts-krypton'
+    'npm'
+
     # --- die Eingabezeile --------------------------------------------
     # Vier Pakete, und sie stehen hier aus derselben Regel wie alles
     # andere: die ERZEUGTE Konfiguration nennt jede dieser Dateien

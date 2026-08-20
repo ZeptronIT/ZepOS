@@ -114,6 +114,11 @@ backup=(
     'etc/greetd/zepos-regreet.toml'
     'etc/greetd/zepos-greeter-zeptronit.css'
     'etc/greetd/zepos-greeter-tageslicht.css'
+    # Seit dem 20.08.2026. Sie steht hier aus genau dem Grund, aus dem es
+    # diese Liste gibt: sie ist eine EINSTELLUNG, und wer seinen
+    # npm-Praefix woanders hin legt, soll ihn beim naechsten Aktualisieren
+    # behalten.
+    'etc/npmrc'
 )
 
 package() {
@@ -322,6 +327,21 @@ assert "dock_pins" not in d, ("die Anheftungen gehoeren zepos-apps und "
     #     Installation abbricht. ZepOS legt deshalb daneben ab und zeigt
     #     greetd ueber das Drop-in darauf; src/login/greetd.toml traegt
     #     die Messung.
+    # Die systemweite npm-Konfiguration. Sie macht `npm i -g` fuer einen
+    # gewoehnlichen Nutzer moeglich, ohne root und ohne in pacmans
+    # /usr/lib/node_modules/ zu schreiben; die Datei selbst begruendet
+    # jede ihrer Zeilen.
+    #
+    # /etc/npmrc gehoert KEINEM Paket - GEPRUEFT am 20.08.2026 im
+    # Container: `pacman -Qo /etc/npmrc` sagt "No package owns", und npm
+    # nennt genau diesen Pfad als seine `globalconfig`. Es gibt hier also
+    # nichts zu ueberschreiben und keinen Dateikonflikt zu erwarten.
+    #
+    # Hier und nicht bei zepos-desktop, obwohl Node dort haengt: dieses
+    # Paket ist das, welches unter /etc ablegt - dieselbe Rolle, in der
+    # es schon greetds Dateien danebenlegt.
+    install -Dm644 system/npmrc "$pkgdir/etc/npmrc"
+
     install -Dm644 login/greetd.toml "$pkgdir/etc/greetd/zepos.toml"
     install -Dm644 login/regreet.toml "$pkgdir/etc/greetd/zepos-regreet.toml"
     install -Dm644 login/greetd-service.conf \

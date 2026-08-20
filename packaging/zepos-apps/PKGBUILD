@@ -234,27 +234,23 @@ depends=(
     # den ZepOS bisher bekommen hat.
     'zepos-claude-code'
 
-    # --- der Orchestrator ----------------------------------------------
-    # zepos-ruflo (npm: claude-flow, stellt sich selbst als "ruflo" vor).
-    # GEMELDET am 19.08.2026: "ich möchte ruflo github projekt auch
-    # direkt in claude mit installieren sodass der user direkt loslegen
-    # kann". Dieselbe Regel wie bei zepos-claude-code direkt darueber:
-    # "immer" heisst nicht optdepends, sonst installiert pacman es nicht.
+    # HIER STAND zepos-ruflo, VOM 19. BIS ZUM 20.08.2026.
     #
-    # Es setzt auf zepos-claude-code auf - ein Claude-Code-Plugin fuer
-    # KI-Agenten in Rollen (Supervisor, Planer, Umsetzer), genau der
-    # Wunsch, den der Nutzer am selben Tag schon einmal geaeussert hatte.
+    # Der Nutzer hat es zurueckgenommen, und die Begruendung ist staerker
+    # als die, mit der es hereinkam: Ruflo steuert Claude Code, Claude
+    # Code spricht mit der Anthropic-Schnittstelle. Ohne Netz tut Ruflo
+    # gar nichts - und Unabhaengigkeit vom Netz ist der EINZIGE Vorteil,
+    # den Vorinstallieren gegenueber `npm i -g` ueberhaupt hat. Bei genau
+    # diesem Werkzeug gibt es ihn nicht.
     #
-    # Das Rezept daneben begruendet, warum es kein eigenes Symbol im Dock
-    # bekommt (ein Orchestrierer fuer ein Projektverzeichnis, kein
-    # Fenster zum Anklicken), warum es an nodejs-lts-krypton haengt und
-    # nicht am schlichten nodejs (claude-flows eigene optionale
-    # better-sqlite3 verlangt Node 20-25.x), und was es kostet: 574
-    # npm-Pakete, dazu nodejs-lts-krypton und npm selbst - GEMESSEN am
-    # gebauten Paket in einem leeren Container: 1247,99 MiB installiert,
-    # 335,72 MiB Bezug. Das ist der GROESSTE einzelne Zuwachs, den ZepOS
-    # bisher bekommen hat, vor zepos-claude-code (310 MiB).
-    'zepos-ruflo'
+    # Dazu kam die Fassung: ein Paket nagelt Ruflo auf 3.38.12 fest,
+    # waehrend sein Hersteller ueber npm ausliefert und schnell nachlegt.
+    # Wer es aus npm holt, bekommt die aktuelle.
+    #
+    # Node und npm sind geblieben - sie haengen jetzt an zepos-desktop,
+    # das dort begruendet. `npm i -g claude-flow` laeuft damit ohne root
+    # durch; /etc/npmrc aus zepos-config setzt den Praefix auf ~/.local,
+    # und ~/.local/bin liegt ohnehin im PATH.
 
     # --- der Rechner --------------------------------------------------
     # gnome-calculator 50.0-1. GEMELDET am 13.08.2026: "es fehlt ein

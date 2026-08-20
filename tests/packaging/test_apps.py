@@ -102,13 +102,6 @@ SHIPPED = {
     # @anthropic-ai/claude-code-linux-x64, mit fester Version und
     # Pruefsumme, wie aylurs-gtk-shell es mit gnim vormacht.
     "zepos-claude-code": "der Assistent",
-    # Am 19.08.2026 dazugekommen: "ich möchte ruflo github projekt auch
-    # direkt in claude mit installieren sodass der user direkt loslegen
-    # kann". Dieselbe Begruendung wie bei zepos-claude-code direkt
-    # darueber - "immer" heisst nicht optdepends. Kein eigenes Symbol im
-    # Dock: packaging/zepos-ruflo/PKGBUILD misst, warum ein Orchestrierer
-    # fuer ein Projektverzeichnis kein Fenster zum Anklicken ist.
-    "zepos-ruflo": "der Orchestrator",
     # Am 13.08.2026 dazugekommen: "es fehlt ein calculator". GTK4 und
     # libadwaita - `pacman -Si gnome-calculator` nennt gtk4, libadwaita
     # und gtksourceview5 und kein gtk3 -, also ohne die Ausnahme, die

@@ -1,0 +1,43 @@
+# /etc/npmrc - die systemweite npm-Konfiguration von ZepOS.
+#
+# WOFUER DIESE DATEI DA IST
+#     Damit `npm i -g <paket>` als GEWOEHNLICHER Nutzer durchlaeuft.
+#     Ohne sie steht npms Praefix auf /usr, globale Pakete gehoeren dann
+#     nach /usr/lib/node_modules/, und das Verzeichnis gehoert root -
+#     der Befehl bricht mit EACCES ab.
+#
+# WARUM NICHT EINFACH sudo npm i -g
+#     Weil /usr/lib/node_modules/ nicht leer ist: Archs eigene Pakete
+#     semver und nodejs-nopt liegen dort, gesetzt von pacman. Ein
+#     npm-Lauf mit root-Rechten schreibt in diesem Verzeichnis an pacman
+#     vorbei und kann Dateien ueberschreiben, die einem Paket gehoeren.
+#     Genau daran ist der erste Bauversuch von zepos-ruflo gescheitert
+#     ("exists in filesystem (owned by semver)"), und was ZepOS sich
+#     selbst verboten hat, empfiehlt es seinen Nutzern nicht.
+#
+# WARUM ~/.local UND NICHT ~/.npm-global
+#     Weil ~/.local/bin bereits im PATH liegt und nicht erst
+#     hineingeschrieben werden muss: src/templates/zshrc-config.template
+#     setzt `path=(~/.local/bin $path)`, und src/bin/zepos-session setzt
+#     denselben Pfad fuer die ganze Sitzung. npm legt unter einem Praefix
+#     X seine Programme nach X/bin und die Baeume nach X/lib/
+#     node_modules - mit prefix=~/.local landet ein globales Paket also
+#     genau dort, wo dieses System ohnehin nach Programmen des Nutzers
+#     sucht.
+#
+#     ~/.npm-global stand bis zum 17.08.2026 in der zsh-Vorlage und wurde
+#     geloescht, weil es VOR /usr/bin im PATH hing - was dort liegt,
+#     gewinnt gegen jedes Programm des Systems. Diese Zeile holt es nicht
+#     zurueck; sie kommt ohne einen zweiten PATH-Eintrag aus.
+#
+# WARUM HIER UND NICHT ALS UMGEBUNGSVARIABLE
+#     npm liest der Reihe nach: Befehlszeile, Umgebung, ~/.npmrc, DIESE
+#     Datei, eingebaute Vorgaben. NPM_CONFIG_PREFIX in der Umgebung
+#     stuende damit UEBER der eigenen ~/.npmrc des Nutzers und wuerde
+#     dessen Einstellung ueberschreiben. Hier steht sie darunter: wer
+#     `prefix` in seiner ~/.npmrc setzt, gewinnt.
+#     GEMESSEN am 20.08.2026 in einem leeren Container - eine eigene
+#     ~/.npmrc mit prefix=~/eigenes hat sich durchgesetzt.
+#
+# ${HOME} wird von npm selbst aufgeloest, je Nutzer, zur Laufzeit.
+prefix=${HOME}/.local

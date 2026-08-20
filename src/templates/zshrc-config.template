@@ -193,6 +193,29 @@ setopt auto_cd interactive_comments
 typeset -U path PATH
 path=(~/.local/bin $path)
 
+# WAS DAMIT AUCH FUER npm GILT - und wie man Ruflo bekommt
+#
+# ZepOS bringt Node und npm mit (nodejs-lts-krypton und npm, siehe
+# packaging/zepos-desktop/PKGBUILD), aber KEIN vorinstalliertes
+# npm-Werkzeug. /etc/npmrc setzt npms Praefix auf ~/.local, also landet
+# alles, was du global installierst, unter ~/.local/bin - dem
+# Verzeichnis, das die Zeile darueber gerade in den PATH gesetzt hat. Es
+# braucht deshalb weder root noch einen zweiten PATH-Eintrag:
+#
+#     npm i -g claude-flow      # danach: claude-flow --version
+#
+# Das ist Ruflo: ein Orchestrierer, der Claude Code steuert und mehrere
+# KI-Agenten in Rollen arbeiten laesst (Supervisor, Planer, Umsetzer).
+# Es SETZT Claude Code VORAUS - das bringt ZepOS als zepos-claude-code
+# schon mit - und es braucht eine Internetverbindung, weil Claude Code
+# mit der Anthropic-Schnittstelle spricht. Genau darum liegt es nicht
+# vorinstalliert bei: ein Werkzeug, das ohne Netz ohnehin nichts tut,
+# gewinnt nichts dadurch, dass es schon auf der Platte liegt - und aus
+# npm bekommst du immer die aktuelle Fassung statt einer eingefrorenen.
+#
+# Wer seinen eigenen Praefix will, setzt ihn in ~/.npmrc; die eigene
+# Datei gewinnt gegen /etc/npmrc.
+
 # Custom aliases - Hyprland profile launchers
 #
 # Hier standen go-game, go-home und go-office: drei Aliase auf

@@ -104,6 +104,11 @@ SOURCE_OF = {
         "src/system/zepos-update.timer",
     "usr/share/libalpm/hooks/90-zepos-update.hook":
         "src/system/zepos-update.hook",
+    # Die systemweite npm-Konfiguration, seit dem 20.08.2026. Auch hier
+    # aendert sich der Name unterwegs: im Baum liegt sie bei den uebrigen
+    # Systemdateien unter src/system/, auf der Maschine heisst sie
+    # /etc/npmrc, weil npm genau diesen Pfad als globalconfig liest.
+    "etc/npmrc": "src/system/npmrc",
     # Die Anmeldung, und die Namen aendern sich unterwegs. Das ist kein
     # Versehen: /etc/greetd/config.toml gehoert dem Paket greetd und
     # /etc/greetd/regreet.toml dem Paket greetd-regreet, also legt ZepOS
