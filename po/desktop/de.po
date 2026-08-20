@@ -1343,3 +1343,23 @@ msgstr "Ja"
 
 #~ msgid "Confirmation"
 #~ msgstr "Bestätigung"
+
+#: src/templates/ags-home.template:854
+msgid "Remove from Home"
+msgstr "Vom Home entfernen"
+
+#: src/templates/ags-home.template:899
+msgid "Open application launcher"
+msgstr "Anwendungsstarter öffnen"
+
+#: src/templates/ags-home.template:904
+msgid "Tidy up icons"
+msgstr "Symbole ordnen"
+
+#: src/templates/ags-home.template:912
+msgid "Choose wallpaper"
+msgstr "Hintergrundbild wählen"
+
+#: src/templates/ags-home.template:917
+msgid "Settings"
+msgstr "Einstellungen"

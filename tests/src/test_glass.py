@@ -421,9 +421,21 @@ def test_the_three_windows_outside_the_ags_templates_are_really_found():
         "mit Aufgabe 26 vollstaendig geloescht sein")
 
 
+def _sorted_into_lists(style) -> tuple[dict[str, str], set[str], set[str]]:
+    """Die drei Mengen, aus denen die Vollzaehligkeit gerechnet wird.
+
+    An EINER Stelle geholt, weil vier Pruefungen sie brauchen und vier
+    Abschriften derselben zwei Zeilen genau die Sorte Kopie sind, die
+    auseinanderlaeuft.
+    """
+    return (_declared_namespaces(),
+            set(style.GLASS_LAYERS),
+            set(style.PLAIN_LAYERS))
+
+
 def test_every_surface_this_project_opens_is_named_in_the_glass_list(
         monkeypatch, tmp_path):
-    """Keine Flaeche ohne Glasregel, und keine Regel ohne Flaeche.
+    """Keine Flaeche ohne Eintrag, und kein Eintrag ohne Flaeche.
 
     Beide Richtungen, und beide haben einen Fehlermodus:
 
@@ -436,24 +448,159 @@ def test_every_surface_this_project_opens_is_named_in_the_glass_list(
       Regel zuviel        Compositor-Konfiguration, die nie greift.
                            Genau der Zustand, in dem
                            MONITOR_HEIGHT_SCALES war.
+
+    SEIT DEM 20.08.2026 (Aufgabe 52) SIND ES DREI LISTEN UND NICHT ZWEI
+        Neben GLASS_LAYERS steht PLAIN_LAYERS: Flaechen, die ueberhaupt
+        keinen Hintergrund malen (bisher genau eine, das Home). Die
+        Begruendung, warum das eine Erweiterung und keine Aufweichung
+        ist, steht bei PLAIN_LAYERS in src/style_definition.py.
+
+        WORAN MAN ES HIER ABLIEST: die Pruefung ist strenger geworden und
+        nicht milder. Sie verlangt weiterhin, dass JEDE angemeldete
+        Flaeche aufgefuehrt ist - und zusaetzlich, dass keine in ZWEI
+        Listen steht. Eine Flaeche, die Glas UND nichts ist, ist ein
+        Widerspruch, und ohne diese Zeile waere er der bequeme Weg, eine
+        Flaeche aus der Deckkraftpruefung herauszunehmen, ohne dass etwas
+        faellt: einfach in beide Listen schreiben.
+
+        Dass der Waechter noch greift, steht nicht als Behauptung hier,
+        sondern wird gemessen -
+        test_a_surface_in_no_list_at_all_is_still_caught legt eine
+        erfundene Flaeche hin und prueft, dass sie durchfaellt.
     """
     test_sizes._no_compositor(monkeypatch)
     style = test_sizes._import_style(tmp_path, monkeypatch)
 
-    declared = _declared_namespaces()
-    listed = set(style.GLASS_LAYERS)
+    declared, glass, plain = _sorted_into_lists(style)
 
     # Die Fabrik selbst ist kein Fenster.
-    missing = sorted(set(declared) - listed)
+    missing = sorted(set(declared) - glass - plain)
     assert missing == [], (
         "diese Flaechen melden einen Layer-Shell-Namensraum an und stehen "
-        "nicht in GLASS_LAYERS - sie bekommen keine Unschaerfe: "
+        "weder in GLASS_LAYERS noch in PLAIN_LAYERS - es ist nicht "
+        "aufgeschrieben, ob sie Glas sind, deckend oder gar nichts: "
         + ", ".join(f"{name} ({declared[name]})" for name in missing))
 
-    orphaned = sorted(listed - set(declared))
+    orphaned = sorted((glass | plain) - set(declared))
     assert orphaned == [], (
-        "fuer diese Namensraeume wird eine layerrule erzeugt, und keine "
-        "Vorlage meldet sie an: " + ", ".join(orphaned))
+        "fuer diese Namensraeume steht ein Eintrag in GLASS_LAYERS oder "
+        "PLAIN_LAYERS, und keine Vorlage meldet sie an: "
+        + ", ".join(orphaned))
+
+    both = sorted(glass & plain)
+    assert both == [], (
+        "diese Flaechen stehen in GLASS_LAYERS UND in PLAIN_LAYERS - sie "
+        "koennen nicht gleichzeitig eine Glasplatte tragen und keinen "
+        "Hintergrund malen: " + ", ".join(both))
+
+
+def test_every_plain_surface_says_why_it_is_plain(monkeypatch, tmp_path):
+    """Eine Flaeche ohne Glas braucht einen Satz, keinen Eintrag.
+
+    PLAIN_LAYERS ist eine Abbildung Name -> Begruendung und kein Tupel
+    mit Kommentaren daneben, genau damit diese Pruefung moeglich ist: ein
+    Kommentar laesst sich weglassen, ein Wert nicht. Ohne diese Zeile
+    waere die dritte Liste das, was sie ausdruecklich nicht sein soll -
+    eine Stelle, an der man eine Flaeche aus der Deckkraftpruefung
+    nehmen kann, ohne zu sagen warum.
+
+    Verlangt wird ein SATZ und nicht ein Wort: die kurze Fassung ("Home",
+    "durchsichtig") beantwortet keine der beiden Fragen, um die es geht -
+    was die Flaeche ist, und warum sie nichts malt.
+    """
+    test_sizes._no_compositor(monkeypatch)
+    style = test_sizes._import_style(tmp_path, monkeypatch)
+
+    thin = sorted(name for name, why in style.PLAIN_LAYERS.items()
+                  if not isinstance(why, str) or len(why.split()) < 10)
+    assert thin == [], (
+        "diese Eintraege in PLAIN_LAYERS tragen keine Begruendung, die "
+        "erklaert, WAS die Flaeche ist und WARUM sie keinen Hintergrund "
+        "malt - ohne sie ist die dritte Liste eine pauschale Ausnahme: "
+        + ", ".join(thin))
+
+
+def test_no_plain_surface_gets_a_layerrule(processor, monkeypatch, tmp_path):
+    """Und keine von ihnen taucht in der erzeugten Compositor-Konfiguration auf.
+
+    Die Gegenprobe zu test_the_generated_config_carries_both_rules_for_
+    every_surface: dort wird verlangt, dass jede GLASS-Flaeche ihre zwei
+    Zeilen bekommt, hier, dass jede PLAIN-Flaeche KEINE bekommt.
+
+    Ohne diese Zeile waere PLAIN_LAYERS eine Liste, die nichts bewirkt:
+    jemand traegt eine Flaeche dort ein, schreibt sie versehentlich auch
+    in GLASS_LAYERS - oder _glass_layerrules() liest eines Tages beide
+    Listen -, und der Compositor rechnete eine Unschaerfe ueber die
+    Tapete, ohne dass etwas faellt.
+    """
+    test_sizes._no_compositor(monkeypatch)
+    style = test_sizes._import_style(tmp_path / "stil", monkeypatch)
+
+    # Derselbe Weg wie in test_the_generated_config_carries_both_rules_
+    # for_every_surface: an der ERZEUGTEN Datei und nicht am Platzhalter.
+    out = tmp_path / "hyprland.conf"
+    processor.ConfigProcessor(
+        styles=dict(style.STYLE_VARIABLES)).apply_template(HYPRLAND, out)
+    text = out.read_text(encoding="utf-8")
+
+    ruled = sorted(name for name in style.PLAIN_LAYERS
+                   if re.search(
+                       re.escape(f"match:namespace ^({name})$"), text))
+    assert ruled == [], (
+        "fuer diese Flaechen wird eine layerrule erzeugt, obwohl sie in "
+        "PLAIN_LAYERS stehen und gar keinen Hintergrund malen: "
+        + ", ".join(ruled))
+
+
+# Eine Flaeche, die es nicht gibt - hingelegt, damit gemessen werden kann,
+# dass der Waechter oben noch greift.
+#
+# WARUM DIESE ZEILEN HIER STEHEN UND NICHT IN PLANTED_WINDOWS
+#     PLANTED_WINDOWS prueft, ob der SUCHER eine Schreibweise lesen kann.
+#     Hier geht es um etwas anderes: ob die VOLLZAEHLIGKEIT noch faellt,
+#     wenn ein Fund in keiner der drei Listen steht. Das ist die Probe,
+#     die eine Erweiterung von einer Aufweichung unterscheidet - ohne sie
+#     waere "der Waechter ist noch streng" eine Behauptung.
+UNLISTED_WINDOW = {
+    "src/templates/ags-erfunden.template":
+        ('new Astal.Window({ namespace: "erfundene-flaeche" })\n'),
+}
+
+
+def test_a_surface_in_no_list_at_all_is_still_caught(monkeypatch, tmp_path):
+    """Die Gegenprobe: eine Flaeche ohne Eintrag faellt weiter durch.
+
+    Gemessen wird an der RECHNUNG der Vollzaehligkeit und nicht am Test
+    daneben - pytest.raises um einen Testaufruf herum liefe auf einen
+    Test hinaus, der einen anderen Test testet. Aufgerufen wird deshalb
+    dasselbe _declared_namespaces() mit einem Baum, in dem ein Fund
+    liegt, und die Rechnung selbst nachvollzogen.
+
+    WAS DAMIT BEWIESEN IST: die dritte Liste hat kein Loch aufgemacht.
+    Eine neue Flaeche muss weiterhin in eine der drei Listen eingetragen
+    werden; wer sie vergisst, wird rot - genauso wie vor dem 20.08.2026,
+    als es zwei Listen waren.
+    """
+    test_sizes._no_compositor(monkeypatch)
+    style = test_sizes._import_style(tmp_path / "stil", monkeypatch)
+
+    baum = tmp_path / "baum"
+    for relative, text in UNLISTED_WINDOW.items():
+        target = baum / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+
+    declared = _declared_namespaces(baum)
+    assert "erfundene-flaeche" in declared, (
+        "der Sucher findet die hingelegte Flaeche nicht - dann misst diese "
+        "Gegenprobe gar nichts")
+
+    missing = sorted(set(declared)
+                     - set(style.GLASS_LAYERS) - set(style.PLAIN_LAYERS))
+    assert missing == ["erfundene-flaeche"], (
+        "eine Flaeche, die in KEINER der drei Listen steht, faellt der "
+        "Vollzaehligkeitspruefung nicht mehr auf - der Waechter ist mit "
+        f"der dritten Liste durchlaessig geworden. Uebrig blieb: {missing}")
 
 
 def test_the_generated_config_carries_both_rules_for_every_surface(
@@ -702,11 +849,26 @@ def test_every_surface_this_project_opens_has_a_plate(monkeypatch, tmp_path):
     jemand einen Eintrag anlegt: eine neue Ueberlagerung ohne Eintrag
     stuende in keiner der beiden Listen und faende deshalb in beiden
     Richtungen nichts zu beanstanden.
+
+    JEDE, DIE SICH UEBERHAUPT MALT - seit dem 20.08.2026 (Aufgabe 52)
+        Die Flaechen aus PLAIN_LAYERS malen keinen Hintergrund, und eine
+        Platte ist ein ZEIGER auf die Zeile, an der ein Hintergrund
+        gemalt wird (siehe den Kopf von GLASS_PLATES). Fuer sie einen
+        Eintrag zu verlangen hiesse, einen Zeiger auf eine Regel zu
+        verlangen, die es nicht geben darf - und der einzige Weg, ihn zu
+        liefern, waere, dem Home doch einen Hintergrund zu geben.
+
+        Sie fallen deshalb HIER heraus und nicht aus der
+        Vollzaehligkeit: dass sie aufgefuehrt sind, prueft
+        test_every_surface_this_project_opens_is_named_in_the_glass_list
+        weiter oben, und dass sie eine Begruendung tragen,
+        test_every_plain_surface_says_why_it_is_plain.
     """
     style = test_sizes._import_style(tmp_path, monkeypatch)
     declared = _declared_namespaces()
 
-    missing = sorted(set(declared) - set(style.GLASS_PLATES))
+    missing = sorted(set(declared) - set(style.GLASS_PLATES)
+                     - set(style.PLAIN_LAYERS))
     assert missing == [], (
         "diese Flaechen melden einen Namensraum an, und GLASS_PLATES sagt "
         "nicht, wo sie sich malen - fuer sie ist die Glaspruefung blind: "

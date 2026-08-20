@@ -1228,5 +1228,14 @@ def test_the_template_count_is_seventy_seven():
     dahinter. Die vollstaendige Rechnung und der Wortlaut der Bestellung
     stehen bei der Zwillingszusicherung in tests/src/test_inventory.py;
     beide muessen zusammen wandern.
+
+    87 STATT 86, am 20.08.2026 (Aufgabe 52): ags-home. Der Schreibtisch
+    mit Programmsymbolen, den der Nutzer bestellt hat ("wo die apps mit
+    den logos sein sollen wie windows"). Eine Layer-Shell-Flaeche je
+    Schirm auf `bottom` - ueber der Tapete, unter jedem Fenster. Sein
+    Stylesheet liegt unter src/styles/home-style.template und zaehlt hier
+    nicht mit, genau wie lock-style.template weiter oben. Die
+    vollstaendige Rechnung steht bei der Zwillingszusicherung in
+    tests/src/test_inventory.py.
     """
-    assert len(list(TEMPLATES.glob("*.template"))) == 86
+    assert len(list(TEMPLATES.glob("*.template"))) == 87

@@ -76,8 +76,8 @@ sys.path.insert(0, str(ROOT))
 
 from tests.render import measure                      # noqa: E402
 from tests.render.desktop_session import (             # noqa: E402
-    Session, bundle, render_configuration, required_tools, size_of,
-    workspaces_file,
+    Session, bundle, empty_home, render_configuration, required_tools,
+    size_of, workspaces_file,
 )
 
 # Dieselbe Beruhigungszeit, die shoot.py benutzt: die Skriptmodule
@@ -116,6 +116,13 @@ def gemalt(request, tmp_path_factory) -> dict:
     bilder = tmp_path_factory.mktemp("zepgeo-bild")
     ags = render_configuration(bau, scale=faktor)
     bundle(ags, bau)
+
+    # Ein Home OHNE Symbole. Es legt seine Symbole ins untere Drittel,
+    # und genau dort misst diese Datei, wie viel der FUSS bemalt - seine
+    # Symbole waeren dort ein Zuschlag, der mit Kopf und Fuss nichts zu
+    # tun hat. Die ganze Begruendung steht bei empty_home() in
+    # tests/render/desktop_session.py.
+    empty_home(bau)
 
     # Kein start() hier: __enter__ ruft es. Ein zweiter Aufruf setzt
     # einen zweiten Compositor ueber den ersten, und danach findet

@@ -18,6 +18,10 @@ import style from "./style.scss"
 import type { OverlayAnchor, OverlayWidget, ShellWidget } from "./utils/overlay"
 import Bar from "./widget/Bar"
 import Dock, { DockHandle } from "./widget/Dock"
+// Das Home - die Flaeche hinter allen Fenstern, Aufgabe 52 (20.08.2026).
+// Baut wie Bar/Dock ein eigenes Astal.Window je Schirm und ist keine
+// Ueberlagerung: es geht nicht auf und zu, es ist immer da.
+import Home from "./widget/Home"
 import Calendar from "./widget/Calendar"
 import Shortcuts from "./widget/Shortcuts"
 import Battery from "./widget/Battery"
@@ -173,6 +177,7 @@ function toggleByName(name: string, at?: OverlayAnchor): void {
 }
 
 const BAR_CSS = `${GLib.get_user_config_dir()}/ags/bar.css`
+const HOME_CSS = `${GLib.get_user_config_dir()}/ags/home.css`
 
 /** Den Leistenstil aus der Datei nachladen. Rueckgabe: was zu melden ist.
  *
@@ -189,6 +194,25 @@ function applyBarStyle(): string {
     return "reloaded"
   } catch (e) {
     console.error("Failed to apply bar.css:", e)
+    return "failed"
+  }
+}
+
+/** Denselben Handgriff fuer den Stil des Homes.
+ *
+ * Eine zweite Funktion und kein zweiter Aufruf in der ersten: die
+ * Rueckgabe ist eine MELDUNG ueber genau eine Datei, und "reloaded" ueber
+ * zwei Dateien saegte man nicht mehr auseinander, wenn eine davon fehlt.
+ * Auch hier `false` - jedes `reset` wuerfe alles vorher Geladene weg,
+ * und bar.css ist eine Zeile vorher geladen worden.
+ */
+function applyHomeStyle(): string {
+  if (!GLib.file_test(HOME_CSS, GLib.FileTest.EXISTS)) return "no home.css"
+  try {
+    app.apply_css(HOME_CSS, false)
+    return "reloaded"
+  } catch (e) {
+    console.error("Failed to apply home.css:", e)
     return "failed"
   }
 }
@@ -334,6 +358,32 @@ app.start({
     // Ein Fehler in dieser Datei kostet damit die Leistenfarben und
     // nicht die ganze Oberflaeche.
     console.log("bar.css:", applyBarStyle())
+    console.log("home.css:", applyHomeStyle())
+
+    // Das Home, VOR der Leiste und vor dem Dock.
+    //
+    //     Nicht wegen der Stapelreihenfolge - die entscheidet der
+    //     Compositor aus der Ebene (`bottom` gegen `top`) und nicht aus
+    //     der Baureihenfolge. Sondern wegen der GROESSE: das Home
+    //     verankert sich an allen vier Kanten mit Exclusivity.NORMAL,
+    //     seine Flaeche ist also der Schirm minus die reservierten
+    //     Zonen. Wird es zuerst gebaut, bekommt es einmal die volle
+    //     Flaeche und danach je eine Groessenaenderung, sobald Leiste
+    //     und Dock ihre Zonen anmelden - und genau die faengt es ab
+    //     (`notify::width`/`notify::height`, siehe dort). Andersherum
+    //     saehe es nur den Endzustand; das waere heute dasselbe Bild und
+    //     liesse den Rueckruf ungeprueft, an dem das Ein- und Ausfahren
+    //     des Docks haengt.
+    //
+    //     toggleByName wird HEREINGEREICHT wie beim Abschaltknopf: zwei
+    //     Punkte seines Rechtsklickmenues oeffnen ein Fenster DIESES
+    //     Prozesses (Tapetenauswahl, Einstellungen).
+    try {
+      Home(toggleByName)
+      console.log("Home loaded successfully")
+    } catch (e) {
+      console.error("Failed to create Home:", e)
+    }
 
     // Die Leiste. Sie steht zuletzt, weil ihre Klicks die Widgets oben
     // erreichen muessen - toggleByName schlaegt in `widgets` nach, und

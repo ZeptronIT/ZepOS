@@ -382,8 +382,18 @@ def test_template_count_is_seventy_seven():
     und zentriert, ein angehaengter Knopf wanderte mit seinem Inhalt.
     Die Zwillingszusicherung in tests/src/test_new_templates.py haelt
     dieselbe Rechnung.
+
+    87 STATT 86, am 20.08.2026 (Aufgabe 52): ags-home. Der Nutzer wollte
+    einen Schreibtisch mit Programmsymbolen ("ich kann auch nicht auf dem
+    hintergrund sozusagen wo die apps mit den logos sein sollen wie
+    windows rechtsklick drücken und eine app spawnen"). Die neue Vorlage
+    erzeugt ags/widget/Home.tsx - eine Layer-Shell-Flaeche je Schirm auf
+    `bottom`, also ueber der Tapete und unter jedem Fenster. Ihr
+    Stylesheet liegt unter src/styles/home-style.template und zaehlt hier
+    NICHT mit, aus demselben Grund, aus dem lock-style.template dort
+    nicht mitzaehlt (siehe die Rechnung weiter oben).
     """
-    assert len(list((SRC / "templates").glob("*.template"))) == 86
+    assert len(list((SRC / "templates").glob("*.template"))) == 87
 
 
 def test_nothing_refers_to_a_deleted_template():

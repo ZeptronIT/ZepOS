@@ -1529,6 +1529,47 @@ _FIXED_STYLE_VARIABLES = {
     # Hover Effects
     "STYLE_HOVER_BG": THEME.SHADE_1,
     "STYLE_HOVER_COLOR": THEME.TEXT,
+
+    # ============================================================================
+    # DAS HOME - Aufgabe 52, 20.08.2026
+    # ============================================================================
+    # Die einzige Flaeche dieses Baums, deren Schrift auf einem BILD
+    # steht und nicht auf einer Platte. Jede andere Beschriftung liegt
+    # ueber einer Glasplatte aus SHADE_1, und tests/src/test_glass.py
+    # rechnet ihren Kontrast dagegen aus. Hier gibt es nichts, wogegen
+    # man rechnen koennte: dahinter liegt die Tapete des Nutzers, und die
+    # kann morgen eine andere sein.
+    #
+    # DESHALB EIN SCHATTEN UND KEINE ZWEITE FARBE
+    #     Eine hellere Schrift hilft ueber einer dunklen Tapete und
+    #     schadet ueber einer hellen; eine dunklere genau umgekehrt. Was
+    #     ueber BEIDEN traegt, ist ein Umriss: helle Schrift mit einem
+    #     dunklen Schatten dahinter. Windows und macOS loesen es seit
+    #     jeher so, und aus demselben Grund.
+    #
+    #     Die Deckkraft ist hoch (0.9) und der Radius klein: ein weicher
+    #     grosser Schatten sieht auf einer ruhigen Tapete nach Nebel aus,
+    #     ein harter enger wirkt wie ein Rand. Gebraucht wird der Rand.
+    # Die zwei Masse des Gitters - ueber size_value(), damit sie dem
+    # Faktor des Nutzers folgen und einzeln setzbar bleiben, genau wie
+    # STYLE_DOCK_ICON_SIZE weiter unten. Die Zelle ist ABGELEITET
+    # (sizes.home_cell_px()): Symbol, Beschriftungszeile und dreimal
+    # Polster, keine Zahl davon getippt.
+    "STYLE_HOME_ICON_SIZE": size_value("STYLE_HOME_ICON_SIZE"),
+    "STYLE_HOME_CELL": size_value("STYLE_HOME_CELL"),
+    "STYLE_HOME_LABEL_CHARS": size_value("STYLE_HOME_LABEL_CHARS"),
+    "STYLE_HOME_LABEL": THEME.TEXT,
+    "STYLE_HOME_LABEL_SHADOW": THEME.rgba(THEME.INK, 0.9),
+    # Der Grund unter einem Symbol, wenn der Zeiger darauf steht. Halb
+    # durchsichtig und nicht SHADE_1 wie STYLE_HOVER_BG: dies ist die
+    # eine Stelle, an der ein Zeigergrund auf der TAPETE liegt, und ein
+    # deckender Kasten mitten im Bild ist ein Loch. Ohne layerrule wird
+    # er auch nicht unscharf (siehe PLAIN_LAYERS) - halb durchsichtig
+    # heisst hier wirklich halb durchsichtig.
+    "STYLE_HOME_HOVER_BG": THEME.rgba(THEME.SHADE_1, 0.55),
+    # Und wenn eines gezogen wird. Kraeftiger als der Zeigergrund, damit
+    # waehrend des Ziehens zu sehen ist, WELCHES Symbol am Zeiger haengt.
+    "STYLE_HOME_DRAG_BG": THEME.rgba(THEME.SHADE_1, 0.8),
     
     # ============================================================================
     # DIE FREMDEN GTK4-FENSTER
@@ -2342,6 +2383,78 @@ GLASS_LAYERS = (
     "clipboard-manager",
     "zepos-menu",
 )
+
+
+# =============================================================================
+# DIE DRITTE LISTE: FLAECHEN, DIE GAR NICHTS MALEN
+# =============================================================================
+#
+# WAS SIE IST - EINE ERWEITERUNG UND KEINE AUFWEICHUNG
+#     Bis zum 20.08.2026 kannte dieser Baum zwei Sorten Layer-Shell-
+#     Flaeche, und tests/src/test_glass.py hielt beide gegeneinander:
+#
+#       GLASS_LAYERS    bekommt `blur on` und malt halbdurchsichtig
+#       alles andere    malt deckend
+#
+#     Beides sind FLAECHEN, die etwas malen. Eine dritte Sorte gab es
+#     nicht, weil es sie nicht gab.
+#
+#     Mit dem Home (Aufgabe 52) gibt es sie: eine Flaeche, die ueberhaupt
+#     KEINEN Hintergrund malt. Sie liegt auf `bottom`, also UNTER jedem
+#     Fenster und UEBER der Tapete, und alles, was man von ihr sieht, sind
+#     ihre Symbole. Sie ist keines von beidem - nicht Glas (es gibt keine
+#     Platte, deren Deckkraft man messen koennte) und nicht deckend (sie
+#     deckt nichts).
+#
+#     DER UNTERSCHIED ZU EINER AUSNAHME, und er ist der ganze Punkt:
+#     eine Ausnahme sagte "diese Flaeche wird nicht geprueft". Diese
+#     Liste sagt "diese Flaeche wird ANDERS geprueft, und hier steht
+#     warum". Jede Flaeche dieses Baums muss weiterhin in GENAU EINER
+#     der drei Listen stehen - in keiner zu stehen faellt weiter durch,
+#     in zweien zu stehen ebenfalls (test_every_surface_this_project_
+#     opens_is_named_in_the_glass_list). Und weil die Begruendung hier
+#     der WERT und nicht ein Kommentar ist, kann sie nicht weggelassen
+#     werden: ein Eintrag ohne Satz faellt durch
+#     test_every_plain_surface_says_why_it_is_plain.
+#
+#     Ein Kommentar neben einem Tupeleintrag waere die bequeme Fassung
+#     gewesen. Sie haette genau den Eintrag ohne Begruendung erlaubt, der
+#     hier nie entstehen soll - und damit die Aufweichung, die diese
+#     Liste ausdruecklich nicht ist.
+#
+# WARUM KEINE UNSCHAERFE - GEMESSEN am 20.08.2026
+#     Unschaerfe rechnet der Compositor ueber das, was HINTER der Flaeche
+#     liegt. Hinter dem Home liegt die Tapete. `blur on` auf dieses
+#     Fenster hiesse also: die Tapete unscharf rechnen, bei jedem Bild,
+#     ueber den ganzen Schirm - und das Ergebnis waere eine verwaschene
+#     Tapete unter scharfen Symbolen. Das ist nicht der teure Effekt, den
+#     niemand sieht (der Fall, den test_every_surface_that_asks_for_blur_
+#     really_paints_through fangen soll); es ist ein teurer Effekt, den
+#     jeder sieht und niemand bestellt hat.
+#
+# WARUM SIE NICHT DECKEND SEIN DARF - AUCH GEMESSEN
+#     Im verschachtelten Compositor, Tapete als reines Gruen (0,204,0),
+#     Bildpunkt in der Mitte des Schirms, aufgenommen mit grim:
+#
+#         ohne `background: transparent`   (246, 245, 244)  <- GTK-Grau
+#         mit  `background: transparent`   (0, 204, 0)      <- die Tapete
+#
+#     GTK4 meldet `wl_surface.set_opaque_region(0, 0, <ganzer Schirm>)`,
+#     solange die Flaeche einen Hintergrund hat. Ein Home mit
+#     GTK-Standardhintergrund ist eine bildschirmfuellende graue Platte
+#     ueber der Tapete - die Tapete waere weg, nicht halb zu sehen.
+#
+# Der Wert ist der Satz, der im Fehlerfall gelesen wird. Er nennt, WAS
+# die Flaeche ist und WARUM sie nichts malt - nicht "Ausnahme".
+PLAIN_LAYERS = {
+    "zepos-home": (
+        "Das Home ist die Flaeche hinter allen Fenstern und malt keinen "
+        "eigenen Hintergrund: sichtbar sind allein seine Programmsymbole, "
+        "dahinter steht unveraendert die Tapete (swaybg auf `background`). "
+        "Eine Platte haette sie verdeckt, eine Unschaerfe haette sie "
+        "verwaschen - beides ueber den ganzen Schirm und bei jedem Bild."
+    ),
+}
 
 
 # =============================================================================

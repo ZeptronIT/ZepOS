@@ -102,8 +102,8 @@ sys.path.insert(0, str(ROOT))
 
 from tests.render import measure                        # noqa: E402
 from tests.render.desktop_session import (              # noqa: E402
-    Session, bundle, render_configuration, required_tools, size_of,
-    workspaces_file,
+    Session, bundle, empty_home, render_configuration, required_tools,
+    size_of, workspaces_file,
 )
 # DIESELBE Frage an `hyprctl monitors` wie beim Einfahren, und deshalb
 # dieselbe Zeile: was der Schirm unten freihaelt, ist eine Zahl mit
@@ -193,6 +193,14 @@ def starter(tmp_path_factory) -> dict:
     bilder = tmp_path_factory.mktemp("zepstart-bild")
     ags = render_configuration(bau)
     schale = bundle(ags, bau)
+
+    # Ein Home OHNE Symbole. Es ist die Flaeche hinter allen Fenstern und
+    # legt seine Symbole ins untere Drittel - genau dorthin, wo diese
+    # Datei misst, ob nach SUPER+B noch etwas vom Fuss stehenbleibt. Die
+    # Symbole des Homes bleiben dort stehen, und zwar zu Recht; sie
+    # gehoeren nur nicht in DIESE Messung. Die ganze Begruendung steht
+    # bei empty_home() in tests/render/desktop_session.py.
+    empty_home(bau)
 
     # Das Klick-Kind: dieselbe erzeugte widget/StarterButton.tsx, nur
     # ohne die uebrige Oberflaeche daneben.

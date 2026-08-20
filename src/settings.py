@@ -204,6 +204,33 @@ def defaults() -> dict[str, Any]:
             # Installation von vor dem 20.08.2026.
             "dock_baseline": None,
         },
+        # Das Home: die Programmsymbole auf der Flaeche hinter allen
+        # Fenstern. Seit dem 20.08.2026 (Aufgabe 52).
+        #
+        # EIN EIGENER ABSCHNITT UND KEINE VIERTE LEISTENHAELFTE
+        #     Der Kopf bei BAR_BASELINE begruendet ausdruecklich, warum
+        #     "dock_pins" eine Liste von NAMEN bleibt: die Gleichform der
+        #     drei Haelften ist es, die bar_choice(), bar_order(), das
+        #     Bruecken-Bedienelement `reihenfolge` und die Seite "Leiste"
+        #     mit EINEM Zweig auskommen laesst, und "ein Objekt an genau
+        #     einer der drei haette an jeder dieser Stellen einen
+        #     Sonderweg erzwungen".
+        #
+        #     Das Home BRAUCHT Objekte: das Dock ist eine Reihe, das Home
+        #     eine FLAECHE, und wo etwas liegt, ist keine Reihenfolge.
+        #     Es in "bar" hineinzuschreiben hiesse, genau die Gleichform
+        #     zu brechen, die jener Absatz verteidigt. Also ein eigener
+        #     Abschnitt - und ausdruecklich DIESELBEN REGELN, siehe
+        #     home_effective() unten, das dock_effective() nachbaut.
+        #
+        # null heisst auch hier "wie ausgeliefert" und nicht "leer".
+        "home": {
+            "icons": None,
+            # Wortgleich dasselbe wie bar.dock_baseline und aus
+            # demselben Grund: ohne sie friert das Home fuer jeden, der
+            # EINMAL ein Symbol abgenommen hat, auf jenen Tag ein.
+            "baseline": None,
+        },
         "watchdog": {
             "interval_seconds": 60,
             "test_host": "1.1.1.1",
@@ -878,6 +905,331 @@ def pinnable(shipped: list[str] | None) -> list[str] | None:
                             if name not in known]
 
 
+# --------------------------------------------------------------------
+# Das Home: dieselben Regeln wie das Dock, nur mit einem Ort dabei
+# --------------------------------------------------------------------
+#
+# WARUM EINE ZELLE UND NICHT ZWEI BILDPUNKTE - GEMESSEN am 20.08.2026
+#     Der naheliegende Weg waere `{"x": 1800, "y": 900}`. Er ist an zwei
+#     Messungen gescheitert, und die zweite ist die, mit der niemand
+#     gerechnet hat:
+#
+#       1. Der kleinere Schirm. Ein Symbol bei (1800, 900) liegt auf
+#          einem 1366 breiten Schirm ausserhalb und ist nie wieder
+#          anzuklicken.
+#       2. DAS DOCK FAEHRT EIN UND AUS. GEMESSEN im verschachtelten
+#          Compositor: die Layer-Shell-Flaeche des Homes ist bei
+#          Exclusivity.NORMAL genau so gross wie der Schirm MINUS die
+#          reservierten Zonen, und sie wird im Betrieb umgebaut -
+#
+#              ohne Leiste        931x1081
+#              mit Leiste         931x1041   (Ursprung 0,40)
+#              Leiste wieder weg  931x1081
+#
+#          Das Dock hat ein toggle() (ags-dock.template). Mit
+#          Bildpunkten wanderte also bei jedem Ein- und Ausfahren des
+#          Docks JEDES Symbol. Ein Aufloesungswechsel ist gar nicht
+#          noetig; eine Taste genuegt.
+#
+#     Gespeichert wird deshalb eine ZELLE: `{"name": ..., "col": 3,
+#     "row": 1}`. Wie viele Spalten und Zeilen es HEUTE gibt, rechnet
+#     die Oberflaeche aus der heutigen Flaeche und dem Zellmass
+#     (sizes.home_cell_px()) - hier steht keine Zahl, die einen Schirm
+#     kennt.
+#
+# EIN EINTRAG DARF SEINE ZELLE AUCH WEGLASSEN
+#     `{"name": "firefox"}` ohne col/row heisst "noch nicht abgelegt".
+#     Genau das schreibt home_effective() fuer eine Anwendung, die ZepOS
+#     seit der Grundlinie dazuliefert: WO sie liegen soll, kann diese
+#     Datei nicht wissen - das haengt daran, welche Zellen auf DIESEM
+#     Schirm gerade frei sind, und das ist eine Frage der Anzeige und
+#     nicht der Einstellung. Die Oberflaeche legt sie in die erste freie
+#     Zelle und schreibt nichts zurueck.
+#
+#     Dieselbe Regel gilt fuer eine Zelle, die es heute nicht GIBT (der
+#     kleinere Schirm): ersatzweise anzeigen, NICHT zurueckschreiben.
+#     Steckt der Nutzer den grossen Schirm wieder an, liegt das Symbol
+#     wieder dort, wo er es hingelegt hat. Das ist derselbe Gedanke wie
+#     bei BAR_BASELINE: eine Anzeige, die sich an die Lage anpasst, darf
+#     die WAHL des Nutzers nicht ueberschreiben.
+HOME = "home"
+HOME_ICONS = "icons"
+HOME_BASELINE = "baseline"
+
+# Die Felder eines Eintrags. "name" ist Pflicht, die Zelle nicht.
+HOME_NAME = "name"
+HOME_COL = "col"
+HOME_ROW = "row"
+HOME_CELL = (HOME_COL, HOME_ROW)
+
+
+def home_icons(document: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """Was der Nutzer auf sein Home gelegt hat. None heisst "wie ausgeliefert".
+
+    Geprueft wird hier und nicht beim Aufrufer, aus demselben Grund wie
+    bei bar_choice(): es gibt mehr als einen Leser, und eine Liste, die
+    der eine annimmt und der andere ablehnt, ist schlimmer als eine, die
+    beide ablehnen - das Home stuende dann anders da als das Fenster, in
+    dem man es eingestellt hat.
+
+    EINE HALBE ZELLE IST EIN FEHLER UND KEIN "NOCH NICHT ABGELEGT"
+        `{"name": "firefox", "col": 3}` ohne "row" sieht aus wie eine
+        Angabe und ist keine. Wer sie als "nicht abgelegt" durchliesse,
+        legte das Symbol woanders hin als der Nutzer geschrieben hat,
+        ohne dass irgendetwas es sagt. Entweder BEIDE Zahlen oder KEINE.
+    """
+    section = document.get(HOME)
+    if section is None:
+        return None
+    if not isinstance(section, dict):
+        raise UnusableSettings(
+            f"\"{HOME}\" ist ein JSON {_json_type(section)} und kein Objekt "
+            f"mit {HOME_ICONS}, {HOME_BASELINE}")
+
+    value = section.get(HOME_ICONS)
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise UnusableSettings(
+            f"\"{HOME}.{HOME_ICONS}\" ist ein JSON {_json_type(value)}; "
+            f"erwartet wird eine Liste von Symbolen oder null fuer die "
+            f"ausgelieferte Belegung")
+
+    entries: list[dict[str, Any]] = []
+    for position, item in enumerate(value):
+        where = f"\"{HOME}.{HOME_ICONS}\"[{position}]"
+        if not isinstance(item, dict):
+            raise UnusableSettings(
+                f"{where} ist ein JSON {_json_type(item)}; erwartet wird ein "
+                f"Objekt wie {{\"{HOME_NAME}\": \"firefox\", "
+                f"\"{HOME_COL}\": 0, \"{HOME_ROW}\": 0}}")
+        name = item.get(HOME_NAME)
+        if not isinstance(name, str) or not name:
+            raise UnusableSettings(
+                f"{where}.{HOME_NAME} ist ein JSON {_json_type(name)}; "
+                f"jedes Symbol braucht den Namen einer Anwendung")
+
+        entry: dict[str, Any] = {HOME_NAME: name}
+        given = [field for field in HOME_CELL if item.get(field) is not None]
+        if given and len(given) != len(HOME_CELL):
+            missing = [f for f in HOME_CELL if f not in given]
+            raise UnusableSettings(
+                f"{where} nennt {', '.join(given)} und nicht "
+                f"{', '.join(missing)}; eine Zelle braucht beide Zahlen, "
+                f"oder keine - dann sucht das Home selbst einen Platz")
+        for field in given:
+            number = item.get(field)
+            # bool IST in Python ein int, und `true` als Spaltennummer
+            # waere sonst die Spalte 1 - eine Zahl, die niemand
+            # geschrieben hat.
+            if not isinstance(number, int) or isinstance(number, bool):
+                raise UnusableSettings(
+                    f"{where}.{field} ist ein JSON {_json_type(number)}; "
+                    f"erwartet wird eine ganze Zahl ab 0")
+            if number < 0:
+                raise UnusableSettings(
+                    f"{where}.{field} ist {number}; eine Zelle zaehlt ab 0 "
+                    f"und kann nicht negativ sein")
+            entry[field] = number
+        entries.append(entry)
+    return entries
+
+
+def home_baseline(document: dict[str, Any]) -> list[str] | None:
+    """Die Auslieferung, gegen die der Nutzer sein Home gesetzt hat.
+
+    Eine Liste von NAMEN und keine von Symbolen, obwohl sie neben einer
+    Symbolliste steht: sie beantwortet "was lieferte ZepOS damals aus",
+    und die Auslieferung hat keine Zellen - wo etwas liegt, ist die
+    Antwort des Nutzers und nie die der Auslieferung. Genau dieselbe
+    Form wie bar.dock_baseline, damit dock_effective() und
+    home_effective() dieselbe Rechnung machen koennen.
+
+    None heisst UNBEKANNT und nicht leer - siehe BAR_BASELINE.
+    """
+    section = document.get(HOME)
+    if section is None:
+        return None
+    if not isinstance(section, dict):
+        raise UnusableSettings(
+            f"\"{HOME}\" ist ein JSON {_json_type(section)} und kein Objekt "
+            f"mit {HOME_ICONS}, {HOME_BASELINE}")
+
+    value = section.get(HOME_BASELINE)
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise UnusableSettings(
+            f"\"{HOME}.{HOME_BASELINE}\" ist ein JSON {_json_type(value)}; "
+            f"erwartet wird eine Liste von Namen oder null")
+    wrong = [_json_type(item) for item in value if not isinstance(item, str)]
+    if wrong:
+        raise UnusableSettings(
+            f"\"{HOME}.{HOME_BASELINE}\" enthaelt "
+            f"{', '.join(f'ein JSON {kind}' for kind in wrong)}; "
+            f"jeder Eintrag muss ein Name sein")
+    return list(value)
+
+
+def home_effective(chosen: list[dict[str, Any]] | None,
+                   baseline: list[str] | None,
+                   shipped: list[str] | None) -> list[dict[str, Any]] | None:
+    """Das Home, nachdem die HEUTIGE Auslieferung dazugerechnet ist.
+
+    Die Schwester von dock_effective(), Satz fuer Satz dieselbe Rechnung
+    - und deshalb steht die Begruendung dort und wird hier nicht noch
+    einmal erzaehlt: `chosen` ist, was der Nutzer wollte, `baseline`,
+    wogegen er es gesagt hat, `shipped`, was heute ausgeliefert wird.
+    Was seit damals dazugekommen ist, hat er nie abgewaehlt - er konnte
+    es nicht - und wird angehaengt.
+
+    DER EINE UNTERSCHIED: DAS NEUE KOMMT OHNE ZELLE
+        dock_effective() haengt einen Namen an eine Reihe; hier fehlt
+        die Antwort auf "wo". Sie wird auch nicht erfunden: welche Zelle
+        frei ist, weiss nur die Oberflaeche, die gerade eine Flaeche
+        einer bestimmten Groesse vor sich hat. Angehaengt wird deshalb
+        `{"name": ...}` ohne col/row, und das Home sucht beim Zeichnen
+        die erste freie Zelle. Eine hier erfundene Zelle waere eine, die
+        auf einem schmaleren Schirm daneben liegt - und sie stuende dann
+        auch noch in der Datei, als haette der Nutzer sie gewaehlt.
+
+    UNBEKANNTE VORGABE HAENGT NICHTS AN - dieselbe Regel wie beim Dock.
+    """
+    if chosen is None:
+        return None
+    if baseline is None or shipped is None:
+        return list(chosen)
+
+    known = set(baseline)
+    already = {entry[HOME_NAME] for entry in chosen}
+    return list(chosen) + [{HOME_NAME: name} for name in shipped
+                           if name not in known and name not in already]
+
+
+def home_names(icons: list[dict[str, Any]] | None) -> list[str] | None:
+    """Nur die Namen, in ihrer Reihenfolge - fuer bar_order().
+
+    Damit das Home seine Namen durch DIESELBE Pruefung schicken kann wie
+    das Dock (kennt diese Maschine die Anwendung ueberhaupt?), statt
+    daneben eine zweite zu fuehren. Eine zweite Pruefung waere eine
+    zweite Antwort auf dieselbe Frage, und src/apps.py beschreibt in
+    seinem Kopf, was das kostet: "Ein Dock, das einen Namen annimmt, den
+    das Fenster verwirft, waere eine Einstellung, die man sieht und
+    nicht bekommt."
+    """
+    return None if icons is None else [entry[HOME_NAME] for entry in icons]
+
+
+def home_plan(document: dict[str, Any],
+              root: Path | None = None) -> dict[str, Any]:
+    """Was WIRKLICH auf dem Home liegt, und was dabei herausgefallen ist.
+
+    Das Gegenstueck zu dem, was `zepos-settings-gui --json get` fuer das
+    Dock tut - und aus demselben Grund hier und nicht im Fenster: die
+    Regeln (Grundlinie anhaengen, unbekannte Namen verwerfen, den Grund
+    NENNEN) sind dieselben, und zwei Antworten auf dieselbe Frage waeren
+    ein Home, das einen Namen annimmt, den das Dock verwirft.
+
+    WARUM DAS HOME NICHT DIE BRUECKE BENUTZT
+        Das Dock liest ueber `zepos-settings-gui --json get`, weil seine
+        Reihenfolge dort ein Bedienelement der Seite "Leiste" IST - es
+        holt sich genau das Feld, das der Nutzer im Einstellungsfenster
+        sieht. Das Home hat kein solches Bedienelement; es hat eine
+        eigene Datei-Sektion. Es fragt deshalb settings.py direkt, ueber
+        `settings.py home` - denselben Weg, ueber den die AGS-Fenster
+        auch SCHREIBEN (`settings.py merge`, siehe USAGE).
+
+    ZURUECK KOMMT IMMER EINE LISTE, AUCH BEI null
+        `home.icons` ist null bei jeder frischen Installation, und
+        "wie ausgeliefert" ist fuer eine Oberflaeche, die zeichnen soll,
+        keine brauchbare Antwort. Aufgeloest wird deshalb hier: die
+        ausgelieferte Auswahl, jede Anwendung OHNE Zelle - wo sie liegt,
+        entscheidet die erste freie Zelle auf dem Schirm, den es gerade
+        gibt (siehe den Kopf bei HOME).
+
+    DIE AUSGELIEFERTE AUSWAHL IST DIESELBE WIE DIE DES DOCKS
+        Und das ist eine Entscheidung: es gibt EINE Liste "was ZepOS
+        mitliefert" (shipped_pins(), aus demselben Abdruck), und zwei
+        davon waeren zwei Listen, die dasselbe sagen muessten. Was der
+        NUTZER daraus macht, ist getrennt - das ist der Unterschied, um
+        den es ihm ging: "Zum Home hinzufuegen" NEBEN "Zum Dock
+        hinzufuegen". Getrennt sind die WAHLEN, nicht die Auslieferung.
+    """
+    shipped = shipped_pins(root)
+    chosen = home_icons(document)
+    if chosen is None:
+        effective: list[dict[str, Any]] | None = (
+            None if shipped is None else [{HOME_NAME: n} for n in shipped])
+    else:
+        effective = home_effective(chosen, home_baseline(document), shipped)
+
+    kept, discarded = bar_order(home_names(effective), pinnable(shipped),
+                                shipped, unknown=BAR_GONE)
+
+    # Die Zellen wieder an die Namen - der ERSTE Treffer gewinnt, genau
+    # wie bar_order() den ersten Platz behaelt und jeden weiteren als
+    # "steht mehrfach in der Liste" verwirft. Ein spaeterer Eintrag
+    # desselben Namens ist dort schon herausgefallen; seine Zelle hier
+    # noch zu nehmen hiesse, einen verworfenen Eintrag doch zu benutzen.
+    cells: dict[str, dict[str, Any]] = {}
+    for entry in (effective or []):
+        cells.setdefault(entry[HOME_NAME], entry)
+
+    return {
+        "icons": [cells.get(name, {HOME_NAME: name}) for name in kept],
+        "discarded": [{"name": name, "why": why} for name, why in discarded],
+        # Damit der Aufrufer "wie ausgeliefert" von "der Nutzer hat eine
+        # leere Flaeche gewaehlt" unterscheiden kann, ohne die Datei ein
+        # zweites Mal zu lesen. Genau diese Unterscheidung ist der Grund,
+        # aus dem home_icons() null zurueckgibt statt einer leeren Liste.
+        "chosen": chosen is not None,
+    }
+
+
+def home_write(document: dict[str, Any], icons: list[dict[str, Any]],
+               root: Path | None = None) -> dict[str, Any]:
+    """Der Abschnitt, wie er auf die Platte gehoert - Symbole UND Vorgabe.
+
+    DIE ZWEI SCHLUESSEL WERDEN GEMEINSAM GESCHRIEBEN, IMMER
+        settings.py sagt das bei BAR_BASELINE ueber das Dock ("Sie werden
+        GEMEINSAM geschrieben (model.Draft.sections()), damit sie nicht
+        auseinanderfallen koennen"), und fuer das Home gilt es genauso.
+        Eine Symbolliste ohne frische Vorgabe hiesse: der Nutzer haette
+        gegen die Auslieferung von GESTERN entschieden, und alles, was
+        seither dazugekommen ist, erschiene beim naechsten Anmelden noch
+        einmal - auch das, was er gerade abgenommen hat.
+
+        Genau deshalb ist das hier eine Funktion und keine Zeile beim
+        Aufrufer: das Home ist nicht der einzige Schreiber. Das Dock und
+        der Starter sollen "Zum Home hinzufuegen" auch anbieten, und drei
+        Aufrufer, die je daran denken muessen, die Vorgabe mitzuschreiben,
+        sind zwei Aufrufer, die es einmal vergessen.
+
+    Die Vorgabe ist die HEUTIGE Auslieferung. Ist sie unbekannt (kein
+    Abdruck), bleibt der Schluessel null statt leer - eine leere Liste
+    hiesse "ZepOS lieferte nichts aus", und danach gaelte jede
+    ausgelieferte Anwendung als neu.
+    """
+    return {HOME: {HOME_ICONS: icons, HOME_BASELINE: shipped_pins(root)}}
+
+
+def check_home(document: dict[str, Any]) -> list[str]:
+    """Was am Home-Abschnitt nicht stimmt, in Saetzen.
+
+    Eine Liste und kein Wurf, aus demselben Grund wie bei check_bar():
+    wer die Symbolliste falsch geschrieben hat, hat moeglicherweise auch
+    die Vorgabe danebengeschrieben, und eine Meldung nach der anderen zu
+    erarbeiten ist die Art Sitzung, die niemand zu Ende bringt.
+    """
+    problems = []
+    for reader in (home_icons, home_baseline):
+        try:
+            reader(document)
+        except UnusableSettings as problem:
+            problems.append(str(problem))
+    return problems
+
+
 def bar_complaint(key: str, discarded: Discarded) -> str:
     """Was ueber die verworfenen Eintraege zu sagen ist - einmal formuliert.
 
@@ -923,10 +1275,31 @@ def check_bar(document: dict[str, Any]) -> list[str]:
 
 USAGE = """usage: settings.py check
        settings.py merge '<json object>'
+       settings.py home
+       settings.py home set '<json array>'
+       settings.py home add <name>
+       settings.py home remove <name>
 
 check reads the user settings and reports what is wrong with them,
 saying nothing when there is nothing to say. A file that is not there is
 not a fault: a fresh installation has none.
+
+home writes the effective Home layout to standard output as JSON - the
+user's icons with the shipped selection appended, every name checked
+against the applications this machine actually has, and the discarded
+ones named with a reason. The AGS Home widget is GJS and cannot import
+this module, so it asks for the answer instead of working it out a
+second time.
+
+home set/add/remove change it. They exist beside merge because the
+Home's two keys - the icons and the shipped baseline they were chosen
+against - have to be written together or the next release quietly brings
+back what the user just took off. add and remove take a name, so the
+Dock and the Starter can offer "add to Home" without knowing any of
+that; set takes the whole array and is how the Home itself saves a
+layout somebody dragged.
+
+    settings.py home add firefox
 
 merge merges whole top-level sections into the settings and writes them
 back atomically at 0600, keeping every section the argument does not
@@ -952,6 +1325,99 @@ def unreadable(target: Path, exc: BaseException) -> str:
             f"A settings file has to be a JSON object carrying "
             f"\"schema_version\": {SCHEMA_VERSION}; repair it, or move it "
             f"aside and let the defaults be written again.")
+
+
+def _home_command(rest: list[str]) -> int:
+    """`settings.py home [set <json> | add <name> | remove <name>]`.
+
+    VIER UNTERBEFEHLE UND NICHT EIN merge MIT EINEM OBJEKT, und das ist
+    der Grund, aus dem es sie ueberhaupt gibt: `merge` verlangte vom
+    Aufrufer, die Vorgabe selbst mitzuschicken (siehe home_write()). Das
+    Home weiss davon; das Dock und der Starter, die "Zum Home
+    hinzufuegen" ebenfalls anbieten sollen, muessten es lernen. Ein
+    Unterbefehl weiss es fuer alle drei.
+
+    `add` und `remove` nehmen einen NAMEN und keine Zelle: wer ein
+    Symbol von woanders aufs Home legt, sagt WELCHES und nicht WOHIN -
+    den Platz sucht das Home in der ersten freien Zelle. `set` nimmt die
+    ganze Liste und ist der Weg des Homes selbst, wenn dort etwas
+    gezogen wurde.
+    """
+    target = _path(None)
+    try:
+        document = load(target)
+    except (ValueError, OSError) as exc:
+        # Auf STDERR und mit Rueckgabewert 1, wie `check`: eine
+        # Oberflaeche darf eine unlesbare Datei nicht als "der Nutzer hat
+        # nichts abgelegt" missverstehen, ein leeres Home zeichnen und
+        # beim naechsten Anheften darueberschreiben.
+        print(unreadable(target, exc), file=sys.stderr)
+        return 1
+
+    try:
+        if not rest:
+            json.dump(home_plan(document), sys.stdout)
+            sys.stdout.write("\n")
+            return 0
+
+        if rest[0] == "set" and len(rest) == 2:
+            try:
+                wanted = json.loads(rest[1])
+            except json.JSONDecodeError as exc:
+                print(f"the icons are not JSON: {exc}", file=sys.stderr)
+                return 2
+            # Durch home_icons() und nicht direkt auf die Platte: was
+            # hereinkommt, wird gegen DIESELBE Formpruefung gehalten wie
+            # das, was schon dort steht. Ein Schreiber, der an ihr
+            # vorbeikaeme, koennte eine Datei hinterlassen, die der
+            # naechste Lesevorgang ablehnt - und dann waere das Home
+            # leer, ohne dass jemand etwas geloescht hat.
+            #
+            # EIGENER FANG, UND DAS IST KEIN SCHMUCK: die Klage ueber das
+            # ARGUMENT darf nicht in unreadable() landen. Die sagt "diese
+            # Datei ist kaputt, repariere sie oder raeume sie weg" - ueber
+            # eine Datei, die vollkommen in Ordnung ist. Der Nutzer suchte
+            # den Fehler an der falschen Stelle, und die Anweisung, die
+            # Datei wegzuraeumen, kostete ihn alle seine Einstellungen.
+            try:
+                icons = home_icons({HOME: {HOME_ICONS: wanted}})
+            except UnusableSettings as problem:
+                print(f"these icons cannot be written: {problem}",
+                      file=sys.stderr)
+                return 2
+            if icons is None:
+                print("the icons are null; pass an array, empty if the Home "
+                      "should carry nothing", file=sys.stderr)
+                return 2
+
+        elif rest[0] in ("add", "remove") and len(rest) == 2:
+            name = rest[1]
+            # Von der WIRKSAMEN Liste aus und nicht von der rohen: wer
+            # heute etwas hinzufuegt, will die Anwendungen behalten, die
+            # er gerade sieht. Von der rohen Liste aus verschwaende alles,
+            # was home_effective() gerade erst angehaengt hat - beim
+            # naechsten Speichern waere es abgewaehlt.
+            icons = list(home_plan(document)["icons"])
+            if rest[0] == "add":
+                if any(entry[HOME_NAME] == name for entry in icons):
+                    # Kein Fehler: zweimal anheften ist keine Klage wert,
+                    # und ein Rueckgabewert ungleich 0 liesse ein Menue
+                    # eine Fehlermeldung zeigen, wo nichts fehlt.
+                    return 0
+                icons.append({HOME_NAME: name})
+            else:
+                icons = [entry for entry in icons
+                         if entry[HOME_NAME] != name]
+        else:
+            print(USAGE, file=sys.stderr)
+            return 2
+
+        merge(home_write(document, icons), target)
+    except (ValueError, OSError) as exc:
+        print(f"{unreadable(target, exc)}\nNothing was changed.",
+              file=sys.stderr)
+        return 1
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -981,10 +1447,17 @@ def main(argv: list[str] | None = None) -> int:
         # Zeichenkette, die Datei bleibt gueltiges JSON, und ohne diese
         # Zeilen erfuehre der Nutzer es an einer Leiste, auf der ein
         # Modul fehlt.
-        problems = check_bar(document)
+        # Und seit dem 20.08.2026 das Home daneben. Es steht in DERSELBEN
+        # Zeile und nicht in einem zweiten `check`, weil der Nutzer eine
+        # Datei repariert und nicht zwei: wer beide Abschnitte
+        # danebengeschrieben hat, soll das in einem Durchgang erfahren.
+        problems = check_bar(document) + check_home(document)
         for problem in problems:
             print(f"{target}: {problem}", file=sys.stderr)
         return 1 if problems else 0
+
+    if argv and argv[0] == "home":
+        return _home_command(argv[1:])
 
     if len(argv) != 2 or argv[0] != "merge":
         print(USAGE, file=sys.stderr)

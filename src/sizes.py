@@ -1517,6 +1517,44 @@ TABLE: dict[str, Size] = {
     # weiter einzeln setzen kann.
     "STYLE_DOCK_ICON_SIZE": Size(48, BARE, FIXED),
     "STYLE_DOCK_PADDING": Size(4, BARE, FIXED),
+    # Das Anwendungssymbol auf dem Home - Aufgabe 52, 20.08.2026.
+    #
+    # WARUM NEBEN STYLE_DOCK_ICON_SIZE UND NICHT DASSELBE
+    #     Es ist dieselbe ART Zahl (ein Bild und kein Text, deshalb BARE
+    #     und FIXED wie die zwei darueber) und ausdruecklich NICHT
+    #     dieselbe Zahl. Das Dock-Symbol ist ABGELEITET: es ist der
+    #     Streifen minus sein Beiwerk (dock_icon_px()), haengt also an
+    #     der Leistendicke, WEIL es in einen Streifen passen muss. Das
+    #     Home-Symbol muss in gar nichts passen - es liegt auf einer
+    #     freien Flaeche. Es an die Leistendicke zu binden hiesse, dass
+    #     die Symbole auf dem Home schrumpfen, sobald jemand seine
+    #     Leiste duenner stellt, und dafuer gibt es keinen Grund.
+    #
+    #     48 ist derselbe Grundwert, den STYLE_DOCK_ICON_SIZE vor seiner
+    #     Ableitung trug, und die kleinste Groesse, die jedes
+    #     Symbolthema noch als eigene Zeichnung fuehrt.
+    "STYLE_HOME_ICON_SIZE": Size(48, BARE, FIXED),
+    # Die Kantenlaenge EINER Zelle des Home-Gitters. ABGELEITET - siehe
+    # home_cell_px() weiter unten - und steht deshalb in DERIVED; der
+    # Grundwert bleibt hier, damit `list-sizes` sie kennt und ein Nutzer
+    # sie einzeln setzen kann. Dieselbe Aufteilung wie bei
+    # STYLE_DOCK_ICON_SIZE eine Zeile darueber.
+    "STYLE_HOME_CELL": Size(96, BARE, FIXED),
+    # Wie viele Zeichen der Name unter einem Home-Symbol breit sein darf,
+    # bevor gekuerzt wird. ABGELEITET aus der Zellbreite und dem
+    # GEMESSENEN Zeichenvorschub - siehe home_label_chars() weiter unten.
+    #
+    # WARUM DAS UEBERHAUPT EINE GROESSE IST UND KEINE ZAHL IM WIDGET
+    #     Weil eine Zahl dort genau der Fehler waere, den
+    #     tests/src/test_design.py::test_no_line_length_is_a_literal
+    #     verbietet - und er hat ihn beim ersten Anlauf dieser Aufgabe
+    #     auch gefangen: dort stand `set_max_width_chars(1)`. Die 1 war
+    #     nicht gedacht als Zeilenlaenge, sondern als "gib die Breite
+    #     ganz an die Groessenanforderung ab" - und genau so entstehen
+    #     die Zahlen, die der Waechter meint. Eine Beschriftung, die in
+    #     eine Zelle passen soll, hat eine Breite, und die ist
+    #     ausrechenbar.
+    "STYLE_HOME_LABEL_CHARS": Size(12, BARE, FIXED),
     # STYLE_DOCK_MARGIN_BOTTOM stand hier, Size(10, BARE, FIXED).
     #
     # GEMELDET am 12.08.2026: "der abstand des header zum rand kann
@@ -1798,10 +1836,107 @@ def gaps_out_px(section: dict) -> int:
     return 2 * int(value_of("STYLE_GAPS_IN", section))
 
 
+# Die zwei Polster einer Home-Zelle: eines ueber dem Symbol, eines
+# zwischen Symbol und Beschriftung, eines unter der Beschriftung. Drei
+# Sprossen und nicht vier, weil unter der letzten Zeile schon der
+# Zellenrand kommt.
+HOME_CELL_PADS = 3
+
+
+def home_cell_px(section: dict) -> int:
+    """Die Kantenlaenge einer Zelle: Symbol, Beschriftung, Polster.
+
+    QUADRATISCH, UND DAS IST EINE ENTSCHEIDUNG
+        Eine Zelle koennte breiter als hoch sein - Beschriftungen sind
+        laenger als Symbole, und Windows macht seine Zellen so. Sie ist
+        hier trotzdem quadratisch, weil die gespeicherte Angabe eine
+        SPALTE und eine ZEILE ist (settings.HOME_COL/HOME_ROW): mit zwei
+        verschiedenen Kantenlaengen haengt die Zahl der Spalten an einer
+        anderen Groesse als die der Zeilen, und beim Drehen eines
+        Schirms - Hochformat, siehe monitors.py - wandern Symbole dann
+        in beide Richtungen verschieden weit. Ein Quadrat dreht sich mit.
+
+        Die Beschriftung darf dafuer laenger sein als die Zelle breit;
+        sie wird abgeschnitten (ellipsize), nicht die Zelle gedehnt. Was
+        eine Anwendung heisst, ist auf dem Home die zweite Auskunft -
+        die erste ist ihr Symbol.
+
+    WORAUS SIE SICH ZUSAMMENSETZT, und keine Zahl davon ist getippt:
+
+        STYLE_HOME_ICON_SIZE          das Symbol
+        STYLE_ICON_CAPTION            die Beschriftung darunter
+        dreimal STYLE_SPACE_8         oben, dazwischen, unten
+
+    STYLE_ICON_CAPTION UND NICHT STYLE_FONT_CAPTION, und das ist der
+    Unterschied zwischen einer Zeile und einer Schrift: die Symbolleiter
+    IST die Zeilenhoehe derselben Sprosse (siehe icon_px() und
+    LINE_HEIGHT weiter oben). Eine Beschriftung belegt ihre ZEILE und
+    nicht ihre Schriftgroesse; mit STYLE_FONT_CAPTION waere die Zelle um
+    die Unterlaengen zu knapp, und zwar bei jedem Faktor um ein bisschen
+    mehr. Beide Sprossen sind SCALED, die Zelle waechst also mit.
+    """
+    icon = int(value_of("STYLE_HOME_ICON_SIZE", section))
+    pad = int(value_of(f"{SPACE_PREFIX}8", section).removesuffix(PX))
+    label = int(value_of(f"{ICON_PREFIX}CAPTION", section).removesuffix(PX))
+    return icon + label + HOME_CELL_PADS * pad
+
+
+# Der Zeichenvorschub der Schrift dieses Schreibtischs, als Anteil ihrer
+# Groesse.
+#
+# GEMESSEN am 20.08.2026 mit Pango auf DIESER Maschine, Schriftstapel
+# "Fira Code", "JetBrainsMono Nerd Font", monospace, ueber das ganze
+# lateinische Alphabet in beiden Schnitten (52 Zeichen), also als
+# DURCHSCHNITT und nicht an einem einzelnen Zeichen:
+#
+#     13px -> 416 fuer 52 Zeichen =  8 px/Zeichen   (0.6154)
+#     17px -> 520 fuer 52 Zeichen = 10 px/Zeichen   (0.5882)
+#     20px -> 624 fuer 52 Zeichen = 12 px/Zeichen   (0.6000)
+#     26px -> 832 fuer 52 Zeichen = 16 px/Zeichen   (0.6154)
+#
+# Die Schwankung ist die Rundung auf ganze Bildpunkte; der Wert
+# dazwischen ist 0.6. Dieselbe Zahl steht schon einmal gemessen in
+# ags-dock.template ("Vorschub bei allen vier Zeichen 12px" bei 20px) -
+# dort an Nerd-Font-Zeichen, hier an Buchstaben, und sie kommt zweimal
+# gleich heraus, weil dieser Stapel durchgehend dicktengleich ist.
+MONO_ADVANCE = 0.6
+
+# Wie kurz eine Beschriftung werden darf, bevor sie nichts mehr sagt.
+# Drei Zeichen und ein Auslassungszeichen ist die Untergrenze, unterhalb
+# derer aus "Firefox" ein "F…" wird - dann traegt nur noch der
+# Kurzhinweis die Auskunft, und den sieht nur, wer wartet.
+MINIMUM_LABEL_CHARS = 4
+
+
+def home_label_chars(section: dict) -> int:
+    """Wie viele Zeichen unter ein Home-Symbol passen.
+
+    Die Zellbreite geteilt durch den gemessenen Zeichenvorschub bei der
+    Schriftgroesse der Beschriftung. Beide Groessen folgen dem Faktor des
+    Nutzers, die Zahl also auch - eine getippte Zahl waere bei doppelter
+    Groesse eine halb so breite Beschriftung in einer doppelt so breiten
+    Zelle.
+
+    WOZU DIE GRENZE UEBERHAUPT DA IST
+        Nicht zur Verzierung. `ellipsize` senkt bei GTK nur die
+        MINDESTbreite eines Labels, nicht seine NATUERLICHE - die ganze
+        Begruendung steht bei zepRow in ags-kit.template. Ein Gtk.Fixed
+        gibt seinen Kindern ihre natuerliche Groesse und deckelt gar
+        nichts; ohne diese Zahl liefe der Name einer Anwendung mit einem
+        langen Titel quer ueber seine Nachbarn.
+    """
+    cell = int(value_of("STYLE_HOME_CELL", section))
+    font = int(value_of(f"{FONT_PREFIX}CAPTION", section).removesuffix(PX))
+    return max(MINIMUM_LABEL_CHARS,
+               int(cell // max(1, math.floor(font * MONO_ADVANCE + 0.5))))
+
+
 DERIVED = {
     "STYLE_BAR_THICKNESS": bar_thickness_px,
     "STYLE_DOCK_ICON_SIZE": dock_icon_px,
     "STYLE_GAPS_OUT": gaps_out_px,
+    "STYLE_HOME_CELL": home_cell_px,
+    "STYLE_HOME_LABEL_CHARS": home_label_chars,
 }
 
 

@@ -1,0 +1,110 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * Der Stil des Homes - der Flaeche hinter allen Fenstern
+ * Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+ * Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/styles/home-style.template kopieren
+ *
+ * WARUM EINE EIGENE DATEI UND NICHT ags-style.template
+ *     Aus demselben Grund, aus dem bar-style.template eine eigene ist,
+ *     und die Begruendung steht in deren Kopf ausfuehrlich: sie wird von
+ *     app.ts ueber app.apply_css() nachgeladen, GTK4 liest sie also
+ *     unveraendert statt durch dart-sass. Ein Tippfehler hier kostet den
+ *     Stil des Homes und nicht die ganze Oberflaeche.
+ *
+ *     Dazu kommt am 20.08.2026 ein zweiter Grund, und er ist der
+ *     eigentliche: ags-style.template wird in derselben Sitzung von
+ *     einem anderen Vorhaben bearbeitet. Zwei Schreiber in einer Datei
+ *     sind keine Arbeitsteilung.
+ *
+ * DIE EINE REGEL, DIE ALLE ANDEREN TRAEGT - UND SIE IST GEMESSEN
+ *     `window.home-window { background: transparent }`.
+ *
+ *     GEMESSEN am 20.08.2026 im verschachtelten Compositor, Tapete als
+ *     reines Gruen (0,204,0), Bildpunkt in der Mitte des Schirms,
+ *     aufgenommen mit grim und gelesen mit tests/render/measure.py:
+ *
+ *         ohne diese Zeile   (246, 245, 244)   GTKs helles Grau
+ *         mit dieser Zeile   (0, 204, 0)       die Tapete
+ *
+ *     Der Grund steht im Wayland-Mitschnitt derselben Messung: GTK4
+ *     meldet `wl_surface.set_opaque_region(0, 0, <ganzer Schirm>)`,
+ *     solange die Flaeche einen Hintergrund hat. Ein Home mit
+ *     GTK-Standardhintergrund ist keine halbdurchsichtige Scheibe,
+ *     sondern eine bildschirmfuellende graue Platte - die Tapete waere
+ *     nicht gedaempft, sondern WEG.
+ *
+ * WARUM HIER KEINE UNSCHAERFE STEHT
+ *     Weil hinter dieser Flaeche die Tapete liegt und sonst nichts.
+ *     `blur on` hiesse: die Tapete unscharf rechnen, ueber den ganzen
+ *     Schirm, bei jedem Bild - ein teurer Effekt, den jeder sieht und
+ *     niemand bestellt hat. Der Namensraum steht deshalb in
+ *     PLAIN_LAYERS und nicht in GLASS_LAYERS (src/style_definition.py),
+ *     und tests/src/test_glass.py::test_no_plain_surface_gets_a_layerrule
+ *     haelt fest, dass fuer ihn wirklich keine erzeugt wird.
+ */
+
+/* =====================================================================
+ * Die Flaeche
+ * ===================================================================*/
+
+window.home-window {
+  background: {{STYLE_BG_TRANSPARENT}};
+  font-family: {{STYLE_FONT_FAMILY}};
+  font-weight: {{STYLE_FONT_WEIGHT}};
+}
+
+/* Das Gitter selbst zeichnet nichts. Es ist ein Gtk.Fixed in der Groesse
+ * der Flaeche; wo ein Symbol liegt, rechnet die Vorlage aus Spalte und
+ * Zeile - siehe home_cell_px() in src/sizes.py fuer die Kantenlaenge. */
+.home-grid {
+  background: {{STYLE_BG_TRANSPARENT}};
+}
+
+/* =====================================================================
+ * Ein Symbol
+ * ===================================================================*/
+
+/* Die Zelle ist quadratisch, und ihre Kantenlaenge ist EINE Zahl aus
+ * der Groessenleiter. Sie hier noch einmal als min-width/min-height zu
+ * setzen ist keine Doppelung der Rechnung, sondern ihr einziger
+ * Leser auf der CSS-Seite: die Vorlage benutzt dieselbe Zahl fuer die
+ * Platzierung, damit gezeichnete und gerechnete Zelle nicht
+ * auseinanderlaufen koennen. */
+.home-icon {
+  min-width: {{STYLE_HOME_CELL}}px;
+  min-height: {{STYLE_HOME_CELL}}px;
+  padding: {{STYLE_SPACE_8}};
+  border: none;
+  background: {{STYLE_BG_TRANSPARENT}};
+  border-radius: {{STYLE_RADIUS_CONTROL}};
+  transition: background {{STYLE_MOTION_INSTANT}};
+}
+
+.home-icon:hover {
+  background: {{STYLE_HOME_HOVER_BG}};
+}
+
+/* Waehrend ein Symbol gezogen wird. Kraeftiger als der Zeigergrund,
+ * damit waehrend des Ziehens zu sehen ist, WELCHES Symbol am Zeiger
+ * haengt - der Zeiger steht dabei laengst ueber einer anderen Zelle. */
+.home-icon.dragging {
+  background: {{STYLE_HOME_DRAG_BG}};
+}
+
+/* Die Beschriftung unter dem Symbol.
+ *
+ * DER SCHATTEN IST KEINE VERZIERUNG, SONDERN DIE LESBARKEIT
+ *     Diese Schrift ist die einzige dieses Baums, die auf einem BILD
+ *     steht statt auf einer Platte. Jede andere liegt ueber SHADE_1, und
+ *     tests/src/test_glass.py rechnet ihren Kontrast dagegen aus. Hier
+ *     gibt es nichts, wogegen man rechnen koennte - dahinter liegt die
+ *     Tapete des Nutzers, und die kann morgen eine andere sein.
+ *
+ *     Was ueber einer hellen UND einer dunklen Tapete traegt, ist kein
+ *     Farbwert, sondern ein Umriss. Die ganze Begruendung steht bei
+ *     STYLE_HOME_LABEL_SHADOW in src/style_definition.py. */
+.home-label {
+  color: {{STYLE_HOME_LABEL}};
+  font-size: {{STYLE_FONT_CAPTION}};
+  text-shadow: 0 1px 2px {{STYLE_HOME_LABEL_SHADOW}};
+}

@@ -376,6 +376,18 @@ def _render_all(monkeypatch, tmp_path, name):
 CHANGES_WITH_THE_THEME = {
     "styles-bar-style",
     "styles-grid-wallpaper-toggle-style",
+    # Das Home, seit dem 20.08.2026 (Aufgabe 52). Es traegt genau vier
+    # Farben, und alle vier kommen aus dem Thema: die Beschriftung unter
+    # einem Symbol, ihr Schatten und die zwei Zeigergruende
+    # (STYLE_HOME_LABEL, _LABEL_SHADOW, _HOVER_BG, _DRAG_BG in
+    # src/style_definition.py).
+    #
+    # Der Schatten ist die interessante von den vieren: er ist der
+    # einzige Grund, aus dem diese Schrift ueber einer HELLEN Tapete
+    # lesbar bleibt - sie steht als einzige dieses Baums auf einem Bild
+    # und nicht auf einer Glasplatte. Ein Thema, das ihn nicht mitdreht,
+    # haette ein Home mit heller Schrift und hellem Umriss.
+    "styles-home-style",
     "styles-hyprclipx-style",
     "styles-hyprlaunch-style",
     "styles-lock-style",

@@ -1,0 +1,1136 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Das Home: Programmsymbole auf der Flaeche hinter allen Fenstern
+// Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+// Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-home.template kopieren
+//
+// DER AUFTRAG, WOERTLICH (20.08.2026)
+//     "ich kann auch nicht auf dem hintergrund sozusagen wo die apps mit
+//     den logos sein sollen wie windows rechtsklick drücken und eine app
+//     spawnen"
+//
+//     und, frueher in derselben Sitzung:
+//
+//     "das verschieben der apps natürlich auch, diese funktion will ich
+//     gerne auch haben"
+//
+//     Also: eine Flaeche hinter allen Fenstern, Programme als Symbole
+//     darauf, anklickbar, mit Rechtsklick, und die Symbole lassen sich
+//     verschieben.
+//
+// =====================================================================
+// DIE VIER MESSUNGEN, AUS DENEN DIESE DATEI BESTEHT
+// =====================================================================
+//
+// Alle vier stammen vom 20.08.2026 und liefen in einem VERSCHACHTELTEN
+// Hyprland (tests/lock/nested_compositor.py), nie auf der Sitzung des
+// Nutzers. Der ausfuehrliche Bericht steht in
+// .superpowers/sdd/2026-08-18-ags-schale-und-breitenleiter/aufgabe-52-report.md.
+//
+// 1. DIE EBENE IST `bottom` UND NICHT `background`
+//
+//    Die Tapete malt swaybg (wallpaper-manager-config.template), und
+//    GEMESSEN meldet es sich auf `background` an:
+//
+//        background  ['wallpaper@0,0 931x1081']
+//
+//    Auf DERSELBEN Ebene entscheidet die Anmeldereihenfolge, wer oben
+//    liegt - und `wallpaper-manager` startet swaybg bei jedem
+//    Tapetenwechsel NEU (`pkill -9 -f swaybg`, dann `swaybg ... &`).
+//    GEMESSEN mit einem Home auf `background`:
+//
+//        vor dem Wechsel:   ['wallpaper', 'zepos-home']
+//        nach dem Wechsel:  ['zepos-home', 'wallpaper']
+//
+//    Die Tapete liegt danach UEBER dem Home, und die Symbole sind weg -
+//    lautlos, bis sich jemand neu anmeldet. Dieselbe Messung mit dem
+//    Home auf `bottom`: vor und nach dem Wechsel unveraendert. `bottom`
+//    liegt per Protokoll ueber `background` und unter jedem
+//    gewoehnlichen Fenster; kein Tapetenwechsel fasst es an.
+//
+// 2. DIE EINGABE HAENGT AN DER STAPELREIHENFOLGE - UND AN SONST NICHTS
+//
+//    Aufbau: swaybg, das Home ueber den ganzen Schirm, dazu ein
+//    schwebendes Fenster bei (60,200), 300x200. Der Zeiger wird mit
+//    `hyprctl dispatch movecursor` bewegt, beide Seiten protokollieren
+//    ihren Gtk.EventControllerMotion:
+//
+//        Zeiger auf die FREIE FLAECHE (911,1061)
+//            Home:    ZEIGER-EIN 911 1061
+//        Zeiger auf das FENSTER (210,300)
+//            Fenster: ZEIGER-EIN 150 100      (= 210-60, 300-200)
+//            Home:    ZEIGER-AUS
+//
+//    Beides geht also. WORAN ES NICHT HAENGT, und das ist der
+//    beunruhigende Teil: `grep -c input_region` im vollen
+//    Wayland-Mitschnitt ergibt 0. GTK4 ruft `wl_surface.set_input_region`
+//    NIE, also gilt die Vorgabe des Protokolls - die Eingaberegion ist
+//    die GANZE Flaeche. Dieses Fenster beansprucht jeden Bildpunkt des
+//    Schirms fuer sich. Dass Fenster trotzdem anklickbar bleiben,
+//    entscheidet allein, dass `bottom` unter ihnen liegt.
+//
+//    DIE EBENE IST DAMIT DIE SICHERUNG. Wer dieses Fenster auf `top`
+//    schoebe, sperrte den Nutzer sofort und vollstaendig aus.
+//
+// 3. `Keymode.EXCLUSIVE` SPERRT DIE SITZUNG AUS - ZWEIMAL GEMESSEN
+//
+//    Derselbe Aufbau, ein einziger geaenderter Wert
+//    (`set_keyboard_interactivity(1)` statt 0):
+//
+//        Zeiger auf die FREIE FLAECHE (911,1061)   -> nichts
+//        Zeiger auf das FENSTER (210,300)          -> nichts
+//        Fenster-Protokoll: []
+//
+//    Das Fenster bekommt GAR KEINE Zeigerereignisse mehr. Zweimal
+//    gelaufen, zweimal dasselbe. Der Tastaturmodus unten ist deshalb
+//    `NONE` und darf es bleiben: das Rechtsklickmenue braucht keine
+//    Tastatur, weil ein Gtk.Popover eine EIGENE Wayland-Flaeche mit
+//    eigenem Griff ist (die Messung dazu steht in ags-dock.template,
+//    "wl_keyboard.enter auf die Flaeche des POPUPS").
+//
+// 4. DIE FLAECHE AENDERT SICH IM BETRIEB - DESHALB ZELLEN UND KEINE PUNKTE
+//
+//    Mit `Exclusivity.NORMAL` ist diese Flaeche so gross wie der Schirm
+//    MINUS die reservierten Zonen. GEMESSEN, waehrend eine Leiste kam
+//    und wieder ging:
+//
+//        ohne Leiste        zepos-home@0,0   931x1081
+//        mit Leiste         zepos-home@0,40  931x1041
+//        Leiste wieder weg  zepos-home@0,0   931x1081
+//
+//    Das Dock hat ein toggle() (SUPER+B, ags-dock.template). Mit
+//    gespeicherten Bildpunkten wanderte also bei JEDEM Ein- und
+//    Ausfahren des Docks jedes Symbol. Ein Aufloesungswechsel ist gar
+//    nicht noetig; eine Taste genuegt. Gespeichert wird deshalb eine
+//    Zelle - die ganze Begruendung steht bei HOME in src/settings.py.
+//
+// =====================================================================
+// WAS DIESE DATEI NICHT TUT
+// =====================================================================
+//
+// SIE HAT KEINEN ZEITGEBER, KEIN ABONNEMENT UND KEINE ANIMATION
+//     Das Dock muss laufende Fenster zeigen und haengt deshalb an
+//     `Hyprland.subscribe()`. Das Home zeigt nichts Laufendes: es zeigt
+//     eine Liste, die sich nur aendert, wenn jemand sie aendert.
+//     Gelesen wird beim Anmelden und nach jedem eigenen Schreiben,
+//     sonst nie.
+//
+//     GEMESSEN am 20.08.2026 ueber utime+stime aus /proc/<pid>/stat,
+//     zwanzig Sekunden Wanduhr, einmal frei sichtbar und einmal von
+//     einem Fenster verdeckt:
+//
+//         verdeckt=false: 0.00 s CPU in 20.0 s  ->  0.00 %
+//         verdeckt=true:  0.00 s CPU in 20.0 s  ->  0.00 %
+//
+//     Ohne Rueckrufe gibt GTK keine `frame`-Anforderungen aus, und ein
+//     Prozess ohne Anforderungen schlaeft. Wer hier einen Zeitgeber
+//     einbaut, macht aus 0.00 % eine Zahl, die nie wieder 0.00 % wird.
+//
+// SIE RECHNET DIE REGELN NICHT SELBST
+//     Welche Anwendung aufs Home gehoert, was von der Auslieferung
+//     dazukommt, welcher Name auf DIESER Maschine gar nicht installiert
+//     ist - das steht in src/settings.py und wird hier GEFRAGT
+//     (`settings.py home`), nicht nachgebaut. Der Grund steht im Kopf
+//     von src/apps.py: "Ein Dock, das einen Namen annimmt, den das
+//     Fenster verwirft, waere eine Einstellung, die man sieht und nicht
+//     bekommt."
+
+import Astal from "gi://Astal?version=4.0"
+import Gio from "gi://Gio"
+import GLib from "gi://GLib"
+import GObject from "gi://GObject"
+import GioUnix from "gi://GioUnix?version=2.0"
+import { Gtk, Gdk } from "ags/gtk4"
+import { execAsync } from "ags/process"
+import * as Hyprland from "../utils/hyprland"
+import { zepRow, zepDivider } from "../utils/kit"
+import { _ } from "../utils/i18n"
+import { terminalCommand } from "./Dock"
+import { oeffneDenStarter } from "./StarterButton"
+
+// Der Layer-Shell-Namensraum. Er steht in PLAIN_LAYERS
+// (src/style_definition.py) und NICHT in GLASS_LAYERS - diese Flaeche
+// malt nichts, sie bekommt deshalb keine Unschaerfe. Die Begruendung
+// steht dort, und tests/src/test_glass.py haelt beide Richtungen fest.
+const WINDOW_NAME = "zepos-home"
+
+// Die Kantenlaenge EINER Zelle und die Groesse eines Symbols darin.
+// Beide aus der Groessenleiter (src/sizes.py), keine getippte Zahl: die
+// Zelle ist ABGELEITET aus Symbol, Beschriftungszeile und Polster -
+// siehe home_cell_px() dort. home-style.template setzt dieselbe Zahl als
+// min-width/min-height, damit gezeichnete und gerechnete Zelle nicht
+// auseinanderlaufen koennen.
+const CELL = {{STYLE_HOME_CELL}}
+const ICON_SIZE = {{STYLE_HOME_ICON_SIZE}}
+
+// Der Abstand zum Schirmrand.
+//
+// DERSELBE, DEN ALLES ANDERE HAELT - UND DAS IST GEMESSEN
+//     Am ersten Bild dieses Homes (20.08.2026, tests/render/) klebte die
+//     linke Symbolspalte bei x=0 am Bildschirmrand, waehrend Leiste,
+//     Dock, Abschaltknopf und Starterknopf ringsum ihren Rand hielten.
+//     Es sah aus, als gehoerte das Home nicht dazu.
+//
+//     {{STYLE_GAPS_OUT}} ist genau diese Zahl. Sie wird schon von
+//     DOCK_MARGIN_BOTTOM (ags-dock.template) und von EDGE_GAP in
+//     ags-kit.template, ags-power-button.template und
+//     ags-starter-button.template gelesen - eine Konstante, jetzt fuenf
+//     Abdruecke, keine zweite Zahl. Der Kopf von
+//     ags-starter-button.template begruendet ausdruecklich, warum hier
+//     kein eigener Platzhalter entsteht.
+const EDGE_GAP = {{STYLE_GAPS_OUT}}
+
+const HOME_DIR = GLib.get_home_dir()
+const CONFIG_HOME = GLib.getenv("XDG_CONFIG_HOME") || `${HOME_DIR}/.config`
+const ZEPOS_USER_ROOT = GLib.getenv("ZEPOS_USER_ROOT") || `${CONFIG_HOME}/zepos`
+// Beim Erzeugen eingesetzt: dieses Widget laeuft aus ~/.config/ags und
+// kann nicht wissen, aus welchem Paket es stammt. Dieselbe Zeile steht
+// in ags-style-editor.template und ags-vpn-settings.template.
+const ZEPOS_SYSTEM_ROOT = "{{ZEPOS_SYSTEM_ROOT}}"
+
+// Der eine Befehl, ueber den gelesen UND geschrieben wird.
+//
+// WARUM settings.py UND NICHT zepos-settings-gui --json
+//     Das Dock liest ueber die Bruecke, weil seine Reihenfolge dort ein
+//     Bedienelement der Seite "Leiste" IST. Das Home hat kein solches
+//     Bedienelement, sondern einen eigenen Abschnitt der
+//     Einstellungsdatei - und settings.py ist genau der Weg, den dieses
+//     Projekt fuer GJS-Fenster vorgesehen hat (siehe USAGE dort: "Both
+//     exist for the callers that cannot import this module - the
+//     generator is bash, the AGS dialogs are GJS"). Zwei andere Fenster
+//     schreiben schon so (ags-style-editor, ags-vpn-settings).
+const SETTINGS = ["python3", `${ZEPOS_SYSTEM_ROOT}/settings.py`, "home"]
+
+const ICONS = {
+  open: "{{ICON_FOLDER_OPEN}}",
+  remove: "{{ICON_MINUS}}",
+  starter: "{{ICON_APPS_GRID}}",
+  tidy: "{{ICON_SORT}}",
+  wallpaper: "{{ICON_WALLPAPER}}",
+  settings: "{{ICON_SETTINGS}}",
+  unknown: "{{ICON_WINDOW}}",
+}
+
+/** Ein Symbol, wie es in der Einstellungsdatei steht. */
+interface HomeIcon {
+  name: string
+  col?: number
+  row?: number
+}
+
+/** Ein Symbol mit dem Platz, den es HEUTE bekommt. */
+interface Gelegt {
+  icon: HomeIcon
+  col: number
+  row: number
+}
+
+/** Wie eine Anwendung auf dem Home heisst.
+ *
+ * Der Anzeigename des Eintrags, sonst der Name aus der Einstellungsdatei
+ * - `firefox` ist ein Paketname und `Firefox` das, was auf dem Schirm
+ * stehen soll. Dieselbe Unterscheidung trifft settings.bar_labels() fuer
+ * das Dock, und aus demselben Grund: eine Tabelle deutscher Namen hier
+ * waere eine zweite Liste, die veraltet, sobald jemand eine Anwendung
+ * tauscht.
+ *
+ * An EINER Stelle, weil drei Stellen sie brauchen (Beschriftung,
+ * Kurzhinweis, Fehlermeldung) und drei Abschriften irgendwann drei
+ * verschiedene Namen zeigen.
+ */
+function benennung(name: string, info: GioUnix.DesktopAppInfo | null): string {
+  return (info && info.get_display_name()) || name
+}
+
+// =====================================================================
+// DIE EINSTELLUNGEN
+// =====================================================================
+
+/** settings.py rufen und die Ausgabe zurueckgeben, oder null.
+ *
+ * null heisst "nicht geantwortet" und NICHT "nichts abgelegt". Die
+ * beiden auseinanderzuhalten ist der ganze Zweck des Rueckgabetyps:
+ * eine leere Liste wuerde spaeter geschrieben, ein fehlgeschlagener
+ * Lesevorgang darf nichts schreiben. Dasselbe Muster wie
+ * gepflegtePins() in ags-dock.template.
+ */
+async function frage(argumente: string[]): Promise<string | null> {
+  // UEBER EINE SHELL, WEIL DIE WURZEL MITMUSS - UND DAS IST GEMESSEN
+  //
+  //     GEMESSEN am 20.08.2026 in tests/render/test_home.py: das Home
+  //     stand da und zeigte KEIN EINZIGES Symbol, ohne eine
+  //     Fehlermeldung. settings.py lief, antwortete gueltiges JSON und
+  //     sagte `{"icons": []}` - weil shipped_pins() den Abdruck der
+  //     ausgelieferten Auswahl nicht fand. Es wusste nicht, zu welcher
+  //     Installation es gehoert.
+  //
+  //     ZEPOS_SYSTEM_ROOT beantwortet genau das. src/apps.py sagt es in
+  //     seinem main() ueber denselben Fall: "der Generator reicht ihn in
+  //     der Umgebung durch, damit ein Lauf aus einem Checkout das Rezept
+  //     dieses Checkouts liest und nicht das eines installierten
+  //     Pakets." Dieses Fenster weiss die Wurzel (sie ist beim Erzeugen
+  //     eingesetzt), also reicht es sie weiter, statt sich darauf zu
+  //     verlassen, dass sie zufaellig in der Umgebung steht.
+  //
+  //     GLib.shell_quote um JEDES Stueck - dieselbe Vorsicht wie in
+  //     bruecke() in ags-dock.template. Ein Pfad mit einem Leerzeichen
+  //     waere sonst zwei Argumente.
+  const zeile = [...SETTINGS, ...argumente]
+    .map(teil => GLib.shell_quote(teil)).join(" ")
+  const wurzel = GLib.shell_quote(ZEPOS_SYSTEM_ROOT)
+  try {
+    return await execAsync(
+      ["bash", "-c", `export ZEPOS_SYSTEM_ROOT=${wurzel}; ${zeile}`])
+  } catch (fehler) {
+    console.error("Home: settings.py hat nicht geantwortet:", String(fehler))
+    return null
+  }
+}
+
+/** Was WIRKLICH auf dem Home liegt - gefragt, nicht gerechnet. */
+async function lies(): Promise<HomeIcon[] | null> {
+  const ausgabe = await frage([])
+  if (ausgabe === null) return null
+  try {
+    const plan = JSON.parse(ausgabe)
+    if (!plan || !Array.isArray(plan.icons)) return null
+    // Die Klagen ueber verworfene Namen kommen mit und werden
+    // AUSGESPROCHEN. Ein Name, den es nicht mehr gibt, ist im Home ein
+    // Symbol, das nichts oeffnet - und settings.py hat ihn genau
+    // deshalb schon herausgenommen und begruendet.
+    for (const weg of plan.discarded ?? []) {
+      console.log(`Home: "${weg.name}" liegt nicht mehr auf dem Home (${weg.why})`)
+    }
+    return plan.icons as HomeIcon[]
+  } catch (fehler) {
+    console.error("Home: settings.py hat kein JSON geliefert:", String(fehler))
+    return null
+  }
+}
+
+/** Eine neue Belegung schreiben. Zurueck kommt, ob es geklappt hat.
+ *
+ * Die Vorgabe, gegen die der Nutzer entschieden hat, schreibt
+ * settings.py SELBST mit (home_write() dort) - wer sie von hier aus
+ * mitschickte, ueberschriebe genau die Zahl, an der spaeter haengt, ob
+ * eine neu ausgelieferte Anwendung erscheinen darf.
+ */
+async function schreibe(argumente: string[]): Promise<boolean> {
+  return (await frage(argumente)) !== null
+}
+
+// =====================================================================
+// DIE ANWENDUNG HINTER EINEM NAMEN
+// =====================================================================
+
+/** Der Anwendungseintrag zu einem Namen, oder null.
+ *
+ * WORTGLEICH ZU entryFor() IN ags-dock.template, UND DAS IST HIER
+ * VERMERKT STATT VERSCHWIEGEN
+ *     Die Funktion dort ist nicht exportiert, und ags-dock.template
+ *     gehoert am 20.08.2026 einem anderen Vorhaben - ein `export`
+ *     nachzutragen hiesse, in einer Datei zu schreiben, in der gerade
+ *     jemand anderes schreibt. Beides zusammen gehoert nach
+ *     utils/apps.ts, neben terminalCommand(); das ist die Nacharbeit,
+ *     die im Bericht zu dieser Aufgabe steht.
+ *
+ *     Bis dahin ist es EINE Abschrift mit einem Zeiger darauf und nicht
+ *     eine zweite Antwort: die Namen kommen aus derselben Quelle
+ *     (settings.py, gegen dieselbe pinnable()-Liste geprueft), also
+ *     kann diese Suche gar nicht zu einem anderen Ergebnis kommen als
+ *     die des Docks.
+ */
+// Die Exec-Basisnamen aller Anwendungseintraege dieser Maschine, EINMAL
+// aufgestellt.
+//
+// WARUM ES DIESEN ZWISCHENSPEICHER GIBT - GEMESSEN am 20.08.2026
+//     Ohne ihn durchsucht jedes Symbol die ganze Liste selbst. Gemessen
+//     auf dieser Maschine (138 Eintraege):
+//
+//         ein Gio.AppInfo.get_all()                     7.1 ms
+//         fuenfzehn Durchlaeufe, wie unten gebraucht   55.3 ms
+//
+//     Fuenfzehn Symbole sind die ausgelieferte Auswahl, und gezeichnet
+//     wird nicht einmal: beim Abbilden, und danach bei jeder
+//     Groessenaenderung (Leiste meldet sich an, Dock meldet sich an,
+//     Dock faehrt ein). Aus 55 ms werden so schnell ein paar hundert -
+//     mitten in der Hauptschleife, waehrend der Rest der Oberflaeche
+//     hochfaehrt.
+//
+//     Aufgefallen ist es an einer FREMDEN Messung: tests/render/
+//     test_geometry.py wartet drei Sekunden auf den Zeigergrund eines
+//     Leistenmoduls und bekam ihn nicht mehr.
+//
+// null heisst "noch nicht aufgestellt". Aufgestellt wird beim ersten
+// Bedarf und danach neu, wenn das Home neu einliest - eine Anwendung,
+// die waehrenddessen dazukommt, ist genau der Fall, in dem ohnehin neu
+// gelesen wird.
+let execIndex: Map<string, GioUnix.DesktopAppInfo> | null = null
+
+function verwirfIndex(): void {
+  execIndex = null
+}
+
+function eintragFuer(program: string): GioUnix.DesktopAppInfo | null {
+  const direct = GioUnix.DesktopAppInfo.new(`${program}.desktop`)
+  if (direct) return direct
+
+  if (execIndex === null) {
+    execIndex = new Map()
+    for (const info of Gio.AppInfo.get_all()) {
+      const executable = info.get_executable()
+      if (!executable) continue
+      // basename, weil eine Exec-Zeile auch /usr/bin/<name> sein darf.
+      const name = executable.split("/").pop()
+      // Der ERSTE gewinnt, wie in der Schleife vorher: sie gab beim
+      // ersten Treffer zurueck. `set` ohne diese Abfrage liesse den
+      // letzten gewinnen - eine andere Anwendung als bisher, und zwar
+      // lautlos.
+      if (name && !execIndex.has(name)) {
+        execIndex.set(name, info as GioUnix.DesktopAppInfo)
+      }
+    }
+  }
+  return execIndex.get(program) ?? null
+}
+
+/** Eine Anwendung starten - ueber ihren Eintrag, nicht ueber einen Namen.
+ *
+ * terminalCommand() kommt AUS ags-dock.template und wird nicht
+ * nachgebaut: dort steht die Messung, warum ein Eintrag mit
+ * `Terminal=true` ueber den Compositor und nicht ueber GIO startet
+ * (GLib sucht in einer festen Liste bekannter Terminals, und kitty steht
+ * nicht darin). Zwei Antworten auf "womit startet ein Konsoleneintrag"
+ * waeren eine, die beim naechsten Mal vergessen wird.
+ */
+function starte(info: GioUnix.DesktopAppInfo): void {
+  const terminal = terminalCommand(info)
+  if (terminal) Hyprland.dispatch(`exec ${terminal}`)
+  else info.launch([], null)
+}
+
+// =====================================================================
+// DAS GITTER
+// =====================================================================
+
+/** Wie viele Zellen nebeneinander und uebereinander auf DIESE Flaeche passen.
+ *
+ * Aus der heutigen Flaeche und nicht aus einer Zahl: die Flaeche aendert
+ * sich im Betrieb (Messung 4 im Kopf). Mindestens eine, damit ein sehr
+ * kleiner Schirm kein Gitter ohne Zellen ergibt - ein Home mit null
+ * Spalten zeigte gar nichts und saehe wie ein Fehler aus.
+ */
+function gitter(breite: number, hoehe: number): { spalten: number, zeilen: number } {
+  // Der Rand geht ZWEIMAL ab, oben und unten beziehungsweise links und
+  // rechts: das Gitter sitzt mittig darin, wie jede andere Flaeche
+  // dieses Schreibtischs auch.
+  return {
+    spalten: Math.max(1, Math.floor((breite - 2 * EDGE_GAP) / CELL)),
+    zeilen: Math.max(1, Math.floor((hoehe - 2 * EDGE_GAP) / CELL)),
+  }
+}
+
+/** Wo jedes Symbol HEUTE liegt.
+ *
+ * ZWEI DURCHGAENGE, UND DIE REIHENFOLGE IST DIE ENTSCHEIDUNG
+ *     Erst bekommen alle ihren Platz, die einen gueltigen und freien
+ *     haben - was der Nutzer selbst hingelegt hat, gewinnt. Danach
+ *     fuellen die uebrigen die Luecken: die ohne Zelle (neu
+ *     ausgeliefert, gerade hinzugefuegt) und die, deren Zelle es auf
+ *     DIESEM Schirm nicht gibt.
+ *
+ *     Andersherum - erst auffuellen, dann die gespeicherten - stuende
+ *     ein neu hinzugekommenes Symbol auf dem Platz eines gespeicherten,
+ *     und das gespeicherte wanderte. Ein Symbol, das der Nutzer selbst
+ *     abgelegt hat, darf nie wegen eines anderen wandern.
+ *
+ * ZURUECKGESCHRIEBEN WIRD DABEI NICHTS
+ *     Das ist die Regel, an der die ganze Frage "was passiert am
+ *     kleineren Schirm" haengt. Ein Symbol bei Zelle (14,7) liegt auf
+ *     einem schmalen Schirm ersatzweise woanders - in der
+ *     Einstellungsdatei steht weiterhin (14,7). Steckt der Nutzer den
+ *     grossen Schirm wieder an, liegt es wieder dort, wo er es
+ *     hingelegt hat. Die ganze Begruendung steht bei HOME in
+ *     src/settings.py.
+ *
+ * SPALTENWEISE UND NICHT ZEILENWEISE
+ *     Die erste freie Zelle ist die naechste UNTEN, nicht die naechste
+ *     rechts: ein Schreibtisch fuellt sich am linken Rand nach unten und
+ *     erst dann in der naechsten Spalte. Windows macht es so, und es ist
+ *     die Richtung, in der ein breiter Schirm nicht sofort eine
+ *     Symbolzeile quer ueber das ganze Bild legt.
+ */
+function lege(icons: HomeIcon[], spalten: number, zeilen: number): Gelegt[] {
+  const belegt = new Set<string>()
+  const gelegt: Gelegt[] = []
+  const offen: HomeIcon[] = []
+
+  const schluessel = (col: number, row: number) => `${col}:${row}`
+
+  for (const icon of icons) {
+    const hatZelle = typeof icon.col === "number" && typeof icon.row === "number"
+    const passt = hatZelle
+      && icon.col! >= 0 && icon.col! < spalten
+      && icon.row! >= 0 && icon.row! < zeilen
+      && !belegt.has(schluessel(icon.col!, icon.row!))
+    if (passt) {
+      belegt.add(schluessel(icon.col!, icon.row!))
+      gelegt.push({ icon, col: icon.col!, row: icon.row! })
+    } else {
+      offen.push(icon)
+    }
+  }
+
+  let naechste = 0
+  for (const icon of offen) {
+    while (naechste < spalten * zeilen) {
+      const col = Math.floor(naechste / zeilen)
+      const row = naechste % zeilen
+      naechste += 1
+      if (belegt.has(schluessel(col, row))) continue
+      belegt.add(schluessel(col, row))
+      gelegt.push({ icon, col, row })
+      break
+    }
+    if (naechste >= spalten * zeilen) {
+      // Kein Absturz und kein stilles Verschwinden: das Symbol bleibt in
+      // der Datei, es ist heute nur kein Platz dafuer. Auf einem
+      // groesseren Schirm ist es wieder da.
+      console.log(
+        `Home: fuer "${icon.name}" ist auf dieser Flaeche kein Platz `
+        + `(${spalten}x${zeilen} Zellen) - es bleibt gespeichert`)
+    }
+  }
+  return gelegt
+}
+
+// =====================================================================
+// DAS RECHTSKLICK-MENUE
+// =====================================================================
+//
+// DIESELBE FORM WIE DAS MENUE DES DOCKS, UND OHNE EIGENE KLASSEN
+//     Ein Gtk.Popover mit zepRow-Zeilen, kein Gtk.PopoverMenu - die
+//     ganze Begruendung dafuer steht bei zeigeMenue() in
+//     ags-dock.template und wird hier nicht abgeschrieben.
+//
+//     Gestylt wird es von `popover > contents` in ags-style.template,
+//     einem ELEMENT-Wahlausdruck. Genau deshalb steht hier keine einzige
+//     CSS-Klasse: das Menue des Docks war am 20.08.2026 komplett weiss,
+//     weil es zwei eigene Klassen trug, zu denen es keine Regel gab. Ein
+//     Menue, das gar keine Klasse traegt, kann diesen Fehler nicht noch
+//     einmal machen - es erbt dieselbe Platte wie jedes andere Popover
+//     dieses Baums.
+
+interface MenueEintrag {
+  symbol: string
+  text: string
+  tun: () => void
+}
+
+/** Das Menue an einem Widget aufklappen.
+ *
+ * `zeigeAn` ist das Rechteck, an dem es sich ausrichtet - beim Klick auf
+ * die freie Flaeche ist das der Zeigerpunkt und nicht das Widget, sonst
+ * klappte das Menue immer in der Mitte des Schirms auf.
+ */
+function zeigeMenue(anker: Gtk.Widget, eintraege: MenueEintrag[],
+                    zeigeAn?: Gdk.Rectangle): Gtk.Popover | null {
+  if (!eintraege.length) return null
+
+  const liste = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+  const menue = new Gtk.Popover({ has_arrow: false })
+  menue.set_child(liste)
+  menue.set_parent(anker)
+  if (zeigeAn) menue.set_pointing_to(zeigeAn)
+
+  eintraege.forEach((eintrag, stelle) => {
+    if (stelle) liste.append(zepDivider())
+    liste.append(zepRow({
+      symbol: eintrag.symbol,
+      titel: eintrag.text,
+      navEintrag: true,
+      // ERST ZU, DANN TUN - dieselbe Reihenfolge wie im Dock: sonst
+      // stuende das Menue noch, waehrend darunter schon ein Programm
+      // startet oder die Flaeche neu gezeichnet wird.
+      aktion: () => {
+        menue.popdown()
+        eintrag.tun()
+      },
+    }))
+  })
+
+  // ABGENOMMEN IM LEERLAUF UND NICHT IM RUECKRUF: "closed" laeuft mitten
+  // im Abbau des Popovers. Die Messung dazu steht in ags-dock.template.
+  menue.connect("closed", () => {
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      if (menue.get_parent()) menue.unparent()
+      return GLib.SOURCE_REMOVE
+    })
+  })
+
+  menue.popup()
+  return menue
+}
+
+// =====================================================================
+// DIE FLAECHE
+// =====================================================================
+
+export interface HomeHandle {
+  windows: Astal.Window[]
+  /** Neu einlesen und neu zeichnen - fuer einen Schreiber von aussen. */
+  refresh: () => void
+}
+
+/** Das Home.
+ *
+ * `toggleByName` kommt herein und wird nicht importiert - dasselbe
+ * Muster wie bei PowerButton(): zwei Menuepunkte oeffnen ein Fenster
+ * DIESES Prozesses (die Tapetenauswahl und die Einstellungen), und ein
+ * Import haenge das Home an jedes davon.
+ */
+export default function Home(
+  toggleByName: (name: string, at?: any) => void,
+): HomeHandle {
+  const display = Gdk.Display.get_default()
+  const windows: Astal.Window[] = []
+  if (!display) {
+    console.error("Keine Anzeige - es gibt kein Home")
+    return { windows, refresh: () => {} }
+  }
+
+  // Der Zustand: was zuletzt gelesen wurde. Er steht hier und nicht in
+  // einem Modul-Feld, damit zwei Homes (falls je zwei entstehen) sich
+  // nicht ins Gehege kommen.
+  let icons: HomeIcon[] = []
+
+  const monitors = display.get_monitors()
+
+  /** Eine Flaeche: ihr Fenster, ihr Gitter und was darauf zuletzt lag. */
+  interface Flaeche {
+    window: Astal.Window
+    fixed: Gtk.Fixed
+    // Je Schirm eigen, weil das Gitter je Schirm eigen ist: ein
+    // 1920er Schirm hat mehr Spalten als ein 1366er, dieselbe Zelle
+    // liegt also woanders. Eine gemeinsame Liste waere eine Liste, die
+    // auf einem der beiden Schirme nicht stimmt.
+    gelegt: Gelegt[]
+  }
+  const flaechen: Flaeche[] = []
+
+  for (let index = 0; index < monitors.get_n_items(); index++) {
+    const monitor = monitors.get_item(index) as Gdk.Monitor
+    const window = new Astal.Window({
+      namespace: WINDOW_NAME,
+      name: `home-${monitor.connector}`,
+      // MESSUNG 1 UND 2 IM KOPF. `bottom` ist die Sicherung, die
+      // Fenster anklickbar laesst - nicht die Eingaberegion.
+      layer: Astal.Layer.BOTTOM,
+      // Alle vier Kanten: das Home ist die ganze freie Flaeche.
+      anchor: (Astal.WindowAnchor.TOP | Astal.WindowAnchor.BOTTOM
+               | Astal.WindowAnchor.LEFT | Astal.WindowAnchor.RIGHT),
+      // NORMAL und nicht IGNORE: die Flaeche endet dort, wo Leiste und
+      // Dock ihre Zonen reserviert haben. GEMESSEN am 20.08.2026 - mit
+      // IGNORE (exclusive_zone -1) laege sie UNTER der Leiste, und die
+      // oberste Symbolzeile stuende hinter ihr. Unter Windows liegt
+      // auch kein Symbol unter der Taskleiste.
+      exclusivity: Astal.Exclusivity.NORMAL,
+      // MESSUNG 3 IM KOPF. NIEMALS EXCLUSIVE.
+      keymode: Astal.Keymode.NONE,
+      gdkmonitor: monitor,
+      visible: true,
+    })
+    window.add_css_class("home-window")
+
+    const fixed = new Gtk.Fixed()
+    fixed.add_css_class("home-grid")
+    window.set_child(fixed)
+
+    // JEDER SCHIRM TRAEGT DIESELBEN SYMBOLE - UND DAS WAR ANDERS GEPLANT
+    //
+    //     Der Entwurf zu dieser Aufgabe sah "die Symbole nur auf dem
+    //     ersten Schirm" vor, mit Windows als Vorbild (dort liegen sie
+    //     auf dem Hauptbildschirm). GEFALLEN ist das am 20.08.2026 an
+    //     einer Messung: tests/render/test_home.py fand null gezeichnete
+    //     Bildpunkte, weil der verschachtelte Compositor ZWEI Ausgaenge
+    //     hat und `get_monitors()` den anderen zuerst nennt als den
+    //     abgebildeten.
+    //
+    //     Das ist kein Fehler des Tests. Es ist die Frage, die die Regel
+    //     nie beantwortet hat: WELCHER Schirm ist der erste? Hyprland
+    //     kennt keinen Hauptbildschirm, die Reihenfolge von
+    //     `get_monitors()` ist die der Anmeldung, und die aendert sich
+    //     beim Umstecken. Der Nutzer haette seine Symbole auf einem
+    //     Schirm, den er nicht waehlen kann - und nach dem naechsten
+    //     Neustart moeglicherweise auf einem anderen.
+    //
+    //     Also alle. Es gibt EINE Liste und EINE Anordnung; jeder Schirm
+    //     rechnet sie in sein eigenes Gitter (ein 1920er hat mehr
+    //     Spalten als ein 1366er). Wer auf einem Schirm ein Symbol
+    //     zieht, hat es auf allen gezogen - eine Anordnung, kein
+    //     Schirmzustand. Und der Wunsch "auf dem hintergrund rechtsklick
+    //     drücken" gilt damit ueberall, ohne Sonderfall.
+    //
+    //     Was es kostet: nichts. 0.00 % im Leerlauf je Flaeche, gemessen
+    //     (siehe Kopf).
+    flaechen.push({ window, fixed, gelegt: [] })
+    windows.push(window)
+
+    rechtsklickAufDieFlaeche(fixed)
+  }
+
+  // ===================================================================
+  // ZEICHNEN
+  // ===================================================================
+
+  function zeichne(): void {
+    for (const flaeche of flaechen) {
+      let kind = flaeche.fixed.get_first_child()
+      while (kind) {
+        const naechstes = kind.get_next_sibling()
+        flaeche.fixed.remove(kind)
+        kind = naechstes
+      }
+
+      const breite = flaeche.window.get_width()
+      const hoehe = flaeche.window.get_height()
+      // Vor dem Abbilden meldet GTK 0 - dann gibt es noch keine Flaeche,
+      // auf die man legen koennte. Der "map"-Rueckruf unten zeichnet
+      // erneut, sobald sie steht.
+      if (breite <= 0 || hoehe <= 0) {
+        flaeche.gelegt = []
+        continue
+      }
+
+      const { spalten, zeilen } = gitter(breite, hoehe)
+
+      // NEU GELEGT WIRD NUR, WENN ES SEIN MUSS - GEMESSEN am 20.08.2026
+      //
+      //     Vorher wurde bei JEDER Groessenaenderung neu gelegt, und das
+      //     hatte eine Folge, die niemand bestellt hat: SUPER+B faehrt
+      //     das Dock ein, die exklusive Zone faellt weg, die Flaeche
+      //     wird hoeher (gemessen: 1041 -> 1081), das Gitter bekommt eine
+      //     Zeile mehr - und SAEMTLICHE Symbole ruecken. Der Nutzer
+      //     drueckt eine Taste, um den Fuss wegzunehmen, und raeumt sich
+      //     dabei den Schreibtisch um.
+      //
+      //     Aufgefallen ist es an zwei fremden Zusicherungen
+      //     (tests/render/test_starter.py, test_einfahrt.py), die messen,
+      //     dass unten nach SUPER+B alles unveraendert zurueckkommt: 87
+      //     Punkte Unterschied und ein um 8 Punkte verschobener Kasten.
+      //
+      //     Die Regel ist jetzt: WAECHST die Flaeche, bleibt liegen, was
+      //     liegt - mehr Platz ist kein Grund, etwas zu bewegen.
+      //     SCHRUMPFT sie so weit, dass ein Symbol herausfiele, wird neu
+      //     gelegt, denn sonst waere es unerreichbar. Das ist zugleich
+      //     das Verhalten, das Windows zeigt, wenn die Taskleiste
+      //     automatisch verschwindet.
+      //     Geprueft wird ueber die NAMEN und nicht ueber die Anzahl: wer
+      //     ein Symbol abnimmt und ein anderes hinzufuegt, hat gleich
+      //     viele - und bekaeme sonst das alte Bild mit dem neuen Namen
+      //     darunter.
+      const passtNoch = flaeche.gelegt.length === icons.length
+        && flaeche.gelegt.every((p, stelle) =>
+             p.icon.name === icons[stelle].name
+             && p.col < spalten && p.row < zeilen)
+      if (!passtNoch) flaeche.gelegt = lege(icons, spalten, zeilen)
+      for (const platz of flaeche.gelegt) {
+        flaeche.fixed.put(symbolKnopf(platz),
+                          EDGE_GAP + platz.col * CELL,
+                          EDGE_GAP + platz.row * CELL)
+      }
+    }
+  }
+
+  /** Ein Symbol: Bild, Beschriftung, Klick, Rechtsklick, Ziehen. */
+  function symbolKnopf(platz: Gelegt): Gtk.Widget {
+    const info = eintragFuer(platz.icon.name)
+
+    const knopf = new Gtk.Button({ can_focus: true })
+    knopf.add_css_class("home-icon")
+
+    const kasten = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      valign: Gtk.Align.CENTER,
+      halign: Gtk.Align.CENTER,
+    })
+
+    if (info) {
+      const bild = new Gtk.Image({ pixel_size: ICON_SIZE })
+      const symbol = info.get_icon()
+      if (symbol) bild.set_from_gicon(symbol)
+      else bild.set_from_icon_name(platz.icon.name)
+      kasten.append(bild)
+    } else {
+      // Kein Eintrag auf DIESER Maschine. settings.py hat den Namen
+      // eigentlich schon herausgenommen (BAR_GONE); hierher kommt nur,
+      // was zwischen dem Lesen und dem Zeichnen deinstalliert wurde.
+      // Ein Zeichen aus der eigenen Quelle statt eines fremden
+      // Ersatzbildes - dieselbe Entscheidung wie im Dock: ein Zahnrad
+      // hiesse "Einstellungen" und nicht "unbekannt".
+      //
+      // AUF SYMBOLHOEHE GEZWUNGEN, UND DAS IST GEMESSEN
+      //     Am Bild vom 20.08.2026 standen die Beschriftungen zweier
+      //     Spalten 13 Punkte gegeneinander versetzt: ein Nerd-Font-
+      //     Zeichen ist SCHRIFT und damit niedriger als ein 48 Punkte
+      //     hohes Bild. Die Zelle blieb gleich gross, der Inhalt darin
+      //     rutschte hoch, und ein Gitter mit versetzten Zeilen sieht
+      //     nicht nach Gitter aus.
+      //
+      //     Dieselbe Ueberlegung, aus der ags-dock.template seinem
+      //     Ersatzzeichen die Groesse der Symbole gibt ("damit der Knopf
+      //     gleich gross bleibt") - hier auf beiden Achsen, weil eine
+      //     Zelle beides festhaelt.
+      const ersatz = new Gtk.Label({
+        label: ICONS.unknown,
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.CENTER,
+      })
+      ersatz.set_size_request(ICON_SIZE, ICON_SIZE)
+      kasten.append(ersatz)
+    }
+
+    const beschriftung = new Gtk.Label({
+      label: benennung(platz.icon.name, info),
+      justify: Gtk.Justification.CENTER,
+    })
+    // Kuerzen UND die natuerliche Breite deckeln - beides, aus dem
+    // Grund, den zepRow in ags-kit.template ausfuehrlich nennt:
+    // `ellipsize` senkt bei GTK nur die MINDESTbreite, nicht die
+    // natuerliche. Ein Gtk.Fixed deckelt gar nichts, also liefe ein
+    // langer Anwendungsname hier quer ueber seine Nachbarn.
+    //
+    // Die Grenze ist AUSGERECHNET und nicht getippt: Zellbreite geteilt
+    // durch den gemessenen Zeichenvorschub dieser Schrift, siehe
+    // home_label_chars() in src/sizes.py. Beide Groessen folgen dem
+    // Faktor des Nutzers, die Zahl also auch.
+    beschriftung.set_ellipsize(3)  // Pango.EllipsizeMode.END
+    beschriftung.set_max_width_chars({{STYLE_HOME_LABEL_CHARS}})
+    beschriftung.add_css_class("home-label")
+    beschriftung.set_size_request(CELL, -1)
+    kasten.append(beschriftung)
+
+    knopf.set_child(kasten)
+    // Der Kurzhinweis traegt den VOLLEN Namen. Die Beschriftung darunter
+    // kuerzt auf eine Zellbreite (siehe dort), und ein gekuerzter Name
+    // ohne einen Weg zum vollen ist genau der Knopf, bei dem man raten
+    // muss, was er oeffnet.
+    knopf.set_tooltip_text(benennung(platz.icon.name, info))
+
+    knopf.connect("clicked", () => {
+      if (info) starte(info)
+      else console.error(
+        `Home: "${platz.icon.name}" hat auf dieser Maschine keinen `
+        + `Anwendungseintrag - es startet nichts`)
+    })
+
+    rechtsklickAufEinSymbol(knopf, platz, info)
+    ziehbar(knopf, platz)
+    return knopf
+  }
+
+  // ===================================================================
+  // DIE ZWEI MENUES
+  // ===================================================================
+
+  function rechtsklickAufEinSymbol(knopf: Gtk.Widget, platz: Gelegt,
+                                   info: GioUnix.DesktopAppInfo | null): void {
+    // Knopf 3 ist die rechte Taste. `new Gtk.GestureClick({button: 3})`
+    // und nicht button 0 mit einer Abfrage: eine Geste, die nur eine
+    // Taste annimmt, kann eine andere nicht versehentlich schlucken -
+    // und der Linksklick soll beim Knopf bleiben.
+    const geste = new Gtk.GestureClick({ button: 3 })
+    geste.connect("pressed", () => {
+      const eintraege: MenueEintrag[] = []
+      if (info) {
+        eintraege.push({
+          symbol: ICONS.open,
+          text: _("Open"),
+          tun: () => starte(info),
+        })
+      }
+      eintraege.push({
+        symbol: ICONS.remove,
+        text: _("Remove from Home"),
+        tun: () => {
+          void schreibe(["remove", platz.icon.name]).then(ok => {
+            if (ok) refresh()
+          })
+        },
+      })
+      zeigeMenue(knopf, eintraege)
+    })
+    knopf.add_controller(geste)
+  }
+
+  function rechtsklickAufDieFlaeche(fixed: Gtk.Fixed): void {
+    // Die Flaeche wird beim Aufruf noch gebaut; welche es ist, steht
+    // erst danach in `flaechen`. Nachgeschlagen wird deshalb ERST BEIM
+    // KLICK und ueber das Gitter, an dem die Geste haengt - ein
+    // Verweis, der beim Bauen festgehalten wuerde, zeigte auf ein
+    // halbfertiges Objekt.
+    const meine = () => flaechen.find(f => f.fixed === fixed)
+    const geste = new Gtk.GestureClick({ button: 3 })
+    geste.connect("pressed", (_g: any, _n: number, x: number, y: number) => {
+      // Am ZEIGERPUNKT und nicht in der Mitte der Flaeche: die Flaeche
+      // ist der ganze Schirm, ein Menue in ihrer Mitte klappte weit weg
+      // von der Stelle auf, an der geklickt wurde.
+      const punkt = new Gdk.Rectangle()
+      punkt.x = Math.round(x)
+      punkt.y = Math.round(y)
+      punkt.width = 1
+      punkt.height = 1
+
+      // VIER PUNKTE, UND JEDER EINZELNE IST GEBAUT
+      //
+      //     Der Wunsch war "eine app spawnen". Der erste Punkt ist
+      //     woertlich das - derselbe Starter, den SUPER+SPACE und der
+      //     Knopf unten rechts oeffnen, ueber dieselbe Funktion und
+      //     nicht ueber einen zweiten Weg dorthin.
+      //
+      //     Die drei anderen sind das, was ein Rechtsklick auf den
+      //     Schreibtisch sonst noch beantworten koennen muss: die
+      //     Symbole aufraeumen, die Tapete wechseln, die Einstellungen
+      //     oeffnen. Mehr steht bewusst nicht darin - ein Menuepunkt,
+      //     der nichts tut, ist schlechter als keiner.
+      zeigeMenue(fixed, [
+        {
+          symbol: ICONS.starter,
+          text: _("Open application launcher"),
+          tun: () => oeffneDenStarter(),
+        },
+        {
+          symbol: ICONS.tidy,
+          text: _("Tidy up icons"),
+          tun: () => {
+            const flaeche = meine()
+            if (flaeche) raeumeAuf(flaeche)
+          },
+        },
+        {
+          symbol: ICONS.wallpaper,
+          text: _("Choose wallpaper"),
+          tun: () => toggleByName("wallpaper"),
+        },
+        {
+          symbol: ICONS.settings,
+          text: _("Settings"),
+          tun: () => toggleByName("settings"),
+        },
+      ], punkt)
+    })
+    fixed.add_controller(geste)
+  }
+
+  /** Alle Symbole von vorn durchzaehlen und die Belegung SPEICHERN.
+   *
+   * Der einzige Punkt dieses Menues, der die Einstellungsdatei aendert -
+   * und er tut es ausdruecklich: "aufraeumen" heisst, dass es danach so
+   * bleibt. Ein Aufraeumen, das nur die Anzeige umlegt, waere beim
+   * naechsten Anmelden wieder weg.
+   */
+  function raeumeAuf(flaeche: Flaeche): void {
+    const { zeilen } = gitter(
+      flaeche.window.get_width(), flaeche.window.get_height())
+    if (!flaeche.gelegt.length) return
+
+    // AUF DEM SCHIRM, AUF DEM GEKLICKT WURDE, und das ist die einzige
+    // Wahl, die keine Frage offenlaesst: aufgeraeumt wird nach DEM
+    // Gitter, das der Nutzer gerade vor sich hat. Bei einem schmaleren
+    // zweiten Schirm ordnet sich dieselbe Liste dort in mehr Spalten -
+    // das ist dieselbe Anordnung in einem anderen Gitter und kein
+    // zweiter Zustand.
+    //
+    // Von der GEZEICHNETEN Belegung aus und nicht von der gespeicherten:
+    // aufgeraeumt wird, was er SIEHT. flaeche.gelegt steht bereits in
+    // der Reihenfolge, in der die Symbole liegen (erst die mit eigener
+    // Zelle, dann die aufgefuellten), also ist "von vorn durchzaehlen"
+    // genau das, was das Wort verspricht.
+    const geordnet = flaeche.gelegt.map((platz, stelle) => ({
+      name: platz.icon.name,
+      col: Math.floor(stelle / zeilen),
+      row: stelle % zeilen,
+    }))
+    void schreibe(["set", JSON.stringify(geordnet)]).then(ok => {
+      if (ok) refresh()
+    })
+  }
+
+  // ===================================================================
+  // DAS ZIEHEN
+  // ===================================================================
+
+  /** Ein Symbol an den Zeiger haengen.
+   *
+   * Gtk.DragSource mit einer Zeichenkette als Fracht - dem NAMEN und
+   * nicht der Stelle in der Liste. Eine Stelle waere eine Zahl, die
+   * zwischen dem Aufnehmen und dem Ablegen veralten kann (ein zweiter
+   * Schreiber, ein Neuzeichnen); ein Name bleibt derselbe Name.
+   */
+  function ziehbar(knopf: Gtk.Widget, platz: Gelegt): void {
+    const quelle = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE })
+    quelle.connect("prepare", () =>
+      Gdk.ContentProvider.new_for_value(platz.icon.name))
+    quelle.connect("drag-begin", () => knopf.add_css_class("dragging"))
+    quelle.connect("drag-end", () => knopf.remove_css_class("dragging"))
+    knopf.add_controller(quelle)
+  }
+
+  /** Die Flaeche nimmt ein gezogenes Symbol an - in DER Zelle, auf der
+   * es losgelassen wurde.
+   *
+   * EINE BELEGTE ZELLE NIMMT NICHTS AN, und das ist eine Entscheidung.
+   * Zwei Symbole auf einer Zelle waeren ein Stapel, den man nicht mehr
+   * auseinandernehmen kann; ein Tausch waere eine Bewegung, die der
+   * Nutzer nicht angefasst hat. Das Symbol bleibt dann, wo es war -
+   * sichtbar, und ohne dass etwas geschrieben wird.
+   */
+  function annahme(flaeche: Flaeche): void {
+    // GObject.TYPE_STRING, weil die Quelle oben eine Zeichenkette
+    // anbietet (Gdk.ContentProvider.new_for_value mit dem Namen). Quelle
+    // und Ziel muessen sich ueber den Typ einig sein - sonst meldet der
+    // Compositor beim Ablegen gar nichts, und das Ziehen sieht aus, als
+    // waere es abgelehnt worden.
+    const ziel = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.MOVE)
+    ziel.connect("drop", (_t: any, wert: any, x: number, y: number) => {
+      const name = String(wert)
+      const { spalten, zeilen } = gitter(
+        flaeche.window.get_width(), flaeche.window.get_height())
+      // Der Rand geht ab, bevor durch die Zellbreite geteilt wird -
+      // dieselbe Rechnung wie beim Legen, nur rueckwaerts. Ohne ihn
+      // laege das Symbol beim Ablegen um eine knappe Zelle zu weit oben
+      // links.
+      const col = Math.min(spalten - 1,
+                           Math.max(0, Math.floor((x - EDGE_GAP) / CELL)))
+      const row = Math.min(zeilen - 1,
+                           Math.max(0, Math.floor((y - EDGE_GAP) / CELL)))
+
+      const besetzt = flaeche.gelegt.some(
+        p => p.col === col && p.row === row && p.icon.name !== name)
+      if (besetzt) {
+        console.log(
+          `Home: Zelle ${col},${row} ist belegt - "${name}" bleibt liegen`)
+        return false
+      }
+
+      // Die GESAMTE Belegung wird geschrieben und nicht nur das eine
+      // Symbol: was heute ersatzweise liegt (weil seine Zelle auf diesem
+      // Schirm fehlt), stuende sonst weiter ohne Zelle in der Datei und
+      // spraenge beim naechsten Zeichnen woandershin. Wer EIN Symbol
+      // ablegt, legt damit die Anordnung fest, die er gerade sieht.
+      const neu = flaeche.gelegt.map(p => p.icon.name === name
+        ? { name, col, row }
+        : { name: p.icon.name, col: p.col, row: p.row })
+      void schreibe(["set", JSON.stringify(neu)]).then(ok => {
+        if (ok) refresh()
+      })
+      return true
+    })
+    flaeche.fixed.add_controller(ziel)
+  }
+
+  // Jede Flaeche nimmt ein gezogenes Symbol an - auf jedem Schirm, weil
+  // auf jedem Schirm Symbole liegen.
+  for (const flaeche of flaechen) annahme(flaeche)
+
+  // ===================================================================
+  // LESEN UND NEU ZEICHNEN
+  // ===================================================================
+
+  function refresh(): void {
+    void lies().then(gelesen => {
+      // null heisst "settings.py hat nicht geantwortet" - dann bleibt
+      // stehen, was da ist. Ein leeres Home an dieser Stelle waere ein
+      // Home, das der naechste Schreibvorgang festschreibt.
+      if (!gelesen) return
+      icons = gelesen
+      // Neu einlesen heisst: es kann sich etwas geaendert haben, auch an
+      // den installierten Anwendungen. Der Zwischenspeicher faellt
+      // deshalb hier und nur hier - bei einer blossen
+      // Groessenaenderung waere er ein zweites Mal aufzustellen, ohne
+      // dass sich etwas geaendert haben koennte.
+      verwirfIndex()
+      zeichne()
+    })
+  }
+
+  // Neu zeichnen, wenn sich die Flaeche aendert - genau der Fall aus
+  // Messung 4: das Dock faehrt ein oder aus, die Leiste kommt oder geht,
+  // ein Schirm wechselt seine Aufloesung. Ohne diesen Rueckruf blieben
+  // die Symbole in einem Gitter stehen, das es nicht mehr gibt.
+  //
+  // AN DER Gdk.Surface UND NICHT AM FENSTER, UND DAS IST GEMESSEN
+  //     Hier stand `window.connect("notify::width", ...)`. Das Home
+  //     blieb daraufhin LEER, ohne eine einzige Fehlermeldung -
+  //     gefunden am 20.08.2026 von tests/render/test_home.py::
+  //     test_das_home_zeichnet_wirklich_symbole, 0 geaenderte
+  //     Bildpunkte.
+  //
+  //     Der Grund, GEPRUEFT per Introspektion am selben Tag:
+  //
+  //         Gtk.Window.list_properties()   width: NEIN
+  //                                        (nur width-request,
+  //                                         default-width)
+  //         Gdk.Surface.list_properties()  width: JA, height: JA
+  //
+  //     `get_width()` ist bei GTK4 die ZUGETEILTE Groesse und keine
+  //     Eigenschaft - auf sie kann man nicht hoeren. Ein
+  //     `notify::width` am Fenster ist deshalb kein Fehler, der etwas
+  //     meldet: GObject nimmt den Namen an, und das Signal kommt
+  //     einfach nie. Die Groesse, die der Compositor zuteilt, steht an
+  //     der Gdk.Surface, und DIE meldet sie.
+  //
+  //     Die Surface gibt es erst nach dem Abbilden, also wird sie im
+  //     "map" geholt. Dort wird auch einmal gezeichnet: beim ersten
+  //     refresh() ist die Flaeche noch 0x0, und zeichnen kann man erst,
+  //     wenn es eine Flaeche gibt.
+  //
+  // Kein Zeitgeber: die Meldung kommt vom Compositor ueber GTK, und
+  // zwischen zwei Aenderungen passiert nichts. Die 0.00 % im Leerlauf
+  // (siehe Kopf) haengen genau daran.
+  /** Die Gdk.Surface eines Fensters abhorchen, sobald es sie hat. */
+  function verfolgeGroesse(window: Astal.Window): void {
+    const anhaengen = () => {
+      const surface = window.get_surface()
+      if (!surface) {
+        console.error("Home: das Fenster hat keine Flaeche - es kann seine "
+                      + "Groesse nicht verfolgen")
+        return
+      }
+      surface.connect("notify::width", () => zeichne())
+      surface.connect("notify::height", () => zeichne())
+      zeichne()
+    }
+
+    // SCHON ABGEBILDET ODER NOCH NICHT - BEIDE FAELLE, UND DAS IST GEMESSEN
+    //
+    //     Hier stand nur `window.connect("map", anhaengen)`, und das
+    //     Home blieb LEER. GEMESSEN am 20.08.2026 mit einer Diagnosezeile
+    //     in der erzeugten Datei:
+    //
+    //         DBG lies: 15
+    //         DBG zeichne: 0x0 icons=15
+    //         DBG zeichne: 0x0 icons=15
+    //         (kein "DBG map")
+    //
+    //     Die Symbole waren also da, die Flaeche war 0x0, und "map" kam
+    //     nie. Der Grund steht eine Bildschirmseite weiter oben: das
+    //     Fenster wird mit `visible: true` GEBAUT - dieselbe Zeile, die
+    //     das Dock hat -, ist beim Verlassen des Konstruktors also
+    //     bereits abgebildet. Das Signal war gefallen, bevor jemand
+    //     zuhoerte.
+    //
+    //     Ein `visible: false` mit spaeterem Einschalten haette es auch
+    //     geloest und dafuer eine zweite Stelle geschaffen, an der steht,
+    //     ob das Home sichtbar ist. Gefragt wird deshalb nach dem
+    //     ZUSTAND statt auf das Ereignis zu warten.
+    if (window.get_mapped()) anhaengen()
+    else window.connect("map", anhaengen)
+  }
+
+  for (const flaeche of flaechen) verfolgeGroesse(flaeche.window)
+
+  refresh()
+
+  return { windows, refresh }
+}

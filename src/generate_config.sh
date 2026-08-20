@@ -1318,12 +1318,30 @@ case "$CONFIG_NAME" in
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
         CONFIG_FILE="StarterButton.tsx"
         ;;
+    # Das Home - die Flaeche hinter allen Fenstern, mit den
+    # Programmsymbolen des Nutzers darauf (Aufgabe 52, 20.08.2026).
+    # Eine Layer-Shell-Flaeche je Schirm auf `bottom`, also ueber der
+    # Tapete und unter jedem Fenster; siehe den Kopf der Vorlage fuer
+    # die vier Messungen, aus denen sie besteht.
+    ags-home)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
+        CONFIG_FILE="Home.tsx"
+        ;;
     # Der Stil der Leiste. Nicht style.scss, sondern eine zweite Datei,
     # die app.ts ueber app.apply_css() nachlaedt - siehe dort, und siehe
     # den Kopf von src/styles/bar-style.template.
     bar-style)
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags"
         CONFIG_FILE="bar.css"
+        ZEPOS_TEMPLATE_SUBDIR="styles"
+        ;;
+    # Der Stil des Homes. Dieselbe Bauart wie bar-style eine Zeile
+    # darueber und aus demselben Grund: von app.ts nachgeladen, damit ein
+    # Tippfehler darin den Stil des Homes kostet und nicht die ganze
+    # Oberflaeche. Siehe den Kopf von src/styles/home-style.template.
+    home-style)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags"
+        CONFIG_FILE="home.css"
         ZEPOS_TEMPLATE_SUBDIR="styles"
         ;;
     # Fuenf Module, ein Aufruf. Siehe den Kopf der Vorlage.

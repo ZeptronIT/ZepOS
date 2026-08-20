@@ -151,6 +151,10 @@ RENDERED = {
     # der case-Zweig dazu heisst `ags-starter-button)` in
     # src/generate_config.sh.
     "templates/ags-starter-button.template": "widget/StarterButton.tsx",
+    # Das Home - die Flaeche hinter allen Fenstern, seit dem 20.08.2026
+    # (Aufgabe 52). Der case-Zweig dazu heisst `ags-home)` in
+    # src/generate_config.sh, der seines Stylesheets `home-style)`.
+    "templates/ags-home.template": "widget/Home.tsx",
     "templates/ags-calendar.template": "widget/Calendar.tsx",
     "templates/ags-shortcuts.template": "widget/Shortcuts.tsx",
     "templates/ags-battery.template": "widget/Battery.tsx",
@@ -171,6 +175,7 @@ RENDERED = {
     "templates/ags-config.template": "app.ts",
     "templates/ags-style.template": "style.scss",
     "styles/bar-style.template": "bar.css",
+    "styles/home-style.template": "home.css",
 }
 
 def _icon(name: str) -> str:
@@ -975,6 +980,46 @@ def workspaces_file(config: Path, connector: str) -> None:
     ags.mkdir(parents=True, exist_ok=True)
     (ags / "workspaces.json").write_text(
         json.dumps({"persistent-workspaces": {connector: WORKSPACES}}),
+        encoding="utf-8")
+
+
+def empty_home(config: Path) -> None:
+    """Ein Home ohne Symbole - fuer Messungen, die nicht von ihm handeln.
+
+    WARUM ES DAS GEBEN MUSS, SEIT DEM 20.08.2026 (Aufgabe 52)
+        Das Home ist die Flaeche hinter allen Fenstern und legt seine
+        Symbole spaltenweise vom linken Rand nach unten. Damit malt es in
+        das UNTERE DRITTEL des Schirms - und genau dort messen
+        test_einfahrt.py und test_starter.py, ob nach SUPER+B noch etwas
+        vom Fuss oder von den zwei Eckknoepfen stehenbleibt.
+
+        GEMESSEN, bevor es diese Funktion gab: beide Zusicherungen fielen
+        um, weil die Symbole des Homes nach SUPER+B natuerlich
+        stehenbleiben - sie SOLLEN es. "Unten steht nichts mehr" war
+        damit eine Aussage ueber drei Flaechen, von denen die Tests nur
+        zwei meinen.
+
+    DAS IST KEINE AUFWEICHUNG, SONDERN DAS GEGENTEIL
+        Die Zusicherung bleibt Wort fuer Wort dieselbe: nach SUPER+B
+        bemalen NULL Punkte das untere Drittel. Weggenommen wird nicht
+        ein Teil der Messflaeche, sondern eine dritte Flaeche, von der
+        die Messung nie handelte. Ein Rechteck kleiner zu machen haette
+        einen echten Rest verstecken koennen; ein unbeteiligtes Fenster
+        leer zu lassen kann das nicht.
+
+        Dass das Home ueberhaupt zeichnet, misst tests/render/test_home.py
+        - dort mit Symbolen, und dort gehoert es hin.
+
+    Geschrieben wird die ECHTE Einstellungsdatei an der Stelle, an der
+    das Home sie sucht ($XDG_CONFIG_HOME/zepos), und mit einer leeren
+    Liste statt mit null: null hiesse "wie ausgeliefert" und braechte
+    genau die Symbole zurueck, um die es hier geht (siehe HOME in
+    src/settings.py).
+    """
+    root = config / "zepos"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "user-settings.json").write_text(
+        json.dumps({"schema_version": 1, "home": {"icons": []}}),
         encoding="utf-8")
 
 

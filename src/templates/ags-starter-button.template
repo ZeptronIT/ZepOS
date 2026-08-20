@@ -207,8 +207,16 @@ const ANGEKOMMEN = "ok"
  *
  * Siehe den Dateikopf: erst der Dispatcher des Plugins, und nur wenn es
  * ihn auf DIESER Maschine nicht gibt, der Rueckfall auf zepos-menu.
+ *
+ * EXPORTIERT SEIT DEM 20.08.2026 (Aufgabe 52), WEIL ES EINEN ZWEITEN
+ * AUFRUFER GIBT: der Rechtsklick auf das Home bietet "Anwendungsstarter
+ * oeffnen" an - woertlich der Wunsch "eine app spawnen". Zwei Kopien
+ * dieser sechs Zeilen waeren zwei Antworten auf die Frage, welchen der
+ * beiden Wege diese Maschine gerade hat, und die zweite bliebe stehen,
+ * wenn sich der Dispatcher einmal umbenennt. Der Knopf und das Menue
+ * oeffnen denselben Starter, also rufen sie dieselbe Funktion.
  */
-function oeffneDenStarter(): void {
+export function oeffneDenStarter(): void {
   const antwort = ask(`dispatch ${STARTER_DISPATCHER}`).trim()
   if (antwort === ANGEKOMMEN) return
 

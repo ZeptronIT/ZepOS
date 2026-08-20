@@ -195,6 +195,23 @@ def test_every_self_built_surface_says_what_it_is():
     Begruendung wie dort - eine feste Ecke am Bildschirmrand, kein
     Aufklappfenster; IGNORE, damit er dem Dock keinen Platz wegnimmt;
     keymode NONE, weil man ihn klickt und nicht ausfuellt.
+
+    SECHS STATT FUENF, SEIT DEM 20.08.2026 (Aufgabe 52): das Home
+    (ags-home.template), die Flaeche hinter allen Fenstern. Es ist der
+    Gegenpol zu allem anderen in dieser Liste - kein Streifen, keine
+    Ecke, sondern die ganze freie Flaeche - und kann aus demselben Grund
+    nicht aus der Fabrik kommen: createOverlayWindow() baut ein Modal mit
+    Kopf, Deckel und Bildlaufleiste, das AUF VERLANGEN aufgeht. Das Home
+    geht nie auf und nie zu; es ist immer da.
+
+    Seine Begruendung ist die ZWEITE, wie bei den Benachrichtigungen und
+    den zwei Knoepfen: `keymode: Astal.Keymode.NONE`. Und die ist hier
+    keine Formalie, sondern gemessen - mit EXCLUSIVE bekam ein
+    gewoehnliches Fenster im Versuch GAR KEINE Zeigerereignisse mehr
+    (zweimal gelaufen, siehe den Kopf von ags-home.template). Einen
+    Streifen reserviert es nicht; es haelt sich an die Streifen der
+    anderen (Exclusivity.NORMAL), damit keine Symbolzeile unter Leiste
+    oder Fuss liegt.
     """
     builders = {
         template.name: _code(template)
@@ -202,14 +219,15 @@ def test_every_self_built_surface_says_what_it_is():
         if template != FACTORY and "new Astal.Window(" in _code(template)
     }
     assert set(builders) == {"ags-bar.template", "ags-dock.template",
+                             "ags-home.template",
                              "ags-notifications.template",
                              "ags-power-button.template",
                              "ags-starter-button.template"}, (
         f"es bauen sich {sorted(builders)} ihr Fenster selbst - erwartet "
-        f"sind die Leiste, das Dock, die Benachrichtigungen und die zwei "
-        f"Knoepfe am Dock (Abschalten links, Starter rechts). Kommt eine "
-        f"Flaeche dazu, gehoert sie durch die Fabrik; faellt eine weg, "
-        f"ist diese Aufzaehlung veraltet")
+        f"sind die Leiste, das Dock, das Home, die Benachrichtigungen und "
+        f"die zwei Knoepfe am Dock (Abschalten links, Starter rechts). "
+        f"Kommt eine Flaeche dazu, gehoert sie durch die Fabrik; faellt "
+        f"eine weg, ist diese Aufzaehlung veraltet")
 
     for name in ("ags-bar.template", "ags-dock.template"):
         assert NOT_A_MODAL[0] in builders[name], (

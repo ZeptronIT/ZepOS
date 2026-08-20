@@ -97,8 +97,8 @@ sys.path.insert(0, str(ROOT))
 
 from tests.render import measure                       # noqa: E402
 from tests.render.desktop_session import (              # noqa: E402
-    Session, bundle, render_configuration, required_tools, size_of,
-    workspaces_file,
+    Session, bundle, empty_home, render_configuration, required_tools,
+    size_of, workspaces_file,
 )
 
 BREITE, HOEHE = 1920, 1080
@@ -167,6 +167,14 @@ def einfahrt(tmp_path_factory) -> dict:
     bilder = tmp_path_factory.mktemp("zepein-bild")
     ags = render_configuration(bau)
     bundle(ags, bau)
+
+    # Ein Home OHNE Symbole. Es ist die Flaeche hinter allen Fenstern und
+    # legt seine Symbole ins untere Drittel - genau dorthin, wo diese
+    # Datei misst, ob nach SUPER+B noch etwas vom Fuss stehenbleibt. Die
+    # Symbole des Homes bleiben dort stehen, und zwar zu Recht; sie
+    # gehoeren nur nicht in DIESE Messung. Die ganze Begruendung steht
+    # bei empty_home() in tests/render/desktop_session.py.
+    empty_home(bau)
 
     with Session(BREITE, HOEHE) as sitzung:
         sitzung.start_bus()
