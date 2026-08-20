@@ -49,6 +49,15 @@ def model(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setenv("ZEPOS_MACHINE_ROOT", str(tmp_path / "etc-zepos"))
     monkeypatch.setenv("ZEPOS_SYSTEMD_ETC", str(tmp_path / "etc"))
+    # NACHGETRAGEN am 20.08.2026: seit Draft.sections() die
+    # hinterlegte Vorgabe der Anheftungen mitschreibt, liest diese
+    # Fixture den Abdruck - und ohne diese Zeile waere das
+    # /usr/share/zepos der Maschine, auf der die Tests laufen. Auf einem
+    # Rechner ohne installiertes ZepOS faellt das nicht auf (die Datei
+    # fehlt, die Antwort ist "unbekannt"); auf einem MIT hinge das
+    # Ergebnis daran, welche Fassung dort gerade installiert ist. Ein
+    # Test, dessen Antwort die Maschine gibt, misst die Maschine.
+    monkeypatch.setenv("ZEPOS_SYSTEM_ROOT", str(tmp_path / "share-zepos"))
     for name in list(sys.modules):
         if name.startswith("zepos_settings_gui") or name in (
                 "brand", "sizes", "settings", "update", "paths"):
@@ -583,8 +592,18 @@ def test_a_reordered_side_is_kept_and_the_untouched_ones_are_not_frozen(model):
     assert draft.dirty()
 
     section = draft.sections()["bar"]
+    # "dock_baseline" geht seit dem 20.08.2026 mit hinaus, sobald die
+    # Anheftungen angefasst werden: es ist die Auslieferung, gegen die
+    # diese Reihenfolge gesetzt wurde, und ohne sie kann der Erzeuger
+    # spaeter nicht unterscheiden, ob ein Name fehlt, weil der Nutzer ihn
+    # abgenommen hat, oder weil ZepOS ihn erst spaeter dazuliefert.
+    #
+    # Hier null, weil dieser Lauf keinen Abdruck hat - "unbekannt" und
+    # nicht "leer". Der Fall mit einer bekannten Auslieferung steht in
+    # test_the_baseline_goes_out_with_the_pins().
     assert section == {"modules_left": None, "modules_right": None,
-                       "dock_pins": ["firefox", "nautilus"]}
+                       "dock_pins": ["firefox", "nautilus"],
+                       "dock_baseline": None}
 
     # Und der Entwurf haelt eine KOPIE: die Seite baut ihre Zeilen aus
     # derselben Liste wieder auf, und ein Entwurf, der auf ihr
@@ -593,6 +612,49 @@ def test_a_reordered_side_is_kept_and_the_untouched_ones_are_not_frozen(model):
     draft.set_bar(settings_file.BAR_PINS, order)
     order.append("nautilus")
     assert draft.current_bar(settings_file.BAR_PINS) == ["firefox"]
+
+
+def test_the_baseline_goes_out_with_the_pins(model, tmp_path):
+    """Die Vorgabe von damals wird MIT den Anheftungen geschrieben.
+
+    DER FALL, DEN DIESE ZEILE VERHINDERT
+        Der Nutzer nimmt ein Symbol ab. Ohne diesen Schluessel steht in
+        der Datei danach nur noch seine gekuerzte Liste, und die
+        beantwortet zwei verschiedene Fragen mit derselben Auslassung:
+        "hier fehlt etwas, weil ich es weggenommen habe" und "hier fehlt
+        etwas, weil es das damals noch nicht gab". Der Erzeuger muss
+        beim naechsten Lauf zwischen beidem entscheiden - und ohne die
+        Vorgabe von damals kann er nur die erste annehmen. Damit
+        erscheint keine spaeter ausgelieferte Anwendung je wieder.
+
+    Und zurueckgesetzt geht sie MIT auf null: "wie ausgeliefert" braucht
+    keine Vorgabe von damals, und eine stehengebliebene waere die
+    eingefrorene Liste durch die Hintertuer.
+    """
+    import settings as settings_file
+
+    root = tmp_path / "share-zepos"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / settings_file.SHIPPED_BAR).write_text(json.dumps({
+        "modules_left": [], "modules_right": [], "modules_available": [],
+        "dock_pins": [{"name": "firefox", "desktop": "firefox.desktop",
+                       "label": ""},
+                      {"name": "nautilus", "desktop": "nautilus.desktop",
+                       "label": ""}]}), encoding="utf-8")
+
+    draft = model.Draft(document={"schema_version": 1})
+    draft.set_bar(settings_file.BAR_PINS, ["nautilus"])
+
+    section = draft.sections()["bar"]
+    assert section[settings_file.BAR_PINS] == ["nautilus"]
+    assert section[settings_file.BAR_BASELINE] == ["firefox", "nautilus"], (
+        "die Auslieferung von damals fehlt neben der Wahl - dann ist "
+        "nicht mehr abzulesen, dass firefox ABGEWAEHLT wurde")
+
+    draft.reset_bar(settings_file.BAR_PINS)
+    zurueck = draft.sections()["bar"]
+    assert zurueck[settings_file.BAR_PINS] is None
+    assert zurueck[settings_file.BAR_BASELINE] is None
 
 
 def test_landing_back_on_the_shipped_order_stores_null_again(model):

@@ -104,6 +104,18 @@ def bridge(monkeypatch, tmp_path):
     monkeypatch.setenv("ZEPOS_SYSTEMD_ETC", str(tmp_path / "etc"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    # DIE FUENFTE UND SECHSTE, NACHGETRAGEN am 20.08.2026
+    #     Seit die Anheftungen des Docks gegen die ANWENDUNGEN DIESER
+    #     MASCHINE geprueft werden (settings.pinnable() ->
+    #     src/desktop_entries.py), liest dieses Dokument auch die
+    #     Anwendungsverzeichnisse. Ohne die zwei Zeilen waeren das
+    #     ~/.local/share/applications und /usr/share/applications des
+    #     Entwicklers - der Satz oben ("liefe der Test gegen den
+    #     Schreibtisch, auf dem er laeuft") gilt fuer sie genauso.
+    #     Leer heisst hier: nichts ist installiert; wer Eintraege
+    #     braucht, legt sie hin (siehe anwendungen() weiter unten).
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path / "leer"))
     for name in list(sys.modules):
         if name.startswith("zepos_settings_gui") or name in (
                 "brand", "displays", "monitors", "paths", "settings",
@@ -584,6 +596,133 @@ def test_eine_haelfte_auf_null_heisst_wieder_wie_ausgeliefert(bridge, capsys,
         "eine hier eingefrorene Liste saehe heute richtig aus und zeigte "
         "nach dem naechsten neuen Modul auf eine Leiste, die es nicht "
         "mehr gibt")
+
+
+# --------------------------------------------------------------------
+# Anheften und abnehmen, durch die Bruecke
+# --------------------------------------------------------------------
+
+DESKTOP_ENTRY = """[Desktop Entry]
+Type=Application
+Name={name}
+Exec={name}
+Terminal=false
+NoDisplay=false
+"""
+
+
+def anwendungen(monkeypatch, tmp_path, *namen: str) -> None:
+    """Anwendungseintraege in ein umgelenktes Datenverzeichnis legen.
+
+    Ohne die Umlenkung fragte settings.pinnable() den Schreibtisch des
+    Entwicklers, und diese Zusicherungen haetten je nach Rechner ein
+    anderes Ergebnis.
+    """
+    share = tmp_path / "data" / "applications"
+    share.mkdir(parents=True, exist_ok=True)
+    for name in namen:
+        (share / f"{name}.desktop").write_text(
+            DESKTOP_ENTRY.format(name=name), encoding="utf-8")
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path / "leer"))
+
+
+def pin_imprint(tmp_path, *namen: str) -> None:
+    """Der Abdruck mit genau diesen Anheftungen."""
+    imprint(tmp_path, modules_left=[], modules_right=[],
+            modules_available=[],
+            dock_pins=[{"name": name, "desktop": f"{name}.desktop",
+                        "label": ""} for name in namen])
+
+
+def test_eine_anheftung_wird_geschrieben_und_wiedergelesen(
+        bridge, capsys, tmp_path, monkeypatch):
+    """DER BELEG: der Weg, den das Rechtsklick-Menue spaeter nimmt.
+
+    Lesen ist `--json get`, Seite "leiste", Bedienelement
+    "bar.dock_pins", Feld `effective`. Schreiben ist `--json set` mit
+    demselben Schluessel. Es braucht keinen neuen Befehl und keinen
+    zweiten Namensraum - genau die Regel, die der Kopf von bridge.py
+    aufstellt.
+
+    Gemessen werden in einem Zug alle drei Faelle, die eine blosse
+    Ersatzliste nicht tragen kann:
+
+      anheften   inkscape steht in keiner Auslieferung und wird
+                 angenommen, weil es auf dieser "Maschine" einen
+                 Anwendungseintrag hat.
+      abnehmen   kitty faellt aus der Wahl und bleibt weg.
+      Vorgabe    papers kommt spaeter dazu und erscheint trotzdem -
+      waechst    obwohl der Nutzer laengst eine eigene Liste hat.
+
+    KEIN update.*-SCHLUESSEL IST DABEI, und das ist kein Zufall: die
+    fuehren durch model.set_update_value() auf `systemctl`, also auf die
+    Dienste der Maschine, auf der die Tests laufen.
+    """
+    import settings as settings_file
+
+    pin_imprint(tmp_path, "firefox", "kitty")
+    anwendungen(monkeypatch, tmp_path, "firefox", "kitty", "inkscape",
+                "papers")
+
+    code, document, _err = read(bridge, capsys, ["set", json.dumps({
+        "bar.dock_pins": ["firefox", "inkscape"]})])
+    assert code == 0, document
+    assert document["ok"] is True, document["problems"]
+    assert "bar.dock_pins" in document["written"]
+
+    stored = json.loads(
+        (tmp_path / "zepos" / settings_file.FILENAME).read_text("utf-8"))
+    assert stored["bar"][settings_file.BAR_PINS] == ["firefox", "inkscape"]
+    assert stored["bar"][settings_file.BAR_BASELINE] == ["firefox", "kitty"], (
+        "die Auslieferung von damals steht nicht neben der Wahl - dann "
+        "ist beim naechsten Lesen nicht zu erkennen, dass kitty "
+        "ABGEWAEHLT wurde und nicht bloss noch nicht ausgeliefert war")
+
+    def gelesen():
+        _code, doc, _err = read(bridge, capsys, ["get"])
+        return {control["key"]: control for page in doc["pages"]
+                for control in page["controls"]}["bar.dock_pins"]
+
+    pins = gelesen()
+    assert pins["value"] == ["firefox", "inkscape"]
+    assert pins["effective"] == ["firefox", "inkscape"]
+    assert pins["discarded"] == []
+
+    # Und jetzt liefert ZepOS eine Anwendung mehr aus.
+    pin_imprint(tmp_path, "firefox", "kitty", "papers")
+
+    pins = gelesen()
+    assert pins["effective"] == ["firefox", "inkscape", "papers"], (
+        "die neu ausgelieferte Anwendung erreicht diesen Nutzer nicht - "
+        "sein Schreibtisch ist auf den Tag eingefroren, an dem er zum "
+        "ersten Mal etwas angeheftet hat")
+    assert "kitty" not in pins["effective"], "das Abgewaehlte ist zurueck"
+
+
+def test_ein_name_ohne_anwendungseintrag_wird_beim_anheften_abgelehnt(
+        bridge, capsys, tmp_path, monkeypatch):
+    """Die Gegenprobe zum Anheften: erlaubt ist, was es gibt.
+
+    Abgelehnt und nicht still verworfen, weil der Nutzer noch davorsteht
+    - dieselbe Regel wie im Kopf von bridge._plan_bar(). Und mit dem
+    Grund, der hier stimmt: nicht "kennt diese Leiste nicht", sondern
+    "auf dieser Maschine nicht installiert".
+    """
+    import settings as settings_file
+
+    pin_imprint(tmp_path, "firefox")
+    anwendungen(monkeypatch, tmp_path, "firefox")
+
+    code, document, _err = read(bridge, capsys, ["set", json.dumps({
+        "bar.dock_pins": ["firefox", "gibtsnicht"]})])
+
+    assert code == 1
+    assert document["ok"] is False
+    assert settings_file.BAR_GONE in document["problems"][0], (
+        document["problems"])
+    assert not (tmp_path / "zepos" / settings_file.FILENAME).exists(), (
+        "abgelehnt und trotzdem geschrieben")
 
 
 # --------------------------------------------------------------------

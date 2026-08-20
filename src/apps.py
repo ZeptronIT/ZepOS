@@ -296,15 +296,23 @@ def shipped(system_root: Path | None = None) -> list[str]:
 # --------------------------------------------------------------------
 #
 # DIE DRITTE HAELFTE DERSELBEN FRAGE
-#     "bar.dock_pins" in user-settings.json ersetzt die ausgelieferte
-#     Reihenfolge vollstaendig; null heisst "wie ausgeliefert". Die
-#     Regeln dafuer - was eine gueltige Liste ist, was mit einem
-#     unbekannten Namen passiert, wie die Klage darueber lautet - stehen
-#     NICHT hier, sondern in src/settings.py, weil die
-#     Einstellungs-Anwendung dieselbe Frage stellt und beide dieselbe
-#     Antwort geben muessen. Ein Dock, das einen Namen annimmt, den das
-#     Fenster verwirft, waere eine Einstellung, die man sieht und nicht
-#     bekommt.
+#     "bar.dock_pins" in user-settings.json ist die Reihenfolge des
+#     Nutzers; null heisst "wie ausgeliefert". Die Regeln dafuer - was
+#     eine gueltige Liste ist, was mit einem unbekannten Namen passiert,
+#     wie die Klage darueber lautet - stehen NICHT hier, sondern in
+#     src/settings.py, weil die Einstellungs-Anwendung dieselbe Frage
+#     stellt und beide dieselbe Antwort geben muessen. Ein Dock, das
+#     einen Namen annimmt, den das Fenster verwirft, waere eine
+#     Einstellung, die man sieht und nicht bekommt.
+#
+#     SIE ERSETZT DIE AUSLIEFERUNG NICHT MEHR - seit dem 20.08.2026
+#         Bis dahin stand hier "ersetzt die ausgelieferte Reihenfolge
+#         vollstaendig", und genau das war der Fehler: wer EINMAL ein
+#         Symbol abgenommen hatte, sah nie wieder eine Anwendung, die
+#         ZepOS spaeter dazugeliefert hat. Neben der Liste steht deshalb
+#         jetzt "bar.dock_baseline", die Auslieferung von damals, und
+#         settings.dock_effective() haengt an, was seither dazugekommen
+#         ist. Die ganze Begruendung steht bei settings.BAR_BASELINE.
 #
 # WARUM EIN UNBEKANNTER NAME NICHT DURCHGEREICHT WIRD
 #     Weil er im Dock ein Knopf waere, der nichts oeffnet - genau der
@@ -372,14 +380,39 @@ def pinned(document: dict | None = None,
     if not document:
         return listed, []
     chosen = settings.bar_choice(document, settings.BAR_PINS)
-    # ZWEIMAL `listed`, UND DAS IST ABSICHT
+
+    # ERST DIE HEUTIGE AUSLIEFERUNG DAZURECHNEN, DANN PRUEFEN
+    #     dock_effective() haengt an, was ZepOS seit der hinterlegten
+    #     Vorgabe dazugeliefert hat - siehe settings.BAR_BASELINE.
+    #     VOR bar_order() und nicht danach: das Angehaengte ist eine
+    #     Anheftung wie jede andere und muss durch dieselbe Pruefung,
+    #     sonst stuende ein neu ausgeliefertes Programm im Dock, das
+    #     diese Maschine gar nicht installiert hat.
+    merged = settings.dock_effective(
+        chosen, settings.bar_baseline(document), listed)
+
+    # NICHT MEHR ZWEIMAL `listed`, UND DAS IST DER GANZE PUNKT VON #45
     #     bar_order() nimmt seit dem 12.08.2026 drei Listen: was diese
     #     Haelfte tragen KANN (`placeable`) und was ohne jede Einstellung
-    #     darauf steht (`shipped`). Fuer die Leiste sind das zwei
-    #     verschiedene Fragen, seit die Vorgabe eine Auswahl aus dem
-    #     Moeglichen ist. Fuer das Dock sind sie dieselbe - so steht es
-    #     auch im Kopf von bar_order() -, weil es hier nichts gibt, was
-    #     ZepOS kennt und trotzdem nicht ausliefert.
+    #     darauf steht (`shipped`). Hier standen dafuer zweimal dieselbe
+    #     Liste, mit der Begruendung, es gebe im Dock nichts, was ZepOS
+    #     kennt und nicht ausliefert.
+    #
+    #     Das stimmte, solange nur ZepOS anheften durfte. Seit der Nutzer
+    #     selbst anheftet, ist "was kann hier stehen" die Frage nach
+    #     dieser MASCHINE und nicht nach dem Erzeugnis:
+    #     settings.pinnable() vereinigt die Auslieferung mit dem, was
+    #     src/desktop_entries.py im Anwendungsverzeichnis findet. Mit
+    #     `listed` allein waere "anheften, was die Vorgabe nicht kennt"
+    #     nicht abgelehnt, sondern unmoeglich.
+    #
+    #     Und `unknown=BAR_GONE`, weil die Ablehnung hier fast immer
+    #     eine andere Ursache hat als auf der Leiste: nicht ein falscher
+    #     Name, sondern ein deinstalliertes Programm. Es bleibt dabei in
+    #     der Einstellungsdatei stehen - wer es wieder installiert,
+    #     findet sein Symbol an seinem Platz wieder -, aber es wird
+    #     nicht gezeichnet: ein Knopf, der nichts oeffnet, ist nach Spec
+    #     7.4 der schlimmste Fehler, den ZepOS erzeugen kann.
     #
     # GEMESSEN AM 13.08.2026, UND ES HAT DAS SYSTEM UNBENUTZBAR GEMACHT
     #     Hier stand `bar_order(chosen, listed)`, also der Aufruf von
@@ -403,7 +436,8 @@ def pinned(document: dict | None = None,
     #     hat es kein Test, sondern ein Mensch auf echter Hardware; die
     #     Zusicherung darueber steht jetzt in
     #     tests/src/test_apps_pinned_call.py.
-    return settings.bar_order(chosen, listed, listed)
+    return settings.bar_order(merged, settings.pinnable(listed), listed,
+                              unknown=settings.BAR_GONE)
 
 
 def user_document() -> dict:
@@ -478,8 +512,10 @@ Checkout aus dem Rezept, auf einer Installation aus dem Abdruck, den
 dessen package() geschrieben hat.
 
 Hat der Nutzer "bar.dock_pins" in user-settings.json gesetzt, steht
-seine Reihenfolge darin; ein Name, den die Auswahl nicht kennt, wird
-verworfen und auf der Fehlerausgabe genannt."""
+seine Reihenfolge darin, ergaenzt um alles, was ZepOS seit
+"bar.dock_baseline" dazuliefert. Ein Name ohne Anwendungseintrag auf
+dieser Maschine wird verworfen und auf der Fehlerausgabe genannt; in
+der Einstellungsdatei bleibt er stehen."""
 
 
 def main(argv: list[str] | None = None) -> int:

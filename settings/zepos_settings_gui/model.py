@@ -783,6 +783,47 @@ def placeable_in(shipped: dict[str, list[str] | None], key: str):
     return shipped[settings_file.BAR_AVAILABLE]
 
 
+def acceptable_in(shipped: dict[str, list[str] | None], key: str):
+    """Welche Namen ANGENOMMEN werden - nicht dasselbe wie angeboten.
+
+    Fuer die zwei Leistenhaelften ist es dasselbe: was aufstellbar ist,
+    wird angeboten, und was angeboten wird, ist aufstellbar.
+
+    FUER DAS DOCK SIND ES SEIT DEM 20.08.2026 ZWEI FRAGEN
+        Angeboten wird, was ZepOS ausliefert - die Liste "Wieder
+        hinzufuegen" auf der Seite "Leiste" soll die abgenommenen
+        Vorgaben zurueckholen und nicht die zweihundert Anwendungen
+        dieser Maschine aufzaehlen.
+
+        ANGENOMMEN wird mehr, naemlich alles, wofuer es hier einen
+        Anwendungseintrag gibt (settings.pinnable()). Ohne diese
+        Erweiterung waere "anheften, was die Vorgabe nicht kennt" nicht
+        abgelehnt, sondern unmoeglich - und genau das ist der Wunsch,
+        wegen dem es das Rechtsklick-Menue geben soll.
+
+        Die Richtung stimmt: angenommen wird MEHR als angeboten, nie
+        weniger. Andersherum waere es der Fehler, den der Kopf von
+        _plan_bar() beschreibt - eine Oberflaeche, die etwas anbietet,
+        das die Pruefung danach wegwirft.
+    """
+    if key == settings_file.BAR_PINS:
+        return settings_file.pinnable(shipped[key])
+    return placeable_in(shipped, key)
+
+
+def rejection_in(key: str) -> str:
+    """Wie eine Ablehnung in dieser Haelfte heisst.
+
+    Auf der Leiste ist ein nicht aufstellbarer Name ein FEHLER in der
+    Einstellung; im Dock ist er meistens ein Programm, das jemand
+    deinstalliert hat. Ein Wortlaut fuer beides schickte den Nutzer bei
+    der zweiten Lage in die falsche Datei.
+    """
+    if key == settings_file.BAR_PINS:
+        return settings_file.BAR_GONE
+    return settings_file.BAR_UNKNOWN
+
+
 def shipped_bar() -> tuple[dict[str, list[str] | None], dict[str, str], str]:
     """Die ausgelieferte Leiste, ihre Beschriftungen, und was zu sagen ist.
 
@@ -938,10 +979,30 @@ class Draft:
         und faellt deshalb nicht mit None zusammen. Sie faellt in jeder
         Wahrheitspruefung mit ihm zusammen, und das ist der Grund, aus
         dem hier ueberall `is None` steht.
+
+        DIE ANHEFTUNGEN BEKOMMEN NOCH ETWAS DAZU - seit dem 20.08.2026
+            Was aus der DATEI kommt, wurde gegen die Auslieferung von
+            damals gesetzt (settings.BAR_BASELINE). Was ZepOS seither
+            dazuliefert, hat der Nutzer nie abgewaehlt und gehoert
+            angehaengt, sonst zeigte dieses Fenster eine Liste, die der
+            Erzeuger anders aufloest - und der Erzeuger hat recht, denn
+            apps.pinned() rechnet genauso.
+
+            Nur fuer den Weg aus der Datei, ausdruecklich nicht fuer den
+            aus dem Entwurf: was im Entwurf steht, hat der Nutzer GERADE
+            zusammengestellt, und zwar aus der bereits ergaenzten Liste.
+            Ein zweites Mal ergaenzt hiesse, dass ein frisch
+            abgenommenes neues Symbol sofort wieder erschiene - ein
+            Knopf, der nachweislich nichts bewirkt.
         """
         if key in self.bar:
             return self.bar[key]
-        return settings_file.bar_choice(self.document, key)
+        chosen = settings_file.bar_choice(self.document, key)
+        if key != settings_file.BAR_PINS or chosen is None:
+            return chosen
+        return settings_file.dock_effective(
+            chosen, settings_file.bar_baseline(self.document),
+            settings_file.shipped_pins())
 
     def current_weather(self) -> str:
         if self.weather is not None:
@@ -1015,6 +1076,40 @@ class Draft:
                     section[key] = self.bar[key]
                 else:
                     section.setdefault(key, None)
+
+            # UND DIE VORGABE, GEGEN DIE DIE ANHEFTUNGEN GESETZT WURDEN
+            #
+            # HIER, WEIL ES DIE EINZIGE STELLE IST, DIE BEIDES SCHREIBT
+            #     settings.BAR_BASELINE traegt die Auslieferung, wie sie
+            #     im Augenblick dieser Entscheidung aussah; ohne sie
+            #     kann der Erzeuger spaeter nicht unterscheiden, ob ein
+            #     Name fehlt, weil der Nutzer ihn abgenommen hat, oder
+            #     weil es ihn damals noch nicht gab. Die ganze
+            #     Begruendung steht in src/settings.py bei BAR_BASELINE.
+            #
+            #     Ein Schreiber, der die Liste ohne ihre Vorgabe ablegt,
+            #     hinterliesse eine Datei, die nur zur Haelfte aussagt,
+            #     was gemeint war. Also gehen sie zusammen hinaus, in
+            #     demselben Abschnitt, in demselben settings.merge().
+            #
+            # UND SIE IST DIE GANZE WANDERUNG
+            #     Eine Datei von vor dem 20.08.2026 hat den Schluessel
+            #     nicht und laeuft ohne ihn weiter (dock_effective()
+            #     haengt bei unbekannter Vorgabe nichts an). Beim ersten
+            #     Speichern der Anheftungen entsteht er - dieselbe
+            #     Regel, nach der user_settings.migrate_scaling()
+            #     arbeitet: beim Lesen wird nichts geschrieben, die
+            #     Wanderung erreicht die Platte beim naechsten Speichern.
+            #
+            #     null beim Zuruecksetzen, und zwar aus demselben Grund
+            #     wie oben: "wie ausgeliefert" braucht keine Vorgabe von
+            #     damals, und eine stehengebliebene waere die
+            #     eingefrorene Liste durch die Hintertuer.
+            if settings_file.BAR_PINS in self.bar:
+                section[settings_file.BAR_BASELINE] = (
+                    None if self.bar[settings_file.BAR_PINS] is None
+                    else settings_file.shipped_pins())
+
             out[settings_file.BAR] = section
 
         return out

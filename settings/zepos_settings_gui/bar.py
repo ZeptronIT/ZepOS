@@ -320,8 +320,14 @@ class BarPage(Adw.PreferencesPage):
                         f"\"{RESET_TITLE}\" unten setzt den Schluessel "
                         f"auf die Auslieferung zurueck.")
 
+        # acceptable_in() und nicht placeable_in(): angeboten wird auf
+        # dieser Seite die Auslieferung, angenommen wird jede Anwendung
+        # dieser Maschine. Eine Anheftung, die der Nutzer anderswo
+        # gesetzt hat - kuenftig per Rechtsklick im Dock -, saehe sonst
+        # hier als "verworfen" aus, waehrend das Dock sie zeigt.
         order, discarded = settings_file.bar_order(
-            chosen, model.placeable_in(self.shipped, key), self.shipped[key])
+            chosen, model.acceptable_in(self.shipped, key), self.shipped[key],
+            unknown=model.rejection_in(key))
         return order, settings_file.bar_complaint(key, discarded)
 
     def _entry_row(self, key: str, name: str, index: int,

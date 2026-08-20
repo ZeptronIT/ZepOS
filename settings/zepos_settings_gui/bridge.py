@@ -430,8 +430,15 @@ def _page_leiste(draft: model.Draft) -> dict:
     for key, label, note in model.BAR_SIDES:
         chosen = draft.current_bar(key)
         placeable = model.placeable_in(shipped, key)
+        # ANGEBOTEN und ANGENOMMEN sind im Dock zweierlei - siehe
+        # model.acceptable_in(). Das Feld `placeable` traegt weiter das
+        # ANGEBOT, weil ein Fenster daraus eine Liste zum Anklicken baut
+        # ("Wieder hinzufuegen"); GEPRUEFT wird gegen das Weitere, sonst
+        # faellt genau die Anheftung heraus, die der Nutzer selbst
+        # hinzugefuegt hat, und `effective` zeigte sie als verworfen an.
         effective, discarded = settings_file.bar_order(
-            chosen, placeable, shipped[key])
+            chosen, model.acceptable_in(shipped, key), shipped[key],
+            unknown=model.rejection_in(key))
         controls.append(_control(
             f"{BAR_PREFIX}{key}", ORDER, label, chosen,
             note=note,
@@ -738,8 +745,14 @@ def _plan_bar(half: str, key: str, value: Any, draft: model.Draft,
         return
 
     shipped, _labels, _say = model.shipped_bar()
+    # acceptable_in() und nicht placeable_in(): im Dock darf angeheftet
+    # werden, was auf DIESER Maschine einen Anwendungseintrag hat, und
+    # nicht nur, was ZepOS ausliefert. Ohne diese Zeile waere der Wunsch
+    # "per Rechtsklick anheften" durch die Bruecke nicht bedienbar - jeder
+    # Name, den die Vorgabe nicht kennt, kaeme als Ablehnung zurueck.
     _kept, discarded = settings_file.bar_order(
-        list(value), model.placeable_in(shipped, half), shipped[half])
+        list(value), model.acceptable_in(shipped, half), shipped[half],
+        unknown=model.rejection_in(half))
     if discarded:
         problems.append(settings_file.bar_complaint(half, discarded))
         return
