@@ -268,3 +268,181 @@ scrollbar slider {
 scrollbar slider:hover {
     background-color: {{STYLE_COLOR_LAUNCHER_ACCENT}};
 }
+
+/* ====================================================================
+ * DAS RECHTSKLICK-MENUE, seit dem 21.08.2026
+ * ====================================================================
+ *
+ * WAS BESTELLT WURDE
+ *     "was das menue angeht bei rechtsklick will ich das wir das am
+ *     besten auslagern auf das aktuelle". Ein Rechtsklick auf eine
+ *     Trefferzeile heftet die Anwendung an den Fuss - oder nimmt sie
+ *     wieder ab. LauncherRenderer::showMenu() baut es.
+ *
+ * DIESE REGELN SIND KEINE ZWEITE LOESUNG
+ *     Am selben Tag hat Aufgabe 50 (b458e77) denselben Fehler am Menue
+ *     des FUSSES behoben - gemeldet als "es ist komplett weiss und
+ *     passt nicht zum style", gemessen als 83.84 % #FFFFFF mit 1.19:1
+ *     Kontrast. Die Ursache dort ist die Ursache hier: GTK4 malt den
+ *     Grund eines Popovers nicht auf `popover`, sondern auf dessen Kind
+ *     `contents`, und keine Regel dieses Baums hatte dafuer je einen
+ *     Wahlausdruck.
+ *
+ *     Die Werte unten sind DESSEN Werte, Zeile fuer Zeile:
+ *     {{STYLE_GLASS_SOLO}} als Grund, {{STYLE_OVERLAY_BORDER_COLOR}}
+ *     als Rahmen, {{STYLE_RADIUS_PANEL}} als Ecke, box-shadow none,
+ *     {{STYLE_SPACE_4}} als Polster. Zwei Rechtsklick-Menues auf einem
+ *     Schreibtisch, die verschieden aussehen, sind zwei Schreibtische.
+ *
+ * DIE DREI SCHRIFTANGABEN SIND KEINE ZIERDE
+ *     Sie stehen hier, weil GTKs eingebautes Thema auf `contents`
+ *     `font: initial` setzt - GEMESSEN in Aufgabe 50 an der
+ *     entpackten Default-light.css. Das nimmt dem INHALT Familie,
+ *     Groesse und Schnitt, nicht nur dem Kasten. Ohne diese drei
+ *     Zeilen stuende in einem Menue dieses Schreibtischs die
+ *     Vorgabeschrift von GTK.
+ *
+ * WAS HIER ANDERS IST ALS DORT, UND WARUM
+ *     `> arrow` bekommt keinen Grund, sondern wird auf null gesetzt:
+ *     showMenu() stellt has_arrow auf FALSE. Der Knoten bleibt
+ *     trotzdem im Baum und nimmt sonst Adwaitas Groesse mit.
+ *
+ *     Und die Wahlausdruecke sind laenger. Warum, steht bei
+ *     .launcher-menu-item weiter unten - es ist eine Messung und keine
+ *     Vorliebe. */
+popover.launcher-menu-popover {
+    background: transparent;
+}
+
+popover.launcher-menu-popover > contents {
+    background: {{STYLE_GLASS_SOLO}};
+    color: {{STYLE_COLOR_OVERLAY_TEXT}};
+    border: 1px solid {{STYLE_OVERLAY_BORDER_COLOR}};
+    border-radius: {{STYLE_RADIUS_PANEL}};
+    box-shadow: none;
+    padding: {{STYLE_SPACE_4}};
+    font-family: {{STYLE_FONT_FAMILY}};
+    font-size: {{STYLE_FONT_BODY}};
+    font-weight: normal;
+}
+
+/* has_arrow ist in showMenu() auf FALSE - der Knoten bleibt trotzdem im
+ * Baum und bekaeme sonst Adwaitas Grund und Groesse. */
+popover.launcher-menu-popover > arrow {
+    background: transparent;
+    border: none;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* Der Kasten der Zeilen, showMenu(), list. */
+.launcher-menu {
+    background: transparent;
+}
+
+/* WARUM HIER EIN LANGER WAHLAUSDRUCK STEHT UND NICHT NUR DIE KLASSE
+ *
+ *     GEMESSEN am 21.08.2026 in einem verschachtelten Compositor,
+ *     indem die drei Knoten testweise eingefaerbt wurden
+ *     (Popover-Inhalt gruen, sein Rahmen gelb, die Zeile rot) und das
+ *     Bild danach nach reinen Farben abgesucht wurde:
+ *
+ *         gruen   3896 Punkte   x 455..730  y 389..445
+ *         gelb    1880 Punkte   x 452..733  y 386..448
+ *         rot        0 Punkte
+ *
+ *     Null rote Punkte, und die 3896 gruenen decken sich auf den Punkt
+ *     mit der POLSTERUNG rings um die Zeile (276*57 minus 264*45 =
+ *     3852). Die Zeile malte also einen eigenen, deckenden Grund ueber
+ *     den Inhalt, und keine einzige Eigenschaft aus dieser Regel kam
+ *     an. Kein Parserfehler: das Protokoll des Kindes war leer.
+ *
+ *     Der Grund ist die Spezifitaet. GTKs Thema stylt einen Knopf IM
+ *     POPOVER kontextuell (`popover.background button`, also 0-1-2),
+ *     und eine einzelne Klasse (0-1-0) verliert dagegen. Genau deshalb
+ *     faellt es bei .launcher-item weiter oben nicht auf: eine
+ *     Trefferzeile steht in einem gewoehnlichen Fenster, wo es keine
+ *     solche Regel gibt.
+ *
+ *     `popover.launcher-menu-popover button.launcher-menu-item` ist
+ *     0-2-2 und gewinnt. Die Klasse zu lassen und stattdessen
+ *     !important zu schreiben waere die andere Moeglichkeit - und die
+ *     schlechtere: !important gewinnt auch gegen die naechste eigene
+ *     Regel, die jemand hier absichtlich schreibt.
+ *
+ * DIE MINDESTHOEHE FEHLT ABSICHTLICH
+ *     Eine Trefferzeile haelt {{STYLE_LAUNCHER_ROW_MIN_HEIGHT}} frei,
+ *     weil sie Symbol, Name UND Beschreibung traegt. Ein Menuepunkt
+ *     traegt einen Satz. */
+popover.launcher-menu-popover button.launcher-menu-item {
+    background: transparent;
+    background-image: none;
+    padding: {{STYLE_SPACE_4}} {{STYLE_SPACE_8}};
+    border-radius: {{STYLE_RADIUS_PANEL}};
+    border: 1px solid transparent;
+    box-shadow: none;
+    transition: background-color {{STYLE_MOTION_INSTANT}} {{STYLE_MOTION_CURVE}},
+                border-color {{STYLE_MOTION_INSTANT}} {{STYLE_MOTION_CURVE}};
+}
+
+/* Wortgleich zu .launcher-item:hover. Zwei Zeilen desselben Fensters,
+ * die sich unter dem Zeiger verschieden faerben, sind zwei Fenster. */
+popover.launcher-menu-popover button.launcher-menu-item:hover {
+    background-color: {{STYLE_COLOR_OVERLAY_ITEM_HOVER}};
+    border-color: {{STYLE_COLOR_OVERLAY_ACCENT_DIM}};
+}
+
+/* Das Zeichen links. 20px ist DIESELBE Groesse, die der Fuss am
+ * 20.08.2026 fuer seine Menuezeichen gemessen und gewaehlt hat.
+ *
+ * WAS DAMIT NICHT BEHOBEN IST, und der Fuss hat es schon
+ * aufgeschrieben: eine GtkLabel mittet den VORSCHUB, sichtbar ist die
+ * TINTE. Bei 20px traegt der Reissnagel 15 Punkte Tinte auf 12 Punkten
+ * Vorschub und ragt 2 px nach rechts, das Minuszeichen 3 px. Der
+ * SICHTBARE Abstand schwankt damit, obwohl im Kasten ueberall dieselbe
+ * Sprosse steht. Die saubere Antwort waere eine eigene Zelle je
+ * Zeichen; sie saesse in jeder Zeile dieses Schreibtischs und nicht in
+ * dieser einen. */
+.launcher-menu-icon {
+    font-size: {{STYLE_ICON_CAPTION}};
+    font-family: {{STYLE_FONT_FAMILY}};
+    color: {{STYLE_COLOR_LAUNCHER_ACCENT}};
+}
+
+/* Die Beschriftung. Groesse und Schnitt wie im Menue des Fusses -
+ * {{STYLE_FONT_BODY}} und normal, nicht die 600 einer Trefferzeile: ein
+ * Menuepunkt ist ein Satz und keine Ueberschrift. */
+.launcher-menu-label {
+    font-size: {{STYLE_FONT_BODY}};
+    font-weight: normal;
+    font-family: {{STYLE_FONT_FAMILY}};
+    color: {{STYLE_COLOR_OVERLAY_TEXT}};
+}
+
+/* GTKs EIGENES MENUE, das dieses Fenster ungefragt mitbringt.
+ *
+ * WARUM DIESE REGEL HIER STEHT, OBWOHL SIE NIEMAND VERGIBT
+ *     Die Suchzeile ist eine GtkEntry, und eine GtkEntry klappt auf
+ *     Rechtsklick GTKs eingebautes Bearbeitungsmenue auf -
+ *     Ausschneiden, Kopieren, Einfuegen. Dessen Zeilen sind
+ *     `modelbutton`, ein Knotentyp, den kein Aufruf dieses Programms
+ *     vergibt und den GTK fuer eine WEISSE Platte rechnet.
+ *
+ *     Aufgabe 50 hat denselben Knoten am selben Tag fuer die
+ *     AGS-Fenster nachgetragen, mit derselben Begruendung. Ohne diese
+ *     Zeilen bliebe im Starter genau ein Menue weiss - dasjenige, das
+ *     niemand gebaut hat, und deshalb dasjenige, das man vergisst. */
+popover > contents modelbutton {
+    background: transparent;
+    background-image: none;
+    color: {{STYLE_COLOR_OVERLAY_TEXT}};
+    border-radius: {{STYLE_RADIUS_CONTROL}};
+    padding: 0 {{STYLE_SPACE_8}};
+    box-shadow: none;
+    font-family: {{STYLE_FONT_FAMILY}};
+    font-size: {{STYLE_FONT_BODY}};
+}
+
+popover > contents modelbutton:hover {
+    background-color: {{STYLE_COLOR_OVERLAY_ITEM_HOVER}};
+}

@@ -99,6 +99,38 @@ hotkey = "SUPER SPACE"
 # einen Namen zu erfinden, den ausser dieser Zeile niemand liest.
 helpers_dir = "~/.local/bin/helpers"
 
+# Die zwei Zeichen des Rechtsklick-Menues, seit dem 21.08.2026.
+#
+# WAS BESTELLT WURDE
+#     "was das menue angeht bei rechtsklick will ich das wir das am
+#     besten auslagern auf das aktuelle". Ein Rechtsklick auf eine
+#     Trefferzeile heftet die Anwendung an den Fuss - oder nimmt sie
+#     wieder ab, wenn sie schon dort steht.
+#
+# WARUM SIE DURCH DIESE DATEI GEHEN
+#     Weil der Fuss denselben Menuepunkt mit demselben Zeichen
+#     zeichnet (src/templates/ags-dock.template, PIN_ICON und
+#     UNPIN_ICON). Zwei Reissnaegel in zwei Schriftarten waeren zwei
+#     Reissnaegel, und fuer den einen von beiden waere der Symbol-SSOT
+#     nicht zustaendig.
+#
+#     Es ist ausserdem der Weg, den diese Datei fuer die Masse schon
+#     geht: was der Nutzer sieht, gehoert nicht ins uebersetzte Objekt.
+#
+# WAS DAMIT NICHT BEHOBEN IST, UND ES IST GEZAEHLT
+#     hyprlaunch traegt seine VIER vorhandenen Zeichen weiterhin als
+#     Emoji-Literale im Quelltext - Lupe, Abakus, Paket und Uhr, in
+#     src/LauncherRenderer.cpp als `static const char* ICON_SEARCH =
+#     "\xf0\x9f\x94\x8d"` und so fort. GEZAEHLT am 20.08.2026: kein
+#     einziger Symbol-Platzhalter im ganzen uebernommenen Baum.
+#
+#     Das ist ein eigener Befund und wird gesondert gemeldet. Er wird
+#     hier NICHT nebenbei mit aufgeraeumt: vier Zeichen zu ersetzen,
+#     waehrend ein Menue gebaut wird, mischt zwei Aenderungen in einem
+#     Patch, den ohnehin schon niemand gern liest.
+pin_icon = "{{ICON_PIN}}"
+unpin_icon = "{{ICON_MINUS}}"
+
 [spacing]
 # Die Abstandsleiter aus src/sizes.py, Sprosse fuer Sprosse.
 #

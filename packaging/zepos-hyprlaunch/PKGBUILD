@@ -138,11 +138,39 @@ _abi="$(cat "$_abi_file" 2>/dev/null || true)"
 # Ersatz. Das faellt nicht auf - es rendert nur in irgendetwas anderem.
 # adwaita-icon-theme traegt die Symbole fuer .desktop-Dateien, deren
 # eigenes Symbol das Thema nicht hat.
+#
+# json-glib SEIT DEM 21.08.2026, UND NUR DIE UI-HAELFTE BRAUCHT ES
+#     Das Rechtsklick-Menue heftet eine Anwendung an den Fuss. Die
+#     Anheftungsliste ist eine ERSATZliste, also heisst anheften: lesen,
+#     anhaengen, ganz zurueckschreiben - und gelesen wird die Antwort
+#     von `zepos-settings-gui --json get`, GEMESSEN 46231 Bytes, mit
+#     `.effective` drei Ebenen tief darin.
+#
+#     Von Hand aus dem Text geklaubt braeche dieser Leser still, sobald
+#     die Bruecke ein Feld ergaenzt. json-glib ist klein, gehoert zum
+#     GNOME-Kern und liegt in [extra]; hyprlaunch-ui linkt GLib und GIO
+#     ohnehin schon. GEMESSEN am 21.08.2026 am gebauten Objekt:
+#
+#         readelf -d hyprlaunch-ui | grep json  ->  libjson-glib-1.0.so.0
+#         readelf -d hyprlaunch.so  | grep json ->  (nichts)
+#
+#     Die zweite Zeile ist der Punkt: src/ConfigParser.cpp steht in
+#     BEIDEN Zielen, aber CMakeLists.txt haengt json-glib allein an
+#     hyprlaunch-ui. Das Objekt, das IN den Compositor geladen wird,
+#     bekommt keine Bibliothek dazu - dieselbe Trennung, die package()
+#     unten fuer GTK schon prueft.
+#
+# zepos-settings-gui steht NICHT hier, sondern unter optdepends. Es ist
+# der Befehl, den das Menue ruft, und ohne ihn bietet der Starter den
+# Menuepunkt gar nicht erst an (LauncherRenderer::entryMenu prueft, ob
+# die Bruecke geantwortet hat). Eine harte Abhaengigkeit waere ausserdem
+# der Zyklus, den der Absatz unten schon fuer zepos-config beschreibt.
 depends=('zepos-hyprland>=0.56.1' 'zepos-hyprland<0.57.0'
          "hyprland-plugin-abi=$_abi"
-         'gtk4' 'gtk4-layer-shell' 'glib2' 'glibc' 'libgcc' 'libstdc++'
+         'gtk4' 'gtk4-layer-shell' 'glib2' 'json-glib'
+         'glibc' 'libgcc' 'libstdc++'
          'ttf-fira-code' 'ttf-jetbrains-mono-nerd' 'adwaita-icon-theme')
-makedepends=('cmake' 'ninja' 'zepos-hyprland')
+makedepends=('cmake' 'ninja' 'zepos-hyprland' 'json-glib')
 
 # zepos-config erzeugt ~/.config/hyprlaunch/config und style.css. Ohne
 # sie oeffnet der Starter trotzdem - in Full-HD-Groessen und
@@ -150,7 +178,8 @@ makedepends=('cmake' 'ninja' 'zepos-hyprland')
 # schreibt. Deshalb eine Empfehlung und keine Abhaengigkeit: zwei
 # Pakete, die einander nennen, sind ein Zyklus, den pacman zwar
 # aufloest und den niemand lesen kann.
-optdepends=('zepos-config: erzeugt config und style.css, ohne die der Starter ungestylt bleibt')
+optdepends=('zepos-config: erzeugt config und style.css, ohne die der Starter ungestylt bleibt'
+            'zepos-settings-gui: fuehrt die Anheftungen des Docks; ohne ihn bleibt das Rechtsklick-Menue leer')
 
 # Zwei Quellen: der unveraenderte Baum des Urhebers, auf den Commit
 # festgenagelt, den plugins/LICENSE als uebernommen nennt - und ZepOS'
@@ -159,7 +188,7 @@ optdepends=('zepos-config: erzeugt config und style.css, ohne die der Starter un
 source=("hyprlaunch-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
         "zepos-hyprlaunch.patch")
 sha256sums=('9e79a3a77b77214d60d9f3129362c8bb264a772b8946e3a53dc3be8cca576e75'
-            '8dc7f9a592dd30236a42d278fb6422743b84406ff75851ff32f35c44fd336aed')
+            '8ca2f9ef1a99a92df3823d54378ebdf5cee9f03d1f1f35f6229ae62b6f8bef13')
 
 _src="hyprlaunch-$_commit"
 _plugin_dir="usr/lib/hyprland/plugins"
@@ -254,6 +283,37 @@ package() {
         echo "Fensterprozess ist genau dafuer da." >&2
         return 1
     fi
+
+    # DASSELBE FUER json-glib, seit dem 21.08.2026.
+    #
+    # Die Bibliothek kam mit dem Rechtsklick-Menue dazu, und sie
+    # gehoert dem Fenster: es liest damit die Antwort von
+    # zepos-settings-gui. Das Plugin ruft die Bruecke nicht - es liest
+    # die Konfigurationsdatei und registriert Dispatcher.
+    #
+    # Die Falle, gegen die das hier steht: src/ConfigParser.cpp steht in
+    # BEIDEN Zielen. Wer json-glib eines Tages in jene Datei zieht statt
+    # in AppDiscovery.cpp, haengt sie wortlos auch dem Objekt im
+    # Compositor an - und `-Wl,--as-needed` verhindert das nicht, sobald
+    # wirklich ein Symbol benutzt wird.
+    if readelf -d "$pkgdir/$_plugin_dir/hyprlaunch.so" | grep -q "json-glib"; then
+        echo "das Plugin-Objekt linkt gegen json-glib. Es liest die" >&2
+        echo "Konfigurationsdatei und ruft keine Bruecke; die" >&2
+        echo "Bibliothek gehoert allein hyprlaunch-ui." >&2
+        return 1
+    fi
+
+    # Und die Gegenprobe: das FENSTER muss sie haben. Ohne sie liesse
+    # sich die Anheftungsliste nicht lesen, und das Rechtsklick-Menue
+    # bliebe wortlos leer - ein Rechtsklick, der nichts tut, ist genau
+    # die Sorte Versagen ohne Protokollzeile, gegen die die Pruefungen
+    # hier alle stehen.
+    grep -q "json-glib" <<<"$needed" || {
+        echo "hyprlaunch-ui wurde ohne json-glib gebaut. Das" >&2
+        echo "Rechtsklick-Menue koennte die Anheftungen des Docks" >&2
+        echo "nicht lesen und bliebe leer." >&2
+        return 1
+    }
 
     # Erneut gelesen, nach dem Uebersetzen: ein `pacman -Syu` zwischen
     # dem Einlesen dieser Datei und jetzt hinterliesse ein Objekt, das
