@@ -175,6 +175,168 @@
 //     Nachgehalten wird der Preis, nicht behauptet: die Zahl steht in
 //     test_the_bar_and_the_footer_leave_the_windows_room, und sie faellt
 //     auf, sobald jemand den Fuss dicker macht.
+//
+// DIE ABGELEGTEN FENSTER, UND WARUM SIE NICHT DA WAREN (20.08.2026)
+//     BESTELLT, woertlich: "sobald fenster minimiert sind werden sie
+//     nicht in der dock unten bei den aktiven fenstern angezeigt rechts
+//     neben den standard icons. ich moechte das dort auch minimiert
+//     angezeigt werden und immer aufgerufen werden koennen, aber ohne
+//     dieses fenster zu fokussieren sondern es normal erscheinen zu
+//     lassen."
+//
+//     DIE URSACHE, GEMESSEN am 20.08.2026 im verschachtelten Compositor
+//     (Hyprland 0.56.1, tests/render/desktop_session.py, headless
+//     1920x1080). Minimiert wird in ZepOS ueber den Knopf der
+//     Fensterleiste - hyprland-plugins-config.template, hyprbars-button
+//     mit `hyprctl dispatch movetoworkspacesilent special:minimized`.
+//     Was `hyprctl clients -j` danach ueber dasselbe Fenster meldet:
+//
+//         vorher    "workspace": {"id": 2,   "name": "2"}
+//         nachher   "workspace": {"id": -98, "name": "special:minimized"}
+//
+//     Sonst aendert sich NICHTS, was das Dock lesen koennte: mapped
+//     bleibt true, hidden bleibt false, die Adresse bleibt dieselbe.
+//     Und `.filter(client => client.workspace.id > 0)` unten in
+//     update() warf genau diese Zeile weg. Der Fuss zeigte also
+//     zuverlaessig jedes Fenster ausser denen, die man von ihm
+//     zurueckholen will.
+//
+//     WAS SICH DAMIT AUF DEM SCHIRM AENDERT, an der ganzen erzeugten
+//     Oberflaeche gemessen (20.08.2026, derselbe Aufbau, `hyprctl
+//     layers`, Kasten der Flaeche zepos-dock):
+//
+//         nur die angehefteten Anwendungen   (784, 996, 353, 60)
+//         ein Fenster dazu geoeffnet         (755, 996, 411, 60)
+//         dasselbe Fenster minimiert         (755, 996, 411, 60)
+//         wieder zurueckgeholt               (755, 996, 411, 60)
+//
+//     Die 58 px Unterschied sind der Knopf. Er BLEIBT jetzt beim
+//     Minimieren stehen - vorher waere die dritte Zeile wieder
+//     (784, 996, 353, 60) gewesen, also der Fuss von vor dem Oeffnen.
+//
+//     WARUM DER FILTER TROTZDEM BLEIBT, NUR MIT EINER AUSNAHME
+//         Hier stand als Begruendung: "Sonderarbeitsbereiche haben
+//         negative Kennungen. Ihre Fenster sind per Definition
+//         weggelegt." Der Satz ist richtig und er gilt weiter - fuer
+//         JEDEN Sonderbereich AUSSER dem einen, den ZepOS selbst
+//         "minimized" nennt. Ein Sonderbereich ist in Hyprland auch das
+//         Werkzeug fuer Kritzelfenster (`togglespecialworkspace`), und
+//         die haben ihre eigene Taste; sie in die Reihe der laufenden
+//         Fenster zu stellen waere ein zweiter, falscher Weg zu ihnen.
+//
+//         Ausgenommen ist deshalb nicht "negativ", sondern der NAME
+//         special:minimized - derselbe, den der Minimieren-Knopf
+//         schreibt. Ueber den Namen und nicht ueber die -98: welche
+//         Zahl ein Sonderbereich bekommt, vergibt Hyprland in der
+//         Reihenfolge des Anlegens (SPECIAL_WORKSPACE_START abwaerts),
+//         der Name steht in der Vorlage.
+//
+//         Und "abgelegt sein" heisst bei einem MINIMIERTEN Fenster
+//         etwas anderes als bei einem Kritzelfenster: minimiert ist ein
+//         Fenster, das man zurueckholen WILL. Ein Ort, an dem es liegt
+//         und von dem aus man es nicht sieht, ist kein Minimieren,
+//         sondern ein Verlieren - genau die Meldung von diesem Tag.
+//
+// WORAN MAN EIN ABGELEGTES FENSTER IM FUSS ERKENNT
+//     An der Deckkraft, und an nichts sonst. Der Fuss sagt seine
+//     Zustaende ueber den Strich unter dem Symbol (durchsichtig = nicht
+//     gestartet, Symbolfarbe = laeuft, Anzeigerfarbe = gerade vorn,
+//     siehe bar-style.template), und ein vierter Strichton waere ein
+//     vierter Ton in einer Reihe, die schon drei hat. `opacity` ist
+//     stattdessen die Sprache, die derselbe Schreibtisch fuer "es gibt
+//     das, aber es ist gerade nichts darin" schon fuehrt:
+//     `#workspaces button.empty` in der Leiste steht seit jeher auf
+//     STYLE_OPACITY_DISABLED.
+//
+//     Und `opacity` kostet keinen Bildpunkt Hoehe. Ein Zeichen mehr im
+//     Knopf oder ein zweiter Rahmen haette den Fuss wachsen lassen, und
+//     der Fuss hat eine EXKLUSIVE Zone: er schiebt dann jedes Fenster
+//     des Schirms. Siehe den Absatz ueber den Zustandsstrich in
+//     bar-style.template, wo dieselbe Falle schon einmal zugeschnappt
+//     ist.
+//
+// WAS EIN KLICK AUSLOEST, UND WARUM GERADE DAS
+//     `movetoworkspacesilent <sichtbarer Bereich>,address:0x...`
+//
+//     Drei Befehle kamen in Frage, und alle drei sind am 20.08.2026 im
+//     verschachtelten Compositor an einem echten minimierten Fenster
+//     GEMESSEN worden:
+//
+//       focuswindow address:      Das Fenster BLEIBT auf
+//                                 special:minimized (gemessen:
+//                                 workspace {"id": -98} auch danach),
+//                                 und der Monitor meldet ploetzlich
+//                                 "specialWorkspace": {"id": -98} - der
+//                                 Sonderbereich wird als UEBERLAGERUNG
+//                                 eingeblendet. Das Fenster ist also
+//                                 weiterhin minimiert, es liegt nur
+//                                 jetzt sichtbar obenauf. Genau das,
+//                                 was der Nutzer NICHT will.
+//       movetoworkspace           Holt es zurueck - und nimmt den
+//                                 Tastaturfokus mit: gemessen wechselte
+//                                 activewindow von 0x...70420 auf
+//                                 0x...510c0. "ohne dieses fenster zu
+//                                 fokussieren" ist damit verletzt.
+//       movetoworkspacesilent     <- dieser. Gemessen: workspace geht
+//                                 von {"id": -98} auf {"id": 2}, der
+//                                 sichtbare Bereich bleibt 2, und
+//                                 activewindow ist VOR und NACH dem
+//                                 Befehl dasselbe Fenster. Das Fenster
+//                                 erscheint als gewoehnliches Fenster
+//                                 im Layout, die Eingabe bleibt, wo sie
+//                                 war.
+//
+//     SO IST "OHNE ZU FOKUSSIEREN" AUSGELEGT, und das ist eine
+//     Entscheidung, die eine Zeile weit reicht: das Fenster erscheint
+//     SICHTBAR auf dem Bereich, den der Nutzer gerade ansieht, aber der
+//     Tastaturfokus bleibt bei dem Fenster, in dem er gerade schreibt.
+//     Der Satz "sondern es normal erscheinen zu lassen" verlangt das
+//     Erscheinen; "ohne dieses fenster zu fokussieren" verlangt, dass
+//     ihm dabei nichts weggenommen wird. Beides zusammen ist genau
+//     movetoworkspacesilent. Wer es anders will, aendert restore().
+//
+//     AUF WELCHEN BEREICH, UND WARUM NICHT AUF DEN URSPRUENGLICHEN
+//         Auf den, den der Nutzer GERADE ANSIEHT (state.focused, also
+//         die activeWorkspace des fokussierten Schirms).
+//
+//         Der urspruengliche Bereich waere die andere Wahl, und sie ist
+//         nicht zu haben: `hyprctl clients -j` fuehrt kein Feld dafuer.
+//         GEMESSEN am 20.08.2026 an der vollstaendigen Antwort fuer ein
+//         minimiertes Fenster - dreissig Felder, von acceptsInput bis
+//         xwayland, und keines nennt einen frueheren Arbeitsbereich.
+//         Das Dock muesste ihn also selbst mitschreiben, und diese
+//         Buchhaltung waere beim ersten Neustart der Oberflaeche leer,
+//         waehrend die Fenster noch abgelegt sind.
+//
+//         Und selbst wenn sie zu haben waere: ein Fenster, das auf
+//         Bereich 7 zurueckkehrt, waehrend der Nutzer auf Bereich 3
+//         steht, ist fuer ihn nicht "erschienen". Es ist wieder
+//         verschwunden, nur woanders. "Es normal erscheinen zu lassen"
+//         heisst: hier, jetzt, sichtbar.
+//
+// WOHIN EIN ABGELEGTES FENSTER GEHOERT, DESSEN ANWENDUNG ANGEHEFTET IST
+//     In die Reihe hinter dem Trenner, IMMER - auch dann, wenn es
+//     Firefox ist und Firefox angeheftet ist. Drei Gruende, und der
+//     erste ist der Wortlaut der Bestellung: "bei den aktiven fenstern
+//     angezeigt rechts neben den standard icons". Genau dort ist diese
+//     Reihe.
+//
+//     Der zweite ist der tragende: ein angehefteter Knopf ist EINER fuer
+//     alle Fenster seiner Anwendung. Ein abgelegtes Fenster dorthin zu
+//     legen hiesse, es wieder ununterscheidbar zu machen - und "immer
+//     aufgerufen werden koennen" verlangt, GENAU DIESES Fenster
+//     anklicken zu koennen.
+//
+//     Der dritte: die Regel darunter ("ein Fenster an beiden Stellen
+//     waere dasselbe Programm zweimal im Dock") bleibt unverletzt. Jedes
+//     Fenster hat weiterhin genau einen Knopf; es aendert sich nur,
+//     WELCHER es ist.
+//
+//     Der angeheftete Knopf weiss trotzdem von den abgelegten Fenstern
+//     seiner Anwendung, und er muss es: sonst saehe er "laeuft nicht"
+//     aus, waehrend das Programm laeuft, und ein Klick startete ein
+//     zweites - dieselbe Sorte Fehler wie die Fork-Bombe vom 17.08.2026,
+//     nur langsamer.
 
 import Astal from "gi://Astal?version=4.0"
 import Gio from "gi://Gio"
@@ -193,6 +355,55 @@ const ICON_SIZE = {{STYLE_DOCK_ICON_SIZE}}
 // Das Zeichen fuer ein Fenster, dessen Anwendung sich nicht ermitteln
 // laesst. Siehe iconFor() weiter unten, warum es KEIN Zahnrad mehr ist.
 const UNKNOWN_WINDOW_ICON = "{{ICON_DOCK_WINDOW}}"
+
+// Der Sonderarbeitsbereich, auf dem die abgelegten Fenster liegen.
+//
+// DERSELBE NAME steht an zwei weiteren Stellen, und alle drei muessen
+// ihn gleich schreiben:
+//   hyprland-plugins-config.template   der Minimieren-Knopf der
+//                                      Fensterleiste schreibt ihn
+//                                      (movetoworkspacesilent
+//                                      special:minimized)
+//   hyprland-universal-config.template SUPER+D blendet ihn ein
+// Dass sie ihn gleich schreiben, misst tests/src/test_dock_minimized.py -
+// eine Vorlage, die den Namen aendert und diese hier stehen laesst,
+// nimmt dem Fuss lautlos jedes abgelegte Fenster wieder weg.
+const MINIMIZED_WORKSPACE = "special:minimized"
+
+/** Liegt dieses Fenster abgelegt?
+ *
+ * Am NAMEN und nicht an der Kennung. Die Kennung ist -98, gemessen am
+ * 20.08.2026 - aber sie ist keine Konstante: Hyprland vergibt die
+ * Kennungen der Sonderbereiche in der Reihenfolge, in der sie entstehen.
+ * Wer morgen ein Kritzelfenster vor dem ersten Minimieren oeffnet,
+ * bekommt eine andere Zahl und denselben Namen.
+ */
+function isMinimized(client: Hyprland.Client): boolean {
+  return client.workspace.name === MINIMIZED_WORKSPACE
+}
+
+/** Ein abgelegtes Fenster zurueckholen, ohne ihm den Fokus zu geben.
+ *
+ * Siehe den Kopf, "WAS EIN KLICK AUSLOEST": movetoworkspacesilent ist
+ * der einzige der drei Befehle, nach dem das Fenster auf dem sichtbaren
+ * Bereich steht UND der Tastaturfokus dort geblieben ist, wo er war.
+ *
+ * `workspace` ist der Bereich, den der Nutzer gerade ansieht. Ist er
+ * unbekannt - refresh() meldet 0, solange kein Compositor antwortet -,
+ * passiert nichts: `movetoworkspacesilent 0,...` waere ein Befehl an
+ * einen Bereich, den es nicht gibt, und ein Knopf, der etwas Falsches
+ * tut, ist schlimmer als einer, der schweigt.
+ */
+function restore(client: Hyprland.Client, workspace: number): void {
+  if (workspace <= 0) {
+    console.error(
+      `Dock: "${client.title || client.class}" laesst sich nicht `
+      + "zurueckholen - kein sichtbarer Arbeitsbereich bekannt")
+    return
+  }
+  Hyprland.dispatch(
+    `movetoworkspacesilent ${workspace},address:${client.address}`)
+}
 
 // Der Abstand, den die Fusszeile zum unteren Schirmrand haelt. Er
 // gehoert zur reservierten Zone: gtk4-layer-shell rechnet sie aus der
@@ -524,9 +735,16 @@ export function DockContent(): Gtk.Box {
   box.append(separator)
 
   const buttons = new Map<string, Gtk.Button>()
-  // Die Klick-Verbindung je angehefteter Anwendung, damit sie ersetzt
-  // und nicht gestapelt wird: ein Knopf, der nach zehn Ereignissen zehn
-  // Rueckrufe traegt, startet beim naechsten Klick zehn Programme.
+  // Die Klick-Verbindung je Knopf - angeheftet wie lose -, damit sie
+  // ersetzt und nicht gestapelt wird: ein Knopf, der nach zehn
+  // Ereignissen zehn Rueckrufe traegt, startet beim naechsten Klick zehn
+  // Programme.
+  //
+  // Seit dem 20.08.2026 stehen auch die LOSEN Knoepfe darin. Ihr
+  // Rueckruf war bis dahin einmalig, weil er immer dasselbe tat; jetzt
+  // haengt er am Zustand (abgelegt? welcher Bereich ist sichtbar?) und
+  // muss deshalb mitwandern. Der Schluessel ist der Knopf und nicht die
+  // Adresse - dieselbe Begruendung wie unten bei den Anheftungen.
   const handlers = new Map<Gtk.Button, number>()
 
   const update = (state: Hyprland.HyprlandState) => {
@@ -537,39 +755,65 @@ export function DockContent(): Gtk.Box {
     // per Definition weggelegt; sie im Dock zu zeigen hiesse, das
     // Weglegen rueckgaengig zu machen, ohne dass jemand darum gebeten
     // hat.
-    const visible = state.clients
-      .filter(client => client.workspace.id > 0)
-      .sort((left, right) => left.workspace.id - right.workspace.id
+    //
+    // AUSSER special:minimized: darum HAT jemand gebeten, und zwar am
+    // 20.08.2026 woertlich. Siehe den Kopf, "DIE ABGELEGTEN FENSTER" -
+    // ein minimiertes Fenster ist eines, das man zurueckholen will,
+    // und der Fuss ist der Ort, an dem das geht.
+    const shown = state.clients
+      .filter(client => client.workspace.id > 0 || isMinimized(client))
+      // Die abgelegten ans ENDE, hinter alle offenen. Ihre Kennung ist
+      // negativ, ohne diese erste Stufe stuenden sie also ganz vorn -
+      // und die Bestellung sagt "rechts neben den standard icons".
+      .sort((left, right) =>
+        Number(isMinimized(left)) - Number(isMinimized(right))
+        || left.workspace.id - right.workspace.id
         || left.title.localeCompare(right.title))
 
     // Jedes Fenster gehoert entweder zu einer angehefteten Anwendung
     // oder auf einen eigenen Knopf. Ein Fenster an beiden Stellen waere
     // dasselbe Programm zweimal im Dock.
+    //
+    // EIN ABGELEGTES FENSTER BEKOMMT IMMER EINEN EIGENEN KNOPF, auch
+    // wenn seine Anwendung angeheftet ist - siehe den Kopf, "WOHIN EIN
+    // ABGELEGTES FENSTER GEHOERT". Die Regel darueber bleibt trotzdem
+    // heil: es steht dann NICHT zusaetzlich unter seiner Anheftung,
+    // sondern nur dort. Was die Anheftung von ihm behaelt, ist die
+    // Auskunft, dass ihre Anwendung laeuft (`putAway`) - sonst saehe
+    // ein Firefox mit einem einzigen, abgelegten Fenster aus wie
+    // "startet nicht", und ein Klick oeffnete einen zweiten.
     const owned = new Map<string, Hyprland.Client[]>()
+    const putAway = new Map<string, Hyprland.Client[]>()
     const loose: Hyprland.Client[] = []
-    for (const client of visible) {
+    for (const client of shown) {
+      const minimized = isMinimized(client)
       const pin = pins.find(candidate =>
         belongsTo(client.class, candidate.info, candidate.program))
       if (pin) {
-        const list = owned.get(pin.program) ?? []
+        const table = minimized ? putAway : owned
+        const list = table.get(pin.program) ?? []
         list.push(client)
-        owned.set(pin.program, list)
-      } else {
-        loose.push(client)
+        table.set(pin.program, list)
       }
+      if (minimized || !pin) loose.push(client)
     }
 
     for (const pin of pins) {
       const windows = owned.get(pin.program) ?? []
+      const abgelegt = putAway.get(pin.program) ?? []
       const classes = ["dock-button", "dock-pin"]
-      if (windows.length) classes.push("running")
+      // "laeuft" zaehlt die abgelegten MIT. Ein minimiertes Programm
+      // laeuft - der Strich unter dem Symbol sagt genau das und nichts
+      // ueber Sichtbarkeit.
+      if (windows.length || abgelegt.length) classes.push("running")
       if (windows.some(client => client.workspace.id === state.focused)) {
         classes.push("active")
       }
       pin.button.set_css_classes(classes)
+      const zahl = windows.length + abgelegt.length
       pin.button.set_tooltip_text(
-        windows.length
-          ? `${pin.info.get_display_name() || pin.program} (${windows.length})`
+        zahl
+          ? `${pin.info.get_display_name() || pin.program} (${zahl})`
           : (pin.info.get_display_name() || pin.program))
       // Neu verbunden, weil das Ziel sich mit jedem Ereignis aendert:
       // laeuft die Anwendung, holt der Klick ihr erstes Fenster nach
@@ -604,9 +848,21 @@ export function DockContent(): Gtk.Box {
       const previousHandler = handlers.get(pin.button)
       if (previousHandler !== undefined) pin.button.disconnect(previousHandler)
       const first = windows[0]
+      // Das erste ABGELEGTE Fenster dieser Anwendung, und der Grund,
+      // aus dem der Knopf davon ueberhaupt weiss: liegt jedes Fenster
+      // einer Anwendung abgelegt, dann laeuft sie - und ein Klick, der
+      // sie dann noch einmal STARTET, macht aus einem minimierten
+      // Firefox zwei Firefoxe. Der Nutzer hat einmal minimiert und
+      // erwartet, dass derselbe Klick es rueckgaengig macht.
+      const firstPutAway = abgelegt[0]
+      const focused = state.focused
       handlers.set(pin.button, pin.button.connect("clicked", () => {
         if (first) {
           Hyprland.dispatch(`focuswindow address:${first.address}`)
+          return
+        }
+        if (firstPutAway) {
+          restore(firstPutAway, focused)
           return
         }
         // Ueber den Compositor und nicht ueber GIO, wenn der Eintrag ein
@@ -626,6 +882,10 @@ export function DockContent(): Gtk.Box {
       if (!addresses.includes(address)) {
         box.remove(button)
         buttons.delete(address)
+        // Und aus der Verbindungstabelle. Sie ist nach dem Knopf
+        // geschluesselt; ein entfernter Knopf, der darin stehenbleibt,
+        // haelt sein Gtk.Button-Objekt am Leben, solange das Dock laeuft.
+        handlers.delete(button)
       }
     }
 
@@ -638,9 +898,8 @@ export function DockContent(): Gtk.Box {
 
         if (theme) button.set_child(iconFor(client, theme))
 
-        button.connect("clicked", () =>
-          Hyprland.dispatch(`focuswindow address:${client.address}`))
-
+        // Der Mittelklick bleibt EINMAL verbunden: sein Ziel ist die
+        // Adresse, und die aendert sich fuer dieses Fenster nie.
         const middle = new Gtk.GestureClick({ button: 2 })
         middle.connect("released", () =>
           Hyprland.dispatch(`closewindow address:${client.address}`))
@@ -650,10 +909,37 @@ export function DockContent(): Gtk.Box {
         box.append(button)
       }
 
+      const minimized = isMinimized(client)
+
+      // Der LINKSKLICK dagegen wird bei jedem Ereignis neu verbunden,
+      // genau wie oben bei den angehefteten Anwendungen - und aus einem
+      // Grund, den es vor dem 20.08.2026 nicht gab: er hing an dem
+      // `client`, mit dem der Knopf ENTSTANDEN ist, und tat immer
+      // dasselbe (focuswindow). Jetzt haengt sein Ziel davon ab, ob das
+      // Fenster gerade abgelegt ist und welchen Bereich der Nutzer
+      // gerade ansieht - zwei Angaben, die sich beide aendern, waehrend
+      // der Knopf steht. Ein einmal verbundener Rueckruf holte ein
+      // Fenster auf den Arbeitsbereich zurueck, den der Nutzer beim
+      // Minimieren ansah, und nicht auf den, den er jetzt ansieht.
+      const previousClick = handlers.get(button)
+      if (previousClick !== undefined) button.disconnect(previousClick)
+      const focused = state.focused
+      handlers.set(button, button.connect("clicked", () => {
+        if (minimized) restore(client, focused)
+        else Hyprland.dispatch(`focuswindow address:${client.address}`)
+      }))
+
       button.set_tooltip_text(client.title || client.class)
-      button.set_css_classes(
-        client.workspace.id === state.focused
-          ? ["dock-button", "active"] : ["dock-button"])
+      // Abgelegt schlaegt aktiv, und zwar ohne dass die beiden je
+      // zusammentreffen koennten: ein abgelegtes Fenster liegt auf
+      // special:minimized, und state.focused ist immer die
+      // activeWorkspace eines Schirms - GEMESSEN am 20.08.2026, auch
+      // waehrend der Sonderbereich per SUPER+D eingeblendet war, meldet
+      // `hyprctl monitors -j` dort weiter den gewoehnlichen Bereich.
+      const classes = ["dock-button"]
+      if (minimized) classes.push("minimized")
+      else if (client.workspace.id === state.focused) classes.push("active")
+      button.set_css_classes(classes)
 
       box.reorder_child_after(button, previous)
       previous = button

@@ -1249,6 +1249,62 @@ window.dock-window {
   color: {{STYLE_DOCK_ICON_ACTIVE_COLOR}};
 }
 
+/* Ein ABGELEGTES (minimiertes) Fenster - seit dem 20.08.2026, und es
+ * ist der einzige Zustand des Fusses, der NICHT ueber den Strich spricht.
+ *
+ * BESTELLT an diesem Tag: "ich moechte das dort auch minimiert
+ * angezeigt werden". Das "auch" ist die halbe Anforderung - es muss
+ * DASTEHEN - und "minimiert" die andere: man muss ihm ansehen, dass es
+ * eines ist. Ein Symbol, das aussieht wie ein offenes Fenster und
+ * keines ist, ist schlimmer als gar keines.
+ *
+ * WARUM DECKKRAFT UND KEIN VIERTER STRICHTON
+ *     Der Strich unter dem Symbol traegt in diesem Fuss schon drei
+ *     Aussagen - durchsichtig (nicht gestartet), Symbolfarbe (laeuft),
+ *     Anzeigerfarbe (gerade vorn). Ein vierter Ton in derselben Reihe
+ *     waere die vierte Farbe, die man auseinanderhalten muss, und die
+ *     drei sind bereits eine Ordnung nach Staerke. "Abgelegt" liegt
+ *     nicht auf dieser Skala: es sagt nichts darueber, wie sehr etwas
+ *     laeuft, sondern dass man es gerade nicht sieht.
+ *
+ *     Genau dafuer fuehrt derselbe Schreibtisch schon eine Sprache, und
+ *     zwar eine Zeile weiter oben in dieser Datei: `#workspaces
+ *     button.empty` steht auf STYLE_OPACITY_DISABLED und heisst "den
+ *     Bereich gibt es, es ist bloss nichts darin". Ein abgeblendetes
+ *     Symbol heisst hier dasselbe: das Fenster gibt es, es ist bloss
+ *     nicht auf dem Schirm.
+ *
+ * WARUM ES KEINEN BILDPUNKT KOSTET
+ *     `opacity` blendet ab und misst nicht neu. Ein zusaetzliches
+ *     Zeichen im Knopf oder ein zweiter Rahmen haette den Fuss hoeher
+ *     gemacht, und der Fuss haelt eine EXKLUSIVE Zone: er haette dann
+ *     jedes Fenster des Schirms verschoben, sobald jemand etwas
+ *     minimiert. Dieselbe Falle, die der lange Absatz ueber
+ *     `border-bottom` weiter oben schon einmal beschreibt.
+ *
+ * DASS MAN ES SIEHT, IST GEMESSEN UND NICHT BEHAUPTET
+ *     Am 20.08.2026 im verschachtelten Compositor (Hyprland 0.56.1,
+ *     1920x1080, ausgelieferte Groesse, tests/render/desktop_session.py)
+ *     an EINEM Fenster, einmal offen und einmal minimiert. Sein Knopf
+ *     liegt bei (1108, 996, 58, 60):
+ *
+ *         mittlere Helligkeit          offen 54.9   abgelegt 40.9
+ *         mittlerer Abstand zur
+ *         Tapete darunter              offen 32.3   abgelegt 25.6
+ *         Punkte, die sich zwischen
+ *         den beiden Bildern
+ *         unterscheiden                1803
+ *
+ *     Und der Kasten des Fusses blieb dabei (755, 996, 411, 60) - Zahl
+ *     fuer Zahl derselbe. Das ist der Absatz darueber, nachgerechnet.
+ *
+ * .active steht daneben und nicht dagegen: ein abgelegtes Fenster liegt
+ * auf special:minimized und kann deshalb nie der aktive Bereich sein -
+ * die beiden Klassen treffen sich nicht. */
+#dock button.dock-button.minimized {
+  opacity: {{STYLE_OPACITY_DISABLED}};
+}
+
 /* Der Trenner zwischen den angehefteten Anwendungen und den Fenstern,
  * die zu keiner davon gehoeren. */
 #dock separator.dock-separator {
@@ -1352,5 +1408,85 @@ window.power-button-window {
  *     verschoebe jedes Fenster des Schirms (die Flaeche des Docks ist
  *     EXCLUSIVE). */
 #power-button button.power-btn label {
+  font-size: {{STYLE_ICON_LEAD}};
+}
+
+/* =====================================================================
+ * Der Starterknopf - dasselbe noch einmal, in der anderen unteren Ecke
+ * (Aufgabe 44, 20.08.2026)
+ * ===================================================================*/
+
+/* BESTELLT, woertlich: "ich will wie shutdown icon unten links, will ich
+ * ein icon ganz unten rechts genauso, nur mit 6 punkten, was im Prinzip
+ * wie SUPER+SPACE macht".
+ *
+ * "GENAUSO" IST HIER EINE ANWEISUNG UND KEINE BESCHREIBUNG, und deshalb
+ * stehen unten dieselben Platzhalter wie beim Abschaltknopf - Zeile fuer
+ * Zeile, ohne eine einzige eigene Zahl. Jede Begruendung dafuer steht
+ * beim Abschaltknopf darueber und wird hier NICHT abgeschrieben; zwei
+ * Fassungen derselben Rechnung sind zwei, die auseinanderlaufen koennen.
+ *
+ * WARUM DANN NICHT EIN GEMEINSAMER WAHLAUSDRUCK
+ *     Weil es zwei Flaechen sind und nicht eine. src/style_definition.py
+ *     fuehrt je Namensraum GENAU EINE Platte (GLASS_PLATES), und die
+ *     Pruefung dort schlaegt den Wahlausdruck in DIESER Datei nach und
+ *     misst seine Deckkraft. Ein `#power-button, #starter-button` waeren
+ *     zwei Namensraeume, die auf dieselbe Zeile zeigen - und die Frage
+ *     "welche Platte malt zepos-starter" waere dann nicht mehr an einer
+ *     Zeile zu beantworten, sondern an einer Liste.
+ *
+ *     Dieselbe Entscheidung ist schon einmal getroffen worden, eine
+ *     Ueberschrift weiter oben: #power-button ist auch nicht #dock,
+ *     obwohl es dieselbe Platte ist.
+ *
+ * GEMESSEN am 20.08.2026 im verschachtelten Compositor (1920x1080,
+ * tests/render/test_starter.py), gegen den Abschaltknopf im selben Lauf:
+ *
+ *     Flaeche         x     y     b    h
+ *     zepos-power      24   999    53   57
+ *     zepos-starter  1843   999    53   57
+ *
+ * Dieselbe Groesse, dieselbe Oberkante, derselbe Rand zum Bildrand
+ * (24 links, 1920 - 1843 - 53 = 24 rechts). */
+window.starter-button-window {
+  background: transparent;
+}
+
+#starter-button {
+  background: {{STYLE_GLASS_SOLO}};
+  border: 1px solid {{STYLE_DOCK_BORDER_COLOR}};
+  border-radius: {{STYLE_RADIUS_PANEL}};
+  padding: {{STYLE_DOCK_PADDING}}px;
+}
+
+#starter-button button.starter-btn {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  border-radius: {{STYLE_RADIUS_CARD}};
+  padding: {{STYLE_DOCK_PADDING}}px;
+  color: {{STYLE_DOCK_ICON_COLOR}};
+  min-width: {{STYLE_DOCK_ICON_SIZE}}px;
+  min-height: {{STYLE_DOCK_ICON_SIZE}}px;
+}
+
+#starter-button button.starter-btn:hover {
+  background: {{STYLE_HOVER_BG}};
+}
+
+/* DAS ZEICHEN IM STARTERKNOPF - AUSDRUECKLICH UND VON ANFANG AN.
+ *
+ * Der Abschaltknopf hatte hier bis zum 19.08.2026 GAR KEINE Zeile und
+ * fiel damit auf die Vorgabe des GTK-Themas zurueck: 10 x 11 Punkte
+ * Tinte, vom Nutzer als "etwas zu klein" gemeldet. Die Ursache waere
+ * dieselbe fuer diesen Knopf - er sitzt in einem EIGENEN Fenster
+ * (window.starter-button-window) und erbt die 20 px aus
+ * window.bar-window nicht.
+ *
+ * Also dieselbe Sprosse, ohne den Umweg ueber die Beschwerde: die ganze
+ * gemessene Tabelle und die Rechnung, warum es ICON_LEAD ist und nicht
+ * STYLE_DOCK_ICON_SIZE, stehen beim Abschaltknopf darueber. */
+#starter-button button.starter-btn label {
   font-size: {{STYLE_ICON_LEAD}};
 }
