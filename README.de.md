@@ -5,180 +5,390 @@
 ZepOS ist eine Arch-basierte Linux-Distribution mit einem Hyprland/Wayland-
 Desktop, ausgeliefert als bootfähiges Live-Medium mit eigenem grafischen
 Installer. Alles, was auf dem Bildschirm steht – Installer, Anmeldemaske,
-Leiste, Dock, Starter, Sperrbildschirm, Abmeldemenü, Einstellungen – ist für
-dieses Projekt geschrieben, ist GTK4, und bezieht Farben, Abstände und
-Schriftgrößen aus einer einzigen Datei.
+Leiste, Dock, Starter, Kontrollzentrum, Einstellungen, Sperrbildschirm,
+Sitzungsmenü – ist für dieses Projekt geschrieben, ist GTK4, und bezieht
+Farben, Abstände und Schriftgrößen aus einer einzigen Datei.
 
-**Hinweis zur Sprache:** Diese Datei und [`README.md`](README.md) sind
-dasselbe Dokument in zwei Sprachen; beide müssen bei jeder Änderung
-synchron gehalten werden. Die Build-Skripte und die Entwicklerdokumentation
-sind Englisch; Quelltextkommentare und die Designdokumente in `docs/` sind
-größtenteils Deutsch. Die ausgelieferte Benutzeroberfläche ist Englisch und
-Deutsch.
+**Es ist Beta.** Es installiert sich, es läuft, und es aktualisiert sich selbst
+aus einer signierten Paketquelle. Es ist außerdem auf genau einer physischen
+Maschine und in QEMU installiert worden, es löscht die Platte, die man ihm gibt,
+und es hat keine eigene Datensicherung und keinen Rückrollpunkt. Diese Datei
+sagt, welche dieser Aussagen wann und womit gemessen wurde.
 
----
-
-## Status: Vor-Release. Bitte diesen Teil lesen.
-
-ZepOS startet, installiert sich und kommt als funktionierender Desktop hoch.
-Man sollte es aber noch nicht auf eine Maschine legen, die einem wichtig
-ist, und das sind die konkreten Gründe dafür:
-
-- **Ein lokaler Bau ist mit einem Testschlüssel signiert; eine
-  veröffentlichte Version nicht.** `packaging/build.sh` braucht weiterhin
-  einen Schlüssel, dem niemand vertrauen sollte – `packaging/make-test-key.sh`
-  erzeugt genau wie bisher einen, mit der Benutzer-ID
-  `ZepOS TEST KEY - DO NOT TRUST`, ohne Passphrase, mit 90 Tagen Laufzeit –
-  weil der echte Signierschlüssel nie die Maschine verlässt, auf der er
-  erzeugt wurde, und nie in den Arbeitsbaum eines Mitwirkenden gelangt. Was
-  der echte Schlüssel tatsächlich signiert, steht unter [Pakete](#pakete).
-- **Der Update-Kanal ist live, aber nur in einem Container erprobt.** Das
-  `[zepos]`-Repository unter `https://zeptronit.github.io/ZepOS/$arch` ist
-  öffentlich und antwortet. Der heutige Test hat ein Paket daraus in einen
-  sauberen Container installiert, mit echtem `pacman` und echter
-  Signaturprüfung gegen den Release-Schlüssel, und das ist gelungen. Was das
-  noch nicht abdeckt: eine Maschine, die niemand beobachtet, mit dem
-  geplanten Update-Timer unbeaufsichtigt, auf echter Hardware.
-- **Secure Boot funktioniert nicht.** Gemessen: Die Boot-Kette trägt keine
-  Signaturen, und Firmware mit aktiviertem Secure Boot lehnt den Loader ab.
-  Secure Boot muss ausgeschaltet werden.
-- **Eine Netzwerkverbindung ist zur Installation erforderlich.** Die
-  Offline-Paketquelle bringt nur die ZepOS-Pakete auf das Medium; die
-  Arch-Basis kommt weiterhin aus dem Netz, sodass eine Installation ohne
-  Netzwerk fehlschlägt.
-- **Die Hardwareabdeckung ist eine Maschine plus QEMU.** Es gibt keine
-  Hardware-Matrix.
-- **Nur zwei Sprachen:** Deutsch und Englisch.
-- **Zwei von ZepOS' eigenen Plugins patchen Upstream-Bäume ohne Lizenz.**
-  Siehe [Lizenz](#lizenz) – ZepOS hat die Erlaubnis, sie zu bauen und zu
-  patchen; man erbt dadurch nicht automatisch eine eigene. Ihre unveränderte
-  Quelle ist nicht Teil dieses Repositorys; die beiden Rezepte holen sie
-  sich selbst, aus dem eigenen Repository des Autors, auf einen
-  festgenagelten Commit.
-
-Was bewiesen ist, und wo die Belege liegen: `iso/README.md` hält fest, was
-jeder Boot und jede Installation tatsächlich getan hat, `packaging/README.md`
-hält fest, was vor einer ersten echten Veröffentlichung stimmen muss, und
-`docs/specs/2026-08-11-weg-zum-eigenen-os.md` ist die Roadmap, die die
-verbleibende Arbeit ordnet.
+**Hinweis zur Sprache:** Diese Datei und [`README.md`](README.md) sind dasselbe
+Dokument in zwei Sprachen; beide müssen bei jeder Änderung synchron gehalten
+werden. Die Build-Skripte und die Entwicklerdokumentation sind Englisch;
+Quelltextkommentare und die Designdokumente in `docs/` sind größtenteils
+Deutsch. Die ausgelieferte Benutzeroberfläche ist Englisch und Deutsch.
 
 ---
 
-## Für wen das hier ist
+## Was „Beta" hier heißt
 
-- Menschen, die einen Hyprland-Desktop wollen, der konfiguriert, in sich
-  stimmig und installierbar ist – statt an einem Wochenende aus einem
-  Dotfiles-Repository zusammengesetzt.
-- Menschen, die lesen wollen, warum ein System so aufgebaut ist, wie es
-  aufgebaut ist. Fast jede Entscheidung in diesem Baum steht direkt neben
-  dem Code, zusammen mit der Messung, aus der sie stammt.
+Kein Etikett. Drei konkrete Aussagen, jede mit dem, was sie gemessen hat.
 
-## Für wen das hier nicht ist
+**Was funktioniert, und wobei jemand zugesehen hat.** Die Belege stehen in
+[`iso/README.md`](iso/README.md), das festhält, was jeder Start und jede
+Installation tatsächlich getan hat – nicht, was beabsichtigt war:
 
-Das sind erklärte Nicht-Ziele, keine Lücken:
+| | Gemessen mit |
+|---|---|
+| Das Medium startet auf UEFI-Firmware in den Installer | `./iso/test-boot.py --scenario release` |
+| Jemand kann diesen Installer bis zu einer fertigen Installation führen | `--scenario release-install` |
+| Was er installiert hat, startet ohne das Medium | `--scenario release-installed` |
+| Eine installierte Maschine aktualisiert sich aus der öffentlichen Quelle, mit Signaturprüfung | `--scenario update`, dazu `./packaging/verify-install.sh` in saubere Container |
+| Ohne Netz sagt das Medium etwas Verständliches, statt einzufrieren | `--scenario release-install-ohne-netz` |
+| Firmware mit aktivem Secure Boot lehnt das Medium ab, und woran genau | `--scenario secure-boot` |
 
-- **Andere Architekturen als x86_64.** Arch Linux selbst liefert offiziell
-  nur x86_64 aus – ARM hat eine eigene, separate Distribution, nicht diese
-  hier –, und ZepOS baut direkt auf Archs eigenem Werkzeugkasten und
-  Paketarchiv auf, erbt diese Grenze also, statt sie selbst zu ziehen. Um
-  die eine CPU explizit zu nennen, nach der manchmal gefragt wird: Ein AMD
-  Ryzen ist x86_64. Dafür braucht es keine ARM-Unterstützung.
-- **Migration einer bestehenden Installation.** ZepOS wird installiert,
-  nicht umgewandelt.
-- **Wahl der Desktop-Umgebung.** Es gibt einen Desktop, und das ist
-  Hyprland. Das ist der Sinn des Projekts.
-- **Alle, die heute Secure Boot oder eine Offline-Installation brauchen.**
-  Siehe den Status-Abschnitt.
+`./iso/test-boot.py --help` nennt alle zehn Szenarien.
+
+**Was gerade veröffentlicht ist.** Eine feste Versionsnummer in dieser Datei
+wäre am nächsten Tag falsch. Deshalb stehen hier die zwei Adressen, die die
+Frage beantworten – und eine datierte Momentaufnahme dessen, was sie gesagt
+haben:
+
+- Pakete: <https://zeptronit.github.io/ZepOS/manifest.txt> nennt Version,
+  Commit, den Arch-Stichtag und die sha256-Summe jedes Pakets.
+- Medien: die [Releases-Seite](https://github.com/ZeptronIT/ZepOS/releases).
+
+*Gemessen am 20.08.2026:* die Paketquelle lieferte **0.1.3 mit 24 Paketen**,
+signiert mit `157C1725A578B80C`; das neueste Medium war
+**`zepos-2026.08.19-x86_64.iso`, 1 324 056 576 Byte (1,23 GiB)**. Dieser
+Arbeitsbaum stand da bereits auf `0.1.4`, und das ist nicht dasselbe wie
+veröffentlicht – [`VERSION`](VERSION) sagt, wo der Baum steht, die zwei Links
+oben sagen, was wirklich draußen ist.
+
+**Was Beta nicht heißt.** Nicht: fertig, nur mit Fehlern. Ganze Fähigkeiten
+fehlen mit Absicht, und sie stehen unten beim Namen, unter
+[Was heute nicht geht](#was-heute-nicht-geht). Diesen Abschnitt bitte lesen,
+bevor irgendetwas installiert wird.
 
 ---
 
-## Ausprobieren
+## Installieren
 
-### Ein Medium herunterladen
+### 1. Ein Medium besorgen
 
-Vor-Release-Images liegen auf der
-[Releases-Seite](https://github.com/ZeptronIT/ZepOS/releases). Vor dem
-Schreiben die Prüfsumme kontrollieren:
-
-```bash
-sha256sum -c zepos-<version>-x86_64.iso.sha256
-```
-
-Mit dem Werkzeug, dem man schon vertraut, auf einen USB-Stick schreiben, mit
-deaktiviertem Secure Boot starten, und das Medium startet den Installer. Es
-gibt keinen Live-Desktop zum Vorab-Ausprobieren – das Release-Medium startet
-direkt in den Installer und sonst nichts.
-
-Zwei Dinge vor dem Herunterladen: Ein veröffentlichtes Image hinkt `main` um
-die Zeit seit dem letzten Release hinterher, und seine Pakete sind mit
-ZepOS' echtem Schlüssel signiert, nicht mit dem Testschlüssel, den sich ein
-lokaler Bau selbst erzeugt – siehe [Pakete](#pakete). Das Medium selbst zu
-bauen ist der einzige Weg, an den heutigen Stand des Baums zu kommen.
-
-### Ein Medium selbst bauen
-
-Beide Bauten laufen in Docker-Containern, weil ein Paket, das gegen das
-gebaut wird, was zufällig auf einer Workstation liegt, eine
-Abhängigkeitsliste hat, die diese Workstation beschreibt.
-
-Benötigt werden `git`, `gpg`, `rsync`, `repo-add` (aus `pacman`), sowie
-Docker erreichbar als **`sudo -n docker`** – die Skripte fragen nie nach
-einem Passwort, also muss passwortloses `sudo` für `docker` vorher
-eingerichtet sein. Für einen Release-Bau sollten etwa 10 GB freier
-Speicherplatz eingeplant werden: gemessen, ein 3,5 GB großes
-archiso-Arbeitsverzeichnis, ein 1,3 GB großes Image, und die Build-Container
-obendrauf.
+Das ISO liegt auf der
+[Releases-Seite](https://github.com/ZeptronIT/ZepOS/releases). Geprüft wird es
+gegen die sha256-Summe, die **im Text der jeweiligen Release-Notiz** steht – die
+Prüfsumme ist Text auf der Seite, keine Datei neben dem Abbild, `sha256sum -c`
+hätte also nichts zu lesen:
 
 ```bash
-git clone https://github.com/ZeptronIT/ZepOS.git
-cd ZepOS
-
-# 1. Ein Signierschluessel. Der echte Schluessel steckt nie in diesem
-#    Repository, darum erzeugt man sich fuer einen lokalen Bau einen
-#    Testschluessel. Er heisst absichtlich DO NOT TRUST, hat keine
-#    Passphrase und laeuft nach 90 Tagen ab. Er gibt den genauen naechsten
-#    Befehl aus.
-./packaging/make-test-key.sh
-
-# 2. Die Pakete und das pacman-Repository, aus dem sie ausgeliefert werden.
-ZEPOS_GNUPGHOME=packaging/keys/gnupg ./packaging/build.sh --key <ausgegebene ID>
-
-# 3. Das Installationsmedium, aus genau diesen Paketen.
-./iso/build.sh --profile release
+sha256sum zepos-<datum>-x86_64.iso     # mit der Release-Notiz vergleichen
 ```
 
-Das Image und sein Manifest landen in `iso/out/` als
-`zepos-<YYYY.MM.DD>-x86_64.iso` und `manifest-release.txt`. Die letzte Zeile
-des Baus ist der Befehl, der das eben Gebaute in QEMU startet:
+Dann mit dem Werkzeug auf einen USB-Stick schreiben, dem man ohnehin vertraut.
+Ein veröffentlichtes Abbild hinkt `main` um so viel hinterher, wie seit dem
+letzten vergangen ist; wer den heutigen Baum will, baut das Medium selbst –
+siehe [Selbst bauen](#selbst-bauen).
+
+### 2. Vier Dinge, die man vorher wissen muss
+
+- **Der Rechner muss im UEFI-Modus gestartet sein.** Der Installer verweigert
+  einen BIOS-Start und sagt das, statt eine Platte zu löschen, um dann
+  herauszufinden, ob das Ergebnis überhaupt startet
+  (`installer/core/firmware.py`).
+- **Secure Boot muss aus sein.** Die Startkette trägt keine Signaturen;
+  gemessen lehnt die Firmware `\EFI\BOOT\BOOTx64.EFI` rundheraus ab.
+- **Eine Netzwerkverbindung ist nötig.** Das Medium bringt die ZepOS-Pakete
+  mit, die Arch-Basis kommt aus dem Netz. Ohne Netz scheitert die Installation –
+  höflich, und auch das ist gemessen.
+- **Die gewählte Platte wird vollständig gelöscht.** Jede Partition wird neu
+  geplant, keine übernommen. Es gibt kein Danebeninstallieren und kein
+  Dual-Boot. Die Begründung steht im Kopf von `installer/core/layout.py`:
+  vorhandene Partitionen zu behalten hieße, ihre Startsektoren auf den Sektor
+  genau gegen das zu treffen, was `parted` tatsächlich vorfindet – und ein
+  Fehler dabei bricht eine halb fertige Installation ab. Die Einteilungsseite
+  zeigt vorher, was auf der Platte liegt.
+
+Es gibt keinen Live-Desktop zum Ausprobieren. Das Release-Medium startet in den
+Installer und in nichts sonst.
+
+### 3. Wonach der Installer fragt
+
+Neun Seiten: Sprache, Netzwerk, Platte, Einteilung, Verschlüsselung, Benutzer,
+Zeit, ZepOS, Zusammenfassung. Es ist ein GTK4/libadwaita-Assistent; kann die
+grafische Sitzung nicht starten, läuft derselbe Installer als Textoberfläche,
+und dieser Rückfall geschieht, bevor irgendein Fenster gezeigt wird.
+
+Die Plattenverschlüsselung ist LUKS2 und freiwillig. Wer sie nimmt, bekommt auch
+den Startbildschirm – dort steht die Passphrasenabfrage. Auf einer
+unverschlüsselten Platte bleibt er aus, weil er dort Schmuck über einem Weg
+wäre, den niemand gemessen hat.
+
+Einteilung, Bootloader und Basisinstallation übernimmt
+[`archinstall`](https://github.com/archlinux/archinstall). Ein eigener
+Partitionierer wäre Code, dessen Fehler fremde Festplatten löschen.
+
+`zepos-install` nimmt **keine Kommandozeilenargumente**. Auf einem Werkzeug, das
+Platten löscht, gibt es keinen `--config`-Schalter;
+`ZEPOS_INSTALLER_SURFACE=gui` oder `=tui` erzwingt eine der beiden Oberflächen,
+und das ist alles.
+
+### 4. Die erste Anmeldung
+
+Es gibt keine automatische Anmeldung – die Maske fragt immer. Die erste
+Anmeldung eines Kontos erzeugt dessen gesamte Konfiguration aus den Vorlagen.
+Gemessen am 20.08.2026 über 94 Erzeugungsziele: **1117 ms** für eine erste,
+vollständige Erzeugung und **260 ms** bei einer Anmeldung, bei der sich nichts
+geändert hat – Unverändertes wird übersprungen, der Rest läuft nebenläufig.
+
+---
+
+## Im Alltag
+
+### Der Schreibtisch in fünf Minuten
+
+77 Tastenbindungen sind ab Werk da; `SUPER+SHIFT+H` öffnet die Liste, und diese
+Liste wird aus der erzeugten Konfiguration gelesen statt daneben gepflegt. Was
+man vorher wissen sollte:
+
+| Taste | Tut |
+|---|---|
+| `SUPER+SPACE` | Starter |
+| `SUPER+Q` / `SUPER+SHIFT+Q` | Terminal (schwebend / gekachelt) |
+| `SUPER+E` | Dateien |
+| `SUPER+SHIFT+B` | Browser |
+| `SUPER+B` | Dock ein- und ausfahren |
+| `SUPER+M` | Sitzungsmenü – sperren, abmelden, neu starten, herunterfahren, Bereitschaft, Ruhezustand |
+| `SUPER+L` | Bildschirm sperren |
+| `SUPER+S` | Ausschnitt aufnehmen und beschriften |
+| `SUPER+SHIFT+V` | Zwischenablage-Verlauf |
+| `SUPER+1…0`, `SUPER+SHIFT+1…0` | Arbeitsfläche wechseln / Fenster mitnehmen |
+| `SUPER+F` / `SUPER+SHIFT+F` | Vollbild / echtes Vollbild |
+| `SUPER+SHIFT+X` | Fenster schließen |
+
+Die rechte Hälfte der Leiste öffnet die Schale: Netzwerk, Bluetooth, VPN, Ton,
+Anzeige, Benachrichtigungen, Kalender, Datenträger, Akku, Hintergrund,
+Stil-Editor und die Einstellungen – Seiten eines Fensters statt verstreuter
+Panels.
+
+### Was installiert wird
+
+`zepos-desktop` ist ein Metapaket, und seine `depends`-Liste ist die Stelle, an
+der die Gestalt eines installierten ZepOS entschieden wird. Die Regel steht im
+Kopf seines PKGBUILD: *eine Abhängigkeit ist ein Programm, das die erzeugte
+Konfiguration selbst startet, oder eines, das eine Standardbindung braucht, um
+zu tun, was die Taste verspricht.*
+
+Es zieht Hyprland mit fünf Plugins herein, die AGS-Leiste, das Dock und die
+Schale, die ZepOS-Programme für Menü, Sperre und Einstellungen, und `zepos-apps`
+– die Auswahl *fremder* Anwendungen, die ZepOS trifft: Firefox, Nautilus, Loupe,
+Papers, Celluloid, GNOME Texteditor, Taschenrechner, Baobab, File Roller, btop,
+CUPS, und kitty als Terminal. Jede wurde GTK4-zuerst gewählt, wo es eine
+GTK4-Fassung gibt, und die Begründung steht neben dem Namen in
+`packaging/zepos-apps/PKGBUILD`. Firefox ist die bewusste Ausnahme: er ist GTK3,
+und ein Browser, den der Nutzer beim Namen genannt hat, wiegt schwerer als eine
+Regel, die von *unseren eigenen* Oberflächen handelt.
+
+Zwei freiwillige Gruppen werden nicht mitinstalliert: `zepos-apps-office`
+(LibreOffice mit deutschen Wörterbüchern) und `zepos-apps-devel` (`base-devel`,
+`git`).
+
+`zepos-apps` enthält außerdem **Claude Code**, als `zepos-claude-code` aus einem
+festgenagelten, prüfsummengesicherten Upstream-Tarball gebaut und im Dock
+angeheftet. Es ist Anthropics proprietäres Kommandozeilenwerkzeug unter eigener
+Lizenz, nicht Teil von ZepOS' GPL, und es braucht ein Anthropic-Konto, um
+überhaupt etwas zu tun. Wer es nicht will, entfernt das Paket.
+
+**Ruflo wird nicht mitgeliefert, und das ist eine Entscheidung.** Ruflo (auf
+npm: `claude-flow`) ist ein Orchestrator, der Claude Code steuert. Es war vom
+19. bis zum 20. August 2026 ein Paket und ist wieder gefallen: es steuert Claude
+Code, Claude Code spricht mit der Anthropic-API, und ohne Netz tut beides
+überhaupt nichts. Der einzige Vorteil des Vorinstallierens – Unabhängigkeit vom
+Netz – existiert für dieses Werkzeug also gar nicht, und ein Paket hätte es auf
+eine Fassung festgenagelt, während npm laufend neue ausliefert.
+
+ZepOS bringt Node 24 LTS und npm mit, ein Befehl holt es – **ohne `sudo`**:
 
 ```bash
-./iso/test-boot.py --scenario release
+npm i -g claude-flow
+claude-flow --version
 ```
 
-Nützliche Varianten – jede davon steht auch in der eigenen `--help` des
-jeweiligen Skripts:
+`/etc/npmrc` setzt npms Präfix auf `~/.local`, das Programm landet also als
+`~/.local/bin/claude-flow`, in einem Verzeichnis, das ohnehin im PATH liegt. Ein
+globales `npm i -g` braucht hier kein root und schreibt nicht in pacmans
+`/usr/lib/node_modules/`. Die eigene `~/.npmrc` gewinnt trotzdem – gemessen am
+20.08.2026 in einem leeren Container.
+
+### Aktualisierungen
+
+Eine installierte Maschine aktualisiert sich selbst: ein täglicher Zeitgeber,
+verzögert nach dem Start und zusätzlich zufällig gestreut, der **nur anfasst,
+was aus `[zepos]` kommt**. Die Arch-Basis wird gezählt und gemeldet, nie
+eingespielt – außer man setzt `update.scope=all`. Ein unbeaufsichtigtes
+`pacman -Syu` auf einem Rolling Release ist ein Rechner, der eines Morgens nicht
+mehr startet, und sein Besitzer hat ihn nicht kaputtgemacht.
+
+Von Hand:
 
 ```bash
-./packaging/build.sh zepos-config        # ein Rezept statt aller
-./packaging/build.sh --no-sign           # ein unsigniertes Repository
-./packaging/build.sh --rebuild-image     # auch den Build-Container neu bauen
-./iso/build.sh                           # das Smoke-ISO (siehe unten), nicht das Medium
-./iso/build.sh --snapshot current        # gegen die heutigen Spiegelserver bauen
+sudo zepos-update                    # einspielen, was ansteht, danach neu erzeugen
+sudo zepos-update --check            # nur nachsehen und sagen, was ansteht
+sudo zepos-update --status           # was der letzte Lauf getan hat
+sudo zepos-update --apply-schedule   # NUR den Zeitgeber stellen; spielt nichts ein
 ```
 
-Zu beachten: `--no-sign` lässt `zepos-keyring` und `zepos-desktop` bei einem
-vollständigen Bau stillschweigend weg – ein Keyring-Paket rund um keinen
-Schlüssel und ein Metapaket, das davon abhängt, können nicht existieren.
+Der Unterschied, den niemand erraten muss: **Was Pakete austauscht, ist
+`zepos-update` ohne Argument (oder `--now`).** `--apply-schedule` schreibt eine
+systemd-Ergänzung und sonst nichts. Sein alter Name `--apply` gilt weiter, weil
+`/usr/share/libalpm/hooks/90-zepos-update.hook` ihn so ruft und ein Haken auf
+der Platte von genau der Aktualisierung gerufen wird, die ihn ersetzt – aber ein
+Mensch, der ihn tippt, bekommt gesagt, dass nichts eingespielt wurde.
 
-**Es gibt zwei ISO-Profile, und sie sind nicht austauschbar.**
-`iso/profile/` ist ein Testgeschirr: Es meldet einen Nutzer automatisch an,
-liefert sein eigenes `/etc/shadow`, installiert unbeaufsichtigt aus einer
-Antwortdatei mit einem Root-Passwort darin, und setzt `console=ttyS0` auf
-die Kernel-Kommandozeile. `iso/profile-release/` ist das Image, das man
-weitergeben kann. Das Auslieferungsprofil wird aus einer Positivliste
-(`iso/shared-with-release.txt`) zusammengesetzt statt als zweite Kopie zu
-existieren, damit eine neue Datei im Testgeschirr nicht durch Vergessen bis
-zu einem Download durchreicht.
+Die andere Hälfte ist die Neuerzeugung. Steht eine aus **und** hängt ein
+Terminal an diesem Lauf **und** ist das aufrufende Konto grafisch angemeldet,
+dann läuft `zepos-generate --all` als dieses Konto gleich hinterher und die
+Schale startet neu – ohne Neuanmeldung. Der Zeitgeber, der keine dieser drei
+Bedingungen erfüllt, hinterlässt statt dessen eine Marke, und die nächste
+Anmeldung erzeugt neu, bevor der Compositor startet. `--regenerate` erzwingt es
+in jedem Fall; `zepos-update --check` sagt, ob eine aussteht.
+
+### Einstellungen
+
+Zwei Oberflächen über einem Hirn, und sie können sich nicht widersprechen, weil
+nur eine von ihnen etwas entscheidet:
+
+```bash
+zepos-settings get                   # jede Einstellung mit ihrem aktuellen Wert
+zepos-settings set sizes.scale 1.25
+zepos-settings set colors.<schluessel> '#...'
+zepos-doctor                         # was eine erzeugte Konfiguration an sich selbst nicht prüfen kann
+```
+
+Das Einstellungsfenster hat sieben Seiten – Größe, Bildschirme, Leiste, Thema,
+Farben, Wetter, Aktualisierung. Jeder der 69 Farbschlüssel, die aus ZeptronITs
+sechs Markenfarben abgeleitet sind, ist erreichbar, und die erste Themenvorlage
+des Stil-Editors *ist* die ausgelieferte Palette statt einer Kopie davon.
+
+### Etwas ändern
+
+Nichts in einem laufenden ZepOS ist eine Konfigurationsdatei, die jemand
+bearbeitet hat; alles ist erzeugt, trägt einen „DO NOT EDIT"-Kopf und wird beim
+nächsten Lauf überschrieben. Das sperrt niemanden aus – es verschiebt die
+Änderung um einen Schritt nach hinten:
+
+```bash
+mkdir -p ~/.config/zepos/templates
+cp /usr/share/zepos/templates/hyprland-universal-config.template ~/.config/zepos/templates/
+$EDITOR ~/.config/zepos/templates/hyprland-universal-config.template
+zepos-generate --all
+```
+
+Eine Vorlage unter `~/.config/zepos/templates/` gewinnt gegen die
+gleichnamige aus dem Paket, und eine Paketaktualisierung kann sie nicht
+überschreiben. Genau das tut auch der Bearbeiten-Knopf im Kürzelfenster – was
+dieser Knopf *nicht* ist, steht unter
+[Was heute nicht geht](#was-heute-nicht-geht).
+
+Die Erzeugung ist atomar: in ein temporäres Verzeichnis schreiben, prüfen, dann
+verschieben. Ein gescheiterter Lauf lässt die vorige, funktionierende
+Konfiguration stehen.
+
+---
+
+## Was heute nicht geht
+
+Alles hier ist gemessen oder aus diesem Baum gelesen. Nichts ist abgemildert,
+und nichts, was beim Schreiben dieser Datei gefunden wurde, ist weggelassen.
+
+### Harte Grenzen
+
+- **Nur x86_64.** Arch selbst liefert offiziell nur x86_64, und ZepOS baut auf
+  Archs eigenem Werkzeug und Archiv auf – die Grenze ist geerbt, nicht gewählt.
+  Um die eine CPU zu nennen, nach der gefragt wird: ein AMD Ryzen ist x86_64.
+- **Nur UEFI, und Secure Boot aus.** Beides gemessen, siehe
+  [Installieren](#installieren).
+- **Zur Installation ist eine Netzwerkverbindung nötig.**
+- **Die Platte wird gelöscht. Kein Dual-Boot, keine Migration.** ZepOS wird
+  installiert, nicht umgewandelt.
+- **Keine eigene Datensicherung, kein Rückrollpunkt.** Die Roadmap führt
+  „Datensicherung und Wiederherstellung" als offen, mit dem Satz, den es
+  verdient: ein Betriebssystem ohne Weg zurück ist ein Versuchsaufbau. Bis es
+  das gibt, ist der Weg zurück die eigene Sicherung – angelegt *bevor*
+  installiert wird.
+- **Zwei Sprachen: Deutsch und Englisch.** Beide werden von Tests vollständig
+  gehalten – eine englische Zeichenkette ohne deutsche Übersetzung lässt die
+  Suite scheitern.
+- **Ein Desktop, und der heißt Hyprland.** Das ist der Sinn des Projekts, keine
+  Lücke.
+- **Die Hardwareabdeckung ist eine physische Maschine plus QEMU.** Es gibt keine
+  Hardware-Matrix und keine Aussage über deine.
+
+### Raue Kanten, einzeln benannt
+
+- **Die Bildschirme lassen sich im neuen Einstellungsfenster nicht gegeneinander
+  verschieben.** Je Schirm kann es an/aus, Auflösung, Maßstab und Drehung. Das
+  Ziehen der Monitore gibt es nur im älteren GTK-Fenster
+  (`zepos-settings-gui --page bildschirme`), weil dort die Zeichenfläche mit der
+  Zieh-Geste liegt. Die neue Seite sagt das ausdrücklich, statt einen Knopf
+  anzubieten, der nichts tut.
+- **Das VPN-Fenster steht 42 px waagerecht über.** Gemessen: sein Inhalt
+  braucht 702 px, die Sprosse, auf der es steht, gibt ihm 634. Das ist eine
+  Sprossenwahl, kein Rundungsfehler, und beide Auswege verändern sichtbar ein
+  Fenster, über das niemand geklagt hat – deshalb steht es hier, statt still
+  geflickt zu werden.
+- **Es gibt keinen Kürzel-Editor.** Der Bearbeiten-Knopf im Kürzelfenster öffnet
+  die *Vorlage* der Tastenbindungen in einem Texteditor. Keine Tastenaufnahme,
+  keine Konfliktprüfung, keine Oberfläche je Bindung.
+- **Die Anmeldemaske ist nur halb übersetzt.** Sie ist `greetd`, das `regreet`
+  in `cage` ausführt, gestaltet aus derselben Markendatei wie alles andere –
+  aber `regreet` selbst übersetzt zwei der acht Beschriftungen. Die anderen
+  sechs sind Englisch, gleich in welcher Sprache installiert wurde.
+- **Ein einzelnes Paket neu zu bauen, von dem andere abhängen, schlägt fehl.**
+  `packaging/build.sh` entfernt den alten Stand, bevor es das gebaute Repository
+  in den Container installiert; ein abhängiges Paket lässt sich in genau diesem
+  Moment nicht auflösen. Zweimal umgangen, indem der ganze Abhängigkeitskreis
+  zusammen gebaut wurde – nicht behoben.
+- **Der Testaufbau hat kein GTK-Thema.** Eine ganze Fehlerklasse – eine
+  Themavorgabe, die unser Stylesheet nie zurücksetzt – ist dort strukturell
+  unsichtbar. Der weiße Ring, den das Systemthema um die Dock-Symbole malte, war
+  der erste Fund dieser Art, und gefunden hat ihn ein Mensch vor einem
+  Bildschirm.
+
+### Was kein Test abdeckt
+
+Das gehört deutlich gesagt, weil es die Form der Fehlermeldungen erklärt, die
+dieses Projekt bekommt. Die Suite prüft, *welche* Bauteile eine Vorlage aufruft,
+und rechnet Kontraste; `tests/render/` misst echte Geometrie unter einem
+verschachtelten Compositor, aber nur für eine Handvoll Oberflächen. **Kein Test
+zeichnet ein Fenster und beurteilt, wie es aussieht.** Ein Layout kann in jeder
+sichtbaren Hinsicht falsch sein, während die ganze Suite grün ist. Diese Lücke
+ist bekannt, sie wird Messung für Messung enger, und bis sie zu ist, schlägt
+eine menschliche Meldung einen grünen Lauf.
+
+### Signatur und Lizenzen
+
+- Ein **lokal gebautes** Medium ist mit einem Wegwerfschlüssel signiert
+  (`packaging/make-test-key.sh`, Benutzer-ID `ZepOS TEST KEY - DO NOT TRUST`,
+  ohne Passphrase, 90 Tage Laufzeit). Der echte Schlüssel gelangt nie in einen
+  Arbeitsbaum.
+- Die **veröffentlichte** Paketquelle ist mit einem echten Schlüssel signiert –
+  `FF2EB06C08A57FEA9E33FC46157C1725A578B80C`, Benutzer-ID
+  `LeonMarzollDev (ZepOS Release)`, gültig bis 18.08.2028. Siehe
+  [Pakete und Signatur](#pakete-und-signatur).
+- **Drei der fünf Compositor-Plugins stammen aus einem Upstream-Baum ganz ohne
+  Lizenz.** ZepOS hat die Erlaubnis, sie zu bauen und zu patchen; man erbt
+  dadurch nicht automatisch eine eigene. Siehe [Lizenz](#lizenz) – das ist die
+  eine Grenze hier, die eine rechtliche Tatsache ist und keine fehlende
+  Funktion.
+
+---
+
+## Für wen das hier ist, und für wen nicht
+
+**Für** Menschen, die einen Hyprland-Desktop wollen, der konfiguriert, in sich
+stimmig und installierbar ist – statt an einem Wochenende aus einem
+Dotfiles-Repository zusammengesetzt. Und für Menschen, die lesen wollen, *warum*
+ein System so gebaut ist, wie es gebaut ist: fast jede Entscheidung in diesem
+Baum steht neben dem Code, mit der Messung, aus der sie stammt.
+
+**Nicht für** jemanden, der Secure Boot braucht, eine Installation ohne Netz,
+eine zweite Desktop-Umgebung, eine andere Architektur als x86_64 – oder eine
+Maschine, deren Inhalt wichtig ist und nirgendwo sonst gesichert liegt.
 
 ---
 
@@ -186,239 +396,203 @@ zu einem Download durchreicht.
 
 ### Das Vorlagensystem ist der Kern
 
-Nichts in einem laufenden ZepOS ist eine Konfigurationsdatei, die jemand
-von Hand bearbeitet hat. Zwei Single Sources of Truth –
-`src/icon_definition.py` für Icons sowie `src/style_definition.py`
-zusammen mit `src/brand.py` für Farben, Größen und Abstände – speisen
-einen Prozessor, der `{{ICON_*}}`- und `{{STYLE_*}}`-Platzhalter in 82
-Vorlagen unter `src/templates/` und 8 Stylesheet-Vorlagen unter
-`src/styles/` einsetzt. Das Ergebnis ist die Konfiguration, die Hyprland,
-AGS, kitty und der Rest tatsächlich lesen.
+Zwei einzige Wahrheitsquellen – `src/icon_definition.py` für Zeichen und
+`src/style_definition.py` mit `src/brand.py` und `src/sizes.py` für Farben,
+Größen und Abstände – speisen einen Prozessor, der `{{ICON_*}}`- und
+`{{STYLE_*}}`-Platzhalter in **85 Vorlagen** unter `src/templates/` und **7
+Stilvorlagen** unter `src/styles/` ersetzt. Heraus kommt die Konfiguration, die
+Hyprland, AGS, kitty und der Rest wirklich lesen.
 
 ```
 icon_definition.py ─┐
 brand.py ───────────┼─► template_processor.py ─► generate_config.sh ─► ~/.config/{hypr,ags,kitty,…}
-style_definition.py ┘        (82 + 8 Vorlagen)      (zepos-generate)
+style_definition.py ┘        (85 + 7 Vorlagen)       (zepos-generate)
 user-settings.json ─┘
 ```
-
-Daraus folgen zwei Dinge, und beide tragen Gewicht:
-
-- **Erzeugte Dateien werden nie bearbeitet.** Sie tragen eine
-  „DO NOT EDIT“-Kopfzeile und werden beim nächsten Lauf überschrieben. Die
-  Änderung gehört in die Vorlage.
-- **Die Erzeugung ist atomar.** In ein temporäres Verzeichnis schreiben,
-  validieren, dann verschieben. Ein fehlgeschlagener Lauf lässt die vorher
-  funktionierende Konfiguration unangetastet.
 
 ```bash
 zepos-generate --all          # alles neu erzeugen
 zepos-generate --help         # jedes einzelne Ziel
-zepos-doctor                  # was eine erzeugte Konfiguration nicht selbst pruefen kann
-zepos-settings get            # jede Einstellung, mit ihrem aktuellen Wert
 ```
 
-### Der Installer ist drei Schichten, und die Oberfläche spricht nie direkt mit archinstall
+### Der Installer ist drei Schichten, und die Oberfläche spricht nie mit archinstall
 
 | Schicht | Inhalt |
 |---|---|
-| `installer/core/` | Datenmodell, Validierung, Laufwerkserkennung, LUKS2-Verschlüsselung, WLAN, Übersetzung zu `archinstall` |
-| `installer/gui/` | GTK4-/libadwaita-Assistent – neun Seiten: Sprache, Netzwerk, Laufwerk, Partitionierung, Verschlüsselung, Benutzer, Zeit, ZepOS, Zusammenfassung |
-| `installer/tui/` | Textoberfläche, verwendet, wenn die grafische Sitzung nicht starten kann |
+| `installer/core/` | Datenmodell, Prüfung, Plattenerkennung, LUKS2, Funk, Übersetzung nach `archinstall` |
+| `installer/gui/` | Der GTK4/libadwaita-Assistent |
+| `installer/tui/` | Textoberfläche, wenn die grafische Sitzung nicht startet |
 
 Die Oberfläche füllt ein serialisierbares Konfigurationsmodell; eine
-Übersetzungsschicht wandelt das in `archinstall`s JSON-Format um; ein
-Runner ruft dessen dokumentierte Kommandozeilenschnittstelle auf. Damit
-sind die beiden Oberflächen austauschbar, und eine unbeaufsichtigte
-Installation braucht keinen zweiten Codepfad – `InstallConfig.from_dict()`
-zusammen mit `installer.core.runner.install()` ist alles, was dafür nötig
-ist.
+Übersetzungsschicht macht daraus archinstalls JSON; ein Läufer ruft dessen
+dokumentierte Kommandozeile auf. Die beiden Oberflächen sind damit austauschbar,
+und eine unbeaufsichtigte Installation braucht keinen zweiten Codeweg –
+`InstallConfig.from_dict()` plus `installer.core.runner.install()` ist alles.
 
-Partitionierung, Bootloader und Basisinstallation übernimmt
-[`archinstall`](https://github.com/archlinux/archinstall). Einen eigenen
-Partitionierer zu schreiben würde bedeuten, Code zu schreiben, dessen
-Fehler fremde Festplatten löschen.
+Funkzugangsdaten werden absichtlich in das installierte System übernommen: eine
+Verbindung in der Live-Umgebung verschafft dem installierten System keinen
+Netzzugang, und ein Laptop ohne Ethernet-Buchse startete sonst ohne jeden Weg
+ins Netz.
 
-`zepos-install` nimmt **keine Kommandozeilenargumente** entgegen. Es wählt
-eine Oberfläche und startet sie; es gibt kein `--config`-Flag bei einem
-Werkzeug, das Festplatten löscht. `ZEPOS_INSTALLER_SURFACE=gui` oder
-`=tui` zu setzen erzwingt eine der beiden, und der Rückfall auf Text
-passiert immer, bevor irgendein Fenster gezeigt wird.
+Die Paketquelle, *mit* der installiert wird, ist nicht die, die bleibt. Eine
+Offline-Installation liest ihre ZepOS-Pakete aus `file:///opt/zepos-repo` auf
+dem Medium; `installer/core/pacmanconf.py` entfernt jeden `[zepos]`-Abschnitt
+aus der `pacman.conf` des Ziels und hängt genau einen an, der auf die
+Online-Quelle zeigt. Ersetzen statt bearbeiten ist das, was das Ergebnis
+unabhängig davon macht, wie viele es vorher waren.
 
-### Pakete
+### Pakete und Signatur
 
-`packaging/` enthält 20 Rezepte, die 25 signierte Pakete erzeugen, gebaut
-in Abhängigkeitsreihenfolge in einem Container, der auf denselben
-Arch-Linux-Archive-Snapshot festgenagelt ist wie das ISO. `zepos-desktop`
-ist ein Metapaket, und seine `depends`-Liste entscheidet über die Form
-eines installierten ZepOS – die Regel dafür steht oben in seiner
-PKGBUILD: *eine Abhängigkeit ist ein Programm, das die erzeugte
-Konfiguration von selbst startet, oder eines, das eine
-Standard-Tastenkombination braucht, um zu tun, was die Taste verspricht.*
+`packaging/` enthält **19 Rezepte, aus denen 24 Pakete entstehen**, gebaut in
+Abhängigkeitsreihenfolge in einem Container, der auf denselben Stichtag des
+Arch-Linux-Archivs festgenagelt ist wie das ISO. Der private Signierschlüssel
+betritt den Baucontainer nie: gebaut wird dort, signiert wird danach auf dem
+Wirt.
 
-Der private Signierschlüssel gelangt nie in den Build-Container. Pakete
-werden dort gebaut; signiert wird danach auf dem Host.
-
-**Seit dem 19.08.2026 ist dieser Schlüssel echt.** Das veröffentlichte
-Repository und jedes Paket darin sind signiert mit
-`FF2EB06C08A57FEA9E33FC46157C1725A578B80C`, Benutzer-ID
-`LeonMarzollDev (ZepOS Release)`, gültig bis 18.08.2028. Der Hauptschlüssel
-kann nur zertifizieren (`[C]`); ein eigener Unterschlüssel (`[S]`)
-übernimmt das eigentliche Signieren – die übliche Trennung zwischen dem
-Schlüssel, der für die anderen bürgt, und dem Schlüssel, der im Alltag
-benutzt wird. Sein öffentlicher Teil steht unter
-[`zeptronit.github.io/ZepOS/zepos-repo.pub`](https://zeptronit.github.io/ZepOS/zepos-repo.pub);
-das Paket `zepos-keyring` trägt dieselbe Datei, und das ist es, was ein
-frisch installiertes System dazu bringt, ihm zu vertrauen, ohne dass
-jemand einen Fingerabdruck von Hand eintippt – die Mechanik dahinter steht
-in `packaging/README.md`. Ein lokaler Bau ist davon unberührt:
-`./packaging/make-test-key.sh` erzeugt weiterhin einen Testschlüssel, weil
-der echte keiner ist, den ein Build-Skript – oder dieses Repository –
-jemals herausgeben könnte.
-
-### Was man nach einer frischen Installation bekommt
-
-`zepos-desktop` zieht Hyprland mit fünf Plugins, die AGS-Leiste und das
-AGS-Dock, die ZepOS-Programme Menü / Sperrbildschirm / Abmeldung /
-Einstellungen, kitty als Terminal, sowie `zepos-apps` – die Auswahl an
-Programmen *anderer Leute*, die ZepOS trifft: Firefox, Nautilus, Loupe,
-Papers, Celluloid, GNOME-Texteditor, Taschenrechner, Baobab, File Roller,
-btop, CUPS. Jedes wurde GTK4-first gewählt, wo eine GTK4-Version
-existiert, und der Grund steht neben dem Namen in
-`packaging/zepos-apps/PKGBUILD`.
-
-Zwei optionale Gruppen werden standardmäßig nicht installiert:
-`zepos-apps-office` (LibreOffice mit deutschen Wörterbüchern) und
-`zepos-apps-devel` (`base-devel`, `git`).
-
-`zepos-apps` enthält außerdem **Claude Code**, verpackt als
-`zepos-claude-code` aus einem festgenagelten, per Prüfsumme abgesicherten
-Upstream-Tarball, und im Dock angeheftet. Es ist Anthropics proprietäre
-CLI unter ihrer eigenen Lizenz, nicht Teil von ZepOS' GPL, und braucht ein
-Anthropic-Konto, um irgendetwas zu tun. Wer es nicht will, entfernt das
-Paket.
-
-**Ruflo ist NICHT vorinstalliert – und das ist Absicht.** Ruflo (auf npm:
-`claude-flow`) ist ein Orchestrierer, der Claude Code steuert und mehrere
-KI-Agenten in Rollen arbeiten lässt. Es lag vom 19. bis zum 20.08.2026 als
-Paket bei und wurde wieder entfernt: Ruflo steuert Claude Code, Claude Code
-spricht mit der Anthropic-Schnittstelle – ohne Internet tut es gar nichts.
-Der einzige Vorteil des Vorinstallierens, die Unabhängigkeit vom Netz, gibt
-es bei genau diesem Werkzeug also nicht, und ein Paket hätte es auf eine
-Fassung festgenagelt, während npm laufend neue ausliefert.
-
-Node und npm bringt ZepOS trotzdem mit, damit du es dir in einem Befehl
-holen kannst – ohne `sudo`:
-
-```
-npm i -g claude-flow
-claude-flow --version
-```
-
-`/etc/npmrc` setzt npms Präfix auf `~/.local`, deshalb landet das Programm
-als `~/.local/bin/claude-flow`, und dieses Verzeichnis liegt bei ZepOS
-ohnehin im PATH. Ein globales `npm i -g` braucht hier also weder
-Root-Rechte noch schreibt es in pacmans `/usr/lib/node_modules/`. Wer einen
-eigenen Präfix will, setzt ihn in `~/.npmrc` – die eigene Datei gewinnt.
+Die veröffentlichte Paketquelle und jedes Paket darin sind mit
+`FF2EB06C08A57FEA9E33FC46157C1725A578B80C` signiert, Benutzer-ID
+`LeonMarzollDev (ZepOS Release)`, gültig bis 18.08.2028. Der Hauptschlüssel kann
+nur beglaubigen (`[C]`); ein eigener Unterschlüssel (`[S]`) signiert tatsächlich
+– die übliche Trennung zwischen dem Schlüssel, der für die anderen bürgt, und
+dem, der täglich benutzt wird. Seine öffentliche Hälfte liegt unter
+[`zeptronit.github.io/ZepOS/zepos-repo.pub`](https://zeptronit.github.io/ZepOS/zepos-repo.pub),
+und das Paket `zepos-keyring` bringt dieselbe Datei mit – das ist es, was ein
+frisch installiertes System ihm vertrauen lässt, ohne dass jemand einen
+Fingerabdruck von Hand tippt. Die Mechanik steht in `packaging/README.md`.
 
 ### Was auf dem Bildschirm steht, und warum wir es selbst geschrieben haben
 
 | | Ersetzt | Warum |
 |---|---|---|
-| `zepos-menu` | wofi | GTK3, und sechs erzeugte Aufrufstellen hängen von der Auswahl ab |
-| Sitzungsfenster (AGS) | wlogout | GTK3, Upstream seit 2024 tot - war bis zum 19.08.2026 ein eigenes Paket `zepos-logout`, jetzt ein Fenster im AGS-Prozess |
-| `zepos-lock` | hyprlock | Rendert mit GLES und Cairo, seine Farben konnten daher nie aus `brand.py` kommen |
-| AGS-Leiste und -Dock | waybar, nwg-dock-hyprland | waybar ist gtkmm-3; nwg-dock hat keine GTK4-Version |
-| `zepos-settings-gui` | nwg-displays | GTK3, und sein „diese Einstellungen behalten?“-Timer stirbt mit dem Programm, das er schützen soll |
-| `hyprlaunch`, `hyprclipx` | – | Gebaut aus [azzuriels](https://github.com/azzuriel) Plugins, von ZepOS gepatcht; 116 Zeilen fest verdrahtetes CSS durch erzeugte Stylesheets ersetzt. Siehe [Lizenz](#lizenz) |
+| `zepos-menu` | wofi | GTK3, und sechs erzeugte Aufrufstellen hängen an dem Auswahlfenster |
+| Sitzungsfenster (AGS) | wlogout | GTK3, Upstream seit 2024 tot |
+| `zepos-lock` | hyprlock | Zeichnet mit GLES und Cairo, seine Farben konnten nie aus `brand.py` kommen |
+| AGS-Leiste und Dock | waybar, nwg-dock-hyprland | waybar ist gtkmm-3; nwg-dock hat keine GTK4-Fassung |
+| `zepos-settings-gui` | nwg-displays | GTK3, und sein „Einstellungen behalten?"-Zeitgeber stirbt mit dem Programm, das er schützen soll |
+| `hyprlaunch`, `hyprclipx` | — | Gebaut aus [azzuriels](https://github.com/azzuriel) Plugins, von ZepOS gepatcht; 116 Zeilen fest verdrahtetes CSS durch erzeugte Stylesheets ersetzt. Siehe [Lizenz](#lizenz) |
 
-GTK4 durchgehend ist eine harte Regel, keine Vorliebe: Eine GTK3-Komponente
-ist eine Komponente, deren Farben und Abstände nie aus derselben Quelle
-kommen können wie alles andere – und genau das ist die Eigenschaft, die
-eine Distribution wie ein einziges System aussehen lässt.
+GTK4 durchgehend ist eine harte Regel, keine Vorliebe: ein GTK3-Bauteil ist ein
+Bauteil, dessen Farben und Abstände nicht aus derselben Quelle kommen können wie
+alles andere – und genau diese eine Eigenschaft lässt eine Distribution wie ein
+System aussehen. Die Regel gilt für Oberflächen, die ZepOS selbst baut, nicht
+für fremde Anwendungen; deshalb ist Firefox hier.
 
-Zwei weitere Oberflächen begegnen einem Nutzer, bevor der Desktop es tut:
+Zwei Oberflächen trifft ein Nutzer, bevor er den Schreibtisch sieht:
 
-- **Die Anmeldemaske** ist `greetd`, das `regreet` innerhalb von `cage`
-  ausführt, gestylt aus demselben `brand.py` und demselben Hintergrund wie
-  der Installer, mit `tuigreet` auf der Konsole als Rückfallebene, falls
-  der grafische Versuch zweimal scheitert. Es gibt kein Autologin – sie
-  fragt immer. Sie folgt der Sprache, in der die Maschine installiert
-  wurde, mit dem ehrlichen Vorbehalt, dass `regreet` selbst nur zwei der
-  acht Strings auf der Maske übersetzt; die übrigen sechs sind Englisch,
-  egal was eingestellt ist.
-- **Der Boot-Splash** ist ein erzeugtes Plymouth-Theme (`zepos.script` und
-  seine Bilder, abgeleitet aus `brand.py` und dem Logo, eingecheckt und
-  von einem Test neu abgeleitet). Er ist **nur bei verschlüsselten
-  Installationen** aktiviert, wo er die Passphrase-Abfrage der Festplatte
-  ist; auf einer unverschlüsselten Platte wäre er Dekoration über einem
-  ungemessenen Pfad, darum schaltet der Installer ihn dort nicht ein. Ihn
-  zu aktivieren schreibt `mkinitcpio.conf` um, prüft das Ergebnis, und
-  macht es bei jedem Zweifel rückgängig.
+- **Die Anmeldemaske** ist `greetd`, das `regreet` in `cage` ausführt, mit
+  `tuigreet` auf der Konsole als Rückfall, falls der grafische Versuch zweimal
+  scheitert. Sie folgt der Sprache, in der die Maschine installiert wurde – mit
+  dem Vorbehalt unter [Was heute nicht geht](#was-heute-nicht-geht).
+- **Der Startbildschirm** ist ein erzeugtes Plymouth-Thema, abgeleitet aus
+  `brand.py` und dem Logo, eingecheckt und von einem Test neu abgeleitet. Er
+  wird **nur bei verschlüsselten Installationen** eingeschaltet. Das Einschalten
+  schreibt `mkinitcpio.conf` um, prüft das Ergebnis und nimmt es bei jedem
+  Zweifel zurück.
 
 ---
 
 ## Gestaltungsentscheidungen, die man kennen sollte
 
-- **Der Desktop muss auch starten, wenn Plugins ausfallen.**
-  Hyprland-Plugins sind an eine exakte Hyprland-Version gebunden, sodass
-  eine Minor-Version, die sich bewegt, bevor die Plugin-Pakete neu gebaut
-  sind, eine Maschine erzeugt, deren Plugins nicht laden können. Alles,
-  was ein geladenes Plugin braucht – die `plugin =`-Zeile, der
-  Einstellungsblock des Plugins, jede Tastenkombination, deren Dispatcher
-  aus einem Plugin kommt – lebt in einer einzigen erzeugten Datei. Ein
-  Block wird nur geschrieben, wenn das kompilierte Objekt auf der
-  Maschine liegt; sonst tritt an seine Stelle ein Kommentar, der das
-  Objekt, das Paket, das es liefert, und den Befehl zum erneuten
-  Ausführen nennt. Ganz ohne Plugins ist die Datei nichts als Kommentare –
-  und das ist immer noch eine Konfiguration, die sich parsen lässt,
-  gemessen mit `Hyprland --verify-config` und in beide Richtungen geprüft
-  von `tests/src/test_plugins.py`. Eine Versionsabweichung kostet ein
-  Feature, keine Sitzung.
-- **WLAN-Zugangsdaten werden in das installierte System mitgenommen.**
-  Sich in der Live-Umgebung zu verbinden gibt dem installierten System
-  keinen Netzwerkzugang, darum wird das Verbindungsprofil explizit
-  geschrieben. Sonst startet ein Laptop ohne Ethernet-Anschluss ohne jede
-  Möglichkeit, online zu kommen.
-- **Das Repository, mit dem eine Installation durchgeführt wird, ist
-  nicht das, das danach bleibt.** Eine Offline-Installation liest ihre
-  ZepOS-Pakete von `file:///opt/zepos-repo` auf dem Medium; sobald das
-  Medium abgezogen wird, ist der Pfad weg. `installer/core/pacmanconf.py`
-  entfernt jeden `[zepos]`-Abschnitt aus der `pacman.conf` des Ziels und
-  hängt genau einen an, der auf das Online-Repository zeigt – zu
-  ersetzen statt zu bearbeiten ist es, was das Ergebnis unabhängig davon
-  macht, wie viele vorher da standen.
-- **Updates sind absichtlich eng gefasst.** Ein täglicher Timer, verzögert
-  nach dem Start und zufällig gestreut, aktualisiert nur das, was aus
-  `[zepos]` kommt. Die Arch-Basis wird gezählt und gemeldet, nie
-  angefasst, außer `update.scope=all` ist gesetzt. Ein unbeaufsichtigtes
-  `pacman -Syu` auf einem Rolling Release ist eine Maschine, die eines
-  Morgens nicht mehr startet. Der Updater erzeugt außerdem nie selbst
-  Konfiguration neu und startet nichts neu: Er hinterlässt eine
-  Markierung, und die nächste Anmeldung erzeugt neu, bevor der Compositor
-  startet.
-- **Deutsch und Englisch werden als gleichwertig gepflegt**, über
-  gettext, in zwei Domänen – Installer und Desktop-Shell. Die englischen
-  Quell-Strings sind die msgids; die deutschen Kataloge sind
-  erstklassig, keine Übersetzung zweiter Klasse. Tests stellen sicher,
-  dass jeder String in der Quelle einen Katalogeintrag hat und jeder
-  Eintrag übersetzt ist, weil ein fehlender Eintrag bedeutet, dass ein
-  deutscher Nutzer stillschweigend Englisch liest.
-- **Kontrast ist eine Korrektheitsfrage, keine Geschmacksfrage.**
-  `src/brand.py` hält ZeptronITs sechs Farben und alle 103 davon
-  abgeleiteten Farbschlüssel. WCAG AA verlangt 4,5:1 für Text, und der
-  eigene Akzent der Marke erreicht das nicht – `#0096C0` auf `#0D3D47`
-  ergibt 3,45:1 –, darum ist der Farbton, der *gelesen* wird, derselbe
-  Ton, aufgehellt auf 6,04:1, während das unangetastete `#0096C0` dort
-  bleibt, wo es *gesehen* wird. Die Tests berechnen jedes Paar neu, statt
-  den daneben geschriebenen Zahlen zu vertrauen. Grün und Rot liegen
-  absichtlich **nicht** auf Marke: Eine Distribution, die ihre
-  Fehlerzustände in das Firmen-Cyan umfärbt, versteckt Fehler, um
-  ordentlich auszusehen.
-- **Eine Marke auszuliefern heißt nicht, sie aufzuzwingen.** Jede dieser
-  Farben ist über `zepos-settings set colors.<key>` erreichbar, und der
-  erste Stil-Vorgabewert des Stil-Editors *ist* die ausgelieferte
-  Palette, statt nur eine Kopie davon zu sein.
+- **Der Schreibtisch muss auch dann starten, wenn Plugins scheitern.**
+  Hyprland-Plugins hängen an einer exakten Hyprland-Fassung; zieht eine
+  Nebenversion an, bevor die Plugin-Pakete neu gebaut sind, entsteht eine
+  Maschine, deren Plugins nicht laden können. Alles, was ein geladenes Plugin
+  braucht, steht in einer erzeugten Datei, und ein Block wird nur geschrieben,
+  wenn das übersetzte Objekt auf der Maschine liegt; sonst steht an seiner
+  Stelle ein Kommentar, der das Objekt, sein Paket und den Befehl dagegen nennt.
+  Ohne jedes Plugin besteht die Datei nur aus Kommentaren – und das ist immer
+  noch eine Konfiguration, die durchgeht. Gemessen mit
+  `Hyprland --verify-config`, in beide Richtungen zugesichert von
+  `tests/src/test_plugins.py`. Eine Fassungsdifferenz kostet eine Funktion,
+  keine Sitzung.
+- **Kontrast ist eine Frage der Richtigkeit, nicht des Geschmacks.** WCAG AA
+  verlangt 4,5:1 für Text, und der Markenakzent erreicht das nicht – `#0096C0`
+  auf `#0D3D47` sind 3,45:1. Deshalb ist das Cyan, das *gelesen* wird, derselbe
+  Farbton, aufgehellt auf 6,04:1, während das unangetastete `#0096C0` dort
+  bleibt, wo es *gesehen* wird. Die Tests rechnen jedes Paar neu, statt den
+  Zahlen daneben zu glauben. Grün und Rot sind absichtlich **nicht** auf Marke:
+  eine Distribution, die ihre Fehlerzustände in das Firmen-Cyan umfärbt,
+  versteckt Fehler, um aufgeräumt auszusehen.
+- **Eine Marke auszuliefern heißt nicht, sie aufzuzwingen.** Alle 69
+  Farbschlüssel sind einstellbar.
+- **Deutsch und Englisch werden als gleichrangig gepflegt**, über gettext, in
+  zwei Domänen – Installer und Schreibtischschale. Die englischen Quelltexte
+  sind die msgids; die deutschen Kataloge sind erstklassig, und die Suite
+  scheitert an einem fehlenden Eintrag, weil ein fehlender Eintrag heißt, dass
+  ein deutscher Nutzer stillschweigend Englisch liest.
+- **Toten Code löschen statt ihn als veraltet zu markieren.** Wo das Wort
+  „deprecated" in diesem Baum vorkommt, ist es eine *Laufzeit*-Meldung, die
+  einem Nutzer sagt, welcher Befehl den ersetzt hat, den er getippt hat – eine
+  Umleitung, kein Grabstein.
+
+---
+
+## Selbst bauen
+
+Beide Bauläufe laufen in Docker-Containern, weil ein Paket, das gegen das gebaut
+wurde, was zufällig auf einer Arbeitsmaschine liegt, eine Abhängigkeitsliste
+hat, die diese Arbeitsmaschine beschreibt.
+
+Gebraucht werden `git`, `gpg`, `rsync`, `repo-add` (aus `pacman`) und Docker,
+erreichbar als **`sudo -n docker`** – die Skripte fragen nie nach einem Passwort,
+passwortloses sudo für `docker` muss also vorher eingerichtet sein. Für einen
+Release-Bau etwa 10 GB freien Plattenplatz einplanen: gemessen ein 3,5 GB großes
+archiso-Arbeitsverzeichnis, ein 1,3 GB großes Abbild, und die Baucontainer
+obendrauf.
+
+```bash
+git clone https://github.com/ZeptronIT/ZepOS.git
+cd ZepOS
+
+# 1. Ein Signierschlüssel. Der echte steckt nie in diesem Repository, für
+#    einen lokalen Bau erzeugt man sich also einen Wegwerfschlüssel. Er heißt
+#    absichtlich DO NOT TRUST, hat keine Passphrase und läuft nach 90 Tagen ab.
+#    Er gibt den genauen nächsten Befehl aus.
+./packaging/make-test-key.sh
+
+# 2. Die Pakete und das pacman-Repository, aus dem sie ausgeliefert werden.
+ZEPOS_GNUPGHOME=packaging/keys/gnupg ./packaging/build.sh --key <ausgegebene id>
+
+# 3. Das Installationsmedium, aus genau diesen Paketen.
+./iso/build.sh --profile release
+```
+
+Das Abbild und sein Manifest landen in `iso/out/` als
+`zepos-<JJJJ.MM.TT>-x86_64.iso` und `manifest-release.txt`. Die letzte Zeile des
+Baus ist der Befehl, der das Gebaute in QEMU startet:
+
+```bash
+./iso/test-boot.py --scenario release
+```
+
+Nützliche Abwandlungen, jede davon im `--help` des jeweiligen Skripts:
+
+```bash
+./packaging/build.sh zepos-config        # ein Rezept statt aller
+./packaging/build.sh --no-sign           # ein unsigniertes Repository
+./packaging/build.sh --rebuild-image     # den Baucontainer mit neu bauen
+./iso/build.sh                           # das Smoke-ISO (siehe unten), nicht das Medium
+./iso/build.sh --snapshot current        # gegen die heutigen Spiegel bauen
+```
+
+Zwei Dinge, die sonst beißen:
+
+- `--no-sign` lässt bei einem vollen Bau stillschweigend `zepos-keyring` und
+  `zepos-desktop` weg: ein Schlüsselbundpaket um keinen Schlüssel herum und ein
+  Metapaket, das davon abhängt, sind keine Dinge, die es geben kann.
+- **Ein** Paket neu zu bauen, von dem andere abhängen, scheitert derzeit – siehe
+  [Was heute nicht geht](#was-heute-nicht-geht). Den Abhängigkeitskreis zusammen
+  bauen.
+
+**Es gibt zwei ISO-Profile, und sie sind nicht austauschbar.** `iso/profile/`
+ist ein Prüfgeschirr: es meldet einen Benutzer an, bringt eine eigene
+`/etc/shadow` mit, installiert unbeaufsichtigt aus einer Antwortdatei mit einem
+Root-Passwort darin, und setzt `console=ttyS0` auf die Kernel-Befehlszeile.
+`iso/profile-release/` ist das Abbild, das man jemandem in die Hand geben kann.
+Das Auslieferungsprofil wird aus einer Erlaubnisliste
+(`iso/shared-with-release.txt`) zusammengesetzt statt als zweite Kopie geführt,
+damit eine neue Datei im Prüfgeschirr nicht durch Vergessen bis in einen
+Download gelangt.
 
 ---
 
@@ -427,8 +601,8 @@ Zwei weitere Oberflächen begegnen einem Nutzer, bevor der Desktop es tut:
 ### Voraussetzungen
 
 Python 3.14, `archinstall` 4.4, GTK4 mit libadwaita und PyGObject für die
-grafischen Oberflächen, `iwd` für WLAN, `gettext` zum Kompilieren der
-Kataloge, `docker` für die Paket- und ISO-Bauten.
+grafischen Oberflächen, `iwd` für Funk, `gettext` zum Übersetzen der Kataloge,
+`docker` für die Paket- und ISO-Bauten.
 
 ### Tests
 
@@ -438,43 +612,66 @@ python -m venv .venv
 .venv/bin/python -m pytest
 ```
 
-110 Testdateien, 2931 Tests, rund sieben Minuten. Die Suite hat eine
-**Isolationswache**: Kein Test darf einen echten Prozess starten oder
-außerhalb eines temporären Verzeichnisses schreiben. Der Installer
-steuert `iwctl`, `archinstall` und NetworkManager – ohne diese Wache
-könnte ein unachtsamer Test die WLAN-Verbindung kappen oder die eigenen
-Netzwerkprofile überschreiben. Tests, die wirklich eine Ausnahme
-brauchen, melden sich sichtbar mit `@pytest.mark.allow_subprocess` oder
-`@pytest.mark.allow_system_writes` an.
+**3121 Tests in 121 Dateien** (gezählt am 20.08.2026 mit
+`pytest --collect-only`). Sie brauchen nichts außer Python und pytest; Tests,
+die QEMU, OVMF, ein gebautes Paketrepository oder ein echtes Hyprland bräuchten,
+überspringen sich selbst, wenn das fehlt.
+
+**Es gibt kein CI.** `.github/` enthält Vorlagen für Issues und Pull Requests
+und keine Workflows. Diese Tests laufen nur, wenn ein Mensch sie startet – und
+genau deshalb wird von einem Pull Request erwartet, dass er sagt, dass sie
+liefen und was zurückkam.
+
+Die Suite hat einen **Isolationswächter**: kein Test darf einen echten Prozess
+starten oder außerhalb eines temporären Verzeichnisses schreiben – wobei
+„schreiben" Löschen, Umbenennen, Rechteändern und Verlinken einschließt. Der
+Installer steuert `iwctl`, `archinstall` und NetworkManager; ohne diesen Wächter
+könnte ein unachtsamer Test die eigene Funkverbindung abwerfen oder die echten
+Netzwerkprofile überschreiben. Tests, die wirklich eine Ausnahme brauchen,
+melden sich sichtbar mit `@pytest.mark.allow_subprocess` oder
+`@pytest.mark.allow_system_writes` an; [CONTRIBUTING.md](CONTRIBUTING.md)
+erklärt, was das kostet.
 
 ### Aufbau
 
 ```
-src/            der Desktop: Vorlagen, die zwei SSOTs, der Generator, die zepos-*-Befehle
+src/            der Schreibtisch: Vorlagen, die Wahrheitsquellen, der Erzeuger, die zepos-*-Befehle
 installer/      der Installer, in drei Schichten
-packaging/      19 PKGBUILD-Rezepte, der Container, die Signier- und Veroeffentlichungsskripte
+packaging/      19 PKGBUILD-Rezepte, der Baucontainer, Signieren und Veröffentlichen
 iso/            zwei archiso-Profile und der Bau, der sie zusammensetzt
-lock/           zepos-lock (C, GTK4, gtk4-layer-shell); das Sitzungsfenster,
-                das frueher in logout/ lag, ist jetzt ein AGS-Fenster in src/
+lock/           zepos-lock (C, GTK4, gtk4-layer-shell)
 menu/ settings/ zepos-menu und zepos-settings-gui (Python, GTK4)
-plugins/        nur LICENSE - ZepOS' Patches fuer hyprlaunch und hyprclipx
-                liegen neben ihren Rezepten in packaging/, nicht hier (siehe Lizenz)
-po/             gettext-Kataloge: zepos-installer und zepos-desktop
-tests/          110 Testdateien und eine Isolationswache
-docs/specs/     das Designdokument und die Roadmap (Deutsch)
+plugins/        nur ZepOS' eigene Patches; die Upstream-Quelle wird beim Bau
+                von einem festgenagelten Commit geholt, nicht mitgeliefert
+                (siehe plugins/LICENSE)
+po/             gettext: die Domänen zepos-installer und zepos-desktop
+tests/          121 Testdateien und ein Isolationswächter
+docs/specs/     das Designdokument und die Roadmap (deutsch)
 ```
+
+`packaging/README.md` und `iso/README.md` sind lang und lohnen sich, bevor man
+etwas darunter ändert – sie halten fest, was gemessen wurde, nicht nur, was
+entschieden wurde.
 
 ### Mitarbeiten
 
-Siehe [CONTRIBUTING.md](CONTRIBUTING.md) (Englisch). Kurzfassung:
-Änderungen gehören in Vorlagen, nicht in erzeugte Dateien; eine
-Behauptung in einer Commit-Nachricht soll benennen, was sie gemessen hat;
-und `pytest` wird erwartet, bevor ein Pull Request eingereicht wird.
+Siehe [CONTRIBUTING.md](CONTRIBUTING.md). Die Kurzfassung: Änderungen gehen in
+Vorlagen, nicht in erzeugte Dateien; von einer Behauptung in einer
+Commit-Nachricht wird erwartet, dass sie nennt, was sie gemessen hat; und
+`pytest` soll vor einem Pull Request durchlaufen. Am nützlichsten sind gerade
+Fehlermeldungen – die
+[Issue-Vorlagen](https://github.com/ZeptronIT/ZepOS/issues/new/choose) fragen
+nach dem, was eine Meldung braucht.
+
+ZepOS wird von [LeonMarzollDev](https://github.com/LeonMarzollDev) (ZeptronIT)
+geschrieben, mit Claude als Assistent an der Tastatur für einen großen Teil des
+Baums. Das steht hier, weil es stimmt und in der Historie sichtbar ist – nicht
+als Verkaufsargument.
 
 ### Eine Sicherheitslücke melden
 
-Siehe [SECURITY.md](SECURITY.md) (Englisch). Bitte kein öffentliches
-Issue für ein Sicherheitsproblem öffnen.
+Siehe [SECURITY.md](SECURITY.md). Für ein Sicherheitsproblem bitte kein
+öffentliches Issue öffnen.
 
 ---
 
@@ -482,67 +679,78 @@ Issue für ein Sicherheitsproblem öffnen.
 
 GPL-3.0-or-later für ZepOS' eigenen Code. Siehe [LICENSE](LICENSE).
 
-ZepOS' Desktop hängt von fünf Compositor-Plugins ab, deren Urheberrecht
-nicht bei ZepOS selbst liegt. Ihre Lage ist nicht bei allen fünf gleich,
-und diese Tabelle existiert, damit man sie auseinanderhalten kann, ohne
-fünf PKGBUILDs lesen zu müssen:
+ZepOS' Schreibtisch hängt an fünf Compositor-Plugins, deren Urheberrecht ihm
+nicht gehört. Ihre Lagen sind nicht dieselbe, und diese Tabelle gibt es, damit
+ein Leser sie unterscheiden kann, ohne fünf PKGBUILDs zu lesen:
 
-| Plugin | Autor | Herkunft | Lizenz | Was ZepOS damit macht |
+| Plugin | Autor | Herkunft | Lizenz | Was ZepOS damit tut |
 |---|---|---|---|---|
-| `hyprbars` | [hyprwm](https://github.com/hyprwm) (das Hyprland-Projekt) | [hyprwm/hyprland-plugins](https://github.com/hyprwm/hyprland-plugins), auf einen Tag festgenagelt | BSD-3-Clause, echte `LICENSE`-Datei | Unverändert gebaut; nur auf der Konfigurationsebene mit ZepOS' eigenen Farben und Icons versehen |
-| `borders-plus-plus` | [hyprwm](https://github.com/hyprwm) (das Hyprland-Projekt) | [hyprwm/hyprland-plugins](https://github.com/hyprwm/hyprland-plugins), auf einen Tag festgenagelt | BSD-3-Clause, echte `LICENSE`-Datei | Unverändert gebaut, ohne eigene Einstellungen geladen |
-| `hyprzones` | Jan Ohlmann ([azzuriel](https://github.com/azzuriel)) | [azzuriel/hyprzones](https://github.com/azzuriel/hyprzones), auf einen Commit festgenagelt | **Keine** – GitHub meldet `license: null`; keine `LICENSE`-Datei, kein Copyright-Vermerk irgendwo im Baum | Unverändert gebaut, keine Änderungen von ZepOS |
-| `hyprlaunch` | Jan Ohlmann ([azzuriel](https://github.com/azzuriel)) | [azzuriel/hyprlaunch](https://github.com/azzuriel/hyprlaunch), auf einen Commit festgenagelt | **Keine** – wie oben | Zur Bauzeit geholt und gepatcht (siehe unten); der Patch ist ZepOS' eigene Arbeit |
-| `hyprclipx` | Jan Ohlmann ([azzuriel](https://github.com/azzuriel)) | [azzuriel/hyprclipx](https://github.com/azzuriel/hyprclipx), auf einen Commit festgenagelt | **Keine** – wie oben | Zur Bauzeit geholt und gepatcht (siehe unten); der Patch ist ZepOS' eigene Arbeit |
+| `hyprbars` | [hyprwm](https://github.com/hyprwm) (das Hyprland-Projekt) | [hyprwm/hyprland-plugins](https://github.com/hyprwm/hyprland-plugins), auf einen Tag-Commit festgenagelt | BSD-3-Clause, echte `LICENSE`-Datei | Unverändert gebaut; nur auf der Konfigurationsebene mit ZepOS' eigenen Farben und Zeichen versehen |
+| `borders-plus-plus` | [hyprwm](https://github.com/hyprwm) (das Hyprland-Projekt) | [hyprwm/hyprland-plugins](https://github.com/hyprwm/hyprland-plugins), auf einen Tag-Commit festgenagelt | BSD-3-Clause, echte `LICENSE`-Datei | Unverändert gebaut, ohne eigene Einstellungen geladen |
+| `hyprzones` | Jan Ohlmann ([azzuriel](https://github.com/azzuriel)) | [azzuriel/hyprzones](https://github.com/azzuriel/hyprzones), auf einen Commit festgenagelt | **Keine** – GitHub meldet `license: null`; keine `LICENSE`-Datei, nirgends im Baum ein Urheberrechtsvermerk | Unverändert gebaut, keine ZepOS-Änderungen |
+| `hyprlaunch` | Jan Ohlmann ([azzuriel](https://github.com/azzuriel)) | [azzuriel/hyprlaunch](https://github.com/azzuriel/hyprlaunch), auf einen Commit festgenagelt | **Keine** – wie oben | Beim Bau geholt und gepatcht; der Patch ist ZepOS' eigene Arbeit |
+| `hyprclipx` | Jan Ohlmann ([azzuriel](https://github.com/azzuriel)) | [azzuriel/hyprclipx](https://github.com/azzuriel/hyprclipx), auf einen Commit festgenagelt | **Keine** – wie oben | Beim Bau geholt und gepatcht; der Patch ist ZepOS' eigene Arbeit |
 
-`hyprbars` und `borders-plus-plus` sind unauffällig: ein ernsthafter
-Upstream, eine echte Lizenz, keine ZepOS-Änderungen am Plugin-Code
-selbst. Die anderen drei sind es nicht, und der Grund ist bei allen
-dreien derselbe – gemessen am 11.08.2026, an der GitHub-API und von Hand
-in jedem Baum: keine `LICENSE`-Datei, keine `Copyright`-Zeile,
-`"license": null`. Code ohne Lizenz ist urheberrechtlich „alle Rechte
-vorbehalten“, ganz unabhängig davon, was ein Dateikopf behauptet.
+`hyprbars` und `borders-plus-plus` sind unauffällig: ein ernsthafter Upstream,
+eine echte Lizenz, keine ZepOS-Änderungen am Plugin-Code selbst. Die anderen
+drei sind es nicht, und der Grund ist bei allen dreien derselbe – gemessen am
+11.08.2026, an der GitHub-API und in jedem Baum von Hand: keine
+`LICENSE`-Datei, keine `Copyright`-Zeile, `"license": null`. Code ohne Lizenz
+ist urheberrechtlich „alle Rechte vorbehalten", ganz gleich, was ein Dateikopf
+behauptet.
 
-**Was das bedeutet, und was ZepOS tatsächlich damit gemacht hat.** Leon
-Marzoll (ZeptronIT) – der an genau diesen Upstream-Bäumen selbst als
-Mitwirkender beteiligt war und daher an seinen eigenen Beiträgen dazu
-das Urheberrecht hält – hat ZepOS am 11.08.2026 die Erlaubnis gegeben,
-alle drei zu bauen und zu verändern. Diese Erlaubnis ist wortwörtlich,
-mit den genauen Commits, in [`plugins/LICENSE`](plugins/LICENSE)
-festgehalten. Es ist eine **Erlaubnis, keine Lizenz**: Sie sagt, was
-*ZepOS* darf, und sagt nichts darüber, was *man selbst*, beim
-Installieren von ZepOS, mit dem erhaltenen Code darf. Eine
-Sicherheitsprüfung vor der Veröffentlichung dieses Repositorys
-(`.superpowers/sdd/2026-08-18-ags-schale-und-breitenleiter/
-sicherheitsanalyse.md`, Abschnitt 6) hat die schärfere Grenze gezogen,
-die diese Erlaubnis nicht überschreitet: Sie deckt nicht, dass ZepOS eine
-*Kopie* der lizenzlosen Quelle selbst weiterveröffentlicht. Daraus zu
-bauen ist eine Sache; sie weiterzuverbreiten eine andere.
+**Was das heißt, und was ZepOS tatsächlich dagegen getan hat.** Leon Marzoll
+(ZeptronIT) – der zu genau diesen Upstream-Bäumen beigetragen hat und darum das
+Urheberrecht an seinen eigenen Beiträgen darin hält – hat ZepOS am 11.08.2026
+die Erlaubnis gegeben, aus allen dreien zu bauen und sie zu verändern. Diese
+Erlaubnis steht wörtlich, mit den genauen Commits, in
+[`plugins/LICENSE`](plugins/LICENSE). Sie ist eine **Erlaubnis, keine Lizenz**:
+sie sagt, was *ZepOS* darf, und sagt nichts darüber, was *du*, der ZepOS
+installiert, mit dem Code tun darfst, den du bekommst. Eine Sicherheitsprüfung
+vor der Veröffentlichung dieses Repositorys hat die schärfere Linie gezogen, die
+diese Erlaubnis nicht überschreitet: sie deckt nicht, dass ZepOS eine *Kopie*
+der unlizenzierten Quelle selbst weiterverbreitet. Daraus zu bauen ist das eine;
+sie weiterzugeben das andere.
 
-**Seit dem 19.08.2026 trägt dieses Repository darum die Quelle von
-`hyprlaunch` oder `hyprclipx` überhaupt nicht mehr.**
-`packaging/zepos-hyprlaunch/PKGBUILD` und
-`packaging/zepos-hyprclipx/PKGBUILD` holen sie sich zur Bauzeit selbst,
-aus dem eigenen Repository des Autors, festgenagelt auf genau den
-Commit, den [`plugins/LICENSE`](plugins/LICENSE) nennt – nie ein
-wandernder Branch, damit der Bau reproduzierbar bleibt –, genau so, wie
-es ein AUR-Paket täte. `hyprzones` war nie in diesem Baum und
-funktioniert genauso. ZepOS' eigene Änderungen an `hyprlaunch` und
-`hyprclipx` – fest verdrahtetes CSS und Fenstergrößen durch ZepOS'
-erzeugte Stylesheets ersetzt, der Zwischenablage-Sammler ergänzt, ein
-Pfad korrigiert, der unter `$HOME` griff – sind ZepOS' eigene Diffs,
-keine Kopien von Upstream-Code, und liegen als
-`packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch` und
-`packaging/zepos-hyprclipx/zepos-hyprclipx.patch`, angewendet zur
-Bauzeit und lizenziert unter GPL-3.0-or-later. Das gebaute,
-veröffentlichte Paket ist von alldem unberührt – das ISO liefert
-weiterhin das fertige Plugin aus –, nur die unveränderte
-Upstream-*Quelle* wird von diesem Repository nicht mehr weiterverbreitet.
+**Deshalb trägt dieses Repository die Quelle von `hyprlaunch` und `hyprclipx`
+überhaupt nicht.** `packaging/zepos-hyprlaunch/PKGBUILD` und
+`packaging/zepos-hyprclipx/PKGBUILD` holen sie beim Bau selbst, aus dem eigenen
+Repository des Autors, festgenagelt auf genau den Commit, den
+[`plugins/LICENSE`](plugins/LICENSE) nennt – nie ein wandernder Zweig, damit der
+Bau reproduzierbar bleibt –, genau so, wie ein AUR-Paket es täte. `hyprzones`
+lag ohnehin nie im Baum und arbeitet gleich. ZepOS' eigene Änderungen –
+fest verdrahtetes CSS und Fenstergrößen durch erzeugte Stylesheets ersetzt, der
+Sammler für die Zwischenablage ergänzt, ein Pfad repariert, der unter `$HOME`
+griff – sind ZepOS' eigene Diffs, liegen neben ihren Rezepten und stehen unter
+GPL-3.0-or-later. Das gebaute, veröffentlichte Paket ist davon unberührt: das
+ISO liefert weiterhin das fertige Plugin aus, nur die unveränderte
+Upstream-*Quelle* wird von diesem Repository nicht mehr weitergegeben.
 
-Alle drei Rezepte erklären darum `license=('custom')`, statt eine
-Lizenz zu behaupten, die es nicht gibt. Die zugrunde liegende Lücke zu
-schließen braucht einen einzigen Commit in Jan Ohlmanns eigenen
-Repositories – eine `LICENSE`-Datei, einmal, und die Frage stellt sich
-niemandem danach je wieder – und sie sollte geschlossen werden; bis
-dahin ist `plugins/LICENSE` die ehrliche Auskunft über den aktuellen
-Stand.
+Alle drei Rezepte erklären deshalb `license=('custom')`, statt eine Lizenz zu
+behaupten, die es nicht gibt. Die zugrunde liegende Lücke schließt ein einziger
+Commit in Jan Ohlmanns eigenen Repositorys – eine `LICENSE`-Datei, einmal, und
+die Frage stellt sich für niemanden weiter unten je wieder –, und sie sollte
+geschlossen werden; bis dahin ist `plugins/LICENSE` die ehrliche Auskunft
+darüber, wie es steht.
+
+---
+
+## Die Zahlen in dieser Datei
+
+Am 20.08.2026 in diesem Baum gezählt oder bei der veröffentlichten Gegenstelle
+erfragt, statt aus einem älteren Dokument abgeschrieben. Mehrere der Zahlen, die
+vorher hier standen, waren falsch – deshalb gibt es diese Tabelle.
+
+| Zahl | Wie sie zustande kam |
+|---|---|
+| 3121 Tests, 121 Dateien | `pytest --collect-only -q`; `find tests -name 'test_*.py' \| wc -l` |
+| 19 Rezepte, 24 Pakete | jede `pkgname=`-Zeile in `packaging/*/PKGBUILD`; die veröffentlichte `manifest.txt` listet 24 |
+| 85 Vorlagen, 7 Stilvorlagen | `ls src/templates`, `ls src/styles` |
+| 77 Tastenbindungen | `grep -c '^bind' src/templates/hyprland-universal-config.template` |
+| 6 Markenfarben, 69 Farbschlüssel | `brand.BRAND`, `brand.COLORS`, ausgeführt |
+| 1 324 056 576 Byte ISO | `iso/out/manifest-release.txt` und das veröffentlichte Release-Anhängsel stimmen überein |
+| 10 Startszenarien | `iso/test-boot.py --help` |
+| 7 Einstellungsseiten | `settings/zepos_settings_gui/model.py` |
+| 94 Erzeugungsziele; 1117 ms / 260 ms | gemessen am 20.08.2026 gegen die eigene Testvorrichtung des Erzeugers |
+| 3,45:1 und 6,04:1 | `src/brand.py`, von den Tests bei jedem Lauf neu gerechnet |
+| Veröffentlichte Version, Paketzahl, Schlüssel | abgefragt bei `https://zeptronit.github.io/ZepOS/manifest.txt` |
