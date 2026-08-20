@@ -141,13 +141,16 @@ geändert hat – Unverändertes wird übersprungen, der Rest läuft nebenläufi
 
 ### Der Schreibtisch in fünf Minuten
 
-77 Tastenbindungen sind ab Werk da; `SUPER+SHIFT+H` öffnet die Liste, und diese
-Liste wird aus der erzeugten Konfiguration gelesen statt daneben gepflegt. Was
-man vorher wissen sollte:
+77 Tastenbindungen sind ab Werk da, und die Liste dieser Bindungen wird *aus
+der erzeugten Konfiguration gelesen* statt in einer zweiten Datei daneben
+gepflegt – deshalb kann sie nicht auseinanderlaufen mit dem, was die Tasten
+wirklich tun. Die vollständige Übersicht öffnet das Kürzel-Modul in der Leiste;
+eine eigene Taste hat dieses Fenster noch nicht.
 
 | Taste | Tut |
 |---|---|
 | `SUPER+SPACE` | Starter |
+| `SUPER+SHIFT+H` | Alles auf einmal durchsuchen – Anwendungen *und* Tastenbefehle |
 | `SUPER+Q` / `SUPER+SHIFT+Q` | Terminal (schwebend / gekachelt) |
 | `SUPER+E` | Dateien |
 | `SUPER+SHIFT+B` | Browser |
@@ -155,15 +158,18 @@ man vorher wissen sollte:
 | `SUPER+M` | Sitzungsmenü – sperren, abmelden, neu starten, herunterfahren, Bereitschaft, Ruhezustand |
 | `SUPER+L` | Bildschirm sperren |
 | `SUPER+S` | Ausschnitt aufnehmen und beschriften |
-| `SUPER+SHIFT+V` | Zwischenablage-Verlauf |
+| `SUPER+ALT+V` | Zwischenablage-Verlauf mit Favoriten – mit und ohne Plugin |
 | `SUPER+1…0`, `SUPER+SHIFT+1…0` | Arbeitsfläche wechseln / Fenster mitnehmen |
 | `SUPER+F` / `SUPER+SHIFT+F` | Vollbild / echtes Vollbild |
 | `SUPER+SHIFT+X` | Fenster schließen |
 
-Die rechte Hälfte der Leiste öffnet die Schale: Netzwerk, Bluetooth, VPN, Ton,
-Anzeige, Benachrichtigungen, Kalender, Datenträger, Akku, Hintergrund,
-Stil-Editor und die Einstellungen – Seiten eines Fensters statt verstreuter
-Panels.
+Die rechte Hälfte der Leiste öffnet das Kontrollzentrum – ein Fenster, dessen
+Seitenleiste sechs Seiten trägt: Netzwerk, Bluetooth, VPN, Allgemein, Ton und
+Anzeige. Daneben stehen die Überlagerungen, die die anderen Leistenmodule
+öffnen: Benachrichtigungen, Kalender, Datenträger, Akku, Hintergrund, die
+Kürzelübersicht, der Stil-Editor und die Einstellungen. Alle sind aus demselben
+Bausatz gebaut, damit eine Zeile, ein Knopf und eine Kopfzeile überall gleich
+aussehen.
 
 ### Was installiert wird
 

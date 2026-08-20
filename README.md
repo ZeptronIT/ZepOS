@@ -132,13 +132,15 @@ targets are skipped and the rest run concurrently.
 
 ### The desktop in five minutes
 
-77 key bindings ship by default; `SUPER+SHIFT+H` opens the list, and that list is
-read out of the generated configuration rather than kept beside it. The ones
-worth knowing before you open it:
+77 key bindings ship by default, and the list of them is *read out of* the
+generated configuration rather than kept in a second file beside it — which is
+why it cannot drift from what the keys actually do. The full overview opens from
+the shortcut module in the bar; it has no key of its own yet.
 
 | Key | Does |
 |---|---|
 | `SUPER+SPACE` | Launcher |
+| `SUPER+SHIFT+H` | Search everything at once — applications *and* key commands |
 | `SUPER+Q` / `SUPER+SHIFT+Q` | Terminal (floating / tiled) |
 | `SUPER+E` | Files |
 | `SUPER+SHIFT+B` | Browser |
@@ -146,14 +148,17 @@ worth knowing before you open it:
 | `SUPER+M` | Session menu — lock, log out, restart, shut down, suspend, hibernate |
 | `SUPER+L` | Lock the screen |
 | `SUPER+S` | Screenshot a region and annotate it |
-| `SUPER+SHIFT+V` | Clipboard history |
+| `SUPER+ALT+V` | Clipboard history with favourites — works with or without the plugin |
 | `SUPER+1…0`, `SUPER+SHIFT+1…0` | Go to a workspace / take the window along |
 | `SUPER+F` / `SUPER+SHIFT+F` | Fullscreen / real fullscreen |
 | `SUPER+SHIFT+X` | Close the window |
 
-The right half of the bar opens the shell: network, Bluetooth, VPN, sound,
-display, notifications, calendar, disks, battery, wallpaper, style editor and
-the settings — pages of one window rather than a scattering of panels.
+The right half of the bar opens the control centre — one window whose sidebar
+holds six pages: network, Bluetooth, VPN, general, sound and display. Beside it
+are the overlays the bar's other modules open: notifications, calendar, disks,
+battery, wallpaper, the shortcut overview, the style editor and the settings.
+All of them are built from the same kit, so a row, a button and a header look
+the same wherever they appear.
 
 ### What is installed
 
