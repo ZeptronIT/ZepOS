@@ -368,8 +368,22 @@ def test_template_count_is_seventy_seven():
     dieses Baums (createShellWindow) neben dem Kontrollzentrum. Sie
     traegt KEINE Einstellung selbst: sie zeichnet, was
     `zepos-settings-gui --json get` ausgibt.
+
+    86 STATT 85, am 20.08.2026 (Aufgabe 44): ags-starter-button. Der
+    Nutzer wollte zum Abschaltknopf unten links ein Gegenstueck unten
+    rechts ("ich will wie shutdown icon unten links, will ich ein icon
+    ganz unten rechts genauso, nur mit 6 punkten, was im Prinzip wie
+    SUPER+SPACE macht"). Die neue Vorlage erzeugt
+    ags/widget/StarterButton.tsx - dieselbe Bauart wie
+    ags-power-button.template, in der anderen unteren Ecke, mit dem
+    Rastersymbol aus sechs Punkten und mit dem Anwendungsstarter statt
+    der Sitzungsmaske dahinter. Kein Teil von ags-dock.template, aus
+    demselben Grund wie der Abschaltknopf: das Dock ist inhaltsbemessen
+    und zentriert, ein angehaengter Knopf wanderte mit seinem Inhalt.
+    Die Zwillingszusicherung in tests/src/test_new_templates.py haelt
+    dieselbe Rechnung.
     """
-    assert len(list((SRC / "templates").glob("*.template"))) == 85
+    assert len(list((SRC / "templates").glob("*.template"))) == 86
 
 
 def test_nothing_refers_to_a_deleted_template():

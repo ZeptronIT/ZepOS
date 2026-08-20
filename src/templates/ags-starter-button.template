@@ -1,0 +1,288 @@
+// Der Starterknopf am Dock (GTK4, Layer-Shell) - Aufgabe 44
+// Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+// Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-starter-button.template kopieren
+//
+// DER AUFTRAG, WOERTLICH (20.08.2026)
+//     "ich will wie shutdown icon unten links, will ich ein icon ganz
+//     unten rechts genauso, nur mit 6 punkten, was im Prinzip wie
+//     SUPER+SPACE macht"
+//
+//     Vier Angaben, und jede einzelne ist hier eine Zeile: dieselbe
+//     Bauart wie der Abschaltknopf ("genauso"), die andere untere Ecke
+//     ("ganz unten rechts"), ein anderes Zeichen ("6 punkten") und eine
+//     andere Wirkung ("wie SUPER+SPACE").
+//
+// DAS VORBILD IST ags-power-button.template, UND ZWAR VOLLSTAENDIG
+//     Jede Begruendung, die dort im Kopf steht, gilt hier unveraendert
+//     und wird deshalb NICHT abgeschrieben - sie steht dort und nur
+//     dort, damit es nicht zwei Fassungen davon gibt, die
+//     auseinanderlaufen koennen:
+//
+//       * WARUM EINE EIGENE FLAECHE UND NICHT EIN KIND IN DockContent()
+//         Das Dock ist inhaltsbemessen und nur an BOTTOM verankert, also
+//         waagerecht ZENTRIERT. Ein angehaengter Knopf wanderte mit
+//         jeder neu angehefteten Anwendung mit - er stuende nicht "ganz
+//         unten rechts", sondern "rechts vom jeweiligen Dockinhalt".
+//       * WARUM PRO SCHIRM. Dieselbe Faehigkeit auf jedem Ausgang, sonst
+//         ist sie auf allen anderen ein Griff ins Leere.
+//       * WARUM KEIN eigener Gtk.EventControllerKey UND KEIN
+//         OverlayAnchor. Der Knopf ist eine feste Flaeche, kein
+//         Aufklappfenster.
+//       * WARUM KEIN eigener STYLE_*-Platzhalter FUER DEN ABSTAND.
+//         Es ist derselbe {{STYLE_GAPS_OUT}}, den DOCK_MARGIN_BOTTOM in
+//         ags-dock.template, EDGE_GAP in ags-kit.template und EDGE_GAP
+//         in ags-power-button.template lesen - eine Konstante, jetzt
+//         vier Abdruecke, keine zweite Zahl.
+//
+//     SPIEGELBILDLICH heisst hier woertlich: derselbe Anker an der
+//     unteren Kante, derselbe Rand daneben, dieselbe Exklusivitaet,
+//     derselbe Tastaturmodus, dieselbe Schriftgroesse fuer das Zeichen -
+//     nur WindowAnchor.RIGHT statt LEFT und set_margin_right() statt
+//     set_margin_left(). GEMESSEN am 20.08.2026 im verschachtelten
+//     Compositor (1920x1080, tests/render/test_starter.py):
+//
+//         Flaeche        x     y     b    h
+//         zepos-power     24   999    53   57    (unten links)
+//         zepos-dock     784   996   353   60    (unten mittig)
+//         zepos-starter 1843   999    53   57    (unten rechts)
+//
+//     53 x 57 gegen 53 x 57: dieselbe Platte. 1843 + 53 = 1896, und
+//     1920 - 1896 = 24 - derselbe Rand zum Bildrand wie die 24 links.
+//     Und 999 gegen 999: dieselbe Oberkante, also auch derselbe Abstand
+//     zum Dock.
+//
+// DAS ZEICHEN: SECHS PUNKTE, UND SIE SIND GESUCHT WORDEN
+//     {{ICON_APPS_GRID}} ist nf-fa-grip - sechs abgerundete Punkte in
+//     drei Spalten und zwei Reihen. Die vollstaendige Messung, warum es
+//     in nf-md kein Rastersymbol aus sechs Punkten gibt und diese eine
+//     Zeile deshalb aus nf-fa kommt, steht bei ICON_APPS_GRID in
+//     src/icon_definition.py.
+//
+//     KEIN fest hingeschriebenes Unicode-Zeichen: der Platzhalter loest
+//     sich aus src/icons_db.py auf, derselben Tabelle, aus der jedes
+//     andere Zeichen dieses Schreibtisches kommt. Ein direkt getipptes
+//     Zeichen waere eines, das in der ausgelieferten Schrift keinen
+//     Glyph haben kann, ohne dass es jemand merkt.
+//
+// DIE GROESSE STEHT AUSDRUECKLICH DA, UND DAS IST EIN GEMESSENER FEHLER
+// VON GESTERN
+//     Der Abschaltknopf hatte am 19.08.2026 UEBERHAUPT KEINE
+//     Schriftgroesse und fiel auf die Vorgabe des GTK-Themas zurueck: er
+//     sitzt in einem EIGENEN Fenster und erbt die 20 px aus
+//     window.bar-window nicht. Gemessen war das Zeichen darin 10 x 11
+//     Punkte Tinte - der Nutzer hat es als "etwas zu klein" gemeldet.
+//     Seither traegt er {{STYLE_ICON_LEAD}} (29 px), und das Zeichen ist
+//     20 x 22.
+//
+//     Dieser Knopf bekommt dieselbe Sprosse von Anfang an. Die Regel
+//     steht als CSS in src/styles/bar-style.template
+//     (#starter-button button.starter-btn label), weil dort auch die
+//     Rechnung steht, warum es ICON_LEAD ist und nicht die Sprosse der
+//     Dock-Symbole daneben.
+//
+// DIE WIRKUNG: DERSELBE STARTER, DEN SUPER+SPACE OEFFNET
+//     SUPER+SPACE steht NICHT in hyprland-universal-config.template -
+//     dort steht (Zeile 633 ff.) nur, warum es dort nicht steht. Die
+//     Taste liegt in ~/.config/hypr/plugins.conf, und was sie tut, haengt
+//     an einer Maschinenfrage, die src/plugins.py beim Erzeugen stellt:
+//
+//         mit dem Plugin    bind = $mainMod, SPACE, hyprlaunch:toggle,
+//         ohne das Plugin   bind = $mainMod, SPACE, exec,
+//                                  zepos-menu --show all
+//
+//     Beides steht in hyprland-plugins-config.template, in einem
+//     zepos-plugin- und einem zepos-plugin-missing-Block. Genau DIESE
+//     zwei Wege nimmt dieser Knopf, in genau dieser Reihenfolge - kein
+//     dritter.
+//
+//     WARUM DIE FRAGE HIER ZUR LAUFZEIT GESTELLT WIRD UND NICHT BEIM
+//     ERZEUGEN
+//         Weil die Blockmarken von src/plugins.py Hyprland-Kommentare
+//         sind (`# zepos-plugin hyprlaunch`) und in einer TypeScript-
+//         Datei nichts als ein Syntaxfehler waeren. Und weil AGS - anders
+//         als die Konfigurationsdatei, die Hyprland VOR dem Start liest -
+//         IM Compositor laeuft und ihn direkt fragen kann. Ein Dispatcher,
+//         den es nicht gibt, antwortet nicht mit Schweigen, sondern mit
+//         einem Satz:
+//
+//             Invalid dispatcher, requested "hyprlaunch:toggle" does
+//             not exist
+//
+//         Denselben Satz meldet `Hyprland --verify-config` auf jeder
+//         Maschine ohne geladenes Plugin (siehe den Block dazu in
+//         iso/profile/airootfs/usr/local/bin/zepos-smoke). Er ist damit
+//         die Antwort auf dieselbe Frage, die plugins.py an das
+//         Dateisystem stellt - nur an den Compositor gestellt, der es
+//         wirklich weiss.
+//
+//         GEMESSEN am 20.08.2026 im verschachtelten Compositor, in dem
+//         kein Plugin geladen ist: `ask("dispatch hyprlaunch:toggle")`
+//         antwortet wortwoertlich mit dem Satz oben, und der Rueckfall
+//         hat danach zepos-menu gestartet. Die Messung steht in
+//         tests/render/test_starter.py; sie belegt BEIDE Haelften mit
+//         einem Lauf, weil die eine die andere ausloest.
+//
+//     WARUM ask() UND NICHT dispatch()
+//         dispatch() aus utils/hyprland wirft die Antwort weg (siehe
+//         dort: "ohne auf die Antwort zu warten"). Hier ist die Antwort
+//         genau das, was gebraucht wird - ohne sie gaebe es kein
+//         Kriterium fuer den Rueckfall, und ein Klick auf einer Maschine
+//         ohne Plugin taete stumm nichts. Es ist derselbe Socket und
+//         dieselbe Funktion, die auch das Dock und die Leiste benutzen,
+//         kein zweiter Weg zum Compositor.
+//
+//     WARUM KEIN `hyprctl` UND KEIN `bash -c`
+//         ask() schreibt auf .socket.sock - kein Prozessstart. Und der
+//         Rueckfall geht als ARGV-Feld an execAsync: Astal startet damit
+//         argv direkt, ohne Shell (siehe den Kopf von
+//         tests/src/test_ags_exec.py, wo genau diese Unterscheidung
+//         schon einmal zwei Fehler erklaert hat).
+//
+// ER FAEHRT MIT DEM DOCK EIN UND AUS
+//     GEMELDET am 20.08.2026 fuer den Abschaltknopf, woertlich: "die dock
+//     beim einfahren mit super b soll auch links der button mit shutdown
+//     auch mit verschwinden mit der selben animation". Ein Gegenstueck,
+//     das bei SUPER+B stehenbliebe, waere dieselbe Beschwerde noch
+//     einmal - nur auf der anderen Seite des Schirms.
+//
+//     Der Zug kommt von dem, der ihn ausloest: faehrtMitDemDock() aus
+//     ags-dock.template. Diese Datei LIEST den Export und aendert an
+//     jener Datei nichts. Warum die Bewegung dabei ohne eine einzige
+//     Zahl in beiden Dateien dieselbe ist, steht dort.
+//
+//     UEBER ALLE SCHIRME ZUGLEICH, wie das Dock selbst: dessen toggle()
+//     kennt keinen einzelnen Monitor. Ein Knopf, der auf Schirm 2 stehen
+//     bliebe, waehrend das Dock ueberall eingefahren ist, waere derselbe
+//     Fehler, nur seltener zu sehen.
+//
+// DER RESERVIERTE STREIFEN: NICHTS DAZU, NICHTS WEG
+//     Astal.Exclusivity.IGNORE, wie der Abschaltknopf und aus demselben
+//     gemessenen Grund (die lange Fassung steht dort). Kurz: das Dock ist
+//     EXCLUSIVE und reserviert einen Streifen ueber die GANZE untere
+//     Kante; eine zweite Flaeche an derselben Kante ohne IGNORE weicht
+//     dieser Reservierung automatisch aus und stuende dann 108 statt 24
+//     Punkte ueber dem Bildrand.
+//
+//     GEMESSEN am 20.08.2026 an `hyprctl monitors`, mit diesem Knopf auf
+//     dem Schirm: 84 px reserviert mit Dock, 0 px mit eingefahrenem Dock,
+//     wieder 84 px nach dem Ausfahren - dieselben drei Zahlen wie vor
+//     dieser Datei. Diese Flaeche traegt nichts bei und soll es nicht:
+//     ein Streifen unten rechts, in dem keine Fenster liegen duerfen,
+//     waere ein unsichtbarer Balken.
+
+import Astal from "gi://Astal?version=4.0"
+import { Gtk, Gdk } from "ags/gtk4"
+import { execAsync } from "ags/process"
+import { faehrtMitDemDock } from "./Dock"
+import { ask } from "../utils/hyprland"
+import { _ } from "../utils/i18n"
+
+// Sechs Punkte - siehe den Dateikopf und src/icon_definition.py.
+const ICON_APPS = "{{ICON_APPS_GRID}}"
+
+// Derselbe Rand, den ags-dock.template als DOCK_MARGIN_BOTTOM exportiert
+// und den ags-power-button.template und ags-kit.template als EDGE_GAP
+// lesen - siehe den Dateikopf, warum hier keine vierte Konstante daraus
+// wird.
+const EDGE_GAP = {{STYLE_GAPS_OUT}}
+
+// Die zwei Wege, die SUPER+SPACE nimmt, in derselben Reihenfolge, in der
+// src/plugins.py sie in ~/.config/hypr/plugins.conf schreibt. Sie stehen
+// als Konstanten und nicht im Rumpf, damit ein Leser sie nebeneinander
+// sieht und tests/src/test_placement.py sie gegen
+// hyprland-plugins-config.template halten kann.
+const STARTER_DISPATCHER = "hyprlaunch:toggle"
+const STARTER_FALLBACK = ["zepos-menu", "--show", "all"]
+
+// Was der Compositor antwortet, wenn ein Befehl angekommen ist. Alles
+// andere - der "Invalid dispatcher"-Satz, aber auch die leere Antwort
+// eines unerreichbaren Sockets - heisst: dieser Weg steht nicht offen.
+const ANGEKOMMEN = "ok"
+
+/** Den Anwendungsstarter oeffnen - denselben, den SUPER+SPACE oeffnet.
+ *
+ * Siehe den Dateikopf: erst der Dispatcher des Plugins, und nur wenn es
+ * ihn auf DIESER Maschine nicht gibt, der Rueckfall auf zepos-menu.
+ */
+function oeffneDenStarter(): void {
+  const antwort = ask(`dispatch ${STARTER_DISPATCHER}`).trim()
+  if (antwort === ANGEKOMMEN) return
+
+  // Kein Fehler, sondern eine Maschine ohne das Plugin - und genau der
+  // Fall, fuer den plugins.py den zweiten Block schreibt. Die Antwort
+  // steht mit im Protokoll, weil sie die einzige Stelle ist, an der
+  // sichtbar wird, WARUM der Rueckfall lief.
+  console.log("hyprlaunch antwortet:", antwort || "(nichts)")
+  execAsync(STARTER_FALLBACK).catch(error => {
+    console.error("Der Anwendungsstarter liess sich nicht oeffnen:", error)
+  })
+}
+
+/** Eine kleine, eigene Flaeche je Schirm, unten rechts am Rand.
+ *
+ * Das Gegenstueck zu PowerButton() aus ags-power-button.template, bis
+ * auf die Ecke, das Zeichen und die Wirkung. Ohne Parameter, und das ist
+ * der eine Unterschied im Bauplan: der Abschaltknopf bekommt
+ * toggleByName, weil er ein AGS-FENSTER dieses Prozesses oeffnet. Dieser
+ * hier oeffnet ein fremdes Fenster (das Plugin im Compositor oder
+ * zepos-menu), also gibt es hier nichts nachzuschlagen.
+ */
+export default function StarterButton(): void {
+  const display = Gdk.Display.get_default()
+  if (!display) {
+    console.error("Keine Anzeige - es gibt keinen Starterknopf")
+    return
+  }
+
+  // Die eigenen Flaechen, je Schirm eine. Sie stehen hier und nicht
+  // modulweit: was mitfaehrt, sind die Fenster GENAU DIESES Aufrufs.
+  const flaechen: Astal.Window[] = []
+
+  const monitors = display.get_monitors()
+  for (let index = 0; index < monitors.get_n_items(); index++) {
+    const monitor = monitors.get_item(index) as Gdk.Monitor
+
+    const plate = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL })
+    plate.set_name("starter-button")
+
+    const button = new Gtk.Button({ can_focus: true })
+    button.add_css_class("starter-btn")
+    button.set_tooltip_text(_("Applications"))
+    button.set_child(new Gtk.Label({ label: ICON_APPS }))
+    button.connect("clicked", () => oeffneDenStarter())
+    plate.append(button)
+
+    const window = new Astal.Window({
+      namespace: "zepos-starter",
+      name: `starter-button-${monitor.connector}`,
+      layer: Astal.Layer.TOP,
+      anchor: Astal.WindowAnchor.BOTTOM | Astal.WindowAnchor.RIGHT,
+      // Astal.Exclusivity.IGNORE und nicht die Vorgabe NORMAL - die
+      // Messung dazu steht im Kopf dieser Datei und ausfuehrlich im Kopf
+      // von ags-power-button.template.
+      exclusivity: Astal.Exclusivity.IGNORE,
+      // Wie der Abschaltknopf und die Benachrichtigungen: diese Flaeche
+      // nimmt die Tastatur NIE. Ein keymode:NONE-Fenster nimmt Mausklicks
+      // weiterhin an. tests/src/test_modal_rule.py verlangt diese Zeile
+      // (oder "exclusivity: EXCLUSIVE") von jedem selbst gebauten
+      // Astal.Window als Beweis, dass es KEIN Modal ist.
+      keymode: Astal.Keymode.NONE,
+      gdkmonitor: monitor,
+      visible: true,
+    })
+    window.add_css_class("starter-button-window")
+    window.set_margin_bottom(EDGE_GAP)
+    window.set_margin_right(EDGE_GAP)
+    window.set_child(plate)
+    flaechen.push(window)
+  }
+
+  // MIT DEM DOCK EIN UND AUS - siehe den Dateikopf. `visible` setzen und
+  // nicht show()/hide(): dasselbe, was das Dock in seinem toggle() tut
+  // und was der Abschaltknopf in seiner Mitfahrt tut. Drei Wege, eine
+  // Flaeche abzumelden, waeren drei Wege, an denen sich etwas
+  // unterscheiden koennte.
+  faehrtMitDemDock(sichtbar => {
+    for (const flaeche of flaechen) flaeche.visible = sichtbar
+  })
+}

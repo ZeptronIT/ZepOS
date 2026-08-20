@@ -147,6 +147,10 @@ RENDERED = {
     "templates/ags-bar.template": "widget/Bar.tsx",
     "templates/ags-dock.template": "widget/Dock.tsx",
     "templates/ags-power-button.template": "widget/PowerButton.tsx",
+    # Der Starterknopf unten rechts, seit dem 20.08.2026 (Aufgabe 44) -
+    # der case-Zweig dazu heisst `ags-starter-button)` in
+    # src/generate_config.sh.
+    "templates/ags-starter-button.template": "widget/StarterButton.tsx",
     "templates/ags-calendar.template": "widget/Calendar.tsx",
     "templates/ags-shortcuts.template": "widget/Shortcuts.tsx",
     "templates/ags-battery.template": "widget/Battery.tsx",

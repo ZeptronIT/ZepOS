@@ -188,6 +188,13 @@ def test_every_self_built_surface_says_what_it_is():
     (er soll dem Dock keinen Platz wegnehmen) und nimmt NIE die Tastatur
     (ein Klick, kein Formular) - dieselbe zweite Begruendung wie bei den
     Benachrichtigungen, nicht die erste wie bei Leiste und Dock.
+
+    FUENF STATT VIER, SEIT DEM 20.08.2026 (Aufgabe 44): der Starterknopf
+    am Dock (ags-starter-button.template), das Gegenstueck zum
+    Abschaltknopf in der anderen unteren Ecke. Wort fuer Wort dieselbe
+    Begruendung wie dort - eine feste Ecke am Bildschirmrand, kein
+    Aufklappfenster; IGNORE, damit er dem Dock keinen Platz wegnimmt;
+    keymode NONE, weil man ihn klickt und nicht ausfuellt.
     """
     builders = {
         template.name: _code(template)
@@ -196,18 +203,20 @@ def test_every_self_built_surface_says_what_it_is():
     }
     assert set(builders) == {"ags-bar.template", "ags-dock.template",
                              "ags-notifications.template",
-                             "ags-power-button.template"}, (
+                             "ags-power-button.template",
+                             "ags-starter-button.template"}, (
         f"es bauen sich {sorted(builders)} ihr Fenster selbst - erwartet "
-        f"sind die Leiste, das Dock, die Benachrichtigungen und der "
-        f"Abschaltknopf am Dock. Kommt eine Flaeche dazu, gehoert sie "
-        f"durch die Fabrik; faellt eine weg, ist diese Aufzaehlung "
-        f"veraltet")
+        f"sind die Leiste, das Dock, die Benachrichtigungen und die zwei "
+        f"Knoepfe am Dock (Abschalten links, Starter rechts). Kommt eine "
+        f"Flaeche dazu, gehoert sie durch die Fabrik; faellt eine weg, "
+        f"ist diese Aufzaehlung veraltet")
 
     for name in ("ags-bar.template", "ags-dock.template"):
         assert NOT_A_MODAL[0] in builders[name], (
             f"{name} reserviert keine exklusive Zone mehr - dann ist es "
             f"kein Streifen, sondern ein Fenster vor der Arbeit")
-    for name in ("ags-notifications.template", "ags-power-button.template"):
+    for name in ("ags-notifications.template", "ags-power-button.template",
+                 "ags-starter-button.template"):
         assert NOT_A_MODAL[1] in builders[name], (
             f"{name} nimmt die Tastatur - dann ist es etwas, das man "
             f"bedient, und gehoert durch die Fabrik. Diese Datei gehoert "

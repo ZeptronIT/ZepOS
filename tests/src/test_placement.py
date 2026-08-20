@@ -56,8 +56,15 @@ DOCK = SRC / "templates" / "ags-dock.template"
 # ein- und ausfaehrt (20.08.2026) - vorher war seine Lage eine Frage fuer
 # sich, jetzt ist sie eine Frage NACH dem Dock.
 POWER = SRC / "templates" / "ags-power-button.template"
+# Der Starterknopf in der anderen unteren Ecke - Aufgabe 44, 20.08.2026.
+# Er steht neben POWER, weil jede Frage an ihn eine Frage NACH dem
+# Abschaltknopf ist: "genauso, nur rechts".
+STARTER = SRC / "templates" / "ags-starter-button.template"
 BAR_STYLE = SRC / "styles" / "bar-style.template"
 HYPRLAND = SRC / "templates" / "hyprland-universal-config.template"
+# Wo SUPER+SPACE gebunden wird, in BEIDEN Fassungen - mit und ohne
+# hyprlaunch-Plugin (siehe src/plugins.py).
+PLUGINS = SRC / "templates" / "hyprland-plugins-config.template"
 
 
 def _code(path: Path, marker: str) -> str:
@@ -414,7 +421,13 @@ def test_the_power_button_rides_with_the_dock():
 
 
 def test_neither_the_dock_nor_the_button_carries_its_own_duration():
-    """Die Bewegung gehoert dem Compositor, nicht diesen zwei Dateien.
+    """Die Bewegung gehoert dem Compositor, nicht diesen drei Dateien.
+
+    DREI SEIT DEM 20.08.2026 (Aufgabe 44): der Starterknopf faehrt aus
+    demselben Grund mit und traegt deshalb dieselbe Bedingung. Ein
+    Gegenstueck mit eigener Dauer sahe man sofort - zwei Knoepfe, die
+    nebeneinander verschieden schnell verblassen, fallen mehr auf als
+    einer.
 
     "mit der selben animation" ist erfuellt, WEIL keine der beiden
     Dateien eine eigene hat: beide setzen `visible` und melden ihre
@@ -432,14 +445,185 @@ def test_neither_the_dock_nor_the_button_carries_its_own_duration():
     Bewegung, nur mit gepflegter Zahl.
     """
     for name, code in (("ags-dock.template", _code(DOCK, "//")),
-                       ("ags-power-button.template", _code(POWER, "//"))):
+                       ("ags-power-button.template", _code(POWER, "//")),
+                       ("ags-starter-button.template", _code(STARTER, "//"))):
         for wort in ("setTimeout", "timeout_add", "STYLE_MOTION",
                      "transition", "cubic-bezier"):
             assert wort not in code, (
                 f"{name} bringt mit {wort!r} eine eigene Bewegung mit. Das "
-                f"Ein- und Ausfahren malt der Compositor, fuer beide "
+                f"Ein- und Ausfahren malt der Compositor, fuer alle drei "
                 f"Flaechen mit derselben Regel - eine zweite Dauer hier "
                 f"waere eine, die dazu nicht passt")
+
+
+# --------------------------------------------------------------------
+# Der Starterknopf: dasselbe noch einmal, in der anderen unteren Ecke
+# --------------------------------------------------------------------
+
+def test_the_starter_button_is_the_mirror_image_of_the_power_button():
+    """"ich will wie shutdown icon unten links, will ich ein icon ganz
+    unten rechts genauso" - gemeldet am 20.08.2026.
+
+    "GENAUSO" IST HIER PRUEFBAR, UND ZWAR OHNE EINE EINZIGE ZAHL
+        Die beiden Dateien duerfen sich in genau drei Dingen
+        unterscheiden - Ecke, Zeichen, Wirkung. Alles andere muss
+        WOERTLICH dasselbe sein, denn beides sind Abdruecke derselben
+        Entscheidungen: dieselbe Sprosse fuer den Rand, dieselbe
+        Exklusivitaet, derselbe Tastaturmodus.
+
+        Was daraus auf dem Schirm wird, misst
+        tests/render/test_starter.py - dort gegen den Abschaltknopf im
+        SELBEN Lauf. GEMESSEN am 20.08.2026: beide 53 x 57, beide mit
+        Oberkante 999, 24 px zum jeweiligen Bildrand.
+    """
+    knopf = _code(STARTER, "//")
+    abschalten = _code(POWER, "//")
+
+    assert _anchors(knopf) == {"BOTTOM", "RIGHT"}, (
+        f"der Starterknopf haengt an {sorted(_anchors(knopf))} statt "
+        f"unten rechts")
+    assert _anchors(abschalten) == {"BOTTOM", "LEFT"}, (
+        "der Abschaltknopf haengt nicht mehr unten links - dann ist "
+        "'spiegelbildlich' nicht mehr die Frage, die hier steht")
+
+    for zeile in ("const EDGE_GAP = {{STYLE_GAPS_OUT}}",
+                  "Astal.Exclusivity.IGNORE",
+                  "Astal.Keymode.NONE",
+                  "window.set_margin_bottom(EDGE_GAP)"):
+        assert zeile in knopf, (
+            f"der Starterknopf fuehrt {zeile!r} nicht - der Abschaltknopf "
+            f"schon, und 'genauso' heisst genau das")
+        assert zeile in abschalten, (
+            f"der Abschaltknopf fuehrt {zeile!r} nicht mehr. Dann ist die "
+            f"Zeile darueber keine Spiegelung mehr, sondern eine eigene "
+            f"Entscheidung des Starterknopfes - und dieser Test misst "
+            f"nichts")
+
+    assert "window.set_margin_right(EDGE_GAP)" in knopf, (
+        "der Starterknopf haelt keinen Abstand zum rechten Bildrand - "
+        "oder er holt ihn nicht aus derselben Sprosse wie alles andere")
+    assert "window.set_margin_left(EDGE_GAP)" in abschalten, (
+        "der Abschaltknopf haelt seinen linken Abstand nicht mehr aus "
+        "EDGE_GAP")
+    assert "set_margin_left" not in knopf, (
+        "der Starterknopf setzt einen linken Rand - er haengt rechts, "
+        "dort waere das eine Zahl ohne Wirkung oder ein Fehler")
+
+
+def test_the_starter_button_rides_with_the_dock():
+    """Dieselbe Anmeldung wie beim Abschaltknopf, aus demselben Grund.
+
+    Der Nutzer hat am 20.08.2026 gemeldet, dass der Abschaltknopf beim
+    Einfahren stehenblieb ("soll auch links der button mit shutdown auch
+    mit verschwinden mit der selben animation"). Ein Gegenstueck, das
+    dasselbe tut, waere dieselbe Meldung noch einmal - nur rechts.
+
+    Was auf dem Schirm daraus wird, misst tests/render/test_starter.py:
+    GEMESSEN am 20.08.2026 bemalen nach SUPER+B null Punkte die untere
+    rechte Ecke, vorher 2717.
+    """
+    knopf = _code(STARTER, "//")
+
+    assert 'from "./Dock"' in knopf and "faehrtMitDemDock" in knopf, (
+        "der Starterknopf meldet sich nicht beim Dock an - dann faehrt "
+        "nur das Dock ein und er bleibt allein auf der Tapete stehen")
+    mitfahrt = knopf[knopf.index("faehrtMitDemDock("):]
+    assert "for (const flaeche of flaechen) flaeche.visible = sichtbar" \
+        in mitfahrt, (
+        "die Mitfahrt setzt nicht ALLE Flaechen des Knopfes. Das Dock "
+        "toggelt alle seine Fenster zugleich (siehe dessen toggle()); ein "
+        "Knopf, der nur eines anfasst, bleibt auf jedem weiteren Schirm "
+        "stehen")
+
+
+def test_the_starter_button_opens_the_launcher_super_space_opens():
+    """"was im Prinzip wie SUPER+SPACE macht" - also DERSELBE Starter.
+
+    SUPER+SPACE hat zwei Fassungen, und src/plugins.py entscheidet beim
+    Erzeugen, welche in ~/.config/hypr/plugins.conf landet:
+
+        mit dem Plugin    bind = $mainMod, SPACE, hyprlaunch:toggle,
+        ohne das Plugin   bind = $mainMod, SPACE, exec,
+                                 zepos-menu --show all
+
+    Der Knopf muss BEIDE kennen und in dieser Reihenfolge nehmen - eine
+    einzelne davon waere auf der jeweils anderen Maschine ein Knopf ohne
+    Wirkung. Geprueft wird gegen die Datei, in der die Taste gebunden
+    wird, damit hier nicht ein zweiter Weg entsteht, der sich unabhaengig
+    aendern kann.
+
+    Dass der Knopf die zwei Zweige zur LAUFZEIT unterscheidet und nicht
+    beim Erzeugen, begruendet sein Dateikopf; dass er es wirklich tut,
+    misst tests/render/test_starter.py an einem Compositor ohne Plugin.
+    """
+    knopf = _code(STARTER, "//")
+    gebunden = PLUGINS.read_text(encoding="utf-8")
+
+    dispatcher = re.search(r'const STARTER_DISPATCHER = "([^"]+)"', knopf)
+    assert dispatcher, "der Starterknopf fuehrt keinen STARTER_DISPATCHER"
+    assert f"bind = $mainMod, SPACE, {dispatcher.group(1)}," in gebunden, (
+        f"der Knopf ruft den Dispatcher {dispatcher.group(1)!r}, an "
+        f"SUPER+SPACE haengt in hyprland-plugins-config.template ein "
+        f"anderer")
+
+    rueckfall = re.search(r"const STARTER_FALLBACK = \[([^\]]+)\]", knopf)
+    assert rueckfall, "der Starterknopf fuehrt keinen STARTER_FALLBACK"
+    befehl = " ".join(teil.strip().strip('"')
+                      for teil in rueckfall.group(1).split(","))
+    assert f"bind = $mainMod, SPACE, exec, {befehl}" in gebunden, (
+        f"der Rueckfall des Knopfes ist {befehl!r}, ohne Plugin bindet "
+        f"hyprland-plugins-config.template etwas anderes auf SUPER+SPACE")
+
+    # Kein zweiter Weg zum Compositor: dieselbe Funktion, die Leiste und
+    # Dock benutzen. `hyprctl` waere ein Prozessstart je Klick UND eine
+    # zweite Art, dieselbe Frage zu stellen.
+    assert 'from "../utils/hyprland"' in knopf, (
+        "der Starterknopf spricht den Compositor nicht ueber utils/"
+        "hyprland an")
+    assert "hyprctl" not in knopf, (
+        "der Starterknopf startet hyprctl - der Socket dieses Projekts "
+        "beantwortet dieselbe Frage ohne Prozessstart")
+
+
+def test_both_buttons_beside_the_dock_name_their_own_font_and_size():
+    """Ein eigenes Fenster erbt NICHTS von der Leiste - zweimal gemessen.
+
+    ZUERST DIE GROESSE (19.08.2026, Aufgabe 33): der Abschaltknopf hatte
+    keine, fiel auf die Vorgabe des GTK-Themas zurueck und war mit 10 x 11
+    Punkten Tinte "etwas zu klein" - gemeldet vom Nutzer.
+
+    DANN DIE FAMILIE (20.08.2026, Aufgabe 44): dieselbe Luecke, eine
+    Zeile daneben, und mit einer schlimmeren Folge. GEMESSEN mit Pango
+    bei 29 px, den zwei Zeichen dieser zwei Fenster:
+
+        Zeichen                  ohne Familie          mit der Liste
+        ICON_POWER    U+F0425    JetBrainsMonoNL NF    JetBrainsMono NF
+                                 Zeile 39, Tinte 20x21  Zeile 39, 20x21
+        ICON_APPS_GRID U+EE56    Adwaita Sans           JetBrainsMono NF
+                                 Zeile 36, Tinte 15x17  Zeile 39, 24x17
+
+    Das Rastersymbol landete also im GTK-Thema und war ein ANDERER Glyph,
+    und die Platten standen drei Punkte auseinander (53 x 54 gegen
+    53 x 57). Beide Fehler verschwinden mit derselben Zeile.
+
+    Deshalb steht hier BEIDES fuer BEIDE Fenster: die zwei Knoepfe sind
+    die einzigen Flaechen dieses Baums, die ein Nerd-Font-Zeichen in ein
+    eigenes Fenster stellen.
+    """
+    css = _code(BAR_STYLE, "/*")
+
+    for fenster, knopf in (("window.power-button-window",
+                            "#power-button button.power-btn label"),
+                           ("window.starter-button-window",
+                            "#starter-button button.starter-btn label")):
+        assert "{{STYLE_FONT_FAMILY}}" in _rule(css, fenster), (
+            f"{fenster} nennt keine Schriftfamilie. Dann zeichnet GTK das "
+            f"Zeichen in der Vorgabe des Themas - auf dieser Maschine "
+            f"Adwaita Sans, auf der naechsten etwas anderes")
+        assert "{{STYLE_ICON_LEAD}}" in _rule(css, knopf), (
+            f"{knopf} nennt keine Schriftgroesse von der Symbolleiter. "
+            f"Genau das war am 19.08.2026 die Meldung 'das icon fuer "
+            f"shutdwon soll groesser dargestellt werden'")
 
 
 # --------------------------------------------------------------------

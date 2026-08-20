@@ -2289,6 +2289,13 @@ GLASS_LAYERS = (
     # Glasplatte wie #dock, aber unter einer eigenen ID (#power-button,
     # styles/bar-style.template) und einem eigenen Namensraum.
     "zepos-power",
+    # Der Starterknopf am Dock - Aufgabe 44, 20.08.2026. Das Gegenstueck
+    # zu "zepos-power" in der anderen unteren Ecke
+    # (ags-starter-button.template): wieder eine eigene Flaeche je
+    # Schirm, dieselbe Glasplatte wie #dock und #power-button, aber unter
+    # einer eigenen ID (#starter-button, styles/bar-style.template) und
+    # einem eigenen Namensraum.
+    "zepos-starter",
     "notifications",
     # Der Verlauf und "Nicht stoeren", seit dem 12.08.2026. Eine EIGENE
     # Flaeche neben "notifications" und kein Zusatz zu ihr: der
@@ -2429,6 +2436,12 @@ GLASS_PLATES = {
     # nur eine eigene ID (siehe den Kommentar bei #power-button in
     # bar-style.template).
     "zepos-power": GlassPlate(_BAR, "#power-button", ("dock_icon",), None),
+    # Und noch einmal dasselbe fuer die andere untere Ecke (Aufgabe 44,
+    # 20.08.2026): derselbe Farbwert, dieselbe Platte, eigene ID - siehe
+    # den Kommentar bei #starter-button in bar-style.template, warum die
+    # beiden sich keinen Wahlausdruck teilen.
+    "zepos-starter": GlassPlate(_BAR, "#starter-button", ("dock_icon",),
+                                None),
     "notifications": GlassPlate(_AGS, ".notif-card", ("overlay_subtext",),
                                 None),
     # Das Zentrum kommt vollstaendig aus createOverlayWindow() und traegt

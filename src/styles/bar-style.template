@@ -1322,7 +1322,45 @@ window.dock-window {
  * der runden Platte. */
 window.power-button-window {
   background: transparent;
+  font-family: {{STYLE_FONT_FAMILY}};
 }
+
+/* DIE ZEILE font-family IST AM 20.08.2026 DAZUGEKOMMEN, UND ZWAR AUS
+ * EINER MESSUNG AM ZWEITEN KNOPF (Aufgabe 44).
+ *
+ * DIESELBE LUECKE WIE BEI DER SCHRIFTGROESSE WEITER UNTEN: window.bar-
+ * window nennt die Schriftfamilie, diese Flaeche ist ein EIGENES Fenster
+ * und erbt nichts von dort. Uebrig blieb die Vorgabe des GTK-Themas, und
+ * die heisst auf einem heutigen Arch "Adwaita Sans".
+ *
+ * GEMESSEN am 20.08.2026 mit Pango (PangoCairo-Standardschriftkarte,
+ * 29 px - die Sprosse, die diese Knoepfe tragen), fuer die zwei Zeichen,
+ * die in diesen zwei Fenstern stehen:
+ *
+ *     Zeichen                Familie    genommen wurde        Zeile  Tinte
+ *     ICON_POWER   U+F0425   Vorgabe    JetBrainsMonoNL NF     39    20x21
+ *     ICON_POWER   U+F0425   die Liste  JetBrainsMono NF       39    20x21
+ *     ICON_APPS_GRID U+EE56  Vorgabe    Adwaita Sans           36    15x17
+ *     ICON_APPS_GRID U+EE56  die Liste  JetBrainsMono NF       39    24x17
+ *
+ * ZWEI BEFUNDE STECKEN DARIN, und der zweite ist der schlimmere:
+ *
+ *   1. Die Zeile ist verschieden hoch (39 gegen 36), also auch die
+ *      Platte. GEMESSEN im verschachtelten Compositor, bevor diese Zeile
+ *      hier stand: der Abschaltknopf 53 x 57, der Starterknopf 53 x 54.
+ *      Zwei Knoepfe, die "genauso" sein sollen, standen drei Punkte
+ *      auseinander.
+ *   2. Es war nicht einmal dasselbe ZEICHEN. Adwaita Sans hat bei U+EE56
+ *      einen eigenen Glyph (Tinte 15 x 17), und der ist nicht das
+ *      Rastersymbol aus sechs Punkten (24 x 17 in der Nerd-Font-Schrift).
+ *      Ohne diese Zeile zeichnete der Knopf, was das GTK-Thema an dieser
+ *      Stelle zufaellig mitbringt - auf einer anderen Maschine also
+ *      etwas anderes.
+ *
+ * FUER DEN ABSCHALTKNOPF AENDERT SICH DAMIT NICHTS AN DER GROESSE (39
+ * bleibt 39): sein Zeichen fiel schon vorher auf eine Nerd-Font-Schrift
+ * zurueck, nur eben auf die NL-Fassung, weil das Thema keinen Glyph
+ * dafuer hat. Was sich aendert, ist, dass es kein Zufall mehr ist. */
 
 /* Dieselbe Platte wie #dock (Glas, Rahmen, Rundung, Innenabstand), nur
  * fuer EINEN Knopf statt einer Reihe - bewusst NICHT dieselbe ID: #dock
@@ -1448,8 +1486,15 @@ window.power-button-window {
  *
  * Dieselbe Groesse, dieselbe Oberkante, derselbe Rand zum Bildrand
  * (24 links, 1920 - 1843 - 53 = 24 rechts). */
+/* Die Schriftfamilie steht hier aus demselben Grund wie beim
+ * Abschaltknopf - die ganze Messung steht dort. Fuer DIESES Fenster ist
+ * sie nicht nur eine Aufraeumung, sondern die Bedingung dafuer, dass
+ * ueberhaupt das bestellte Zeichen erscheint: ohne sie zeichnete GTK
+ * den Glyph, den das Thema bei U+EE56 zufaellig fuehrt, und nicht die
+ * sechs Punkte aus der Nerd-Font-Schrift. */
 window.starter-button-window {
   background: transparent;
+  font-family: {{STYLE_FONT_FAMILY}};
 }
 
 #starter-button {

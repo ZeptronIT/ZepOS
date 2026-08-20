@@ -272,6 +272,45 @@ ICON_DEFINITIONS = {
     "ICON_WINDOW_CLOSE": "nf-fa-times",
 
     # ===== APPLICATIONS =====
+    # SECHS PUNKTE - das Rastersymbol des Anwendungsstarters, bestellt am
+    # 20.08.2026: "will ich ein icon ganz unten rechts genauso, nur mit 6
+    # punkten, was im Prinzip wie SUPER+SPACE macht".
+    #
+    # DIE FAMILIENREGEL OBEN SAGT nf-md FUER BEDIENZEICHEN, UND HIER STEHT
+    # nf-fa. Das ist keine Bequemlichkeit, das ist gemessen.
+    #
+    #     Am 20.08.2026 wurden ALLE 6896 nf-md-Zeichen der ausgelieferten
+    #     Schrift (/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf,
+    #     bei 64 px gezeichnet) auf zusammenhaengende Flecken abgesucht.
+    #     Genau SECHS gleich grosse Flecken haben davon sechs Zeichen, und
+    #     kein einziges davon ist ein Raster:
+    #
+    #         nf-md-camera_iris        Blende
+    #         nf-md-dots_triangle      sechs Punkte, aber als Dreieck
+    #         nf-md-table_merge_cells  Tabellenzellen
+    #         nf-md-turtle             eine Schildkroete
+    #         nf-md-view_module        sechs RECHTECKE, keine Punkte
+    #         nf-md-volleyball         ein Ball
+    #
+    #     Die naechstliegenden nf-md-Kandidaten haben die falsche ANZAHL:
+    #     nf-md-dots_grid und nf-md-apps sind NEUN (3x3), nf-md-view_grid
+    #     ist VIER, nf-md-dots_square und nf-md-dots_circle sind ACHT.
+    #
+    #     In nf-fa sind es bei derselben Messung (1818 Zeichen) drei, und
+    #     zwei davon sind genau das Gesuchte: nf-fa-grip (3 Spalten x 2
+    #     Reihen) und nf-fa-grip_vertical (2 x 3). Gewaehlt ist die
+    #     waagerechte Anordnung - dieselbe, die Anwendungsuebersichten
+    #     ueblicherweise tragen.
+    #
+    #     nf-fa-grip ist ausserdem der vertraeglichste Nachbar, den nf-fa
+    #     zu bieten hat: seine sechs Flecken sind abgerundete Quadrate,
+    #     nicht die scharfen Ecken, wegen derer die Familienregel oben
+    #     ueberhaupt entstanden ist ("das eckige Kalenderblatt aus nf-fa
+    #     neben den runden Lautstaerkezeichen aus nf-md").
+    #
+    # Die Bestellung nennt die ANZAHL, nicht die Familie. Ein neun-Punkte-
+    # Zeichen waere die Regel eingehalten und die Bestellung verfehlt.
+    "ICON_APPS_GRID": "nf-fa-grip",
     "ICON_TERMINAL": "nf-md-console",
     "ICON_TERMINAL_ACTIVE": "nf-md-console_line",
     "ICON_BROWSER": "nf-md-web",

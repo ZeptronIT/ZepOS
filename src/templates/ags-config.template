@@ -44,6 +44,11 @@ import Logout from "./widget/Logout"
 // haette fuehren muessen - siehe den Kopf von
 // ags-power-button.template.
 import PowerButton from "./widget/PowerButton"
+// Der Starterknopf am Dock - Aufgabe 44 (20.08.2026). Dasselbe noch
+// einmal fuer die andere untere Ecke, nur OHNE Parameter: er oeffnet
+// kein Fenster dieses Prozesses, sondern den Anwendungsstarter, den auch
+// SUPER+SPACE oeffnet - siehe den Kopf von ags-starter-button.template.
+import StarterButton from "./widget/StarterButton"
 // Zwei Ausfuhren aus EINER Datei, und das ist kein Sparzwang: der
 // Einblendstapel und das Zentrum teilen sich den Verlauf. Die
 // Begruendung steht im Kopf von ags-notifications.template.
@@ -363,6 +368,22 @@ app.start({
       console.log("PowerButton loaded successfully")
     } catch (e) {
       console.error("Failed to create PowerButton:", e)
+    }
+
+    // Der Starterknopf, ebenfalls NACH dem Dock - und aus demselben
+    // Grund: er meldet sich bei faehrtMitDemDock() an, und diese
+    // Anmeldung holt sich den STAND des Docks (siehe dort). Ein Knopf,
+    // der vor dem Dock gebaut wuerde, haenge bis zum ersten SUPER+B in
+    // der Luft.
+    //
+    // OHNE toggleByName, anders als der Abschaltknopf eine Zeile
+    // darueber: er oeffnet kein Fenster dieses Prozesses. Siehe den Kopf
+    // von ags-starter-button.template.
+    try {
+      StarterButton()
+      console.log("StarterButton loaded successfully")
+    } catch (e) {
+      console.error("Failed to create StarterButton:", e)
     }
   },
   requestHandler(request: any, res: (response: any) => void) {

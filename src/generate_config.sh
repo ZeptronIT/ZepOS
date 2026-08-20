@@ -1310,6 +1310,14 @@ case "$CONFIG_NAME" in
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
         CONFIG_FILE="PowerButton.tsx"
         ;;
+    # Der Starterknopf am Dock - Aufgabe 44 (20.08.2026). Das
+    # Gegenstueck zum Abschaltknopf in der anderen unteren Ecke: wieder
+    # eine eigene, kleine Layer-Shell-Flaeche neben dem Dock und kein
+    # Teil davon - siehe den Kopf von ags-starter-button.template.
+    ags-starter-button)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
+        CONFIG_FILE="StarterButton.tsx"
+        ;;
     # Der Stil der Leiste. Nicht style.scss, sondern eine zweite Datei,
     # die app.ts ueber app.apply_css() nachlaedt - siehe dort, und siehe
     # den Kopf von src/styles/bar-style.template.

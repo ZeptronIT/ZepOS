@@ -1220,5 +1220,13 @@ def test_the_template_count_is_seventy_seven():
     dieses Baums (createShellWindow) neben dem Kontrollzentrum. Sie
     traegt KEINE Einstellung selbst: sie zeichnet, was
     `zepos-settings-gui --json get` ausgibt.
+
+    86 STATT 85, am 20.08.2026 (Aufgabe 44): ags-starter-button. Der
+    Starterknopf unten rechts, das Gegenstueck zum Abschaltknopf unten
+    links - dieselbe Bauart, dieselbe Groesse, dieselbe Mitfahrt am Dock,
+    nur das Rastersymbol aus sechs Punkten und der Anwendungsstarter
+    dahinter. Die vollstaendige Rechnung und der Wortlaut der Bestellung
+    stehen bei der Zwillingszusicherung in tests/src/test_inventory.py;
+    beide muessen zusammen wandern.
     """
-    assert len(list(TEMPLATES.glob("*.template"))) == 85
+    assert len(list(TEMPLATES.glob("*.template"))) == 86
