@@ -63,13 +63,29 @@ nmcli_field() {
 # Das Feld ACTIVE ist "yes" oder "no" und kann weder Doppelpunkt noch
 # Backslash tragen; danach beginnt der Name, den der Aufsteller des
 # Zugangspunktes vergeben hat.
+#
+# `--rescan no` NACHGETRAGEN am 20.08.2026 (Aufgabe 36)
+#
+#     `dev wifi` ohne Unterbefehl IST `dev wifi list`, und ohne
+#     `--rescan` nimmt nmcli `auto`: es sucht dann von sich aus, sobald
+#     der Zwischenspeicher aelter als 30 Sekunden ist. Diese Zeile
+#     beantwortet `network_info`, und `network_info` haengt an zwei
+#     Stellen, an denen niemand auf Funkverkehr warten will - am
+#     Leistenmodul, das mehrmals je Minute fragt, und am ersten Aufbau
+#     der Netzwerkseite (Stufe 1, siehe updateDisplay() in
+#     ags-network.template).
+#
+#     GEMESSEN am 20.08.2026: 13 ms aus dem Zwischenspeicher gegen 3552
+#     und 5899 ms fuer einen echten Suchlauf. WER DEN NAMEN DER AKTIVEN
+#     VERBINDUNG WISSEN WILL, BRAUCHT KEINEN SUCHLAUF - er ist verbunden,
+#     die Antwort steht laengst da.
 get_wifi_ssid() {
     local line
     while IFS= read -r line; do
         case "$line" in
             yes:*) nmcli_field "$line" 2; return ;;
         esac
-    done < <(LANG=C nmcli -t -f active,ssid dev wifi 2>/dev/null)
+    done < <(LANG=C nmcli -t -f active,ssid dev wifi list --rescan no 2>/dev/null)
 }
 
 # get_wifi_signal() stand hier und ist am 17.08.2026 mit seinem einzigen
@@ -191,15 +207,64 @@ watchdog_class() {
 }
 
 # Network list (JSON for AGS)
+#
+# DER SUCHLAUF WARTET JETZT WIRKLICH, UND OHNE IHN WIRD NICHTS GESUCHT -
+# GEAENDERT am 20.08.2026 (Aufgabe 36)
+#
+#     Hier stand `nmcli dev wifi rescan; sleep 1`, und beide Haelften
+#     davon waren falsch. GEMESSEN am 20.08.2026 auf der Maschine des
+#     Nutzers:
+#
+#         nmcli dev wifi rescan            15 ms
+#         nmcli dev wifi list --rescan yes  3552 ms und 5899 ms
+#         nmcli dev wifi list --rescan no     13 ms
+#
+#     `rescan` kehrt nach 15 ms zurueck, weil es den Suchlauf nur
+#     BEAUFTRAGT - es wartet nicht auf ihn. Die Sekunde danach war
+#     geraten, und sie war ZU KURZ: ein echter Suchlauf dauert dreieinhalb
+#     bis sechs Sekunden (Funkverkehr, nicht Rechenzeit). Die Liste, fuer
+#     die das Fenster eine Sekunde stillstand, war beim Ausdrucken also
+#     noch gar nicht fertig gesucht.
+#
+#     `--rescan yes` laesst nmcli selbst auf das Ergebnis warten. Das
+#     dauert LAENGER als vorher und ist trotzdem die Verbesserung: der
+#     Aufruf laeuft seit Aufgabe 36 im Hintergrund, waehrend das Fenster
+#     schon den Zwischenspeicher zeigt und daneben sagt, dass gesucht
+#     wird (siehe updateDisplay() in ags-network.template).
+#
+#     `--rescan no` ohne Argument ist die andere Haelfte: OHNE Angabe
+#     nimmt nmcli `--rescan auto` und sucht von sich aus, sobald der
+#     Zwischenspeicher aelter als 30 Sekunden ist. Genau daran haengt das
+#     "TEILWEISE sehr lange" der Meldung - derselbe Aufruf antwortete mal
+#     in 13 ms und mal in Sekunden, je nachdem, wann zuletzt gesucht
+#     wurde. Der schnelle Weg muss ausdruecklich "nein" sagen, sonst ist
+#     er nicht verlaesslich schnell.
 network_list() {
     local rescan="$1"
-    if [ "$rescan" = "rescan" ]; then
-        LANG=C nmcli dev wifi rescan 2>/dev/null
-        sleep 1
-    fi
+    # Vorgabe: NICHT suchen (siehe oben - "auto" ist der unzuverlaessige
+    # Fall). Nur wer "rescan" sagt, bekommt den echten Suchlauf, und der
+    # wartet dann auch auf sein Ergebnis.
+    local scan_mode="no"
+    [ "$rescan" = "rescan" ] && scan_mode="yes"
 
-    # Get active SSID first
-    local active_ssid=$(get_wifi_ssid)
+    # DIE AKTIVE VERBINDUNG KOMMT AUS DER SPALTE, NICHT AUS EINER ZWEITEN
+    # ABFRAGE - GEAENDERT am 20.08.2026 (Aufgabe 36)
+    #
+    #     Hier stand `local active_ssid=$(get_wifi_ssid)`, und das ist
+    #     eine ZWEITE `nmcli ... dev wifi`-Abfrage neben der unten - also
+    #     ein zweiter Prozess (GEMESSEN: rund 18 der 46 ms, die `list`
+    #     brauchte) und, schlimmer, eine zweite Gelegenheit fuer den
+    #     `--rescan auto`-Fall oben.
+    #
+    #     Die Abfrage unten holt die Spalte ACTIVE ohnehin schon mit. Sie
+    #     zu lesen beantwortet dieselbe Frage aus derselben Antwort.
+    #     `get_wifi_ssid` bleibt - `network_info` braucht es weiter.
+    #
+    #     Zusammengefasst wird je NAME (ein Name kann mehrere
+    #     Zugangspunkte haben): aktiv ist ein Name, wenn IRGENDEINER
+    #     seiner Zugangspunkte aktiv ist. Das ist dieselbe Aussage, die
+    #     der Namensvergleich vorher getroffen hat, nur ohne den Umweg
+    #     ueber den Text.
 
     # Gebaut mit jq, nicht mit echo.
     #
@@ -221,7 +286,26 @@ network_list() {
     # also sortierte das eine nach dem falschen Feld und das andere fasste
     # nach einem abgeschnittenen Namen zusammen. Beides macht jetzt jq,
     # unten, auf den fertig zerlegten Werten.
-    local entries=()
+    # EIN jq FUER ALLE NETZE STATT EINES JE NETZ - GEAENDERT am
+    # 20.08.2026 (Aufgabe 36)
+    #
+    #     Hier stand ein `jq -cn` INNERHALB der Schleife, also ein
+    #     Prozessstart je Netz in Reichweite. GEMESSEN am 20.08.2026 bei
+    #     zehn Netzen: 16 ms fuer zehn Starts gegen 2 ms fuer einen
+    #     einzigen, der alle zehn auf einmal baut. Der Betrag ist klein;
+    #     das Muster ist es nicht - es ist genau "einen teuren Aufruf je
+    #     Zeile wiederholen", und die Zahl waechst mit der Zahl der
+    #     Nachbarn.
+    #
+    #     Uebergeben ueber `--args` und `$ARGS.positional`, VIER Werte je
+    #     Netz, nicht ueber eine Zeile mit Trennzeichen: eine SSID gehoert
+    #     dem, der den Zugangspunkt aufstellt, und darf JEDES Zeichen
+    #     tragen - Anfuehrungszeichen, Backslash, Doppelpunkt, auch einen
+    #     Tabulator. Ein Argument braucht kein Trennzeichen und kann
+    #     darum an keinem zerbrechen. Genau diese Sorte Fehler steht
+    #     zweimal im Kopf dieser Datei (`IFS=:` und `cut -d:`), und ein
+    #     drittes Mal soll sie nicht entstehen.
+    local werte=()
     local line fields=() ssid signal security
     while IFS= read -r line; do
         mapfile -t fields < <(nmcli_fields "$line")
@@ -230,28 +314,34 @@ network_list() {
         security="${fields[2]}"
         [ -z "$ssid" ] && continue
         local is_active="false"
-        # Check if this is the active network
-        [ "$ssid" = "$active_ssid" ] && is_active="true"
+        # Die Spalte ACTIVE ist "yes" oder "no" und kommt von
+        # NetworkManager selbst - kein fremder Text, kein Zerleger noetig.
+        [ "${fields[3]}" = "yes" ] && is_active="true"
         local is_secure="false"
         [ -n "$security" ] && [ "$security" != "--" ] && is_secure="true"
-        # Die Signalstärke kommt ebenfalls von aussen; als --arg
-        # hereingegeben und in jq nach Zahl gewandelt, damit ein leeres
-        # Feld eine 0 ergibt statt einer Datei ohne Wert an dieser Stelle.
-        entries+=("$(jq -cn --arg ssid "$ssid" --arg signal "$signal" \
-            --argjson secure "$is_secure" --argjson active "$is_active" \
-            '{ssid: $ssid, signal: ($signal | tonumber? // 0),
-              secure: $secure, active: $active}')")
-    done < <(LANG=C nmcli -t -f SSID,SIGNAL,SECURITY,ACTIVE dev wifi list 2>/dev/null)
+        werte+=("$ssid" "$signal" "$is_secure" "$is_active")
+    done < <(LANG=C nmcli -t -f SSID,SIGNAL,SECURITY,ACTIVE dev wifi list \
+                  --rescan "$scan_mode" 2>/dev/null)
 
-    if [ ${#entries[@]} -eq 0 ]; then
-        echo "[]"
-    else
-        # Je Name der staerkste Eintrag, absteigend nach Signal - dieselbe
-        # Auswahl wie vorher `sort | awk`, nur auf Werten statt auf Text.
-        printf '%s\n' "${entries[@]}" \
-            | jq -s -c 'group_by(.ssid) | map(max_by(.signal))
-                        | sort_by(-.signal)'
-    fi
+    # Auch die leere Liste geht durch jq - `[]` faellt hier von selbst
+    # heraus, wenn nichts in Reichweite ist, und braucht keinen eigenen
+    # Zweig mehr.
+    #
+    # Die Signalstaerke kommt von aussen und wird in jq nach Zahl
+    # gewandelt, damit ein leeres Feld eine 0 ergibt statt kaputtem JSON.
+    # Je Name der staerkste Zugangspunkt, absteigend nach Signal -
+    # dieselbe Auswahl wie vorher, nur dass "aktiv" jetzt ueber ALLE
+    # Zugangspunkte dieses Namens geodert wird (siehe oben).
+    jq -cn --args '
+      [ range(0; ($ARGS.positional | length); 4) as $i
+        | { ssid:   $ARGS.positional[$i],
+            signal: ($ARGS.positional[$i + 1] | tonumber? // 0),
+            secure: ($ARGS.positional[$i + 2] == "true"),
+            active: ($ARGS.positional[$i + 3] == "true") } ]
+      | group_by(.ssid)
+      | map( max_by(.signal) + { active: (map(.active) | any) } )
+      | sort_by(-.signal)
+    ' "${werte[@]}"
 }
 
 # Network connect

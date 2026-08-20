@@ -10,6 +10,12 @@ KIT = ROOT / "src" / "templates" / "ags-kit.template"
 
 ERWARTETE_BAUTEILE = (
     "zepButton", "zepRow", "zepToggle", "zepSectionLabel", "zepDivider",
+    # NACHGETRAGEN am 20.08.2026 (Aufgabe 36): die Wartezeile. Sie steht
+    # hier und nicht in den beiden Seiten, die sie zuerst gebraucht
+    # haben, weil "laedt" eine Aussage ist, die JEDE Seite treffen kann -
+    # und weil es davor genau eine Fassung im ganzen Baum gab, von Hand
+    # gebaut in ags-vpn.template, ohne CSS-Klasse.
+    "zepBusy",
 )
 
 

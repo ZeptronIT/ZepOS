@@ -182,6 +182,20 @@ msgstr "Suche läuft …"
 msgid "No device known - search for devices"
 msgstr "Kein Gerät bekannt - suche nach Geräten"
 
+# Aufgabe 36, 20.08.2026: der dritte Zustand einer leeren Liste.
+# "Es wird noch gelesen" und "es ist nichts da" sahen bis dahin beide
+# gleich aus, naemlich wie nichts.
+#: src/templates/ags-bluetooth.template:506
+msgid "Reading devices …"
+msgstr "Geräte werden gelesen …"
+
+# Aufgabe 36, 20.08.2026: die Ansage waehrend des Suchlaufs. Die Dauer
+# steht darin, weil sie feststeht (SUCHDAUER) - wer sie kennt, wartet
+# anders als wer nicht weiss, ob ueberhaupt noch etwas kommt.
+#: src/templates/ags-bluetooth.template:723
+msgid "Searching for devices - {seconds} seconds …"
+msgstr "Geräte werden gesucht - {seconds} Sekunden …"
+
 #: src/templates/ags-bluetooth.template:531
 msgid "Connecting …"
 msgstr "Verbinde …"
@@ -564,6 +578,15 @@ msgstr "offen"
 #: src/templates/ags-network.template:568
 msgid "Turn Wi-Fi on or off"
 msgstr "WLAN ein- oder ausschalten"
+
+# Aufgabe 36, 20.08.2026: die Ansage waehrend des Suchlaufs. Er dauert
+# GEMESSEN 3,5 bis 5,9 Sekunden (Funkverkehr, nicht Rechenzeit) und
+# laeuft seither im Hintergrund, waehrend die Liste des letzten Laufs
+# schon dasteht. Ohne diese Zeile saehe der Nutzer nur eine Liste, die
+# sich irgendwann von selbst aendert.
+#: src/templates/ags-network.template:710
+msgid "Searching for Wi-Fi networks …"
+msgstr "WLAN-Netze werden gesucht …"
 
 #: src/templates/ags-network.template:607
 #: src/templates/ags-network.template:754

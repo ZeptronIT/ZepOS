@@ -228,6 +228,56 @@ export function zepSectionLabel(text: string): Gtk.Label {
   return marke
 }
 
+// Die Zeile, die sagt, dass gerade etwas laeuft. Scheibe links, Satz
+// daneben.
+//
+// NACHGETRAGEN am 20.08.2026, Aufgabe 36. GEMELDET, woertlich: "die ags
+// fenster bluetooth und wlan laden teilweise sehr lange um den inhalt
+// anzuzeigen das muss performanter und user friendly werden" - zwei
+// Beschwerden in einem Satz. Dies ist die Antwort auf die zweite; die
+// erste (Geschwindigkeit) steht in ags-network.template und
+// ags-bluetooth.template.
+//
+// WARUM INS KIT UND NICHT IN DIE BEIDEN SEITEN
+//     GEZAEHLT am 20.08.2026 per grep ueber Kit und Stylesheet: fuer
+//     "laedt" gab es KEIN Bauteil. Das einzige Vorbild im ganzen Baum
+//     war ein von Hand gebauter Gtk.Spinner in ags-vpn.template
+//     ("Disconnecting ..."), ohne CSS-Klasse und ohne zweiten
+//     Verbraucher. Haetten Netzwerk und Bluetooth sich jetzt jeder eine
+//     eigene Scheibe gebaut, waeren es drei Fassungen derselben Aussage -
+//     genau die Lage, aus der die 45 Knopfregeln in 41 Klassen
+//     entstanden sind (siehe Kopf dieser Datei).
+//
+// WAS HIER STEHT UND WAS NICHT: dieses Bauteil dreht eine Scheibe und
+// setzt einen Text daneben. Es entscheidet NICHT, wann es erscheint und
+// WAS dort steht - das weiss nur die Seite, die wartet. Der Text kommt
+// deshalb als Parameter herein und nicht als Vorgabe von hier: eine
+// Scheibe, die "wird gesucht" sagt, waehrend in Wahrheit ein Fehler
+// vorliegt, ist schlimmer als eine Fehlermeldung. Wer dieses Bauteil
+// zeigt, muss es auch wieder wegnehmen.
+export function zepBusy(text: string): Gtk.Widget {
+  const zeile = new Gtk.Box({ valign: Gtk.Align.CENTER })
+  zeile.add_css_class("zep-busy")
+
+  // `spinning: true` im Konstruktor und nicht spaeter: die Scheibe
+  // laeuft, sobald sie im Baum haengt, und sie haengt nur so lange, wie
+  // die Seite sie haengen laesst.
+  const scheibe = new Gtk.Spinner({ spinning: true, valign: Gtk.Align.CENTER })
+  scheibe.add_css_class("zep-busy-spinner")
+
+  const satz = new Gtk.Label({ label: text, xalign: 0 })
+  satz.add_css_class("zep-busy-text")
+  // Gekuerzt UND gedeckelt, dieselbe Begruendung und dieselbe Grenze wie
+  // bei zepRow oben: der Satz kann einen Netz- oder Geraetenamen
+  // tragen, und `ellipsize` allein senkt nur die Mindestbreite.
+  satz.set_ellipsize(3)  // Pango.EllipsizeMode.END
+  satz.set_max_width_chars({{STYLE_MEASURE_LINE}})
+
+  zeile.append(scheibe)
+  zeile.append(satz)
+  return zeile
+}
+
 // Der Trenner. Ein Gtk.Separator und keine 1-px-Box: er meldet sich
 // den Hilfsmitteln als Trenner.
 export function zepDivider(): Gtk.Widget {

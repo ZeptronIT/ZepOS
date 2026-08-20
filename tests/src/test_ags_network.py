@@ -413,3 +413,199 @@ def test_every_action_the_control_centre_asks_for_exists_in_the_script():
         f"- ags-network-scripts.template kennt im case-Zweig nur "
         f"{sorted(known)}. Der `*)`-Zweig dort gibt seinen eigenen Pfad "
         "zurueck, und der landet unveraendert auf dem Bildschirm.")
+
+
+# --------------------------------------------------------------------
+# was ein Oeffnen kosten darf (Aufgabe 36, 20.08.2026)
+#
+# GEMELDET, woertlich: "die ags fenster bluetooth und wlan laden
+# teilweise sehr lange um den inhalt anzuzeigen das muss performanter
+# und user friendly werden".
+#
+# Die Reparatur haengt an vier Aussagen, und jede einzelne davon laesst
+# sich mit einer Zeile wieder einreissen, ohne dass ein anderer Test
+# hier etwas merkt: der Aufbau wuerde weiter funktionieren, nur wieder
+# zwei Sekunden dauern. Genau dafuer stehen die Waechter unten.
+# --------------------------------------------------------------------
+
+_NETWORK_PAGE = SRC / "templates" / "ags-network.template"
+_BLUETOOTH_PAGE = SRC / "templates" / "ags-bluetooth.template"
+
+
+def _ohne_kommentare(text: str) -> str:
+    """Die Vorlage ohne ihre `//`-Zeilen.
+
+    Dieselbe Falle wie in tests/src/test_ags_i18n.py: die Koepfe dieser
+    beiden Dateien ZITIEREN die Zeilen, um die es geht (`await
+    scanWifi()`, `sleep 1`), um zu erklaeren, warum sie weg sind. Ein
+    schlichtes `in text` waere damit auch dann wahr, wenn die Reparatur
+    zurueckgenommen wird.
+    """
+    zeilen = []
+    for zeile in text.splitlines():
+        blank = zeile.lstrip()
+        if blank.startswith("//") or blank.startswith("*") or blank.startswith("/*"):
+            continue
+        zeilen.append(zeile)
+    return "\n".join(zeilen)
+
+
+def test_der_schnelle_weg_der_netzliste_sagt_ausdruecklich_nicht_suchen():
+    """`nmcli dev wifi list` OHNE `--rescan` ist `--rescan auto`.
+
+    nmcli sucht dann von sich aus, sobald der Zwischenspeicher aelter
+    als 30 Sekunden ist - derselbe Aufruf antwortet mal in 13 ms und mal
+    in Sekunden. GEMESSEN am 20.08.2026: 13 ms mit `--rescan no` gegen
+    3552 ms und 5899 ms mit `--rescan yes`.
+
+    Das ist das "TEILWEISE" aus der Meldung. Der schnelle Weg muss
+    ausdruecklich "nein" sagen, sonst ist er nicht verlaesslich schnell.
+    """
+    text = (SRC / "templates" / "ags-network-scripts.template").read_text(
+        encoding="utf-8")
+    rumpf = "\n".join(z for z in text.splitlines()
+                      if not z.lstrip().startswith("#"))
+
+    # Fortsetzungszeilen zuerst zusammenziehen: der Aufruf steht ueber
+    # zwei Zeilen, und ein `\` am Zeilenende wuerde ihn sonst genau vor
+    # dem `--rescan` abschneiden.
+    ganz = re.sub(r"\\\n\s*", " ", rumpf)
+    aufrufe = re.findall(r"nmcli[^\n|]*dev wifi list[^\n|]*", ganz)
+    assert aufrufe, "ags-network-scripts.template fragt keine Netzliste mehr ab"
+    ohne = [a for a in aufrufe if "--rescan" not in a]
+    assert ohne == [], (
+        "eine Netzabfrage ohne --rescan - nmcli nimmt dann 'auto' und sucht "
+        f"nach 30 Sekunden von selbst: {ohne}")
+
+
+def test_die_netzliste_startet_nicht_ein_jq_je_netz():
+    """GEMESSEN am 20.08.2026 bei zehn Netzen: 16 ms fuer zehn
+    jq-Starts gegen 2 ms fuer einen einzigen.
+
+    Der Betrag ist klein, das Muster ist es nicht - es waechst mit der
+    Zahl der Nachbarn. Geprueft wird die Schleife selbst: zwischen
+    `while ... read` und dem `done` darf kein jq stehen.
+    """
+    text = (SRC / "templates" / "ags-network-scripts.template").read_text(
+        encoding="utf-8")
+    rumpf = "\n".join(z for z in text.splitlines()
+                      if not z.lstrip().startswith("#"))
+
+    schleifen = re.findall(r"while IFS= read -r line; do(.*?)done", rumpf,
+                           re.DOTALL)
+    assert schleifen, "die Zerlegeschleife der Netzliste ist verschwunden"
+    mit_jq = [s for s in schleifen if "jq" in s]
+    assert mit_jq == [], (
+        "ein jq-Start INNERHALB der Schleife, also einer je Netz in "
+        "Reichweite - alle Netze gehen in EINEN Aufruf (--args)")
+
+
+def test_die_verbindungsauskunft_stoesst_keinen_suchlauf_an():
+    """Der teuerste gemessene Fund: DERSELBE Suchlauf, zweimal.
+
+    `getConnectionInfo()` rief `scanWifi()` nur fuer die Signalstaerke,
+    und `updateDisplay()` rief es unmittelbar danach ein zweites Mal.
+    GEMESSEN am 20.08.2026: zwei Suchlaeufe zu je 1060 ms in einem
+    einzigen Aufbau von 2160 ms.
+
+    Die Liste kommt seither als Parameter herein. Wer sie nicht hat,
+    uebergibt eine leere - er bekommt dann 0, genau wie vorher bei einem
+    fehlgeschlagenen Suchlauf.
+    """
+    rumpf = _ohne_kommentare(_NETWORK_PAGE.read_text(encoding="utf-8"))
+
+    koerper = re.search(
+        r"async function getConnectionInfo\((.*?)\n\}", rumpf, re.DOTALL)
+    assert koerper, "getConnectionInfo() ist verschwunden"
+    assert "scanWifi(" not in koerper.group(1), (
+        "getConnectionInfo() sucht wieder selbst - das ist der doppelte "
+        "Suchlauf von vor dem 20.08.2026, 1060 ms geschenkt")
+
+
+def test_der_erste_aufbau_der_netzseite_fragt_den_funk_nicht():
+    """Stufe 1 zeigt den Zwischenspeicher (51 ms), Stufe 2 sucht nach.
+
+    `scanWifi(true)` ist der echte Suchlauf (3,5 bis 5,9 s, GEMESSEN am
+    20.08.2026) und darf NUR in `sucheNach()` stehen - dem Zweig, der
+    ohne `await` angestossen wird und waehrenddessen sagt, dass er
+    laeuft. Stuende er in `updateDisplay()`, waere das Fenster wieder
+    das, was gemeldet wurde: sekundenlang leer.
+    """
+    rumpf = _ohne_kommentare(_NETWORK_PAGE.read_text(encoding="utf-8"))
+
+    update = re.search(
+        r"const updateDisplay = async \(\) => \{(.*?)\n    \}", rumpf,
+        re.DOTALL)
+    assert update, "updateDisplay() der Netzseite ist verschwunden"
+    assert "scanWifi(true)" not in update.group(1), (
+        "updateDisplay() sucht wieder selbst, statt erst den "
+        "Zwischenspeicher zu zeigen - genau der Zustand der Meldung")
+    assert "scanWifi(false)" in update.group(1), (
+        "updateDisplay() liest die Netzliste gar nicht mehr")
+
+
+def test_bluetooth_fragt_seine_vier_listen_gleichzeitig():
+    """GEMESSEN am 20.08.2026 mit einer Attrappe, die nicht antwortet:
+    nacheinander 12006 ms, gleichzeitig 3003 ms.
+
+    Im gesunden Fall ist diese Seite nicht langsam (10 ms). Der Fall aus
+    der Meldung ist der andere - antwortet bluez nicht, lief jede der
+    vier Fragen in ihre volle Frist, und die vier Fristen addierten
+    sich. FRIST soll die laengste Wartezeit sein, nicht ein Viertel
+    davon.
+    """
+    rumpf = _ohne_kommentare(_BLUETOOTH_PAGE.read_text(encoding="utf-8"))
+
+    lese = re.search(r"async function readDevices\(\).*?\n\}", rumpf,
+                     re.DOTALL)
+    assert lese, "readDevices() ist verschwunden"
+    assert "Promise.all" in lese.group(0), (
+        "readDevices() fragt seine drei Listen wieder nacheinander - "
+        "drei Fristen statt einer")
+
+    update = re.search(
+        r"const updateDisplay = async \(\) => \{(.*?)\n    \}", rumpf,
+        re.DOTALL)
+    assert update, "updateDisplay() der Bluetooth-Seite ist verschwunden"
+    assert "Promise.all" in update.group(1), (
+        "updateDisplay() fragt Adapter und Geraete wieder nacheinander")
+
+
+def test_beide_seiten_frischen_beim_seitenwechsel_auf():
+    """`wechsleSeite()` setzt nur `set_visible_child_name()`.
+
+    Keine Seite erfaehrt darueber, dass sie jetzt die gezeigte ist -
+    `notify::visible` feuert nur, wenn die GANZE Schale auf- oder
+    zugeht. Ohne die `map`-Zeile sieht, wer bei offener Schale links
+    umschaltet, den Stand des letzten Taktes (bis zu 5000 ms alt), und
+    erst DANACH laeuft die Abfrage.
+
+    GEMESSEN am 20.08.2026 (GTK4 headless ueber broadwayd, eigener
+    XDG_RUNTIME_DIR, kein Sitzungsbus): ein Gtk.Stack mappt genau sein
+    sichtbares Kind und unmappt das vorige - beim Blaettern UND beim
+    Wiederaufgehen der Schale.
+    """
+    for pfad in (_NETWORK_PAGE, _BLUETOOTH_PAGE):
+        rumpf = _ohne_kommentare(pfad.read_text(encoding="utf-8"))
+        assert re.search(r'container\.connect\("map"', rumpf), (
+            f"{pfad.name} frischt beim Seitenwechsel nicht auf - "
+            "ohne den map-Rueckruf bleibt bis zu 5 Sekunden der alte "
+            "Stand stehen")
+
+
+def test_die_wartezeile_wird_in_jedem_ausgang_wieder_weggenommen():
+    """Eine Scheibe, die sich ueber einem Fehler weiterdreht, behauptet,
+    es laufe noch etwas - sie ist schlimmer als eine Fehlermeldung.
+
+    Geprueft wird das Verhaeltnis: wer `sucheWrap` sichtbar macht, muss
+    es mindestens ebenso oft wieder unsichtbar machen.
+    """
+    for pfad in (_NETWORK_PAGE, _BLUETOOTH_PAGE):
+        rumpf = _ohne_kommentare(pfad.read_text(encoding="utf-8"))
+        an = len(re.findall(r"sucheWrap\.set_visible\(true\)", rumpf))
+        aus = len(re.findall(r"sucheWrap\.set_visible\(false\)", rumpf))
+        assert an > 0, f"{pfad.name} zeigt gar keine Wartezeile mehr"
+        assert aus >= an, (
+            f"{pfad.name} zeigt die Wartezeile {an}x und nimmt sie {aus}x "
+            "wieder weg - ein Ausgang ohne Ruecknahme laesst die Scheibe "
+            "ueber einem Fehler stehen")

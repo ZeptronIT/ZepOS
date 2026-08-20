@@ -169,7 +169,7 @@ import Pango from "gi://Pango"
 // Aufgabe 7, an derselben Stelle).
 import type { ShellSeite } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
-import { zepButton, zepRow, zepStateHeader, zepToggle, zepSectionLabel, zepDivider } from "../utils/kit"
+import { zepButton, zepRow, zepStateHeader, zepToggle, zepSectionLabel, zepDivider, zepBusy } from "../utils/kit"
 
 // UMGESTELLT AUF DAS BAUTEIL-KIT, 18.08.2026 (task-C, Stufe 4)
 //     zepToggle fehlte bewusst in der Liste oben, bis Aufgabe 12: net-
@@ -305,10 +305,27 @@ function getSignalIcon(signal: number): string {
   return ICONS.signal1
 }
 
-async function scanWifi(): Promise<WifiNetwork[]> {
+/** Die Netze in Reichweite.
+ *
+ * `mitSuchlauf` ENTSCHEIDET UEBER ZWEI GROESSENORDNUNGEN, UND DAS IST
+ * GEMESSEN (20.08.2026, Aufgabe 36, Maschine des Nutzers):
+ *
+ *     false  aus dem Zwischenspeicher von NetworkManager      13 ms
+ *     true   echter Suchlauf, auf sein Ergebnis gewartet    3552 ms
+ *                                                       und 5899 ms
+ *
+ * Die zweite Zahl laesst sich NICHT wegoptimieren: ein Suchlauf wartet
+ * auf Funkverkehr, nicht auf Rechenzeit. Sie laesst sich nur aus dem
+ * Weg raeumen - updateDisplay() zeigt darum ZUERST den Zwischenspeicher
+ * und laesst den Suchlauf danach nachliefern.
+ */
+async function scanWifi(mitSuchlauf: boolean): Promise<WifiNetwork[]> {
   const networks: WifiNetwork[] = []
   try {
-    const output = await execAsync([SCRIPTS.network, "list", "rescan"])
+    const argumente = mitSuchlauf
+      ? [SCRIPTS.network, "list", "rescan"]
+      : [SCRIPTS.network, "list"]
+    const output = await execAsync(argumente)
     const parsed = JSON.parse(output.trim())
     for (const net of parsed) {
       networks.push({ ssid: net.ssid, signal: net.signal, security: net.secure ? "WPA" : "", active: net.active })
@@ -317,16 +334,37 @@ async function scanWifi(): Promise<WifiNetwork[]> {
   return networks.sort((a, b) => b.signal - a.signal)
 }
 
-async function getConnectionInfo(): Promise<{ type: string; name: string; ip: string; signal: number }> {
+/** Die aktuelle Verbindung.
+ *
+ * SUCHT SEIT DEM 20.08.2026 NICHT MEHR SELBST (Aufgabe 36)
+ *     Hier stand `const networks = await scanWifi()`, nur um die
+ *     Signalstaerke der aktiven Verbindung zu erfahren - und
+ *     updateDisplay() rief scanWifi() unmittelbar DANACH ein zweites
+ *     Mal. GEMESSEN am 20.08.2026: zwei Suchlaeufe zu je 1060 ms in
+ *     einem einzigen Aufbau, also 1060 ms geschenkt, fuer Daten, die
+ *     der Aufrufer schon hatte.
+ *
+ *     Die Liste kommt jetzt als Parameter herein. Wer die Signalstaerke
+ *     braucht, hat die Liste ohnehin - und wer sie nicht hat, uebergibt
+ *     eine leere und bekommt 0, genau wie vorher bei einem
+ *     fehlgeschlagenen Suchlauf.
+ *
+ * Die beiden verbliebenen Fragen laufen GLEICHZEITIG (Promise.all) statt
+ * nacheinander: sie wissen nichts voneinander.
+ */
+async function getConnectionInfo(
+  networks: WifiNetwork[],
+): Promise<{ type: string; name: string; ip: string; signal: number }> {
   try {
-    const name = await execAsync([SCRIPTS.network, "info"])
-    const ip = await execAsync([SCRIPTS.network, "ip"])
+    const [name, ip] = await Promise.all([
+      execAsync([SCRIPTS.network, "info"]),
+      execAsync([SCRIPTS.network, "ip"]),
+    ])
     let type = "none", signal = 0
     if (name.trim() && name.trim() !== NOT_CONNECTED) {
       if (name.trim() === WIRED_NAME) { type = "ethernet" }
       else {
         type = "wifi"
-        const networks = await scanWifi()
         const active = networks.find(n => n.active)
         if (active) signal = active.signal
       }
@@ -340,7 +378,11 @@ async function connectToNetwork(ssid: string, password?: string): Promise<boolea
     if (password) { await execAsync([SCRIPTS.network, "connect", ssid, password]) }
     else { await execAsync([SCRIPTS.network, "connect", ssid]) }
     await new Promise(resolve => setTimeout(resolve, 2000))
-    const info = await getConnectionInfo()
+    // OHNE Netzliste: hier wird nur gefragt, OB die Verbindung steht,
+    // nicht wie stark sie ist. Ein Suchlauf an dieser Stelle waere
+    // dieselbe Verwechslung, die getConnectionInfo() am 20.08.2026
+    // losgeworden ist (siehe dort).
+    const info = await getConnectionInfo([])
     return info.name === ssid || info.type !== "none"
   } catch (e) { console.error("Das Verbinden schlug fehl:", e); return false }
 }
@@ -391,6 +433,25 @@ export const networkSeite: ShellSeite = {
     let detailBox: Gtk.Box, detailHeaderWrap: Gtk.Box
     let detailSecurityLabel: Gtk.Label, detailIpLabel: Gtk.Label, detailGatewayLabel: Gtk.Label, detailDnsLabel: Gtk.Label
     let currentConnectionInfo: { type: string; name: string; ip: string; signal: number } = { type: "none", name: "", ip: "", signal: 0 }
+
+    // Wo die Ansage "es wird gesucht" steht. Genau EIN Kind oder keines -
+    // dieselbe Bauart wie statusWrap darueber.
+    let sucheWrap: Gtk.Box
+
+    // DER LETZTE STAND, UEBER DAS SCHLIESSEN HINWEG - NEU am 20.08.2026
+    // (Aufgabe 36).
+    //
+    // Diese beiden Felder sind der Grund, aus dem ein ZWEITES Oeffnen
+    // sofort etwas zeigt statt einer leeren Flaeche. Sie leben so lange
+    // wie die Schale (bauen() laeuft genau einmal), nicht so lange wie
+    // eine Sichtbarkeit - und ein WLAN-Name in der Nachbarschaft ist
+    // beim naechsten Oeffnen fast immer noch derselbe.
+    //
+    // Sie sind ein ZWISCHENSPEICHER und keine Wahrheit: was hier steht,
+    // wird bei jedem Aufbau von der frischen Antwort ueberschrieben
+    // (51 ms spaeter, siehe updateDisplay()).
+    let letzteNetze: WifiNetwork[] = []
+    let letzterSchalter = false
 
     const showPassword = (ssid: string) => {
       connectingSsid = ssid
@@ -512,20 +573,15 @@ export const networkSeite: ShellSeite = {
       })
     }
 
-    const updateDisplay = async () => {
-      if (currentView !== "main") return
-      // Eine Unteransicht wird nicht aufgefrischt - dieselbe Zeile wie
-      // vorher, nur der Grund "ein geschlossenes Fenster wird nicht
-      // aufgefrischt" ist mit dem `windowIsUp`-Feld gegangen (siehe Kopf
-      // der Datei): DAS entscheidet jetzt, WER updateDisplay() ueberhaupt
-      // ruft (der Takt unten fragt `win.visible` selbst), nicht mehr
-      // diese Funktion selbst.
-
-      const connInfo = await getConnectionInfo()
-      currentConnectionInfo = connInfo
-      const networks = await scanWifi()
-      const wifiEnabled = (await execAsync("nmcli radio wifi").catch(() => "disabled")).trim() === "enabled"
-
+    /** Ein Aufbau aus dem, was DA IST - ohne eine einzige Frage nach
+     * aussen.
+     *
+     * Getrennt von updateDisplay(), damit derselbe Aufbau zweimal
+     * laufen kann: einmal sofort mit dem Zwischenspeicher und einmal,
+     * wenn der Suchlauf etwas Besseres gebracht hat.
+     */
+    const zeichne = (connInfo: { type: string; name: string; ip: string; signal: number },
+                     networks: WifiNetwork[], wifiEnabled: boolean) => {
       // Der Zustandskopf als frischer zepStateHeader (18.08.2026,
       // Aufgabe 12) - siehe die Begruendung bei der Deklaration von
       // statusWrap oben und am Kopf dieser Datei. `zepStateHeader` kennt
@@ -596,6 +652,118 @@ export const networkSeite: ShellSeite = {
 
       removeAllChildren(networkList)
       for (const network of networks.slice(0, 12)) { networkList.append(createNetworkRow(network)) }
+    }
+
+    // ZWEI STUFEN STATT EINER, UND DIE ERSTE FRAGT DEN FUNK NICHT -
+    // NEU am 20.08.2026 (Aufgabe 36)
+    //
+    // GEMELDET, woertlich: "die ags fenster bluetooth und wlan laden
+    // teilweise sehr lange um den inhalt anzuzeigen das muss
+    // performanter und user friendly werden".
+    //
+    // WAS HIER VORHER STAND, UND WAS ES GEMESSEN GEKOSTET HAT
+    //     Fuenf Fragen, streng nacheinander, jede mit `await`, und die
+    //     Oberflaeche blieb bis zur letzten stehen (AGS ist einfaedig).
+    //     GEMESSEN am 20.08.2026 auf der Maschine des Nutzers:
+    //
+    //         info                                14 ms
+    //         ip                                   3 ms
+    //         list rescan  (in getConnectionInfo) 1060 ms
+    //         list rescan  (noch einmal, hier)    1060 ms
+    //         nmcli radio wifi                    12 ms
+    //         ----------------------------------------
+    //         Summe                             2160 ms
+    //
+    //     Zwei Drittel davon war DERSELBE Suchlauf, zweimal gemacht
+    //     (behoben in getConnectionInfo(), siehe dort), und der Rest
+    //     war ein Suchlauf VOR dem ersten Bild.
+    //
+    // DIE AUFTEILUNG
+    //     Stufe 1 fragt nur, was aus dem Zwischenspeicher kommt, und
+    //     zwar alles GLEICHZEITIG: info, ip, der Schalterstand des
+    //     Empfaengers und die Netzliste ohne Suchlauf. GEMESSEN: 51 ms,
+    //     und danach steht das Bild.
+    //
+    //     Stufe 2 stoesst den echten Suchlauf an (3,5 bis 5,9 s, siehe
+    //     scanWifi()) und zeichnet neu, wenn er etwas gebracht hat.
+    //     Waehrenddessen steht ueber der Liste, DASS gesucht wird -
+    //     nicht als Zierde, sondern weil das die einzige ehrliche
+    //     Auskunft ueber diese Sekunden ist.
+    //
+    // WAS DAMIT NICHT BEHAUPTET WIRD: der Suchlauf ist nicht schneller
+    // geworden. Er ist aus dem Weg. Die Liste, die in Stufe 1 erscheint,
+    // ist die vom letzten Suchlauf - fuer WLAN-Namen in der Nachbarschaft
+    // ist das fast immer dieselbe Liste, und wenn nicht, korrigiert
+    // Stufe 2 sie ein paar Sekunden spaeter.
+
+    /** Laeuft gerade ein Suchlauf? Ein zweiter waehrenddessen waere ein
+     * zweites Funkgeraet auf derselben Karte. */
+    let suchtGerade = false
+
+    /** Stufe 2: der echte Suchlauf, im Hintergrund, mit Ansage. */
+    const sucheNach = async () => {
+      if (suchtGerade || currentView !== "main") return
+      suchtGerade = true
+      // Die Ansage steht UEBER der Liste und ERSETZT sie nicht: was da
+      // ist, bleibt bedienbar, waehrend nachgesucht wird.
+      removeAllChildren(sucheWrap)
+      sucheWrap.append(zepBusy(_("Searching for Wi-Fi networks …")))
+      sucheWrap.set_visible(true)
+      try {
+        const frisch = await scanWifi(true)
+        letzteNetze = frisch
+        if (currentView === "main") {
+          zeichne(currentConnectionInfo, frisch, letzterSchalter)
+        }
+      } catch (e) {
+        console.error("Netzwerk: der Suchlauf schlug fehl:", e)
+      }
+      suchtGerade = false
+      // Weg damit, in JEDEM Ausgang. Eine Scheibe, die sich ueber einem
+      // Fehler weiterdreht, ist schlimmer als eine Fehlermeldung.
+      removeAllChildren(sucheWrap)
+      sucheWrap.set_visible(false)
+    }
+
+    /** Stufe 1: sofort zeigen, was da ist - und danach nachsuchen. */
+    const updateDisplay = async () => {
+      if (currentView !== "main") return
+      // Eine Unteransicht wird nicht aufgefrischt - dieselbe Zeile wie
+      // vorher, nur der Grund "ein geschlossenes Fenster wird nicht
+      // aufgefrischt" ist mit dem `windowIsUp`-Feld gegangen (siehe Kopf
+      // der Datei): DAS entscheidet jetzt, WER updateDisplay() ueberhaupt
+      // ruft (der Takt unten fragt `win.visible` selbst), nicht mehr
+      // diese Funktion selbst.
+
+      // WAS SCHON DA IST, STEHT SOFORT DA. Beim allerersten Aufbau ist
+      // `letzteNetze` leer und dieser Aufruf zeichnet eine leere Liste -
+      // die 51 ms danach fuellen sie. Bei JEDEM weiteren Oeffnen steht
+      // die Liste des letzten Mals sofort da, statt dass die Seite bei
+      // null anfaengt.
+      if (letzteNetze.length > 0) {
+        zeichne(currentConnectionInfo, letzteNetze, letzterSchalter)
+      }
+
+      // Vier Fragen, KEINE davon fragt den Funk - und alle vier
+      // gleichzeitig, weil keine von der anderen etwas wissen muss.
+      const [netze, schalter] = await Promise.all([
+        scanWifi(false),
+        execAsync("nmcli radio wifi")
+          .then(text => text.trim() === "enabled")
+          .catch(() => false),
+      ])
+      const connInfo = await getConnectionInfo(netze)
+
+      letzteNetze = netze
+      letzterSchalter = schalter
+      currentConnectionInfo = connInfo
+      if (currentView !== "main") return
+      zeichne(connInfo, netze, schalter)
+
+      // Und JETZT erst der Suchlauf - ohne `await`, damit dieser
+      // Rueckruf hier endet und die Oberflaeche wieder dem Nutzer
+      // gehoert.
+      void sucheNach()
     }
 
     // ----- Die Passwortabfrage -----
@@ -740,9 +908,16 @@ export const networkSeite: ShellSeite = {
     // Hilfsmitteln als Trenner, eine leere Box nicht.
     const divider = zepDivider()
 
+    // Die Ansage ueber der Liste, unsichtbar bis etwas laeuft.
+    // ZWISCHEN Knopfzeile und Liste und nicht darunter: sie gehoert zu
+    // dem, was gleich in der Liste steht, und dort sucht das Auge
+    // waehrend des Wartens.
+    sucheWrap = new Gtk.Box({ visible: false })
+
     mainContent.append(statusWrap)
     mainContent.append(divider)
     mainContent.append(toggleRow)
+    mainContent.append(sucheWrap)
     mainContent.append(networkList)
 
     // ----- Die Detailansicht -----
@@ -886,6 +1061,41 @@ export const networkSeite: ShellSeite = {
     win.connect("notify::visible", () => {
       if (win.visible && istAktiv()) { showMain(); updateDisplay() }
     })
+
+    // UND DER SEITENWECHSEL SELBST - NEU am 20.08.2026 (Aufgabe 36)
+    //
+    //     `notify::visible` oben feuert nur, wenn die GANZE Schale auf-
+    //     oder zugeht. Wer sie offen hat und links auf "Netzwerk"
+    //     klickt, loeste bis heute GAR NICHTS aus: `wechsleSeite()`
+    //     (ags-overlay-utils.template) setzt nur
+    //     `set_visible_child_name()`, und keine Seite erfaehrt, dass sie
+    //     jetzt die gezeigte ist. Zu sehen war der Stand des letzten
+    //     Taktes - bis zu UPDATE_INTERVAL (5000 ms) alt -, und erst
+    //     DANACH lief die Abfrage. Das ist die zweite Haelfte des
+    //     "teilweise sehr lange" aus der Meldung.
+    //
+    //     `map` ist das Signal, das GTK4 dafuer schon hat, und es ist
+    //     GEMESSEN und nicht angenommen (20.08.2026, GTK4 headless ueber
+    //     broadwayd, eigener XDG_RUNTIME_DIR, kein Sitzungsbus, kein
+    //     fremder Compositor): ein Gtk.Stack mappt genau sein sichtbares
+    //     Kind und unmappt das vorige - beim Blaettern UND beim
+    //     Wiederaufgehen der Schale.
+    //
+    //         map:general
+    //         --- Fenster offen ---
+    //         map:bluetooth / unmap:general   <- wechsleSeite(bluetooth)
+    //         map:network   / unmap:bluetooth <- wechsleSeite(network)
+    //         unmap:network                   <- Schale zu
+    //         map:network                     <- Schale wieder auf
+    //
+    //     KEIN `istAktiv()` davor: gemappt wird nur die aktive Seite,
+    //     das ist ja gerade die Aussage des Signals. Und kein Ersatz fuer
+    //     `notify::visible` oben - jenes setzt zusaetzlich `showMain()`
+    //     zurueck, und beide zusammen kosten nichts, weil `updateDisplay()`
+    //     in Stufe 1 keinen Funkverkehr mehr ausloest (51 ms) und
+    //     `sucheNach()` sich mit `suchtGerade` selbst gegen den zweiten
+    //     Anlauf sperrt.
+    container.connect("map", () => { updateDisplay() })
 
     return container
   },

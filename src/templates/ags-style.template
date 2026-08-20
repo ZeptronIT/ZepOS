@@ -200,6 +200,33 @@ $overlay-border: $border;
 
 .zep-divider { background: $border; margin: {{STYLE_SPACE_8}} 0; }
 
+// Die Wartezeile (zepBusy, ags-kit.template). NACHGETRAGEN am
+// 20.08.2026, Aufgabe 36.
+//
+// GEDAEMPFT UND NICHT BETONT, und das ist eine Entscheidung: was hier
+// steht, ist eine Zwischenmeldung und kein Ergebnis. Dieselbe Farbe wie
+// die Nebenzeile einer Zeile ($subtext, siehe .zep-row-sub oben) - sie
+// soll lesbar sein und nicht die Aufmerksamkeit von der Liste
+// wegziehen, die gleich darunter erscheint.
+//
+// Der Abstand zwischen Scheibe und Satz steht HIER und nicht als
+// `spacing` im Konstruktor: es ist ein Mass des Aussehens, und der
+// Groessenregler soll es mitnehmen (STYLE_SPACE_8, dieselbe Sprosse wie
+// der Rand von .zep-section darueber).
+.zep-busy {
+  margin: {{STYLE_SPACE_8}} 0;
+}
+
+.zep-busy-spinner {
+  color: $subtext;
+  margin-right: {{STYLE_SPACE_8}};
+}
+
+.zep-busy-text {
+  font-size: {{STYLE_FONT_CAPTION}};
+  color: $subtext;
+}
+
 // Der Schalter. NACHGETRAGEN am 18.08.2026: die Schnittstellenliste von
 // task-3 nannte .zep-toggle, der Codeblock des vorigen Auftrags
 // (task-1u4) enthielt sie nicht - GEPRUEFT per `grep -rn switch

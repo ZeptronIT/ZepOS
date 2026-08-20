@@ -144,7 +144,7 @@ import { interval } from "ags/time"
 // ohnehin nichts uebrigbleibt (esbuild entfernt Typ-Importe restlos).
 import type { ShellSeite } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
-import { zepButton, zepRow, zepToggle, zepSectionLabel, zepDivider, zepStateHeader }
+import { zepButton, zepRow, zepToggle, zepSectionLabel, zepDivider, zepStateHeader, zepBusy }
   from "../utils/kit"
 
 // NACHGETRAGEN am 18.08.2026, task-5: dieses Fenster stellte bis hierher
@@ -301,17 +301,27 @@ function parseDevices(output: string): Map<string, string> {
  * leer.
  */
 async function readDevices(): Promise<Device[]> {
-  let alle: Map<string, string>
-  try {
-    alle = parseDevices(await bctl("devices"))
-  } catch {
-    return []
-  }
+  // DIE DREI FRAGEN LAUFEN GLEICHZEITIG - GEAENDERT am 20.08.2026
+  // (Aufgabe 36). Sie wissen nichts voneinander; sie nacheinander zu
+  // stellen addierte nur ihre Fristen. Die Messung dazu steht ueber
+  // updateDisplay() weiter unten.
+  //
+  // `.catch()` an JEDER einzelnen und kein gemeinsames try/catch: eine
+  // Frist, die bei `devices Paired` ablaeuft, darf die schon
+  // vorliegende Antwort von `devices` nicht mitreissen. Promise.all
+  // bricht beim ersten Fehler ab - deshalb faengt jede fuer sich, und
+  // Promise.all bekommt nur noch erfuellte Zusagen zu sehen.
+  const leer = new Map<string, string>()
+  const [alle, verbunden, gekoppelt] = await Promise.all([
+    bctl("devices").then(parseDevices).catch(() => null),
+    bctl("devices Connected").then(parseDevices).catch(() => leer),
+    bctl("devices Paired").then(parseDevices).catch(() => leer),
+  ])
 
-  let verbunden = new Map<string, string>()
-  let gekoppelt = new Map<string, string>()
-  try { verbunden = parseDevices(await bctl("devices Connected")) } catch { /* leer */ }
-  try { gekoppelt = parseDevices(await bctl("devices Paired")) } catch { /* leer */ }
+  // `devices` ist die einzige der drei, ohne die es nichts zu zeigen
+  // gibt - dieselbe Unterscheidung wie vorher, nur dass sie jetzt am
+  // Ergebnis haengt statt an der Reihenfolge.
+  if (alle === null) return []
 
   // Ein verbundenes Geraet, das `devices` nicht nennt, gibt es: die
   // Liste ohne Argument zeigt, was der Adapter GESEHEN hat, und nach
@@ -374,6 +384,10 @@ export const bluetoothSeite: ShellSeite = {
     let deviceList: Gtk.Box
     let emptyLabel: Gtk.Label
 
+    // Wo die Ansage "es wird gesucht" steht (Aufgabe 36, 20.08.2026).
+    // Genau EIN Kind oder keines - dieselbe Bauart wie statusWrap.
+    let sucheWrap: Gtk.Box
+
     // Laeuft gerade ein Suchlauf? Ein zweiter waehrenddessen ist ein
     // zweites bluetoothctl auf demselben Adapter.
     let suchtGerade = false
@@ -383,8 +397,30 @@ export const bluetoothSeite: ShellSeite = {
     // ueberhaupt etwas passiert.
     let adapter: Adapter = { vorhanden: false, powered: false, name: "", fehler: "" }
 
-    const updateDisplay = async () => {
-      adapter = await readAdapter()
+    // DIE GERAETE DES LETZTEN MALS - NEU am 20.08.2026 (Aufgabe 36).
+    //
+    // Ein gekoppelter Kopfhoerer ist beim naechsten Oeffnen noch
+    // derselbe. Dieses Feld ist der Grund, aus dem die Liste beim
+    // Wiederaufgehen SOFORT dasteht, statt leer anzufangen und sich
+    // fuellen zu lassen. Ein Zwischenspeicher und keine Wahrheit: die
+    // frische Antwort ueberschreibt ihn (im gesunden Fall 3 ms spaeter,
+    // siehe die Messung ueber updateDisplay()).
+    let letzteGeraete: Device[] = []
+
+    // Ist ueberhaupt schon einmal etwas angekommen? Unterscheidet "noch
+    // nichts gefragt" von "gefragt, nichts gefunden" - die beiden saehen
+    // sonst gleich aus, naemlich wie eine leere Liste, und genau diese
+    // Verwechslung ist der Grund, aus dem emptyLabel ueberhaupt
+    // existiert (siehe dort).
+    let schonGelesen = false
+
+    /** Ein Aufbau aus dem, was DA IST - ohne eine Frage nach aussen.
+     *
+     * Aus updateDisplay() herausgeloest (Aufgabe 36), damit derselbe
+     * Aufbau zweimal laufen kann: einmal sofort mit dem letzten Stand
+     * und einmal mit der frischen Antwort.
+     */
+    const zeichne = (devices: Device[]) => {
 
       // Der Schalter, frisch fuer DIESEN Takt gebaut. zepToggle verbindet
       // sich erst NACH dem Konstruktor mit "notify::active" (siehe
@@ -444,10 +480,11 @@ export const bluetoothSeite: ShellSeite = {
         return
       }
 
-      // Die Geraete werden HIER gelesen, VOR dem Seitenkopf - Aufgabe 7
-      // braucht die Anzahl der verbundenen Geraete fuer die Nebenzeile
-      // des Kopfes, unabhaengig vom Schalterstand (siehe readDevices()).
-      const devices = await readDevices()
+      // Die Geraete kommen seit Aufgabe 36 (20.08.2026) als Parameter
+      // herein statt hier gelesen zu werden: sie werden GLEICHZEITIG mit
+      // dem Adapter geholt (siehe updateDisplay()), nicht danach. Die
+      // Anzahl der verbundenen braucht der Seitenkopf weiterhin
+      // unabhaengig vom Schalterstand - das ist Aufgabe 7 und bleibt.
       const verbundenCount = devices.filter(device => device.connected).length
 
       statusWrap.append(zepStateHeader({
@@ -468,14 +505,80 @@ export const bluetoothSeite: ShellSeite = {
       }
 
       if (devices.length === 0) {
+        // DREI ZUSTAENDE UND NICHT ZWEI - erweitert am 20.08.2026
+        // (Aufgabe 36). "Es laeuft noch" und "es ist nichts da" sahen
+        // bis dahin beide wie eine leere Liste aus. `schonGelesen`
+        // unterscheidet sie; der Suchlauf sagt es ohnehin selbst.
+        //
+        // Was hier steht, muss WAHR sein: "wird gesucht" nur, solange
+        // wirklich gesucht wird.
         emptyLabel.set_text(suchtGerade
           ? _("Searching …")
-          : _("No device known - search for devices"))
+          : !schonGelesen
+            ? _("Reading devices …")
+            : _("No device known - search for devices"))
         emptyLabel.set_visible(true)
         return
       }
       emptyLabel.set_visible(false)
       for (const device of devices) deviceList.append(createDeviceRow(device))
+    }
+
+    // DER ADAPTER UND DIE GERAETE WERDEN GLEICHZEITIG GEFRAGT, UND DAS
+    // IST DER GANZE PUNKT DIESER AENDERUNG - 20.08.2026 (Aufgabe 36)
+    //
+    // GEMELDET, woertlich: "die ags fenster bluetooth und wlan laden
+    // teilweise sehr lange um den inhalt anzuzeigen das muss
+    // performanter und user friendly werden".
+    //
+    // "TEILWEISE" IST HIER DAS ENTSCHEIDENDE WORT. GEMESSEN am
+    // 20.08.2026 auf der Maschine des Nutzers (bluez 5.87, Dienst
+    // aktiv):
+    //
+    //     bluetoothctl show                3 ms
+    //     bluetoothctl devices             3 ms
+    //     bluetoothctl devices Connected   3 ms
+    //     bluetoothctl devices Paired      3 ms
+    //     -----------------------------------
+    //     nacheinander (bis hierher)      10 ms
+    //
+    // Im gesunden Fall ist diese Seite also NICHT langsam. Der Fall,
+    // von dem der Nutzer spricht, ist der andere - der, aus dem diese
+    // Datei ueberhaupt entstanden ist (17.08.2026, "stuckt er freeze
+    // es passiert nichts"). Antwortet bluez nicht, laeuft JEDE der vier
+    // Fragen in ihre volle Frist, und die vier Fristen ADDIERTEN sich:
+    //
+    //     GEMESSEN am 20.08.2026 mit einer Attrappe, die nicht antwortet
+    //     (das echte bluetoothctl blieb dabei unberuehrt):
+    //
+    //         nacheinander (bis heute)   12006 ms
+    //         gleichzeitig                3003 ms
+    //
+    // FRIST ist damit wieder das, was ihr Name sagt: die laengste Zeit,
+    // die diese Seite auf eine Auskunft wartet - EINMAL, nicht viermal.
+    // Die Zahl FRIST selbst bleibt bei 3 (siehe oben); geaendert hat
+    // sich nur, dass sie nicht mehr vierfach anfaellt.
+    const updateDisplay = async () => {
+      // WAS SCHON DA IST, STEHT SOFORT DA. Beim allerersten Aufbau ist
+      // das nichts, und emptyLabel sagt dann "wird gelesen" (siehe
+      // zeichne()). Bei jedem weiteren Oeffnen steht die Liste des
+      // letzten Mals da, statt dass die Seite bei null anfaengt.
+      if (schonGelesen) zeichne(letzteGeraete)
+
+      const [neuerAdapter, geraete] = await Promise.all([
+        readAdapter(),
+        // AUCH BEI FEHLER UND OHNE ADAPTER: `bluetoothctl devices`
+        // meldet die bekannte Datenbank unabhaengig vom Schalterstand
+        // (Aufgabe 7), und ob ueberhaupt jemand antwortet, weiss man
+        // vorher nicht - genau deshalb laufen beide gleichzeitig statt
+        // die eine hinter der Entscheidung der anderen.
+        readDevices(),
+      ])
+
+      adapter = neuerAdapter
+      letzteGeraete = geraete
+      schonGelesen = true
+      zeichne(geraete)
     }
 
     /** Eine Zeile: Zeichen, Name, Zustand - und ein Klick, der etwas tut.
@@ -605,8 +708,28 @@ export const bluetoothSeite: ShellSeite = {
       if (suchtGerade) return
       suchtGerade = true
       scanBtn.set_sensitive(false)
-      emptyLabel.set_text(_("Searching …"))
-      emptyLabel.set_visible(true)
+
+      // DIE ZEHN SEKUNDEN BEKOMMEN JETZT EINE DREHENDE SCHEIBE STATT
+      // NUR EINER ZEILE, DIE MAN LEICHT UEBERSIEHT - 20.08.2026
+      // (Aufgabe 36).
+      //
+      //     `emptyLabel` sagte "Suche laeuft" - aber NUR, solange die
+      //     Liste leer war. Wer schon ein gekoppeltes Geraet hat (also
+      //     fast jeder, der sucht), sah beim Klick auf "Suchen"
+      //     ueberhaupt keine Veraenderung: der Knopf wurde blass, und
+      //     zehn Sekunden lang passierte sichtbar nichts.
+      //
+      //     SUCHDAUER laesst sich nicht verkuerzen - ein Geraet, das
+      //     sich anbietet, sendet sein Erkennungspaket ueber Funk, und
+      //     darauf wartet man (siehe die Begruendung bei SUCHDAUER
+      //     oben). Was sich aendern laesst, ist, ob man dabei etwas
+      //     sieht.
+      removeAllChildren(sucheWrap)
+      sucheWrap.append(zepBusy(format(
+        _("Searching for devices - {seconds} seconds …"),
+        { seconds: SUCHDAUER })))
+      sucheWrap.set_visible(true)
+
       try {
         // Die aeussere Frist ist die innere plus Anlauf. Ohne sie
         // haengt diese Seite an genau dem Werkzeug, dessen Haengen
@@ -617,6 +740,11 @@ export const bluetoothSeite: ShellSeite = {
         console.error("Bluetooth: der Suchlauf schlug fehl:", e)
       }
       suchtGerade = false
+      // Weg damit, in JEDEM Ausgang - auch nach einem Fehler. Eine
+      // Scheibe, die sich ueber einem Fehlschlag weiterdreht, behauptet,
+      // es laufe noch etwas.
+      removeAllChildren(sucheWrap)
+      sucheWrap.set_visible(false)
       updateDisplay()
     })
     scanBtn.set_tooltip_text(
@@ -671,9 +799,16 @@ export const bluetoothSeite: ShellSeite = {
     })
     emptyLabel.add_css_class("bt-empty")
 
+    // Die Ansage ueber der Liste, unsichtbar bis etwas laeuft
+    // (Aufgabe 36, 20.08.2026). ZWISCHEN Knopfzeile und Liste: sie
+    // gehoert zu dem, was gleich in der Liste steht, und dort sucht das
+    // Auge waehrend des Wartens.
+    sucheWrap = new Gtk.Box({ visible: false })
+
     container.append(statusWrap)
     container.append(divider)
     container.append(toolRow)
+    container.append(sucheWrap)
     container.append(deviceList)
     container.append(emptyLabel)
 
@@ -709,6 +844,27 @@ export const bluetoothSeite: ShellSeite = {
     // Bluetooth gar nicht die gezeigte Seite war.
     interval(UPDATE_INTERVAL, () => { if (win.visible && istAktiv()) updateDisplay() })
     win.connect("notify::visible", () => { if (win.visible && istAktiv()) updateDisplay() })
+
+    // UND DER SEITENWECHSEL SELBST - NEU am 20.08.2026 (Aufgabe 36)
+    //
+    //     `notify::visible` oben feuert nur, wenn die GANZE Schale auf-
+    //     oder zugeht. Wer sie offen hat und links auf "Bluetooth"
+    //     klickt, loeste bis heute GAR NICHTS aus: `wechsleSeite()`
+    //     (ags-overlay-utils.template) setzt nur
+    //     `set_visible_child_name()` - keine Seite erfaehrt, dass sie
+    //     jetzt die gezeigte ist. Zu sehen war der Stand des letzten
+    //     Taktes, bis zu UPDATE_INTERVAL (5000 ms) alt.
+    //
+    //     GEMESSEN und nicht angenommen (20.08.2026, GTK4 headless ueber
+    //     broadwayd, eigener XDG_RUNTIME_DIR, kein Sitzungsbus, kein
+    //     fremder Compositor): ein Gtk.Stack mappt genau sein sichtbares
+    //     Kind und unmappt das vorige - beim Blaettern UND beim
+    //     Wiederaufgehen der Schale. Die Messung steht ausgeschrieben in
+    //     ags-network.template an derselben Stelle.
+    //
+    //     KEIN `istAktiv()` davor: gemappt wird nur die aktive Seite -
+    //     das IST die Aussage des Signals.
+    container.connect("map", () => { updateDisplay() })
 
     return container
   },
