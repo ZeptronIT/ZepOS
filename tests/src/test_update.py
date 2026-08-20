@@ -22,9 +22,11 @@ WARUM DIE VERGLEICHE ZEILENGENAU UND OHNE KOMMENTARE SIND
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -38,17 +40,27 @@ REPO = SRC.parent
 
 @pytest.fixture
 def update(monkeypatch, tmp_path):
-    """Das Modul, mit allen drei Wurzeln in tmp_path.
+    """Das Modul, mit allen vier Wurzeln in tmp_path.
 
     Die Umlenkung ist nicht Bequemlichkeit: ohne sie schriebe jeder Test
     nach /etc/zepos, /var/lib/zepos und /etc/systemd/system. Die
     Isolationssperre in tests/conftest.py laesst das nicht zu - und genau
     deshalb ist sie da.
+
+    DIE VIERTE KAM AM 20.08.2026 DAZU
+        update.stamp_path() rechnet den Zeitstempel EINES KONTOS aus -
+        erst XDG_STATE_HOME, dann dessen Heimatverzeichnis aus der
+        Benutzerdatenbank. Ohne die Umlenkung befragte jeder Test, der
+        eine uid setzt (_human setzt 1000), das echte
+        ~/.local/state/zepos des Entwicklers: gelesen, nicht
+        geschrieben, also von der Sperre unbemerkt - und das Ergebnis
+        des Tests haenge daran, ob dieser Rechner gerade erzeugt hat.
     """
     monkeypatch.syspath_prepend(str(SRC))
     monkeypatch.setenv("ZEPOS_MACHINE_ROOT", str(tmp_path / "etc-zepos"))
     monkeypatch.setenv("ZEPOS_STATE_ROOT", str(tmp_path / "var-lib-zepos"))
     monkeypatch.setenv("ZEPOS_SYSTEMD_ETC", str(tmp_path / "etc"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     import update as module
 
     return module
@@ -821,6 +833,415 @@ def test_the_dry_run_says_what_a_real_one_would_do_in_the_subjunctive(
     assert "Neu erzeugt" not in text
     assert machine.called("runuser") == []
     assert not update.marker_path().exists()
+
+
+# --------------------------------------------------------------------
+# Die Sackgasse: eine Marke, die liegen bleibt (20.08.2026)
+# --------------------------------------------------------------------
+#
+# GEMELDET, zum dritten Mal: "aktualsiert sich das ui mit generate all
+# immernoch nicht nach zepos update warum ?"
+#
+# Der Weg hinein, aus der Sitzung mit dem Nutzer:
+#
+#   1. `sudo zepos-update` holt 0.1.3 - dabei lief noch das Programm aus
+#      0.1.2: Marke gesetzt, nichts erzeugt. Richtig so.
+#   2. jeder weitere Lauf sagt "nothing", `changed` ist falsch, und der
+#      ganze Block wurde uebersprungen - samt caller(), also auch samt
+#      --regenerate.
+#   3. Die Marke bleibt liegen, die Oberflaeche bleibt alt, beliebig oft
+#      wiederholbar. Kein Ausgang hat es je erwaehnt.
+#
+# Ohne die Tests hier kommt genau das wieder: die Sperre oben bleibt
+# gruen, egal ob eine ausstehende Marke je etwas ausloest.
+
+
+def _marke_von_frueher(update):
+    """Was ein frueherer Lauf ohne Terminal hinterlassen hat.
+
+    Eine Marke der MASCHINE und kein Zeitstempel des Kontos daneben -
+    genau der Zustand nach Schritt 1.
+    """
+    marker = update.mark_regeneration()
+    assert not update.stamp_path(1000).exists()
+    return marker
+
+
+def _dieses_konto_hat_erzeugt(update):
+    """Und der Gegenzustand: das Konto hat nach der Marke erzeugt.
+
+    Der Zeitstempel wird ausdruecklich in die Zukunft datiert und nicht
+    nur angelegt: mark_regeneration() und dieser Aufruf liegen in
+    derselben Millisekunde, und `-nt` vergleicht Zeiten, nicht
+    Reihenfolgen.
+    """
+    stamp = update.stamp_path(1000)
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    stamp.write_text("", encoding="utf-8")
+    spaeter = update.marker_path().stat().st_mtime + 10
+    os.utime(stamp, (spaeter, spaeter))
+    return stamp
+
+
+def test_a_pending_mark_regenerates_even_though_nothing_was_installed(
+        update, monkeypatch, capsys):
+    """Der Fehler selbst, als Messung.
+
+    Nichts einzuspielen, eine Marke von frueher, ein Mensch am Terminal:
+    bis heute ist hier gar nichts passiert, weil die Neuerzeugung an
+    `outcome.changed` hing. Sie haengt jetzt daran, ob eine aussteht.
+    """
+    _human(monkeypatch)
+    _marke_von_frueher(update)
+    machine = Machine(upgradable="", members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+
+    assert machine.called("runuser") == [[
+        "runuser", "-u", "zep", "--", "bash", "-c", update.REGENERATE_SCRIPT]]
+    text = capsys.readouterr().out
+    assert "zepos-update: nothing" in text
+    assert "Neu erzeugt" in text
+
+
+def test_the_same_pending_mark_without_a_terminal_regenerates_nothing(
+        update, monkeypatch):
+    """Die andere Haelfte, und sie ist die teurere.
+
+    Der Zeitgeber trifft dieselbe Marke bei jedem taeglichen Lauf. Er
+    darf davon nichts anfassen - ein Generatorlauf im Hintergrund
+    beendet Waybar und AGS mitten in der Sitzung (11.08.2026). Die Marke
+    aendert an dieser Sperre nichts.
+    """
+    _human(monkeypatch, terminal=False, uid=None)
+    _marke_von_frueher(update)
+    machine = Machine(upgradable="", members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+
+    assert machine.called("runuser") == []
+    assert _forbidden_hits(update, machine.commands) == []
+
+
+def test_a_mark_this_account_has_already_answered_regenerates_nothing(
+        update, monkeypatch):
+    """WORAN "steht aus" haengt, und woran ausdruecklich nicht.
+
+    Nicht an der Marke allein: die gilt der Maschine, gehoert root und
+    wird ABSICHTLICH nie geloescht - ein zweites Konto braucht sein
+    eigenes Neuerzeugen noch. Wer nur `marker_path().exists()` fragte,
+    haette eine Maschine, die von der ersten Aktualisierung an bei JEDEM
+    Lauf 30 Sekunden lang alles neu erzeugt, fuer immer.
+    """
+    _human(monkeypatch)
+    _marke_von_frueher(update)
+    _dieses_konto_hat_erzeugt(update)
+    machine = Machine(upgradable="", members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+
+    assert update.marker_path().is_file()
+    assert machine.called("runuser") == []
+
+
+def test_the_rule_for_pending_is_the_one_the_login_already_applies(update):
+    """Keine zweite Antwort auf dieselbe Frage.
+
+    src/bin/zepos-session entscheidet bei jeder Anmeldung, ob neu
+    erzeugt wird, und tut es mit bashs `-nt` ueber genau diese zwei
+    Dateien. regeneration_pending() rechnet dasselbe in Python. Waeren es
+    zwei Regeln, koennte eine Anmeldung erzeugen, wo der Aktualisierer
+    schweigt - und der Nutzer haette wieder einen Unterschied, den
+    niemand erraten kann. Ein Bash-Skript kann kein Python importieren,
+    also wird es hier gegeneinander gehalten.
+    """
+    sitzung = (BIN / "zepos-session").read_text(encoding="utf-8")
+
+    assert f'UPDATE_MARKER="$ZEPOS_STATE_ROOT/{update.REGENERATE_MARKER}"' \
+        in sitzung
+    assert ('GENERATED_STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/zepos/'
+            f'{update.GENERATED_STAMP}"') in sitzung
+    assert '"$UPDATE_MARKER" -nt "$GENERATED_STAMP"' in sitzung
+
+    # Und dieselbe Datei ist es, die REGENERATE_SCRIPT nach einem
+    # erfolgreichen Lauf datiert - sonst erzeugte die naechste Anmeldung
+    # ein zweites Mal.
+    assert f'"$zustand/{update.GENERATED_STAMP}"' in update.REGENERATE_SCRIPT
+
+
+@pytest.mark.parametrize("lage,marke,stempel,erwartet", [
+    ("nichts liegt", False, False, False),
+    ("Marke, nie erzeugt", True, False, True),
+    ("Marke, danach erzeugt", True, True, False),
+])
+def test_pending_is_the_comparison_and_not_the_mere_marker(
+        update, lage, marke, stempel, erwartet):
+    """Dieselben drei Faelle direkt an der Funktion, ohne main() dazwischen."""
+    invocation = update.Invocation(True, 1000, "zep", True, "")
+    if marke:
+        _marke_von_frueher(update)
+    if stempel:
+        _dieses_konto_hat_erzeugt(update)
+
+    assert update.regeneration_pending(invocation) is erwartet, lage
+
+
+def test_a_run_that_belongs_to_no_account_answers_nothing_at_all(update):
+    """Ohne Konto gibt es den Vergleich nicht - und ohne Konto wird
+    ohnehin nicht erzeugt (caller()). "Die Marke liegt" auszugeben, waere
+    genau die Aussage ueber die MASCHINE, die diese Sackgasse gebaut hat.
+    """
+    _marke_von_frueher(update)
+    invocation = update.Invocation(False, None, "", True, "")
+
+    assert update.stamp_path(None) is None
+    assert update.regeneration_pending(invocation) is False
+
+
+def test_the_switch_forces_a_run_that_has_nothing_to_do_at_all(
+        update, monkeypatch, capsys):
+    """--regenerate ohne alles: nichts eingespielt, nichts ausstehend.
+
+    Ein ausdruecklicher Schalter, der schweigend nichts tut, ist
+    schlimmer als keiner - dann glaubt der Nutzer, es sei versucht
+    worden. Bis heute war er wirkungslos, sobald `changed` falsch war:
+    caller() wurde INNERHALB dieses Blocks gefragt.
+    """
+    _human(monkeypatch)
+    machine = Machine(upgradable="", members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main(["--regenerate"]) == 0
+
+    assert not update.marker_path().exists()
+    assert len(machine.called("runuser")) == 1
+    assert "Neu erzeugt" in capsys.readouterr().out
+
+
+def test_check_names_the_pending_regeneration_and_the_command_for_it(
+        update, monkeypatch, capsys):
+    """Die Lage, die drei Runden lang unsichtbar war, gehoert in die
+    Ausgabe - samt dem Befehl, der sie aufloest."""
+    _human(monkeypatch)
+    _marke_von_frueher(update)
+    machine = Machine(upgradable="", members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main(["--check"]) == 0
+
+    text = capsys.readouterr().out
+    assert "Eine Neuerzeugung steht aus" in text
+    assert str(update.marker_path()) in text
+    assert str(update.stamp_path(1000)) in text
+    assert "zepos-update --regenerate" in text
+    # Und ein Probelauf bleibt ein Probelauf.
+    assert machine.called("runuser") == []
+
+
+def test_check_says_nothing_about_a_regeneration_that_is_not_pending(
+        update, monkeypatch, capsys):
+    """Ein Satz, der bei jedem Lauf steht, wird nicht mehr gelesen."""
+    _human(monkeypatch)
+    machine = Machine(upgradable="", members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main(["--check"]) == 0
+
+    assert "steht aus" not in capsys.readouterr().out
+
+
+def test_a_finished_regeneration_is_not_reported_as_still_pending(
+        update, monkeypatch, capsys):
+    """Jede Zeile muss wahr sein, auch die, die gerade unwahr geworden
+    ist: nach einem erfolgreichen Lauf steht nichts mehr aus."""
+    _human(monkeypatch)
+    _marke_von_frueher(update)
+    machine = Machine(upgradable="", members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+
+    text = capsys.readouterr().out
+    assert "steht aus" not in text
+    assert "Neu erzeugt" in text
+
+
+# --------------------------------------------------------------------
+# Was ein Mensch waehrenddessen sieht (20.08.2026)
+# --------------------------------------------------------------------
+#
+# GEMELDET: "ich will eine coole asci animation im terminal sehen statt
+# nach zepos-update immer nicht". Die vier Auflagen misst
+# tests/src/test_terminal.py an den geschriebenen Zeichen; hier steht
+# die Haelfte, die den Aktualisierer betrifft: dass die Ausgabe des
+# Generators vollstaendig durchkommt, dass gezaehlt wird, was er selbst
+# sagt, und dass ein Lauf ohne Terminal kein einziges Steuerzeichen
+# hinterlaesst.
+
+
+class Generator:
+    """Ein `zepos-generate --all`, das nur redet - mit seinen Farben."""
+
+    def __init__(self, lines, code: int = 0):
+        self.stdout = iter(line + "\n" for line in lines)
+        self._code = code
+
+    def wait(self, timeout=None) -> int:
+        return self._code
+
+    def poll(self) -> int:
+        return self._code
+
+    def terminate(self) -> None:
+        return None
+
+    def kill(self) -> None:
+        return None
+
+
+class Bildschirm:
+    """Ein Terminal, das mitschreibt (siehe tests/src/test_terminal.py)."""
+
+    encoding = "utf-8"
+
+    def __init__(self) -> None:
+        self.parts: list[str] = []
+
+    def isatty(self) -> bool:
+        return True
+
+    def write(self, text: str) -> int:
+        self.parts.append(text)
+        return len(text)
+
+    def flush(self) -> None:
+        return None
+
+    @property
+    def text(self) -> str:
+        return "".join(self.parts)
+
+
+GENERATOR_AUSGABE = [
+    "\033[1;33m=== Generating ALL configs ===\033[0m",
+    "\033[0;32m→ Processing:\033[0m ags-bar",
+    "  \033[0;32m✓ Success\033[0m",
+    "\033[0;32m→ Processing:\033[0m waybar",
+    "  \033[0;31m✗ Failed\033[0m",
+    "\033[0;31m✗ Some configs failed!\033[0m",
+]
+
+
+def test_the_generator_is_read_along_and_not_a_word_of_it_is_lost(update):
+    """Die zweite Auflage, am Aktualisierer gemessen.
+
+    Die Statuszeile weicht der Ausgabe des Kindes aus, nicht umgekehrt:
+    "✗ Failed" ist das Wichtigste, was durch diese Roehre kommt.
+    """
+    screen = Bildschirm()
+    gesehen = []
+
+    def opener(argv, **kwargs):
+        gesehen.append((argv, kwargs))
+        return Generator(GENERATOR_AUSGABE, code=1)
+
+    code = update._regenerate_live(["runuser", "-u", "zep"], opener, screen)
+
+    assert code == 1
+    for zeile in GENERATOR_AUSGABE:
+        assert zeile + "\n" in screen.text, zeile
+    # Gezaehlt wird, was der Generator selbst sagt, und zwar an seiner
+    # einen Zeile "→ Processing:": die zweite Vorlage ist die zweite.
+    # NICHT an "✓ Success" - derselbe Schritt endet auch mit "✗ Failed",
+    # und eine Zaehlung, die an einem Wortlaut haengt, zaehlt still
+    # falsch, sobald dort ein Wort dazukommt.
+    assert "1. ags-bar" in screen.text
+    assert "2. waybar" in screen.text
+    assert screen.text.endswith(update.terminal.SHOW_CURSOR)
+    # stderr geht in denselben Strom, sonst stuende eine Fehlermeldung
+    # nicht da, wo sie entstanden ist.
+    assert gesehen[0][1]["stderr"] is update.subprocess.STDOUT
+
+
+def test_a_generator_that_cannot_be_started_is_not_a_crash(update):
+    """127, dieselbe Zahl wie im stummen Weg - in beiden Faellen ist
+    nichts erzeugt worden, und der Aufrufer behandelt beide gleich."""
+
+    def opener(argv, **kwargs):
+        raise OSError("runuser gibt es nicht")
+
+    assert update._regenerate_live(["runuser"], opener, Bildschirm()) == 127
+
+
+def test_a_pipe_that_never_closes_does_not_hang_the_update(update,
+                                                           monkeypatch):
+    """Der teuerste Ausgang, den es hier gibt, und deshalb gemessen.
+
+    Die Leseschleife endet, wenn die Roehre schliesst - und die
+    schliesst erst, wenn JEDER Schreiber sie losgelassen hat, auch ein
+    Kind, das der Generator im Hintergrund gestartet hat.
+    generate_config.sh haengt seinen beiden ">/dev/null 2>&1" an
+    (Abschnitt "Start/restart AGS", nachgesehen am 20.08.2026); verloere
+    eines davon diese
+    Umleitung, haenge `sudo zepos-update` ohne die Uhr fuer immer - mit
+    einem freundlich drehenden Ring, was es schlimmer macht und nicht
+    besser.
+    """
+
+    class Haengend:
+        def __init__(self) -> None:
+            self._los = threading.Event()
+            self.getoetet = False
+            self.stdout = self._zeilen()
+
+        def _zeilen(self):
+            yield "→ Processing: ags-bar\n"
+            self._los.wait(10)
+
+        def kill(self) -> None:
+            self.getoetet = True
+            self._los.set()
+
+        def terminate(self) -> None:
+            self.kill()
+
+        def wait(self, timeout=None) -> int:
+            return -9
+
+        def poll(self):
+            return -9 if self.getoetet else None
+
+    kind = Haengend()
+    monkeypatch.setattr(update, "GENERATOR_TIMEOUT", 0.2)
+
+    code = update._regenerate_live(["runuser"], lambda argv, **kw: kind,
+                                   Bildschirm())
+
+    assert kind.getoetet, "die Uhr hat das Kind nicht abgebrochen"
+    assert code == 127
+
+
+def test_a_whole_run_whose_output_is_not_a_terminal_stays_free_of_them(
+        update, monkeypatch, capsys):
+    """Die erste Auflage, am ganzen main() gemessen.
+
+    Ein Mensch am Terminal, aber die Ausgabe geht in eine Roehre
+    (`sudo zepos-update | tee protokoll`) - genau der Fall, in dem ein
+    Protokoll entsteht, das jemand lesen will. Kein einziges
+    Steuerzeichen darf hinein.
+    """
+    _human(monkeypatch)
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS, sessions=SESSION)
+    monkeypatch.setattr(update.subprocess, "run", machine)
+
+    assert update.main([]) == 0
+
+    ausgabe = capsys.readouterr()
+    assert "\x1b" not in ausgabe.out + ausgabe.err
+    assert "\r" not in ausgabe.out + ausgabe.err
 
 
 # --------------------------------------------------------------------

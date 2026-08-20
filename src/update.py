@@ -97,6 +97,33 @@ UND WAS PASSIERT, WENN EIN MENSCH DEN LAUF SELBST ANSTOESST (19.08.2026)
     reisst dem Nutzer die Leiste unter den Haenden weg - das ist der
     Fehler vom 11.08. Im Zweifel wird deshalb nicht neu erzeugt.
 
+DIE SACKGASSE, DIE DAS UEBRIG LIESS (20.08.2026)
+    GEMELDET vom Nutzer, zum dritten Mal: "aktualsiert sich das ui mit
+    generate all immernoch nicht nach zepos update warum ?".
+
+    Die Neuerzeugung hing bis heute an EINER Bedingung, und zwar an der
+    falschen: `if outcome.changed`. Wer den Lauf machte, der wirklich
+    Pakete tauschte, hatte damals vielleicht kein Terminal - dann blieb
+    es bei der Marke, richtig so. Nur betrat jeder WEITERE Lauf den
+    Block gar nicht mehr: `changed` ist falsch, wenn nichts einzuspielen
+    ist, und die Marke, die daneben liegt, hat in dieser Datei niemand
+    gelesen. Gemessen an drei Runden mit dem Nutzer:
+
+      1. `sudo zepos-update` holt 0.1.3 -> Marke gesetzt, nichts erzeugt
+      2. `sudo zepos-update` -> "nothing", Block uebersprungen
+      3. wie 2., beliebig oft. Die Oberflaeche bleibt alt.
+
+    Auch `--regenerate` half nicht: der Schalter wirkt ueber caller(),
+    und caller() wurde INNERHALB dieses Blocks gefragt.
+
+    Die Neuerzeugung haengt darum jetzt an "steht eine aus?" und nicht
+    an "hat dieser Lauf etwas getan?" - siehe regeneration_pending(),
+    das dafuer keine zweite Regel erfindet, sondern die von
+    src/bin/zepos-session uebernimmt. --regenerate erzwingt ausserdem
+    ohne jede Bedingung, und --check SAGT, dass etwas aussteht, samt dem
+    Befehl, der es aufloest: die Sackgasse war drei Runden lang
+    unsichtbar, weil kein Ausgang sie je erwaehnt hat.
+
 WAS EIN FEHLSCHLAG TUN MUSS
     Reden. `SigLevel = Required` heisst, dass eine Datenbank oder ein
     Paket ohne gueltige Unterschrift abgelehnt wird; pacman endet dann
@@ -125,6 +152,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -136,8 +164,10 @@ from typing import Any, Callable, Iterable, Sequence
 # sehen.
 try:
     from .paths import machine_root, state_root
+    from . import terminal
 except ImportError:
     from paths import machine_root, state_root
+    import terminal
 
 Runner = Callable[..., "subprocess.CompletedProcess"]
 
@@ -149,6 +179,20 @@ STATE_FILE = "update-state.json"
 # Aenderungszeit IST die Aussage, und deshalb steht nichts darin, was mit
 # ihr in Widerspruch geraten koennte.
 REGENERATE_MARKER = "regenerate-required"
+
+# Und das Gegenstueck: der Zeitstempel, den REGENERATE_SCRIPT im
+# Heimatverzeichnis DES KONTOS hinterlaesst, wenn dort erzeugt worden
+# ist. Der Name steht hier ein zweites Mal - src/bin/zepos-session
+# schreibt ihn als GENERATED_STAMP -, weil ein Bash-Skript kein Python
+# importieren kann; tests/src/test_update.py haelt beide gegeneinander.
+#
+# ZWEI DATEIEN UND NICHT EINE, UND DAS IST DER GANZE PUNKT
+#     Die Marke gehoert der MASCHINE und damit jedem Konto auf ihr; der
+#     Zeitstempel gehoert EINEM Konto. Erst der Vergleich beider
+#     beantwortet die Frage, die eine Neuerzeugung ausloest: nicht "ist
+#     eingespielt worden?", sondern "ist eingespielt worden, seit DIESES
+#     Konto zuletzt erzeugt hat?".
+GENERATED_STAMP = "generated-at"
 
 # Die Einheit, die den Lauf ausloest, und die Ergaenzung, mit der die
 # Einstellungen sie umstellen.
@@ -771,9 +815,32 @@ def apply(config: dict[str, Any], *, runner: Runner | None = None,
 # Was pacman sagt
 # --------------------------------------------------------------------
 
-def _run(runner: Runner, argv: Sequence[str], *, timeout: float = 3600
-         ) -> subprocess.CompletedProcess:
-    return runner(list(argv), capture_output=True, text=True, timeout=timeout)
+def _run(runner: Runner, argv: Sequence[str], *, timeout: float = 3600,
+         note: str = "") -> subprocess.CompletedProcess:
+    """Ein Aufruf, dessen Ausgabe eingesammelt wird - und ein Lebenszeichen.
+
+    WARUM DIE AUSGABE WEITER EINGESAMMELT WIRD (20.08.2026)
+        Sie ist das Einzige, was nach einem Fehlschlag sagt, WARUM: _tail()
+        legt sie in die Zustandsdatei, `zepos-update --status` holt sie
+        wieder, und die Leiste zeigt sie an. Ein pacman, der direkt auf
+        das Terminal schreibt, haette davon nichts uebrig.
+
+        Der Preis war, dass ein Mensch waehrenddessen auf nichts sieht -
+        `pacman -Sy` und ein Einspielen dauern. `note` ist die Antwort
+        darauf: eine Zeile, die sagt, was gerade laeuft, und die sich
+        bewegt, solange es laeuft. An einem Lauf ohne Terminal - dem
+        Zeitgeber, dem ALPM-Haken, jeder Umleitung in eine Datei - zeichnet
+        terminal.live() dafuer NICHTS, nicht ein Steuerzeichen.
+    """
+    if not note:
+        # Die kurzen Fragen - loginctl, `pacman -Qu`, `pacman -Slq` -
+        # bekommen keine. Ein Bild, das nach 40 ms wieder weg ist, ist
+        # kein Lebenszeichen, sondern ein Zucken.
+        return runner(list(argv), capture_output=True, text=True,
+                      timeout=timeout)
+    with terminal.live(note):
+        return runner(list(argv), capture_output=True, text=True,
+                      timeout=timeout)
 
 
 def refresh_command() -> list[str]:
@@ -1135,7 +1202,45 @@ def regenerate_command(invocation: Invocation) -> list[str]:
     return argv
 
 
-def regenerate(invocation: Invocation, *, runner: Runner | None = None) -> int:
+# Die eine Zeile, an der `zepos-generate --all` selbst sagt, wo es steht.
+# Sie steht so in src/generate_config.sh (generate_all_configs):
+#
+#     echo -e "${GREEN}→ Processing:${NC} ${base_name%-config}"
+#
+# GEZAEHLT WIRD, WAS DER GENERATOR SAGT, UND SONST NICHTS (20.08.2026)
+#     Wie viele Vorlagen ein Lauf hat, sagt er selbst erst am Ende
+#     ("Total configs: N"): er sammelt sie waehrend des Laufs ein und
+#     ueberspringt einige davon. Eine Prozentzahl liesse sich hier also
+#     nur aus einer zweiten Zaehlung erfinden, die neben der des
+#     Generators herliefe und bei der ersten uebersprungenen Vorlage
+#     falsch waere. Gezeigt wird deshalb die laufende Nummer und der
+#     Name - beides steht in dieser einen Zeile.
+#
+# UND WARUM NICHT DER AUSGANG EINES ZIELS ("✓ Success")
+#     Weil das ein anderer Satz ist und mehrere Fassungen hat: derselbe
+#     Schritt endet auch mit "✗ Failed", und was ein Ziel meldet, das
+#     nichts zu tun hatte, ist eine Frage des Generators und nicht
+#     dieser Datei. Eine Zaehlung, die an dem Wortlaut haengt, zaehlt
+#     falsch, sobald dort ein Wort dazukommt - und zaehlt dann still
+#     falsch. Die begonnenen Schritte sind die Zahl, die der Generator
+#     unter jeder seiner Fassungen ausschreibt.
+GENERATOR_STEP = "→ Processing:"
+
+# Wie lange ein Generatorlauf hoechstens dauern darf. Gemessen dauert er
+# rund 30 Sekunden; die halbe Stunde ist der Abstand, ab dem etwas
+# haengt und nicht mehr laeuft. Dieselbe Zahl in beiden Wegen - der
+# stumme gibt sie an subprocess.run, der mitlesende an seine Uhr.
+GENERATOR_TIMEOUT = 1800
+
+# Farbe wird zum Zaehlen weggeschnitten: der Generator schreibt
+# "\033[0;32m→ Processing:\033[0m waybar", und ein Vergleich gegen die
+# rohe Zeile findet den Namen mitten zwischen Steuerzeichen.
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def regenerate(invocation: Invocation, *, runner: Runner | None = None,
+               opener: Callable[..., Any] | None = None,
+               stream: Any | None = None) -> int:
     """Neu erzeugen und die Schale neu starten, sichtbar.
 
     OHNE capture_output, und das ist der Unterschied zu jedem anderen
@@ -1144,17 +1249,100 @@ def regenerate(invocation: Invocation, *, runner: Runner | None = None) -> int:
     es tut. Ein Mensch, der gerade `sudo zepos-update` getippt hat, soll
     das sehen und nicht auf eine stumme halbe Minute schauen.
 
+    AN EINEM TERMINAL WIRD ES MITGELESEN (20.08.2026)
+        GEMELDET: "ich will eine coole asci animation im terminal sehen
+        statt nach zepos-update immer nicht". Die Ausgabe des Generators
+        laeuft dann durch eine Roehre, wird Zeile fuer Zeile
+        WEITERGEDRUCKT - keine einzige geht verloren, auch keine
+        Fehlermeldung - und traegt daneben eine Statuszeile, die zaehlt,
+        was fertig ist. Ohne Terminal bleibt es beim direkten Durchreichen
+        an denselben Ausgang, den dieser Lauf ohnehin hat: der Zeitgeber
+        laeuft hier nie hinein (caller().human ist dort falsch), aber ein
+        `sudo zepos-update --regenerate > protokoll` schon, und der soll
+        ein lesbares Protokoll bekommen.
+
     Der Rueckgabewert ist der des Generators; 127 steht fuer "gar nicht
     erst gestartet" (dieselbe Zahl, die eine Schale fuer einen fehlenden
     Befehl liefert), damit der Aufrufer beide Faelle gleich behandeln
     kann - in beiden ist nichts erzeugt worden.
     """
+    argv = regenerate_command(invocation)
+    stream = stream if stream is not None else sys.stdout
+
+    if terminal.possible(stream):
+        return _regenerate_live(argv, opener or subprocess.Popen, stream)
+
     runner = runner or subprocess.run
     try:
-        result = runner(regenerate_command(invocation), timeout=1800)
+        result = runner(argv, timeout=GENERATOR_TIMEOUT)
     except (OSError, subprocess.SubprocessError):
         return 127
     return result.returncode
+
+
+def _regenerate_live(argv: Sequence[str], opener: Callable[..., Any],
+                     stream: Any) -> int:
+    """Denselben Befehl, mitgelesen und mitgezaehlt.
+
+    stderr geht in denselben Strom wie stdout (STDOUT), damit eine
+    Fehlermeldung des Generators an DER Stelle steht, an der sie
+    entstanden ist, und nicht gesammelt hinterher. Sie wird gedruckt wie
+    jede andere Zeile - die Statuszeile weicht ihr aus, sie weicht nicht
+    der Statuszeile.
+
+    WARUM HIER EINE UHR LAEUFT UND NICHT NUR EIN wait(timeout=...)
+        Die Leseschleife endet, wenn die Roehre schliesst, und die
+        schliesst erst, wenn JEDER Schreiber sie losgelassen hat - das
+        Kind und alles, was es im Hintergrund gestartet hat.
+        generate_config.sh startet zwei solche Kinder (helpers/
+        notification-stub.py und `ags run`) und haengt beiden
+        ">/dev/null 2>&1" an; nachgesehen am 20.08.2026 im Abschnitt
+        "Start/restart AGS". Verloere eines davon diese Umleitung, haenge
+        `sudo zepos-update` ohne diese Uhr fuer immer - mit einem
+        freundlich drehenden Ring, was die Sache schlimmer macht und
+        nicht besser. Die Grenze ist dieselbe wie im stummen Weg.
+    """
+    try:
+        child = opener(list(argv), stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, text=True, bufsize=1)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return 127
+
+    abgelaufen = threading.Event()
+
+    def _abbrechen() -> None:
+        abgelaufen.set()
+        child.kill()
+
+    uhr = threading.Timer(GENERATOR_TIMEOUT, _abbrechen)
+    uhr.daemon = True
+    uhr.start()
+
+    nummer = 0
+    with terminal.live("zepos-generate --all", stream=stream) as line:
+        try:
+            for zeile in child.stdout or ():
+                zeile = zeile.rstrip("\n")
+                # ZUERST drucken, dann auswerten: was der Generator sagt,
+                # steht auf dem Bildschirm, auch wenn niemand es liest.
+                line.write(zeile)
+                nackt = _ANSI.sub("", zeile).strip()
+                if nackt.startswith(GENERATOR_STEP):
+                    nummer += 1
+                    line.note(f"{nummer}. "
+                              f"{nackt[len(GENERATOR_STEP):].strip()}")
+            code = child.wait()
+            # Ein abgewuergter Lauf hat nichts erzeugt, genau wie einer,
+            # der nie angefangen hat - dieselbe Zahl fuer denselben
+            # Zustand, damit aftermath() nicht zwei Faelle kennen muss.
+            return 127 if abgelaufen.is_set() else code
+        finally:
+            uhr.cancel()
+            # Auch bei Strg-C: ein Kind, das weiterlaeuft, waehrend
+            # dieser Prozess endet, schriebe gleich in die Eingabezeile
+            # der Schale, die den Nutzer dann schon wieder hat.
+            if child.poll() is None:
+                child.terminate()
 
 
 def notification(outcome: Outcome, config: dict[str, Any], *,
@@ -1348,6 +1536,89 @@ def mark_regeneration(path: Path | None = None) -> Path:
     return target
 
 
+def stamp_path(uid: int | None) -> Path | None:
+    """Wo der Zeitstempel dieses Kontos liegt - oder None.
+
+    DIESELBE AUFLOESUNG WIE REGENERATE_SCRIPT, ZEICHEN FUER ZEICHEN
+        Dort steht `${XDG_STATE_HOME:-$HOME/.local/state}/zepos`, und
+        zwar im Kind: runuser setzt HOME auf das Heimatverzeichnis des
+        Kontos und laesst die uebrige Umgebung stehen. Hier wird deshalb
+        genau dieselbe Reihenfolge gefragt - erst XDG_STATE_HOME, dann
+        das Heimatverzeichnis DES KONTOS aus der Benutzerdatenbank, nie
+        das des laufenden Prozesses.
+
+        Ein `Path.home()` waere hier der Fehler, den diese Datei schon
+        einmal beschrieben hat: der Prozess ist root, das gemeinte
+        Heimatverzeichnis ist es nicht. paths.user_state_root() rechnet
+        denselben Pfad fuer den EIGENEN Prozess aus und ist genau
+        deswegen nicht das, was hier gebraucht wird.
+
+    None heisst "es gibt kein Konto, dessen Zeitstempel gemeint sein
+    koennte" - derselbe Fall, in dem caller() nicht erzeugt, weil ein
+    root ohne SUDO_UID nicht raet, wessen Schreibtisch gemeint ist.
+    """
+    if uid is None:
+        return None
+    state_home = os.environ.get("XDG_STATE_HOME")
+    if state_home:
+        return Path(state_home) / "zepos" / GENERATED_STAMP
+    try:
+        import pwd
+
+        home = Path(pwd.getpwuid(uid).pw_dir)
+    except (ImportError, KeyError):
+        return None
+    return home / ".local" / "state" / "zepos" / GENERATED_STAMP
+
+
+def regeneration_pending(invocation: Invocation) -> bool:
+    """Steht fuer DIESES Konto eine Neuerzeugung aus? (20.08.2026)
+
+    WORAN ES HAENGT, UND WARUM AN GENAU DEM
+        An der Marke UND am Zeitstempel des aufrufenden Kontos, mit
+        derselben Regel, die src/bin/zepos-session bei jeder Anmeldung
+        anwendet:
+
+            [[ -e "$UPDATE_MARKER" && "$UPDATE_MARKER" -nt "$GENERATED_STAMP" ]]
+
+        Die Marke ALLEIN genuegt nicht, und das ist keine Feinheit: sie
+        gilt der Maschine und jedem Konto auf ihr, und sie wird
+        ABSICHTLICH nie geloescht - sie gehoert root, eine Sitzung kann
+        das nicht, und ein zweites Konto braucht sein eigenes
+        Neuerzeugen noch. Wer nur `marker_path().exists()` fragte, haette
+        eine Maschine, die von der ersten Aktualisierung an bei JEDEM
+        Lauf 30 Sekunden lang alles neu erzeugt, fuer immer.
+
+        Und es ist bewusst KEINE zweite Antwort auf dieselbe Frage: die
+        Anmeldung entscheidet es so, also entscheidet es dieser Lauf
+        auch so. Waeren es zwei Regeln, koennte eine Anmeldung erzeugen,
+        wo der Aktualisierer schweigt - und der Nutzer haette wieder
+        einen Unterschied, den niemand erraten kann.
+
+    NICHT gefragt wird die Bitte der Einstellungs-Anwendung
+    (paths.SESSION_REGENERATE_MARKER, dieselbe Datei im Konto). Sie ist
+    die Frage eines anderen, und zepos-session beantwortet sie schon;
+    laeuft der Generator hier trotzdem, ist sie miterfuellt - dafuer
+    raeumt REGENERATE_SCRIPT sie weg.
+    """
+    marker = marker_path()
+    if not marker.exists():
+        return False
+
+    stamp = stamp_path(invocation.uid)
+    if stamp is None:
+        # Ohne Konto gibt es den Vergleich nicht - und ohne Konto wird
+        # ohnehin nicht erzeugt (caller()). "Die Marke liegt" statt
+        # einer Antwort auszugeben, waere genau die Aussage ueber die
+        # MASCHINE, die dieser Datei die Sackgasse eingebracht hat.
+        return False
+    if not stamp.exists():
+        # Genau bashs `-nt`: eine Datei, die es gibt, ist neuer als
+        # eine, die es nicht gibt. Dieses Konto hat noch nie erzeugt.
+        return True
+    return marker.stat().st_mtime_ns > stamp.stat().st_mtime_ns
+
+
 # --------------------------------------------------------------------
 # Der Lauf
 # --------------------------------------------------------------------
@@ -1386,7 +1657,8 @@ def perform(config: dict[str, Any], *, runner: Runner | None = None,
     # SigLevel = Required erzeugt, waere der einzige stille gewesen.
     sessions = graphical_sessions(runner=runner)
 
-    refreshed = _run(runner, refresh_command())
+    refreshed = _run(runner, refresh_command(),
+                     note="Paketdatenbank wird geholt")
     if refreshed.returncode != 0:
         return Outcome(result=Outcome.FAILED, returncode=refreshed.returncode,
                        message=_tail(refreshed), sessions=tuple(sessions),
@@ -1426,8 +1698,14 @@ def perform(config: dict[str, Any], *, runner: Runner | None = None,
                        sessions=tuple(sessions), started=started,
                        finished=_now())
 
+    # Der Text nennt die Pakete und nicht ihre Anzahl: "3 Pakete" ist
+    # nach dem Lauf nicht mehr nachzuvollziehen, "zepos-config, ..."
+    # schon - und dieselben Namen stehen gleich darunter mit Fassung
+    # vorher und nachher.
     upgraded = _run(runner, upgrade_command(config,
-                                            [change.name for change in ours]))
+                                            [change.name for change in ours]),
+                    note=f"eingespielt wird: "
+                         f"{', '.join(change.name for change in ours)}")
     if upgraded.returncode != 0:
         return Outcome(result=Outcome.FAILED, returncode=upgraded.returncode,
                        message=_tail(upgraded), base_available=tuple(base),
@@ -1483,13 +1761,20 @@ DER UNTERSCHIED, DEN NIEMAND ERRATEN MUSS
     systemd ein - wann der Zeitgeber feuert und ob ueberhaupt.
 
 WAS NACH EINEM LAUF NEU ERZEUGT WIRD
-    Hat der Lauf Pakete getauscht UND haengt ein Terminal daran UND ist
-    das aufrufende Konto (SUDO_USER) gerade grafisch angemeldet, dann
-    laeuft `zepos-generate --all` gleich hinterher, als dieses Konto: die
-    Konfiguration ist neu, die Schale startet neu, und es braucht keine
-    Neuanmeldung. Fehlt eine der drei Bedingungen - so ruft der
-    Zeitgeber -, bleibt es bei der Marke, und die naechste Anmeldung
-    erzeugt neu. --regenerate/--no-regenerate entscheiden es ausdruecklich.
+    Steht eine Neuerzeugung aus UND haengt ein Terminal an diesem Lauf
+    UND ist das aufrufende Konto (SUDO_USER) gerade grafisch angemeldet,
+    dann laeuft `zepos-generate --all` gleich hinterher, als dieses
+    Konto: die Konfiguration ist neu, die Schale startet neu, und es
+    braucht keine Neuanmeldung. Fehlt eine der drei Bedingungen - so ruft
+    der Zeitgeber -, bleibt es bei der Marke, und die naechste Anmeldung
+    erzeugt neu. --regenerate/--no-regenerate entscheiden es ausdruecklich,
+    und --regenerate erzwingt es AUCH DANN, wenn nichts aussteht.
+
+    "Steht aus" heisst: die Marke der Maschine ist neuer als der
+    Zeitstempel dieses Kontos - dieselbe Regel, nach der eine Anmeldung
+    entscheidet. Ein Lauf, der nichts eingespielt hat, holt die
+    Neuerzeugung damit nach, die ein frueherer Lauf schuldig geblieben
+    ist; `zepos-update --check` sagt, ob eine aussteht.
 
 Was, wann und ob ueberhaupt entscheidet {config}; geschrieben wird das
 mit `zepos-settings set update.<name> <wert>`:
@@ -1537,7 +1822,8 @@ APPLY_NOTE = (
 
 
 def aftermath(outcome: Outcome, invocation: Invocation,
-              regeneration: int | None, *, dry: bool = False) -> list[str]:
+              regeneration: int | None, *, dry: bool = False,
+              pending: bool = False) -> list[str]:
     """Was nach dem Lauf gilt - und was NICHT gilt.
 
     Die eigentliche Bestellung des Nutzers steckt in diesen Zeilen: "und
@@ -1560,6 +1846,12 @@ def aftermath(outcome: Outcome, invocation: Invocation,
     nichts geschehen, und jeder Satz steht im Konjunktiv - "erzeugt" zu
     drucken, wo nichts erzeugt wurde, waere dieselbe Unwahrheit wie
     "fertig" zu drucken, wo eine Neuanmeldung fehlt.
+
+    `pending` ist die Lage, die drei Runden lang unsichtbar war
+    (20.08.2026): es steht eine Neuerzeugung aus, die dieser Lauf nicht
+    verursacht hat. Sie GEHOERT in die Ausgabe, samt dem Befehl, der sie
+    aufloest - ein Nutzer, der dreimal "nothing" liest und dreimal eine
+    alte Oberflaeche sieht, hat keinen Weg, von selbst darauf zu kommen.
     """
     lines: list[str] = []
 
@@ -1573,7 +1865,33 @@ def aftermath(outcome: Outcome, invocation: Invocation,
                      f"liegen bereit und werden nicht angefasst - "
                      f"`sudo pacman -Syu` spielt sie ein.")
 
-    if not outcome.changed:
+    # Was DIESER Lauf eingespielt hat und was von frueher aussteht, sind
+    # zwei verschiedene Aussagen. Nur die zweite braucht einen eigenen
+    # Satz: die erste steht schon als Paketliste darueber.
+    #
+    # Und nur, solange sie noch WAHR ist: hat dieser Lauf gerade
+    # erfolgreich erzeugt (regeneration == 0), steht nichts mehr aus, und
+    # der Satz waere die Sorte Unwahrheit, gegen die der Absatz oben
+    # geschrieben ist. Beim Probelauf und bei einem gescheiterten
+    # Generator steht sie weiter.
+    stale = pending and not outcome.changed and regeneration != 0
+    if stale:
+        lines.append(f"Eine Neuerzeugung steht aus: {marker_path()} ist "
+                     f"neuer als {stamp_path(invocation.uid)} - es ist "
+                     f"schon einmal etwas eingespielt worden, ohne dass "
+                     f"seither erzeugt wurde.")
+        # Der Befehl gehoert in dieselbe Ausgabe wie die Lage. Drei
+        # Runden lang stand hier nichts, und der Nutzer hatte keinen
+        # Weg, von "nothing" auf "dann eben --regenerate" zu kommen.
+        lines.append("`sudo zepos-update --regenerate` erzeugt jetzt neu; "
+                     "sonst tut es die naechste Anmeldung.")
+
+    # `regeneration is not None` heisst: es ist erzeugt worden, ganz
+    # gleich warum. Das ist der Fall `--regenerate` ohne alles - er hat
+    # weder eine Aenderung noch eine ausstehende Marke, und ein Lauf, der
+    # eine halbe Minute lang erzeugt und danach schweigt, sieht aus wie
+    # einer, der nichts getan hat.
+    if not (outcome.changed or pending or regeneration is not None):
         return lines
 
     if dry:
@@ -1581,11 +1899,16 @@ def aftermath(outcome: Outcome, invocation: Invocation,
             lines.append(f"Ein Lauf ohne --check wuerde danach "
                          f"`zepos-generate --all` als {invocation.user} "
                          f"ausfuehren; eine Neuanmeldung waere nicht noetig.")
-        else:
+        elif outcome.changed:
             lines.append(invocation.reason)
             lines.append("Ein Lauf ohne --check wuerde nur die Marke "
                          "setzen; erzeugt wuerde bei der naechsten "
                          "Anmeldung.")
+        else:
+            # Der Befehl steht schon im Absatz darueber; hier fehlt nur
+            # noch, WARUM dieser Lauf ihn nicht von selbst ausfuehren
+            # wuerde.
+            lines.append(invocation.reason)
         return lines
 
     if regeneration is None:
@@ -1680,13 +2003,17 @@ def main(argv: list[str] | None = None) -> int:
         # Auch der Probelauf sagt, was DANACH passieren wuerde. Bis heute
         # war das die eine Frage, die man nur durch Ausfuehren beantworten
         # konnte - und Ausfuehren ist genau das, was ein --check vermeidet.
-        for line in aftermath(outcome, invocation, None, dry=True):
+        #
+        # Und seit dem 20.08.2026 sagt er auch, was JETZT schon aussteht:
+        # das ist die Lage, in der der Nutzer dreimal "nothing" gelesen
+        # und dreimal eine alte Oberflaeche gesehen hat.
+        for line in aftermath(outcome, invocation, None, dry=True,
+                              pending=regeneration_pending(invocation)):
             print(line)
         return 0
 
     write_state(outcome, config)
 
-    regeneration: int | None = None
     if outcome.changed:
         # Die Marke wird IMMER gesetzt, auch wenn gleich im Vordergrund
         # erzeugt wird. Sie gilt der MASCHINE und damit jedem Konto: wer
@@ -1695,15 +2022,30 @@ def main(argv: list[str] | None = None) -> int:
         # SICH, indem er den Zeitstempel dieses Kontos danach neu setzt -
         # siehe REGENERATE_SCRIPT.
         mark_regeneration()
-        if invocation.human:
-            print("")
-            print(f"zepos-generate --all (als {invocation.user}) - "
-                  f"das dauert einen Moment.")
-            regeneration = regenerate(invocation)
+
+    # NACH mark_regeneration() gefragt, und das ist der Kern der
+    # Korrektur vom 20.08.2026: erzeugt wird, wenn etwas AUSSTEHT - nicht
+    # nur, wenn dieser eine Lauf etwas eingespielt hat. Ein Lauf, der
+    # nichts zu tun fand, holt damit nach, was ein frueherer Lauf ohne
+    # Terminal schuldig geblieben ist. Vorher blieb genau diese Schuld
+    # liegen, beliebig oft wiederholbar, und kein Ausgang erwaehnte sie.
+    pending = regeneration_pending(invocation)
+
+    regeneration: int | None = None
+    if invocation.human and (outcome.changed or pending or force is True):
+        # force is True steht ausdruecklich noch einmal da: `--regenerate`
+        # muss auch dann erzwingen, wenn nichts aussteht und nichts
+        # eingespielt wurde. Ein Schalter, der schweigend nichts tut, ist
+        # schlimmer als keiner - dann glaubt der Nutzer, es sei versucht
+        # worden.
+        print("")
+        print(f"zepos-generate --all (als {invocation.user}) - "
+              f"das dauert einen Moment.")
+        regeneration = regenerate(invocation)
 
     announce(outcome, config, regenerated=regeneration == 0)
 
-    for line in aftermath(outcome, invocation, regeneration):
+    for line in aftermath(outcome, invocation, regeneration, pending=pending):
         print(line)
     return 1 if outcome.failed else 0
 
