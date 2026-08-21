@@ -34,6 +34,9 @@ DIE MESSUNG, DIE DIESER DATEI IHREN NAMEN GIBT
 """
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -121,13 +124,76 @@ def gemessen(tmp_path_factory) -> dict:
             + sitzung.read_shell_log())
         mit_home = sitzung.shoot(bilder / "mit-home.png")
 
+        # ================================================================
+        # DIE FREMDE AENDERUNG - seit dem 21.08.2026 (Aufgabe 53)
+        # ================================================================
+        #
+        # GEMELDET aus 0.1.7, woertlich: "auch im ags launcher bzw
+        # hyprlauncher kann ich nicht mit rechtsklick zu home hinzufügen,
+        # und wenn ich es dort mit der dock versuche dann passiert
+        # nichts".
+        #
+        # Der Fuss und der Starter bieten seither "Vom Home entfernen"
+        # an, und sie setzen dafuer GENAU DIESEN BEFEHL ab -
+        # `settings.py home remove <name>`. Hier laeuft er von aussen,
+        # waehrend die Oberflaeche steht: kein `ags request`, kein
+        # Neustart, kein Erzeugungslauf. Was danach auf dem Bild steht,
+        # ist die Antwort auf "kommt es an?".
+        entfernt = _nimm_das_erste_symbol_weg(bau)
+        time.sleep(SETTLE)
+        ohne_erstes = sitzung.shoot(bilder / "ohne-erstes.png")
+        ebenen_danach = _ebenen(sitzung)
+        flaechen_danach = sitzung.layers()
+
         return {
             "ebenen": ebenen,
             "flaechen": flaechen,
             "vorher": measure.read_png(nur_tapete),
             "nachher": measure.read_png(mit_home),
+            "entfernt": entfernt,
+            "danach": measure.read_png(ohne_erstes),
+            "ebenen_danach": ebenen_danach,
+            "flaechen_danach": flaechen_danach,
             "protokoll": sitzung.read_shell_log(),
         }
+
+
+def _nimm_das_erste_symbol_weg(bau: Path) -> str:
+    """Ein Symbol vom Home nehmen - von AUSSEN, ueber settings.py.
+
+    DERSELBE BEFEHL, DEN DER FUSS UND DER STARTER ABSETZEN
+        `settings.py home remove <name>` - genau das, was ihr
+        Menuepunkt "Vom Home entfernen" seit dem 21.08.2026 ruft. Kein
+        `ags request`, kein Erzeugungslauf, kein Neustart: nur ein
+        Schreibvorgang in user-settings.json, waehrend die Oberflaeche
+        steht.
+
+    DAS ERSTE UND NICHT IRGENDEINES: die uebrigen ruecken dadurch alle
+    eine Zelle auf, und die erste Symbolspalte sieht danach ganz anders
+    aus. Ein Symbol aus der Mitte einer spaeteren Spalte aenderte nur
+    seine eigene Zelle - messbar, aber knapp.
+
+    ZEPOS_USER_ROOT zeigt dorthin, wo die Oberflaeche ihre Datei sucht:
+    Session.shell() reicht XDG_CONFIG_HOME=<bau> durch, und
+    utils/user-settings.ts leitet daraus `<bau>/zepos` ab (dieselbe
+    Ableitung wie src/paths.py).
+    """
+    umgebung = {"PATH": os.environ.get("PATH", "/usr/bin"),
+                "ZEPOS_SYSTEM_ROOT": str(ROOT / "src"),
+                "ZEPOS_USER_ROOT": str(bau / "zepos")}
+    plan = subprocess.run(
+        [sys.executable, str(ROOT / "src" / "settings.py"), "home"],
+        capture_output=True, text=True, env=umgebung, timeout=60)
+    assert plan.returncode == 0, plan.stderr
+    namen = [icon["name"] for icon in json.loads(plan.stdout)["icons"]]
+    assert namen, "auf dem Home lag nichts - dann misst dieser Lauf nichts"
+
+    fertig = subprocess.run(
+        [sys.executable, str(ROOT / "src" / "settings.py"),
+         "home", "remove", namen[0]],
+        capture_output=True, text=True, env=umgebung, timeout=60)
+    assert fertig.returncode == 0, f"{namen[0]}: {fertig.stderr}"
+    return namen[0]
 
 
 def test_das_home_liegt_auf_bottom(gemessen):
@@ -275,3 +341,69 @@ def test_das_home_zeichnet_wirklich_symbole(gemessen):
         f"nur {geaendert} Bildpunkte haben sich in der ersten Symbolspalte "
         "geaendert - das Home zeichnet keine Symbole. Was das Protokoll "
         "sagt:\n" + gemessen["protokoll"][-2000:])
+
+
+# --------------------------------------------------------------------
+# Dass eine Aenderung aus einem ANDEREN Fenster ankommt
+# --------------------------------------------------------------------
+
+def test_eine_fremde_aenderung_erreicht_das_home_ohne_neustart(gemessen):
+    """Der Fehler aus 0.1.7, von der anderen Seite gemessen.
+
+    Zwischen dem Bild mit allen Symbolen und diesem liegt NICHTS ausser
+    einem `settings.py home remove` in einem fremden Prozess - kein
+    Neustart, kein Erzeugungslauf, kein `ags request`. Was die Aenderung
+    ankommen laesst, ist der Gio.FileMonitor in
+    utils/user-settings.ts.
+
+    GEMESSEN wird in der ersten Symbolspalte, weil dort das
+    weggenommene Symbol stand und alle uebrigen um eine Zelle
+    aufruecken - dieselbe Messflaeche wie in
+    test_das_home_zeichnet_wirklich_symbole, nur dass dort "es ist
+    ueberhaupt etwas da" der Befund ist und hier "es hat sich
+    geaendert".
+
+    AB x+8 UND NICHT AB x+2, und das ist gemessen: bei x+2 liegt der
+    Rand der Nachbarflaeche, und die ist auf dem Bild "nur Tapete" gar
+    nicht da (dort lief noch keine Oberflaeche). GEMESSEN am
+    21.08.2026: die Abweichungen dieser einen Spalte waren um 1 bis 15
+    Stufen gross - ein weicher Rand, kein Symbol.
+    """
+    mit, danach = gemessen["nachher"], gemessen["danach"]
+    x, y, _breite, hoehe = gemessen["flaechen"][NAMENSRAUM]
+    LINKER_RAND = 8
+
+    geaendert = 0
+    for px in range(x + LINKER_RAND, x + 200, 3):
+        for py in range(y + 2, y + hoehe - 2, 3):
+            if mit.at(px, py) != danach.at(px, py):
+                geaendert += 1
+
+    assert geaendert > 100, (
+        f"nur {geaendert} Bildpunkte haben sich geaendert, nachdem "
+        f"\"{gemessen['entfernt']}\" von aussen vom Home genommen wurde - "
+        f"die Aenderung ist nicht angekommen.\n"
+        + gemessen["protokoll"][-2000:])
+
+
+def test_die_flaeche_des_homes_bleibt_dabei_liegen(gemessen):
+    """Ein Home, dem ein Symbol fehlt, ist immer noch ein Home.
+
+    Es darf dabei weder verschwinden noch die Ebene wechseln: die
+    Flaeche traegt das Rechtsklickmenue der freien Flaeche ("Anwendung
+    starten", "Aufraeumen", "Tapete", "Einstellungen"), und `bottom` ist
+    die Sicherung, an der die Bedienbarkeit jedes Fensters haengt (siehe
+    Messung 2 im Kopf von ags-home.template).
+
+    NICHT das RECHTECK: die Hoehe des Homes ist der Schirm minus die
+    reservierten Zonen, und die des Fusses aendert sich mit seinem
+    Inhalt. Eine Zusicherung darueber waere eine Zusicherung ueber den
+    Fuss, und die steht in tests/render/test_dock_breite.py.
+    """
+    assert NAMENSRAUM in gemessen["ebenen_danach"], (
+        "das Home ist mit dem weggenommenen Symbol verschwunden:\n"
+        + gemessen["protokoll"][-2000:])
+    assert gemessen["ebenen_danach"][NAMENSRAUM] == "bottom", (
+        gemessen["ebenen_danach"])
+    assert NAMENSRAUM in gemessen["flaechen_danach"], (
+        gemessen["flaechen_danach"])

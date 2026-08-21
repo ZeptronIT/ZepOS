@@ -1237,5 +1237,14 @@ def test_the_template_count_is_seventy_seven():
     nicht mit, genau wie lock-style.template weiter oben. Die
     vollstaendige Rechnung steht bei der Zwillingszusicherung in
     tests/src/test_inventory.py.
+
+    88 STATT 87, am 21.08.2026 (Aufgabe 53): ags-user-settings. Sie
+    erzeugt ags/utils/user-settings.ts - der eine Weg, auf dem das Dock
+    und das Home die Einstellungsdatei lesen, ueber `settings.py
+    dock|home add|remove` aendern und ueber einen Gio.FileMonitor
+    voneinander erfahren. Ein Baustein wie kit.ts und i18n.ts, kein
+    Fenster. Die vollstaendige Rechnung und der Wortlaut der Bestellung
+    stehen bei der Zwillingszusicherung in tests/src/test_inventory.py;
+    beide muessen zusammen wandern.
     """
-    assert len(list(TEMPLATES.glob("*.template"))) == 87
+    assert len(list(TEMPLATES.glob("*.template"))) == 88

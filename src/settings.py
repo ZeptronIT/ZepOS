@@ -905,6 +905,89 @@ def pinnable(shipped: list[str] | None) -> list[str] | None:
                             if name not in known]
 
 
+def dock_plan(document: dict[str, Any],
+              root: Path | None = None) -> dict[str, Any]:
+    """Was WIRKLICH im Fuss steht, und was dabei herausgefallen ist.
+
+    Das Gegenstueck zu home_plan(), Satz fuer Satz - und ausdruecklich
+    dieselbe Rechnung, die `zepos-settings-gui --json get` fuer das
+    Bedienelement "bar.dock_pins" anstellt (settings/zepos_settings_gui/
+    bridge.py, _page_leiste(), und model.Draft.current_bar() davor):
+
+        die Wahl des Nutzers        bar_choice()
+        plus die HEUTIGE Auslieferung, soweit sie nach der Grundlinie
+        dazugekommen ist                        dock_effective()
+        jeder Name gegen das, was diese Maschine anheften KANN
+                                    bar_order(..., pinnable(...))
+
+    Es ist keine zweite Antwort auf dieselbe Frage, sondern DIESELBE
+    Antwort aus denselben vier Funktionen. Sie steht hier, weil die drei
+    Rechtsklick-Menues sie brauchen und keines davon Python importieren
+    kann - das Dock und das Home sind GJS, der Starter ist C++.
+
+    WARUM DAS UEBERHAUPT HIER STEHT UND NICHT WEITER BEI DER BRUECKE
+        Bis zum 21.08.2026 nahm das Dock den Weg ueber
+        `zepos-settings-gui --json get`, und der Starter tat es ihm
+        nach. Das war die Antwort auf eine Frage, die das Dock damals
+        alleine hatte. Seit es DREI Menues sind, ist es eine Antwort,
+        die dreimal abgeschrieben werden muesste - und die Antwort des
+        Homes (`settings.py home`) waere die vierte. Ein Unterbefehl
+        weiss es fuer alle drei; der Kopf von _home_command() fuehrt
+        dieselbe Ueberlegung fuer das Home aus.
+
+    ZURUECK KOMMT IMMER EINE LISTE, AUCH BEI null - genau wie bei
+    home_plan(): "wie ausgeliefert" ist fuer eine Oberflaeche, die
+    zeichnen soll, keine brauchbare Antwort. Ob der Nutzer eine Wahl
+    getroffen hat, steht daneben in "chosen".
+    """
+    shipped = shipped_pins(root)
+    chosen = bar_choice(document, BAR_PINS)
+    effective = dock_effective(chosen, bar_baseline(document), shipped)
+
+    kept, discarded = bar_order(effective, pinnable(shipped), shipped,
+                                unknown=BAR_GONE)
+    return {
+        "pins": kept,
+        "discarded": [{"name": name, "why": why} for name, why in discarded],
+        "chosen": chosen is not None,
+    }
+
+
+def dock_write(document: dict[str, Any], pins: list[str],
+               root: Path | None = None) -> dict[str, Any]:
+    """Der Abschnitt, wie er auf die Platte gehoert - Anheftungen UND Vorgabe.
+
+    DIE ZWEI SCHLUESSEL WERDEN GEMEINSAM GESCHRIEBEN, IMMER
+        Der Kopf bei BAR_BASELINE sagt es fuer diese Datei ("Sie werden
+        GEMEINSAM geschrieben (model.Draft.sections()), damit sie nicht
+        auseinanderfallen koennen"), home_write() sagt es fuer das Home.
+        Hier ist die dritte Stelle, an der es gilt, und ab heute die
+        einzige, die die drei Menues betrifft: eine Anheftungsliste ohne
+        frische Vorgabe hiesse, der Nutzer haette gegen die Auslieferung
+        von GESTERN entschieden.
+
+    DER GANZE ABSCHNITT UND NICHT NUR DIE ZWEI SCHLUESSEL
+        merge() ERSETZT einen Abschnitt (siehe dort, "Sections are
+        REPLACED, not deep-merged"). Wer hier nur die Anheftungen
+        zurueckgaebe, loeschte modules_left und modules_right - also die
+        ganze Leiste des Nutzers, beim Anheften eines Symbols.
+        model.Draft.sections() baut den Abschnitt aus demselben Grund
+        vollstaendig auf.
+
+    Die Vorgabe ist die HEUTIGE Auslieferung. Ist sie unbekannt (kein
+    Abdruck), bleibt der Schluessel null statt leer - eine leere Liste
+    hiesse "ZepOS lieferte nichts aus", und danach gaelte jede
+    ausgelieferte Anwendung als neu.
+    """
+    stored = document.get(BAR)
+    section = dict(stored) if isinstance(stored, dict) else {}
+    for key in BAR_KEYS:
+        section.setdefault(key, None)
+    section[BAR_PINS] = list(pins)
+    section[BAR_BASELINE] = shipped_pins(root)
+    return {BAR: section}
+
+
 # --------------------------------------------------------------------
 # Das Home: dieselben Regeln wie das Dock, nur mit einem Ort dabei
 # --------------------------------------------------------------------
@@ -1279,6 +1362,9 @@ USAGE = """usage: settings.py check
        settings.py home set '<json array>'
        settings.py home add <name>
        settings.py home remove <name>
+       settings.py dock
+       settings.py dock add <name>
+       settings.py dock remove <name>
 
 check reads the user settings and reports what is wrong with them,
 saying nothing when there is nothing to say. A file that is not there is
@@ -1300,6 +1386,20 @@ that; set takes the whole array and is how the Home itself saves a
 layout somebody dragged.
 
     settings.py home add firefox
+
+dock is the same three things for the Dock's pinned applications, and it
+exists for the same reason - bar.dock_pins and bar.dock_baseline have to
+be written together, and there are now three menus that offer to change
+them: the Dock's own, the Home's, and the Starter's. Two of the three
+are not Python. A subcommand knows the rule once; three callers that
+each have to remember it are two that forget it.
+
+    settings.py dock add firefox
+
+Both add commands are silent about a name that is already there: they
+end with 0 and write nothing. Pinning twice is not a complaint worth
+making, and a non-zero exit would put an error in front of somebody for
+whom nothing is missing.
 
 merge merges whole top-level sections into the settings and writes them
 back atomically at 0600, keeping every section the argument does not
@@ -1420,6 +1520,83 @@ def _home_command(rest: list[str]) -> int:
     return 0
 
 
+def _dock_command(rest: list[str]) -> int:
+    """`settings.py dock [add <name> | remove <name>]`.
+
+    DREI UNTERBEFEHLE UND NICHT VIER: es gibt kein `set`. Die
+    Reihenfolge der Anheftungen ist ein Bedienelement der Seite
+    "Leiste", und die schreibt das Einstellungsfenster ueber
+    model.Draft.sections(). Ein zweiter Weg, die GANZE Liste zu setzen,
+    waere ein zweiter Weg an derselben Stelle - `add` und `remove` sind
+    das, was ein Menue braucht, und mehr braucht ein Menue nicht.
+
+    LESEN, RECHNEN, SCHREIBEN - IN EINEM PROZESS, UND DAS IST DER PUNKT
+        bar.dock_pins ist eine ERSATZliste: anheften heisst lesen,
+        anhaengen, ganz zurueckschreiben. Bis zum 21.08.2026 tat das
+        jeder Aufrufer selbst, und jeder musste dabei an dieselben zwei
+        Dinge denken - zuerst lesen (sonst nimmt er eine fremde
+        Aenderung still zurueck) und bei einem fehlgeschlagenen
+        Lesevorgang gar nichts schreiben (sonst loescht er dem Nutzer
+        jedes Symbol, das er je angeheftet hat). Zwei Aufrufer taten es;
+        ein dritter kam dazu, ein vierter waere gefolgt.
+
+        Hier ist es eine Funktion. Ein Lesevorgang, der nicht geht, ist
+        eine Ausnahme aus load(), und die faellt unten in denselben
+        Fang, der auch merge() abfaengt - geschrieben wird dann nichts,
+        und der Rueckgabewert sagt es.
+
+    `add` und `remove` nehmen einen NAMEN, also genau das, was
+    bar.dock_pins traegt (siehe den Kopf bei BAR_BASELINE, "warum ein
+    zweiter Schluessel und nicht ein Objekt in dock_pins").
+    """
+    target = _path(None)
+    try:
+        document = load(target)
+    except (ValueError, OSError) as exc:
+        # Auf STDERR und mit Rueckgabewert 1, wie `check` und wie
+        # `home`: eine Oberflaeche darf eine unlesbare Datei nicht als
+        # "der Nutzer hat nichts angeheftet" missverstehen, ein leeres
+        # Dock zeichnen und beim naechsten Anheften darueberschreiben.
+        print(unreadable(target, exc), file=sys.stderr)
+        return 1
+
+    try:
+        if not rest:
+            json.dump(dock_plan(document), sys.stdout)
+            sys.stdout.write("\n")
+            return 0
+
+        if rest[0] in ("add", "remove") and len(rest) == 2:
+            name = rest[1]
+            # Von der WIRKSAMEN Liste aus und nicht von der rohen -
+            # dieselbe Begruendung wie bei `home add`: wer heute etwas
+            # anheftet, will die Symbole behalten, die er gerade sieht.
+            # Von der rohen Liste aus verschwaende alles, was
+            # dock_effective() gerade erst angehaengt hat.
+            pins = list(dock_plan(document)["pins"])
+            if rest[0] == "add":
+                if name in pins:
+                    # Kein Fehler - siehe USAGE. Ein Rueckgabewert
+                    # ungleich 0 liesse ein Menue eine Fehlermeldung
+                    # zeigen, wo nichts fehlt.
+                    return 0
+                pins.append(name)
+            else:
+                if name not in pins:
+                    return 0
+                pins = [pin for pin in pins if pin != name]
+        else:
+            print(USAGE, file=sys.stderr)
+            return 2
+
+        merge(dock_write(document, pins), target)
+    except (ValueError, OSError) as exc:
+        print(f"{unreadable(target, exc)}\nNothing was changed.",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """The entry point for a caller that is not Python.
 
@@ -1458,6 +1635,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if argv and argv[0] == "home":
         return _home_command(argv[1:])
+
+    # Und das Dock daneben, seit dem 21.08.2026. In derselben Form und
+    # aus demselben Grund: drei Rechtsklick-Menues aendern diese Liste,
+    # zwei davon sind nicht in Python geschrieben.
+    if argv and argv[0] == "dock":
+        return _dock_command(argv[1:])
 
     if len(argv) != 2 or argv[0] != "merge":
         print(USAGE, file=sys.stderr)

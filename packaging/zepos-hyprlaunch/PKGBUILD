@@ -188,7 +188,7 @@ optdepends=('zepos-config: erzeugt config und style.css, ohne die der Starter un
 source=("hyprlaunch-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
         "zepos-hyprlaunch.patch")
 sha256sums=('9e79a3a77b77214d60d9f3129362c8bb264a772b8946e3a53dc3be8cca576e75'
-            '8ca2f9ef1a99a92df3823d54378ebdf5cee9f03d1f1f35f6229ae62b6f8bef13')
+            '2469e3b8e08d8f9a3188260ab66c1942ed2121f9035acf833a7c0c2250965a13')
 
 _src="hyprlaunch-$_commit"
 _plugin_dir="usr/lib/hyprland/plugins"

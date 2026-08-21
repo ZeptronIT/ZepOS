@@ -1279,6 +1279,16 @@ case "$CONFIG_NAME" in
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/utils"
         CONFIG_FILE="kit.ts"
         ;;
+    # Die Einstellungsdatei, aus der Sicht der Oberflaeche - Aufgabe 53
+    # (21.08.2026). Ein Baustein wie kit.ts und i18n.ts und aus
+    # demselben Grund dort: das Dock UND das Home lesen dieselbe Datei,
+    # aendern sie ueber dieselben Unterbefehle und erfahren ueber
+    # denselben Gio.FileMonitor voneinander. Zwei Fassungen davon waeren
+    # zwei Antworten auf "was hat der Nutzer angeheftet".
+    ags-user-settings)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/utils"
+        CONFIG_FILE="user-settings.ts"
+        ;;
     # Die Uebersetzung. Ein Baustein wie overlay.ts und aus demselben
     # Grund dort: JEDES Widget importiert `_` daraus.
     ags-i18n)

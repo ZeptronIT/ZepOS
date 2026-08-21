@@ -99,7 +99,7 @@ hotkey = "SUPER SPACE"
 # einen Namen zu erfinden, den ausser dieser Zeile niemand liest.
 helpers_dir = "~/.local/bin/helpers"
 
-# Die zwei Zeichen des Rechtsklick-Menues, seit dem 21.08.2026.
+# Die drei Zeichen des Rechtsklick-Menues, seit dem 21.08.2026.
 #
 # WAS BESTELLT WURDE
 #     "was das menue angeht bei rechtsklick will ich das wir das am
@@ -130,6 +130,42 @@ helpers_dir = "~/.local/bin/helpers"
 #     Patch, den ohnehin schon niemand gern liest.
 pin_icon = "{{ICON_PIN}}"
 unpin_icon = "{{ICON_MINUS}}"
+
+# Das dritte, seit dem 21.08.2026: der Schreibtisch, fuer BEIDE
+# Richtungen des Home-Punktes.
+#
+# WARUM EIN ZEICHEN FUER ZWEI PUNKTE
+#     "Zum Home hinzufuegen" und "Vom Home entfernen" stehen nie
+#     zusammen in einem Menue - der Punkt schlaegt um, je nachdem, ob
+#     das Programm schon dort liegt. Das Zeichen nennt deshalb das ZIEL
+#     und der Text die Richtung. Ein zweites Minus daneben waeren zwei
+#     gleiche Zeichen mit zwei Wirkungen in EINEM Menue, und genau das
+#     verbietet der Kopf von src/templates/ags-dock.template fuer sein
+#     Kreuz schon einmal.
+home_icon = "{{ICON_COMPUTER}}"
+
+# Wo settings.py liegt, seit dem 21.08.2026.
+#
+# WOFUER
+#     Der Rechtsklick heftet an den Fuss und legt aufs Home - beides
+#     ueber `python3 <dieser Pfad> dock|home add|remove <name>`,
+#     denselben Unterbefehl, den der Fuss und das Home rufen
+#     (src/templates/ags-user-settings.template). Bis zum 21.08.2026
+#     lief das ueber `zepos-settings-gui --json get|set`; der Kopf von
+#     AppDiscovery.cpp im Patch fuehrt aus, warum es das nicht mehr tut.
+#
+# WARUM ER DURCH DIESE DATEI GEHT
+#     Weil ein uebersetztes Programm nicht wissen kann, aus welchem
+#     Paket es stammt - genau die Frage, die
+#     src/template_processor.py mit {{ZEPOS_SYSTEM_ROOT}} beantwortet.
+#     Ein Bau aus einem Checkout bekommt den Checkout, ein Paket das
+#     Paket. Der Grundwert im uebersetzten Objekt ist SYSTEM_ROOT aus
+#     src/paths.py, also der ausgelieferte Ort - damit ein Starter ohne
+#     diese Datei nicht verstummt. Er steht dort und ausdruecklich
+#     NICHT hier: eine erzeugte Datei, die den Ort raet, hat die
+#     Ersetzung nie bekommen, und genau darauf sieht
+#     tests/src/test_naming.py nach.
+settings_script = "{{ZEPOS_SYSTEM_ROOT}}/settings.py"
 
 [spacing]
 # Die Abstandsleiter aus src/sizes.py, Sprosse fuer Sprosse.

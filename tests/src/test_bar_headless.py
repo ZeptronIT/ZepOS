@@ -107,6 +107,13 @@ RENDERED = {
     # tun haben, denn die Leiste und die zwei Knoepfe importieren es
     # ueber Dock.tsx mit.
     "templates/ags-kit.template": "utils/kit.ts",
+    # Dock.tsx liest und schreibt die Einstellungen daraus, seit Aufgabe
+    # 53 (21.08.2026) - und horcht darueber auf Aenderungen, die ein
+    # anderes Fenster gemacht hat. Dieselbe Begruendung wie bei kit.ts
+    # eine Zeile hoeher: ohne diesen Eintrag meldet `ags bundle` "Could
+    # not resolve ../utils/user-settings", und KEIN Kind dieser Datei
+    # startet mehr.
+    "templates/ags-user-settings.template": "utils/user-settings.ts",
     "templates/ags-bar.template": "widget/Bar.tsx",
     "templates/ags-dock.template": "widget/Dock.tsx",
     # Die zwei Knoepfe am Dock, fuer CORNER_CHILD. Sie stehen in
@@ -675,6 +682,49 @@ def _desktop_entries(share: Path, binaries: Path) -> None:
     stub = binaries / SERVICE_ENTRY
     stub.write_text(f"#!/bin/bash\necho {SERVICE_ENTRY}\n")
     stub.chmod(0o755)
+
+    _werkzeuge(binaries)
+
+
+# Was das Dock BRAUCHT, um seine Einstellungen zu lesen - kein Programm
+# dieses Schreibtischs, sondern Werkzeug.
+#
+# SEIT DEM 21.08.2026 (Aufgabe 53), UND ES IST GEMESSEN
+#     Der Fuss liest seine Anheftungen jetzt beim Bauen, ueber
+#     `bash -c "... python3 <wurzel>/settings.py dock"` (siehe
+#     utils/user-settings.ts). Der PATH dieser Laeufe besteht NUR aus
+#     dem Programmverzeichnis - siehe den Kopf von
+#     dock_headless_child.tsx, und das ist richtig so: mit /usr/bin
+#     darin maesse der Lauf, was der Entwickler zufaellig installiert
+#     hat.
+#
+#     Ohne diese zwei Verknuepfungen meldete jeder Lauf am 21.08.2026
+#     zweimal `Failed to execute child process "bash"` auf STDERR, und
+#     test_the_run_produced_no_critical_warning fiel darueber. Die
+#     Meldung war RICHTIG - das Kind konnte seine Einstellungen wirklich
+#     nicht lesen.
+#
+# WEITERGABEN UND KEINE VERKNUEPFUNGEN, und das ist keine Vorliebe:
+# tests/conftest.py prueft bei einem Symlink auch das ZIEL ("moving a
+# harmless temporary file onto /etc/passwd is a write to /etc/passwd"),
+# und /usr/bin/bash ist geschuetzt. Eine Kopie waere fuer python3 falsch -
+# der Interpreter findet seine Standardbibliothek ueber den Ort seiner
+# eigenen Datei, und eine Kopie unter /tmp faende sie nicht. Ein
+# Weitergabeskript loest beides: es liegt im Programmverzeichnis, und
+# das Programm dahinter startet an seinem eigenen Ort.
+#
+# Keines von beiden ist eine Anwendung: sie tragen keinen
+# .desktop-Eintrag, fallen also nicht in die Auswahl, die diese Laeufe
+# messen.
+def _werkzeuge(binaries: Path) -> None:
+    binaries.mkdir(parents=True, exist_ok=True)
+    for werkzeug in ("bash", "python3"):
+        ziel = shutil.which(werkzeug)
+        assert ziel, (f"ohne {werkzeug} kann das Dock seine Einstellungen "
+                      f"nicht lesen")
+        stub = binaries / werkzeug
+        stub.write_text(f'#!/bin/sh\nexec {ziel} "$@"\n')
+        stub.chmod(0o755)
 
 
 @pytest.fixture(scope="module")

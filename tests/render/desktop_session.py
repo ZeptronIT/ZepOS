@@ -141,6 +141,12 @@ WALLPAPER = SRC / "branding" / "zepos-wallpaper.png"
 RENDERED = {
     "templates/ags-i18n.template": "utils/i18n.ts",
     "templates/ags-kit.template": "utils/kit.ts",
+    # Die Einstellungsdatei aus der Sicht der Oberflaeche, seit dem
+    # 21.08.2026 (Aufgabe 53) - der case-Zweig dazu heisst
+    # `ags-user-settings)` in src/generate_config.sh. Dock.tsx und
+    # Home.tsx importieren sie beide; ohne diese Zeile bricht esbuild
+    # mit "Could not resolve ../utils/user-settings" ab.
+    "templates/ags-user-settings.template": "utils/user-settings.ts",
     "templates/ags-overlay-utils.template": "utils/overlay.ts",
     "templates/ags-hyprland.template": "utils/hyprland.ts",
     "templates/ags-tray.template": "utils/tray.ts",

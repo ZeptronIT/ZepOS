@@ -463,3 +463,191 @@ def test_der_erzeuger_setzt_die_gewanderte_liste_in_die_erzeugte_datei(
         "die erzeugte Zeile traegt nicht, was die Einstellungen sagen: "
         "kitty war abgewaehlt, papers ist neu ausgeliefert, inkscape hat "
         "der Nutzer selbst angeheftet")
+
+
+# --------------------------------------------------------------------
+# `settings.py dock` - der EINE Schreibweg der drei Rechtsklick-Menues
+# --------------------------------------------------------------------
+#
+# WOFUER ES DEN UNTERBEFEHL GIBT, SEIT DEM 21.08.2026 (Aufgabe 53)
+#     Drei Menues aendern diese Liste: das des Fusses, das des Homes und
+#     das des Starters. Zwei davon sind nicht in Python geschrieben (GJS
+#     und C++), koennen dieses Modul also nicht importieren.
+#
+#     Bis dahin rechnete jedes fuer sich: lesen, anhaengen, ganz
+#     zurueckschreiben - und jedes musste dabei an dieselben zwei Dinge
+#     denken (zuerst lesen, bei einem fehlgeschlagenen Lesevorgang gar
+#     nichts schreiben). settings.py sagt es bei _home_command() in
+#     einem Satz: "drei Aufrufer, die je daran denken muessten, sind
+#     zwei, die es einmal vergessen."
+#
+#     Diese Zusicherungen messen deshalb genau die Dinge, die ein
+#     Aufrufer vergessen wuerde.
+
+def _lauf(argumente: list[str], tmp_path) -> "object":
+    """`settings.py <argumente>` gegen die Wurzeln dieses Laufs.
+
+    Ueber einen Unterprozess und nicht ueber einen Import, aus demselben
+    Grund wie beim Erzeuger eine Zusicherung weiter oben: gemessen wird
+    der Weg, den die drei Menues wirklich gehen.
+    """
+    import subprocess
+
+    return subprocess.run(
+        [sys.executable, str(SRC / "settings.py"), *argumente],
+        capture_output=True, text=True,
+        env={"PATH": "/usr/bin:/bin",
+             "ZEPOS_SYSTEM_ROOT": str(tmp_path / "system"),
+             "ZEPOS_USER_ROOT": str(tmp_path / "zepos"),
+             "XDG_DATA_HOME": str(tmp_path / "data"),
+             "XDG_DATA_DIRS": str(tmp_path / "leer")})
+
+
+def _datei(tmp_path) -> dict:
+    ziel = tmp_path / "zepos" / "user-settings.json"
+    return json.loads(ziel.read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def aufbau(tmp_path):
+    """Eine Maschine mit drei ausgelieferten und einer eigenen Anwendung."""
+    liefere(tmp_path, "firefox", "kitty")
+    installiere(tmp_path, "firefox", "kitty", "inkscape")
+    (tmp_path / "leer").mkdir(exist_ok=True)
+    (tmp_path / "zepos").mkdir(parents=True, exist_ok=True)
+    return tmp_path
+
+
+@pytest.mark.allow_subprocess
+def test_dock_antwortet_mit_der_wirksamen_liste(aufbau):
+    """Dieselbe Rechnung, die die Bruecke fuer ihr Bedienelement macht.
+
+    Ohne jede Wahl ist die wirksame Liste die ausgelieferte - "wie
+    ausgeliefert" ist fuer eine Oberflaeche, die zeichnen soll, keine
+    brauchbare Antwort, also loest der Unterbefehl sie auf. Dass der
+    Nutzer nichts gewaehlt hat, steht daneben in "chosen".
+    """
+    fertig = _lauf(["dock"], aufbau)
+    assert fertig.returncode == 0, fertig.stderr
+    plan = json.loads(fertig.stdout)
+    assert plan["pins"] == ["firefox", "kitty"]
+    assert plan["chosen"] is False
+    assert plan["discarded"] == []
+
+
+@pytest.mark.allow_subprocess
+def test_dock_add_schreibt_die_vorgabe_mit(aufbau):
+    """Die zwei Schluessel gehen GEMEINSAM hinaus, immer.
+
+    Der Kopf bei BAR_BASELINE in src/settings.py fuehrt aus, woran das
+    haengt: eine Anheftungsliste ohne frische Vorgabe hiesse, der Nutzer
+    haette gegen die Auslieferung von GESTERN entschieden - und alles,
+    was seither dazugekommen ist, erschiene beim naechsten Anmelden noch
+    einmal, auch das, was er gerade abgenommen hat.
+
+    Genau deshalb ist es ein Unterbefehl und keine Zeile beim Aufrufer:
+    keines der drei Menues schickt dock_baseline mit, und keines muss.
+    """
+    assert _lauf(["dock", "add", "inkscape"], aufbau).returncode == 0
+    bar = _datei(aufbau)["bar"]
+    assert bar["dock_pins"] == ["firefox", "kitty", "inkscape"]
+    assert bar["dock_baseline"] == ["firefox", "kitty"]
+
+
+@pytest.mark.allow_subprocess
+def test_dock_add_laesst_die_leiste_stehen(aufbau):
+    """settings.merge() ERSETZT einen Abschnitt.
+
+    modules_left und modules_right stehen im SELBEN Abschnitt wie die
+    Anheftungen. Ein Schreiber, der nur die Anheftungen zurueckgibt,
+    loescht dem Nutzer seine Leiste, weil er ein Symbol angeheftet hat.
+    """
+    (aufbau / "zepos" / "user-settings.json").write_text(json.dumps({
+        "schema_version": 1,
+        "colors": {"accent": "#abcdef"},
+        "bar": {"modules_left": ["custom/date"], "modules_right": ["tray"],
+                "dock_pins": ["firefox"], "dock_baseline": ["firefox",
+                                                            "kitty"]},
+    }), encoding="utf-8")
+    assert _lauf(["dock", "add", "inkscape"], aufbau).returncode == 0
+    document = _datei(aufbau)
+    assert document["bar"]["modules_left"] == ["custom/date"]
+    assert document["bar"]["modules_right"] == ["tray"]
+    assert document["colors"] == {"accent": "#abcdef"}
+    assert document["bar"]["dock_pins"] == ["firefox", "inkscape"]
+
+
+@pytest.mark.allow_subprocess
+def test_dock_add_rechnet_von_der_wirksamen_liste_aus(aufbau):
+    """Und nicht von der rohen.
+
+    Der Nutzer hat kitty NIE abgewaehlt - es kam nach seiner Grundlinie
+    dazu. Wer von der rohen Liste ausginge, schriebe ["firefox",
+    "inkscape"] und haette kitty damit abgewaehlt, ohne dass jemand es
+    angefasst hat.
+    """
+    (aufbau / "zepos" / "user-settings.json").write_text(json.dumps(
+        dokument(pins=["firefox"], baseline=["firefox"])), encoding="utf-8")
+    assert _lauf(["dock", "add", "inkscape"], aufbau).returncode == 0
+    assert _datei(aufbau)["bar"]["dock_pins"] == ["firefox", "kitty",
+                                                 "inkscape"]
+
+
+@pytest.mark.allow_subprocess
+def test_ein_zweites_anheften_ist_kein_fehler_und_schreibt_nichts(aufbau):
+    """Was ein Menuepunkt tut, wenn das Programm schon dort liegt.
+
+    Nichts - und zwar ohne Klage. Ein Rueckgabewert ungleich 0 liesse
+    ein Menue eine Fehlermeldung zeigen, wo nichts fehlt; die drei
+    Menues bauen ihre Anzeige auf genau dieser Regel auf und bieten
+    stattdessen die GEGENRICHTUNG an (siehe homePunkt() und dockPunkt()
+    in den zwei Vorlagen).
+    """
+    assert _lauf(["dock", "add", "firefox"], aufbau).returncode == 0
+    assert not (aufbau / "zepos" / "user-settings.json").exists(), (
+        "es wurde geschrieben, obwohl firefox schon angeheftet war")
+
+
+@pytest.mark.allow_subprocess
+def test_ein_zweites_abnehmen_ist_ebenfalls_kein_fehler(aufbau):
+    assert _lauf(["dock", "remove", "inkscape"], aufbau).returncode == 0
+    assert not (aufbau / "zepos" / "user-settings.json").exists()
+
+
+@pytest.mark.allow_subprocess
+def test_dock_remove_nimmt_eine_ausgelieferte_anwendung_ab(aufbau):
+    """Das "nein", das eine blosse Ersatzliste nicht ausdruecken kann.
+
+    kitty steht danach in der Vorgabe und nicht in der Wahl - genau die
+    Kombination, aus der der Erzeuger "abgewaehlt" liest.
+    """
+    assert _lauf(["dock", "remove", "kitty"], aufbau).returncode == 0
+    bar = _datei(aufbau)["bar"]
+    assert bar["dock_pins"] == ["firefox"]
+    assert bar["dock_baseline"] == ["firefox", "kitty"]
+
+
+@pytest.mark.allow_subprocess
+def test_eine_unlesbare_datei_wird_nicht_ueberschrieben(aufbau):
+    """Die wichtigste dieser Zusicherungen.
+
+    bar.dock_pins ist eine ERSATZliste. Wer sie schreibt, ohne sie
+    vorher gelesen zu haben, loescht dem Nutzer jedes Symbol, das er je
+    angeheftet hat. Der Unterbefehl bricht deshalb ab, und die kaputte
+    Datei bleibt unveraendert liegen - sie ist die einzige, die sich
+    noch reparieren laesst.
+    """
+    ziel = aufbau / "zepos" / "user-settings.json"
+    ziel.write_text("{kaputt", encoding="utf-8")
+    fertig = _lauf(["dock", "add", "inkscape"], aufbau)
+    assert fertig.returncode == 1
+    assert ziel.read_text(encoding="utf-8") == "{kaputt"
+    assert str(ziel) in fertig.stderr
+
+
+@pytest.mark.allow_subprocess
+def test_ein_falsches_argument_endet_mit_zwei_und_schreibt_nichts(aufbau):
+    fertig = _lauf(["dock", "add"], aufbau)
+    assert fertig.returncode == 2
+    assert "usage" in fertig.stderr
+    assert not (aufbau / "zepos" / "user-settings.json").exists()

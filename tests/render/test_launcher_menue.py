@@ -142,42 +142,19 @@ def _erzeuge(ziel: Path, faktor: float) -> None:
         os.environ.update(umgebung)
 
 
-def _bruecken_abbild(bin_verzeichnis: Path, heim: Path) -> None:
-    """Ein `zepos-settings-gui` auf PATH, das auf den Checkout zeigt.
-
-    WARUM DAS KEIN BETRUG IST
-        Es ist DERSELBE Befehl - dasselbe Skript aus settings/bin/, mit
-        derselben Python-Umgebung, die auch `zepos-settings-gui` aus dem
-        Paket ausfuehren wuerde. GEMESSEN am 21.08.2026 auf dieser
-        Maschine: das PAKET zepos-settings-gui ist nicht installiert
-        (`which zepos-settings-gui` findet nichts), und ein Lauf, der
-        deshalb uebersprungen wuerde, beantwortete die Frage nicht.
-
-        Ohne dieses Abbild antwortet die Bruecke gar nicht, und
-        LauncherRenderer::entryMenu() bietet dann - richtigerweise -
-        KEINEN Punkt an. Der Lauf saehe ein leeres Menue und koennte
-        nicht unterscheiden, ob das Menue kaputt ist oder ob nur der
-        Befehl fehlt.
-
-    HEIM ZEIGT IN DEN SANDKASTEN
-        Damit ein Schreibvorgang die user-settings.json des NUTZERS
-        nicht anfasst. Session.environment() setzt HOME ohnehin auf das
-        Laufzeitverzeichnis; hier steht es noch einmal, weil dieses
-        Skript seine Wurzeln aus der Umgebung liest und ein
-        vergessenes HOME der teuerste denkbare Fehler waere.
-    """
-    bin_verzeichnis.mkdir(parents=True, exist_ok=True)
-    python = ROOT / ".venv" / "bin" / "python"
-    if not python.exists():
-        python = Path(sys.executable)
-    skript = bin_verzeichnis / "zepos-settings-gui"
-    skript.write_text(
-        "#!/bin/sh\n"
-        f'export HOME="{heim}"\n'
-        f'export XDG_CONFIG_HOME="{heim}/.config"\n'
-        f'exec "{python}" "{ROOT / "settings" / "bin" / "zepos-settings-gui"}" "$@"\n',
-        encoding="utf-8")
-    skript.chmod(0o755)
+# HIER STAND BIS ZUM 21.08.2026 EIN `zepos-settings-gui` AUF DEM PATH
+#
+#     Der Starter rief diesen Befehl, um die Anheftungen zu lesen und zu
+#     schreiben; das Paket ist auf einer Entwicklermaschine nicht
+#     installiert, also legte dieser Lauf ein Abbild auf den PATH.
+#
+#     Er ruft ihn nicht mehr. Seit Aufgabe 53 geht der Weg ueber
+#     `python3 <settings.py> dock|home add|remove`, und WELCHES
+#     settings.py gemeint ist, steht in der erzeugten Datei
+#     (~/.config/hyprlaunch/config, settings_script) - eingesetzt vom
+#     ECHTEN Prozessor in _erzeuge() oben, also auf src/settings.py
+#     dieses Checkouts. Ein Abbild auf dem PATH braucht dieser Lauf
+#     damit nicht mehr; er braucht gar keinen eigenen PATH.
 
 
 def _uebersetze(quelle: Path, ziel: Path) -> None:
@@ -288,9 +265,6 @@ def lauf(tmp_path_factory) -> dict:
     with Session(BREITE, HOEHE) as sitzung:
         heim = sitzung.home
         _erzeuge(heim / ".config" / "hyprlaunch", FAKTOR)
-        pfad_bin = bau / "bin"
-        _bruecken_abbild(pfad_bin, heim)
-
         sitzung.hyprctl("keyword", "cursor:invisible", "true")
         sitzung.wallpaper()
 
@@ -329,8 +303,7 @@ def lauf(tmp_path_factory) -> dict:
         sitzung.move_cursor(BREITE // 2, HOEHE // 2)
         time.sleep(1.5)
 
-        umgebung = sitzung.environment(
-            PATH=f"{pfad_bin}:{os.environ.get('PATH', '/usr/bin')}")
+        umgebung = sitzung.environment()
         kindlog = bau / "kind.log"
         prozess = subprocess.Popen(
             [str(kind_bin)], env=umgebung, stdin=subprocess.PIPE,
@@ -467,9 +440,23 @@ def test_das_menue_geht_auf_einer_layer_flaeche_wirklich_auf(lauf):
 
 
 def test_das_menue_bietet_das_anheften_an(lauf):
-    """Der Punkt, der bestellt war - woertlich."""
+    """Der Punkt, der am 20.08.2026 bestellt war - woertlich."""
     assert "Zum Dock hinzufuegen" in lauf["menue_offen"], (
         "das Menue traegt den bestellten Punkt nicht: "
+        f"{lauf['menue_offen']!r}")
+
+
+def test_das_menue_bietet_auch_das_home_an(lauf):
+    """Der Punkt, der am 21.08.2026 dazu bestellt war - woertlich:
+    "auch im ags launcher bzw hyprlauncher kann ich nicht mit
+    rechtsklick zu home hinzufügen".
+
+    Zwei Ziele, zwei Punkte, und beide in der Richtung, die gerade
+    etwas bewirkt: in diesem Lauf liegt nichts im Fuss und nichts auf
+    dem Home, also heisst es beide Male "hinzufuegen".
+    """
+    assert "Zum Home hinzufuegen" in lauf["menue_offen"], (
+        "das Menue traegt den Home-Punkt nicht: "
         f"{lauf['menue_offen']!r}")
 
 

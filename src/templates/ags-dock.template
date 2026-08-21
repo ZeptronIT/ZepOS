@@ -367,15 +367,32 @@
 //     oeffnen, eine Seite finden, eine Liste bedienen, um ein Symbol
 //     anzuheften, das man gerade vor sich sieht.
 //
-//     VIER PUNKTE, UND JEDER EINZELNE IST GEBAUT. Was ein Menuepunkt
-//     nicht tut, steht nicht darin - Spec §7.4, dieselbe Regel, aus der
-//     eine fehlende Anwendung im Fuss keinen ausgegrauten Knopf bekommt:
+//     SECHS PUNKTE SEIT DEM 21.08.2026, UND JEDER EINZELNE IST GEBAUT.
+//     Was ein Menuepunkt nicht tut, steht nicht darin - Spec §7.4,
+//     dieselbe Regel, aus der eine fehlende Anwendung im Fuss keinen
+//     ausgegrauten Knopf bekommt:
 //
-//       auf einem FENSTER      Zum Dock hinzufuegen   (wenn es geht -
-//                                                     siehe anheftbar())
+//       auf einem FENSTER      Zum Dock hinzufuegen / Vom Dock entfernen
+//                              Zum Home hinzufuegen / Vom Home entfernen
+//                                                    (beide nur, wenn
+//                                                     das Fenster einen
+//                                                     Namen hat - siehe
+//                                                     dockName())
 //                              Schliessen
 //       auf einer ANHEFTUNG    Neues Fenster
+//                              Zum Home hinzufuegen / Vom Home entfernen
 //                              Vom Dock entfernen
+//
+//     WAS PASSIERT, WENN ES SCHON DA IST: DER PUNKT SCHLAEGT UM.
+//     Ausgeblendet waere ein Rechtsklick, der mal einen Punkt hat und
+//     mal nicht; ausgegraut gibt es in diesem Haus ueberhaupt nicht.
+//     Der Starter traegt denselben Umschlag seit dem 20.08.2026
+//     (43b8b25), und settings.py deckt ihn: `dock add` auf einen
+//     liegenden Namen endet mit 0 und schreibt nichts.
+//
+//     BESTELLT am 21.08.2026, woertlich: "das gleiche muss bei der dock
+//     auch funktionieren, weil ich nicht jedes icon auf der dock oder
+//     auf dem home haben will."
 //
 //     "Schliessen" ist derselbe Befehl wie der Mittelklick, und das ist
 //     sein zweiter Zweck: eine Geste ohne Beschriftung findet nur, wer
@@ -384,28 +401,34 @@
 //     das erste nach vorn, und das soll er.
 //
 //     WAS DAS MENUE SCHREIBT, UND WOHIN
-//         `zepos-settings-gui --json set '{"bar.dock_pins": [...]}'` -
-//         die Nutzerliste aus Aufgabe 45 (973d9d3), kein zweiter Ort
-//         und keine zweite Datei. Gelesen wird vorher aus derselben
-//         Quelle (`--json get`, `.effective`), damit eine Aenderung aus
-//         dem Einstellungsfenster nicht stillschweigend zurueckgenommen
-//         wird.
+//         `settings.py dock add|remove` und `settings.py home
+//         add|remove` - dieselben zwei Befehle, die das Home und der
+//         Starter rufen, kein zweiter Ort und keine zweite Datei. Die
+//         Schluessel sind unveraendert (bar.dock_pins mit
+//         bar.dock_baseline daneben, home.icons mit home.baseline);
+//         gelesen, gerechnet und geschrieben wird in EINEM Prozess,
+//         damit kein Aufrufer mehr daran denken muss, zuerst zu lesen.
+//         Der Abschnitt "DIE ANHEFTUNGEN DES NUTZERS" weiter unten
+//         fuehrt aus, was hier bis zum 21.08.2026 stand und warum es
+//         fort ist.
 //
-//     DAS SYMBOL STEHT SOFORT DA, und das ist gemessen: setzePins()
-//     baut die Reihe neu und update() laeuft im selben Zug. Kein
-//     Neustart der Oberflaeche, kein Erzeugungslauf.
+//     DAS SYMBOL STEHT SOFORT DA, und das ist gemessen: die Aenderung
+//     kommt ueber die Ueberwachung von user-settings.json zurueck
+//     (Gio.FileMonitor, utils/user-settings.ts), setzePins() baut die
+//     Reihe neu und update() laeuft im selben Zug. Kein Neustart der
+//     Oberflaeche, kein Erzeugungslauf - und zwar AUCH DANN, wenn die
+//     Aenderung aus dem Home, aus dem Starter oder aus dem
+//     Einstellungsfenster kommt. Bis zum 21.08.2026 galt das nur fuer
+//     das eigene Menue; "wenn ich es dort mit der dock versuche dann
+//     passiert nichts" war genau diese Luecke.
 //
-//         WAS DAFUER EINEN LAUF BRAUCHT, ist die erzeugte Zeile PINNED
-//         in dieser Datei. Sie ist der Abzug, den src/apps.py beim
-//         Erzeugen hineinschreibt - `zepos-settings-gui --json set`
-//         legt dafuer die Marke `regenerate-required`, und
-//         src/bin/zepos-session laesst beim naechsten Anmelden
-//         `zepos-generate` darueber laufen. Bis dahin steht die
-//         Anheftung in user-settings.json und auf dem Schirm, aber
-//         nicht in der erzeugten Datei: wer die Oberflaeche in
-//         derselben Sitzung neu startet (`ags quit`, dann `ags run`),
-//         ohne neu zu erzeugen, sieht die alte Reihe wieder. Verloren
-//         ist dabei nichts - beim naechsten Anmelden ist sie zurueck.
+//         DIE ERZEUGTE ZEILE PINNED IST DAMIT NUR NOCH DER ANFANGSWERT.
+//         Sie ist der Abzug, den src/apps.py beim Erzeugen
+//         hineinschreibt; beobachteDock() liest die wirksame Liste,
+//         sobald der Fuss steht, und ersetzt sie. Wer die Oberflaeche
+//         in derselben Sitzung neu startet, ohne neu zu erzeugen, sieht
+//         seit dem 21.08.2026 seine Anheftungen und nicht mehr die
+//         ausgelieferten.
 //
 // DAS MENUE UEBER DEM FUSS - DASS ES DAS DARF, IST GEMESSEN
 //     Ein Fuss ist 60 Punkte hoch (GEMESSEN am 20.08.2026,
@@ -426,7 +449,6 @@ import GLib from "gi://GLib"
 // wo genau diese Zeile den Lauf hat auffallen lassen.
 import GioUnix from "gi://GioUnix?version=2.0"
 import { Gtk, Gdk } from "ags/gtk4"
-import { execAsync } from "ags/process"
 import * as Hyprland from "../utils/hyprland"
 // Der Bausatz. Das Menue baut KEIN eigenes Zeilenbauteil: zepRow ist
 // die klickbare Zeile dieses Schreibtischs (Symbol links, Text daneben,
@@ -434,7 +456,14 @@ import * as Hyprland from "../utils/hyprland"
 // Abstand stehen damit in ags-style.template und nicht hier - siehe den
 // Kopfabschnitt "DAS RECHTSKLICK-MENUE".
 import { zepRow, zepDivider } from "../utils/kit"
-import { _, format } from "../utils/i18n"
+import { _ } from "../utils/i18n"
+// Die Einstellungsdatei, aus der Sicht der Oberflaeche - Aufgabe 53
+// (21.08.2026). Hier standen bis dahin bruecke(), gepflegtePins() und
+// schreibePins(); der Abschnitt "DIE ANHEFTUNGEN DES NUTZERS" weiter
+// unten sagt, warum sie fort sind.
+import {
+  beobachteDock, beobachteHome, dockAdd, dockRemove, homeAdd, homeRemove,
+} from "../utils/user-settings"
 
 const ICON_SIZE = {{STYLE_DOCK_ICON_SIZE}}
 
@@ -442,7 +471,7 @@ const ICON_SIZE = {{STYLE_DOCK_ICON_SIZE}}
 // laesst. Siehe iconFor() weiter unten, warum es KEIN Zahnrad mehr ist.
 const UNKNOWN_WINDOW_ICON = "{{ICON_DOCK_WINDOW}}"
 
-// Die vier Zeichen des Rechtsklick-Menues. Alle vier standen schon in
+// Die fuenf Zeichen des Rechtsklick-Menues. Alle fuenf standen schon in
 // src/icon_definition.py - kein neues Zeichen fuer dieses Menue.
 //
 //   Anheften    die Reisszwecke, dasselbe Bild, das jede Oberflaeche
@@ -451,11 +480,20 @@ const UNKNOWN_WINDOW_ICON = "{{ICON_DOCK_WINDOW}}"
 //               Kreuz steht eine Zeile weiter fuer SCHLIESSEN, und
 //               zwei Kreuze in einem Menue mit zwei verschiedenen
 //               Wirkungen sind ein Bedienfehler mit Ansage
+//   Home        der Schreibtisch, seit dem 21.08.2026 - fuer BEIDE
+//               Richtungen dasselbe Zeichen. Dieselbe Regel, die eine
+//               Zeile hoeher das Minus vom Kreuz trennt, verbietet ein
+//               zweites Minus fuer "Vom Home entfernen": das Zeichen
+//               nennt hier das ZIEL, der Text die Richtung. Zusammen
+//               stehen die beiden nie - der Punkt schlaegt um (siehe
+//               homePunkt()). Wortgleich in ags-home.template (ICONS.home)
+//               und in hyprlaunch-config.template (home_icon).
 //   Neu         das Fenster - "Neues Fenster" ist genau das
 //   Schliessen  das Kreuz der Fensterleiste, dasselbe wie am
 //               Fensterknopf
 const PIN_ICON = "{{ICON_PIN}}"
 const UNPIN_ICON = "{{ICON_MINUS}}"
+const HOME_ICON = "{{ICON_COMPUTER}}"
 const NEW_WINDOW_ICON = "{{ICON_WINDOW}}"
 const CLOSE_ICON = "{{ICON_WINDOW_CLOSE}}"
 
@@ -771,102 +809,30 @@ function starte(info: GioUnix.DesktopAppInfo): void {
 // DIE ANHEFTUNGEN DES NUTZERS
 // =====================================================================
 //
-// Der Befehl, der sie fuehrt, und die Schluessel darin. Beides steht
-// seit Aufgabe 45 (973d9d3) fest und wird hier nur benutzt - es gibt
-// keinen zweiten Namensraum und keine zweite Datei.
+// HIER STANDEN BIS ZUM 21.08.2026 bruecke(), gepflegtePins() UND
+// schreibePins()
+//     Sie riefen `zepos-settings-gui --json get|set`, weil die
+//     Reihenfolge der Anheftungen auf der Seite "Leiste" jenes Fensters
+//     ein Bedienelement IST. Die Begruendung war richtig, solange
+//     dieses Menue das einzige war, das sie aendert.
 //
-//     lesen     zepos-settings-gui --json get
-//               -> pages[name="leiste"].controls[key="bar.dock_pins"]
-//                  .effective   die gepruefte, gewanderte Reihenfolge
-//     schreiben zepos-settings-gui --json set '{"bar.dock_pins": [...]}'
-//               -> dock_baseline schreibt der Befehl SELBST mit; wer es
-//                  von hier aus mitschickte, ueberschriebe die Vorgabe,
-//                  gegen die der Nutzer sich einmal entschieden hat
-const SETTINGS_COMMAND = "zepos-settings-gui"
-const JSON_FLAG = "--json"
-const PIN_KEY = "bar.dock_pins"
-const BAR_PAGE = "leiste"
-
-/** Ein Aufruf der Bruecke, als Dokument zurueck.
- *
- * WORTGLEICH ZU bruecke() IN ags-settings.template, und das ist kein
- * uebersehenes Doppel: die Begruendung fuer jedes Stueck dieser sechs
- * Zeilen steht dort ausfuehrlich (die Bruecke endet mit 1, WENN sie
- * eine Aenderung ablehnt, und legt ihre Klage dabei auf STDOUT;
- * execAsync verwirft bei jedem Rueckgabewert ungleich 0 und reicht
- * STDERR weiter, nicht stdout - ein direkter Aufruf verloere die Klage
- * also genau dann, wenn man sie braucht). `; exit 0` nimmt dem Aufruf
- * seinen Rueckgabewert; unterschieden wird danach an `ok`.
- *
- * Nicht geteilt, weil die beiden Dateien nichts teilen: das Dock ist
- * ein Widget in widget/, das Einstellungsfenster ein anderes, und ein
- * gemeinsames utils/settings.ts fuer sechs Zeilen waere ein drittes
- * Modul, das beide importieren muessten. Aendert sich der Aufruf,
- * aendert er sich fuer beide - dann findet ihn `grep zepos-settings-gui`
- * in genau zwei Dateien.
- */
-async function bruecke(argumente: string[]): Promise<any> {
-  const zeile = [SETTINGS_COMMAND, JSON_FLAG, ...argumente]
-    .map(teil => GLib.shell_quote(teil)).join(" ")
-  let ausgabe = ""
-  try {
-    ausgabe = await execAsync(["bash", "-c", `${zeile}; exit 0`])
-  } catch (fehler) {
-    return { ok: false, problems: [String(fehler)] }
-  }
-  try {
-    return JSON.parse(ausgabe)
-  } catch {
-    // Kein JSON heisst: der Befehl ist gar nicht gelaufen (er fehlt,
-    // eine seiner Wurzeln fehlt) oder er ist abgestuerzt. Beides sagt
-    // der Text, den er hinterlassen hat, besser als ein Satz von hier -
-    // und wenn er gar nichts hinterlassen hat, steht derselbe Satz da
-    // wie im Einstellungsfenster.
-    return {
-      ok: false,
-      problems: [ausgabe || format(_("{command} did not answer."),
-                                   { command: SETTINGS_COMMAND })],
-    }
-  }
-}
-
-/** Die WIRKSAME Anheftungsliste des Nutzers, oder null.
- *
- * null heisst "die Bruecke hat nicht geantwortet" und NICHT "der Nutzer
- * hat nichts angeheftet" - die beiden auseinanderzuhalten ist der ganze
- * Zweck des Rueckgabetyps: eine leere Liste wuerde geschrieben, ein
- * fehlgeschlagener Lesevorgang darf nichts schreiben.
- *
- * `.effective` und nicht `.value`: die Bruecke rechnet dort die heutige
- * Auslieferung gegen `dock_baseline` und prueft jeden Namen gegen den
- * Anwendungseintrag dieser Maschine (siehe den Bericht zu Aufgabe 45).
- * `.value` waere die rohe Wahl, also die Liste VOR dieser Rechnung.
- */
-async function gepflegtePins(): Promise<string[] | null> {
-  const zustand = await bruecke(["get"])
-  if (!zustand || !Array.isArray(zustand.pages)) return null
-  const seite = zustand.pages.find((s: any) => s && s.name === BAR_PAGE)
-  if (!seite || !Array.isArray(seite.controls)) return null
-  const bedienelement = seite.controls.find((c: any) => c && c.key === PIN_KEY)
-  const wirksam = bedienelement ? bedienelement.effective : null
-  return Array.isArray(wirksam) ? wirksam.map(String) : null
-}
-
-/** Eine neue Anheftungsliste schreiben. Zurueck kommen die Klagen.
- *
- * Eine leere Liste Klagen heisst: geschrieben. Ein Array und kein
- * boolean, weil die Bruecke ihre Ablehnung BEGRUENDET und die
- * Begruendung ins Protokoll gehoert - "es hat nicht geklappt" ist die
- * Sorte Meldung, die niemand melden kann.
- */
-async function schreibePins(namen: string[]): Promise<string[]> {
-  const antwort = await bruecke(
-    ["set", JSON.stringify({ [PIN_KEY]: namen })])
-  if (antwort && antwort.ok) return []
-  return antwort && Array.isArray(antwort.problems) && antwort.problems.length
-    ? antwort.problems.map(String)
-    : [`${SETTINGS_COMMAND} ${JSON_FLAG} set: ${JSON.stringify(antwort)}`]
-}
+//     Es sind drei. Der Starter hat am 20.08.2026 dieselben sechs
+//     Zeilen in C++ bekommen, dem Home fehlte "Zum Dock hinzufuegen"
+//     ausdruecklich deshalb, weil es "die dritte Abschrift von
+//     bruecke()" gebraucht haette. Und mit jeder Abschrift wanderte
+//     nicht nur der Aufruf mit, sondern die REGEL: bar.dock_pins ist
+//     eine ERSATZliste, also muss jeder Schreiber ZUERST lesen und bei
+//     einem fehlgeschlagenen Lesevorgang GAR NICHTS schreiben.
+//
+//     `settings.py dock add|remove` tut beides in einem Prozess. Was
+//     hier bleibt, ist der Aufruf - ueber utils/user-settings.ts,
+//     dasselbe Modul, das auch das Home benutzt. Gerechnet wird dabei
+//     nicht anders: settings.dock_plan() ruft genau die vier
+//     Funktionen, die die Bruecke fuer dasselbe Bedienelement ruft.
+//
+//     bar.dock_pins BEDEUTET WEITERHIN DASSELBE. Die Liste, ihre Form
+//     und ihr Verhaeltnis zu dock_baseline sind unveraendert; nur der
+//     Weg dorthin ist einer statt dreier.
 
 // =====================================================================
 // DAS RECHTSKLICK-MENUE
@@ -1191,13 +1157,25 @@ export function DockContent(): Gtk.Box {
   // anheftet oder abnimmt - und nur dann.
   //
   // PINNED IST DER ANFANGSWERT UND NICHT MEHR DIE WAHRHEIT, und das ist
-  // der Unterschied zu jeder Fassung vor heute. Was gilt, steht in
-  // user-settings.json und kommt ueber `zepos-settings-gui --json get`;
-  // PINNED ist der Abzug davon, den der Erzeugungslauf hier
-  // hineingeschrieben hat. Solange niemand etwas aendert, sind die
-  // beiden dasselbe.
+  // der Unterschied zu jeder Fassung vor dem 20.08.2026. Was gilt, steht
+  // in user-settings.json und kommt ueber `settings.py dock`; PINNED ist
+  // der Abzug davon, den der Erzeugungslauf hier hineingeschrieben hat.
+  //
+  // ER WIRD SEIT DEM 21.08.2026 SOFORT NACHGEPRUEFT, und das ist der
+  // Unterschied zu gestern: beobachteDock() unten liest die wirksame
+  // Liste, sobald das Dock steht. Vorher galt PINNED, bis jemand im MENUE
+  // dieses Fusses etwas anheftete - wer im Starter anheftete und die
+  // Oberflaeche neu startete, ohne neu zu erzeugen, sah die alte Reihe
+  // wieder. Der Abzug ist damit das, was in der ersten Bildschirmseite
+  // steht, und nicht mehr das, was gilt.
   let namen: string[] = [...PINNED]
   let pins: Pin[] = []
+
+  // Was auf dem HOME liegt. Nicht der Zustand dieses Fensters, sondern
+  // der des anderen - gebraucht fuer die Richtung des Menuepunkts (siehe
+  // homePunkt()) und frisch gehalten von derselben Ueberwachung, die
+  // auch `namen` frisch haelt.
+  let homeNamen: string[] = []
 
   /** Die Reihe der Anheftungen neu bauen. */
   const setzePins = (neue: string[]) => {
@@ -1222,7 +1200,7 @@ export function DockContent(): Gtk.Box {
 
   /** Was ein Rechtsklick auf ein ANGEHEFTETES Symbol anbietet.
    *
-   * ZWEI PUNKTE, UND BEIDE TUN WIRKLICH ETWAS
+   * DREI PUNKTE SEIT DEM 21.08.2026, UND JEDER TUT WIRKLICH ETWAS
    *     "Neues Fenster"       ruft starte() - genau den Weg, den ein
    *                           gewoehnlicher Klick nimmt, wenn die
    *                           Anwendung noch nicht laeuft. Er ist damit
@@ -1232,7 +1210,14 @@ export function DockContent(): Gtk.Box {
    *                           einer laufenden Anwendung: der Linksklick
    *                           holt das erste nach vorn, und das ist so
    *                           gewollt ("wie Apple OS").
-   *     "Vom Dock entfernen"  die Bestellung, woertlich.
+   *     das Home              "Zum Home hinzufuegen" oder "Vom Home
+   *                           entfernen", je nachdem, was gerade dort
+   *                           liegt - siehe homePunkt(). BESTELLT am
+   *                           21.08.2026: "das gleiche muss bei der dock
+   *                           auch funktionieren, weil ich nicht jedes
+   *                           icon auf der dock oder auf dem home haben
+   *                           will."
+   *     "Vom Dock entfernen"  die Bestellung vom 20.08.2026, woertlich.
    *
    * WAS ABSICHTLICH FEHLT: "Schliessen". Ein angehefteter Knopf ist
    * EINER fuer alle Fenster seiner Anwendung (siehe den Kopf) - welches
@@ -1247,42 +1232,102 @@ export function DockContent(): Gtk.Box {
       text: _("New window"),
       tun: () => starte(pin.info),
     },
+    homePunkt(pin.program),
     {
       symbol: UNPIN_ICON,
       text: _("Remove from dock"),
-      tun: () => void aendere(
-        aktuell => aktuell.filter(name => name !== pin.program)),
+      // OHNE setzePins() DAHINTER, seit dem 21.08.2026: die Aenderung
+      // kommt ueber die Ueberwachung der Einstellungsdatei zurueck
+      // (siehe beobachteDock() weiter unten), genau wie eine Aenderung aus
+      // dem Home, aus dem Starter oder aus dem Einstellungsfenster. Ein
+      // eigener Weg fuer den eigenen Schreibvorgang waere der einzige,
+      // der je gepflegt wuerde - und die drei anderen blieben kaputt.
+      tun: () => void dockRemove(pin.program),
     },
   ]
 
-  /** Der Programmname, unter dem dieses Fenster angeheftet werden kann.
+  /** Der Punkt, der dieses Programm aufs Home legt - oder es abnimmt.
    *
-   * null heisst: der Punkt "Zum Dock hinzufuegen" wird gar nicht erst
-   * angeboten. Vier Gruende dafuer, und jeder einzelne waere sonst ein
-   * Menuepunkt, der nichts tut - Spec §7.4, dieselbe Regel, aus der
-   * eine fehlende Anwendung im Fuss keinen ausgegrauten Knopf bekommt:
+   * ER SCHLAEGT UM UND WIRD NICHT AUSGEGRAUT
+   *     Drei Antworten waren moeglich auf "was, wenn es schon auf dem
+   *     Home liegt": den Punkt trotzdem zeigen (er taete nichts - Spec
+   *     §7.4 verbietet genau das), ihn ausblenden (ein Rechtsklick, der
+   *     mal einen Punkt hat und mal nicht), oder die Gegenrichtung
+   *     anbieten.
+   *
+   *     Die dritte ist die einzige, die immer etwas sagt, und sie ist
+   *     nicht erfunden: der Starter traegt seit dem 20.08.2026 genau
+   *     diesen Umschlag fuer den Fuss (43b8b25). Ausgegraut gibt es in
+   *     diesem Haus ueberhaupt nicht - siehe den Kopf dieser Datei,
+   *     "eine fehlende Anwendung im Fuss bekommt keinen ausgegrauten
+   *     Knopf".
+   *
+   * `homeNamen` ist der Stand, den DIESE Sitzung zuletzt gelesen hat,
+   * frisch gehalten von derselben Ueberwachung wie `namen`. Ein
+   * Lesevorgang beim Aufklappen waere ein Menue, das auf einen
+   * Unterprozess wartet.
+   */
+  const homePunkt = (program: string): MenueEintrag => {
+    if (homeNamen.includes(program)) {
+      return {
+        symbol: HOME_ICON,
+        text: _("Remove from Home"),
+        tun: () => void homeRemove(program),
+      }
+    }
+    return {
+      symbol: HOME_ICON,
+      text: _("Add to Home"),
+      tun: () => void homeAdd(program),
+    }
+  }
+
+  /** Der Programmname, unter dem dieses Fenster im Fuss steht - oder
+   * stehen koennte -, und ob es schon dort steht.
+   *
+   * null heisst: dieses Fenster hat gar keinen Namen, unter dem sich
+   * etwas anheften oder ablegen liesse. Zwei Gruende, und jeder einzelne
+   * waere sonst ein Menuepunkt, der nichts tut - Spec §7.4, dieselbe
+   * Regel, aus der eine fehlende Anwendung im Fuss keinen ausgegrauten
+   * Knopf bekommt:
    *
    *   kein Programm     /proc/<pid>/comm hat nichts hergegeben. Ohne
    *                     Programmnamen gibt es nichts zu schreiben.
-   *   schon angeheftet  der Name steht bereits in der Liste.
-   *   schon vertreten   das Fenster gehoert zu einer angehefteten
-   *                     Anwendung und steht nur deshalb hier, weil es
-   *                     ABGELEGT ist (siehe den Kopf). Ein zweiter
-   *                     Eintrag dafuer waere dieselbe Anwendung zweimal
-   *                     im Fuss.
    *   kein Eintrag      entryFor() findet nichts, oder der Eintrag
    *                     markiert sich als Dienst. Dann bekaeme der Name
    *                     beim naechsten resolvePins() ohnehin keinen
    *                     Knopf - der Punkt schriebe eine Anheftung, die
    *                     unsichtbar bliebe.
+   *
+   * ZWEI GRUENDE STATT VIER, SEIT DEM 21.08.2026, und die zwei
+   * weggefallenen sind nicht verschwunden, sondern haben ihre Antwort
+   * gewechselt:
+   *
+   *   schon angeheftet  hiess bis gestern "kein Punkt". Es heisst jetzt
+   *                     "Vom Dock entfernen" - dieselbe Umkehr wie beim
+   *                     Home eine Funktion weiter oben und im Starter
+   *                     seit dem 20.08.2026. Ein Rechtsklick, der bei
+   *                     dem einen Fenster einen Punkt hat und bei dem
+   *                     daneben nicht, ist schwerer zu verstehen als
+   *                     einer, der beide Richtungen kennt.
+   *   schon vertreten   das Fenster gehoert zu einer angehefteten
+   *                     Anwendung und steht nur deshalb hier, weil es
+   *                     ABGELEGT ist (siehe den Kopf). Es ist damit
+   *                     ebenfalls "schon angeheftet", nur unter dem
+   *                     Namen der ANHEFTUNG - und genau der wird
+   *                     zurueckgegeben, damit "Vom Dock entfernen" den
+   *                     Knopf trifft, den der Nutzer meint. Ein zweiter
+   *                     Eintrag entstuende dabei nie: angeheftet wird
+   *                     hier nichts, was schon dasteht.
    */
-  const anheftbar = (client: Hyprland.Client): string | null => {
+  const dockName = (client: Hyprland.Client): string | null => {
+    const vertreter = pins.find(
+      pin => belongsTo(client.class, pin.info, pin.program))
+    if (vertreter) return vertreter.program
+
     const program = programOf(client.pid)
     if (!program) return null
-    if (namen.includes(program)) return null
-    if (pins.some(pin => belongsTo(client.class, pin.info, pin.program))) {
-      return null
-    }
+    if (namen.includes(program)) return program
     const info = entryFor(program)
     if (!info || info.get_nodisplay()) return null
     return program
@@ -1290,10 +1335,11 @@ export function DockContent(): Gtk.Box {
 
   /** Was ein Rechtsklick auf ein FENSTER anbietet.
    *
-   * "Schliessen" steht IMMER da, "Zum Dock hinzufuegen" nur, wenn es
-   * etwas anzuheften gibt (siehe anheftbar()). Ein Menue mit einem
-   * einzigen Punkt ist erlaubt und richtig; eines mit einem toten
-   * zweiten waere es nicht.
+   * "Schliessen" steht IMMER da; die zwei Punkte davor stehen da, wenn
+   * dieses Fenster ueberhaupt einen Namen hat, unter dem sich etwas
+   * ablegen laesst (siehe dockName()). Ein Menue mit einem einzigen
+   * Punkt ist erlaubt und richtig; eines mit einem toten zweiten waere
+   * es nicht.
    *
    * "Schliessen" ist derselbe Befehl, den der Mittelklick seit jeher
    * absetzt - und das ist sein zweiter Zweck: der Mittelklick war eine
@@ -1302,13 +1348,20 @@ export function DockContent(): Gtk.Box {
    */
   const fensterMenue = (client: Hyprland.Client): MenueEintrag[] => {
     const eintraege: MenueEintrag[] = []
-    const program = anheftbar(client)
+    const program = dockName(client)
     if (program) {
-      eintraege.push({
-        symbol: PIN_ICON,
-        text: _("Add to dock"),
-        tun: () => void aendere(aktuell => [...aktuell, program]),
-      })
+      eintraege.push(namen.includes(program)
+        ? {
+            symbol: UNPIN_ICON,
+            text: _("Remove from dock"),
+            tun: () => void dockRemove(program),
+          }
+        : {
+            symbol: PIN_ICON,
+            text: _("Add to dock"),
+            tun: () => void dockAdd(program),
+          })
+      eintraege.push(homePunkt(program))
     }
     eintraege.push({
       symbol: CLOSE_ICON,
@@ -1316,46 +1369,6 @@ export function DockContent(): Gtk.Box {
       tun: () => Hyprland.dispatch(`closewindow address:${client.address}`),
     })
     return eintraege
-  }
-
-  /** Die Anheftungen aendern: lesen, rechnen, schreiben, zeigen.
-   *
-   * GELESEN WIRD ZUERST, UND ZWAR BEI DER BRUECKE
-   *     `namen` ist der Stand, den DIESE Sitzung kennt. Die Wahrheit
-   *     steht in user-settings.json, und dort kann seit dem letzten
-   *     Erzeugungslauf etwas anderes stehen - das Einstellungsfenster
-   *     schreibt in dieselbe Liste (Seite "Leiste"). Auf `namen`
-   *     aufzubauen hiesse, eine fremde Aenderung beim naechsten
-   *     Anheften stillschweigend zurueckzunehmen.
-   *
-   *     Antwortet die Bruecke nicht, wird `namen` genommen. Das ist die
-   *     schlechtere Grundlage, aber die einzige - und ein Menuepunkt,
-   *     der bei fehlender Bruecke gar nichts tut, waere schlechter.
-   *
-   * GESCHRIEBEN WIRD, BEVOR ETWAS ZU SEHEN IST
-   *     Erst wenn die Bruecke `ok` sagt, wird die Reihe neu gebaut. Ein
-   *     Symbol, das erscheint und beim naechsten Anmelden wieder fort
-   *     ist, waere die schlimmere Haelfte beider Welten.
-   */
-  const aendere = async (wandle: (aktuell: string[]) => string[]) => {
-    const gepflegt = await gepflegtePins()
-    if (!gepflegt) {
-      console.error(
-        `Dock: ${SETTINGS_COMMAND} hat die Anheftungen nicht hergegeben - `
-        + "gerechnet wird mit dem Stand dieser Sitzung")
-    }
-    const neue = wandle(gepflegt ?? namen)
-    const klagen = await schreibePins(neue)
-    if (klagen.length) {
-      console.error("Dock: die Anheftungen liessen sich nicht speichern - "
-        + klagen.join("; "))
-      return
-    }
-    setzePins(neue)
-    // SOFORT UND NICHT BEIM NAECHSTEN EREIGNIS: ohne diese Zeile
-    // stuenden die neuen Knoepfe ohne Klick-Verbindung und ohne
-    // Zustandsklasse da, bis der Nutzer zufaellig ein Fenster bewegt.
-    update(Hyprland.refresh())
   }
 
   /** Einen Rechtsklick an einen Knopf haengen.
@@ -1383,6 +1396,38 @@ export function DockContent(): Gtk.Box {
   }
 
   setzePins([...PINNED])
+
+  /** Die gelesene Anheftungsliste uebernehmen - wenn sie neu ist.
+   *
+   * WOFUER DAS DIE ANTWORT IST - GEMELDET AUS 0.1.7
+   *     "auch im ags launcher bzw hyprlauncher kann ich nicht mit
+   *     rechtsklick zu home hinzufügen, und wenn ich es dort mit der
+   *     dock versuche dann passiert nichts"
+   *
+   *     Der zweite Halbsatz war ein Fehler in einer ausgelieferten
+   *     Fassung, und er war klein: der Starter SCHRIEB richtig - die
+   *     Anheftung stand in user-settings.json, apps.pinned() gab den
+   *     Namen zurueck -, nur erfuhr es niemand. Dieses Fenster horchte
+   *     allein auf Hyprland (Fenster gehen auf und zu) und baute seine
+   *     Reihe nur dann neu, wenn es SELBST geschrieben hatte. GEZAEHLT
+   *     am 21.08.2026: `grep -n "FileMonitor|watch|reload"` ueber
+   *     diese Vorlage, null Treffer.
+   *
+   * NUR BEI EINEM UNTERSCHIED, und das ist kein Sparen, sondern eine
+   * Notwendigkeit: die Ueberwachung meldet JEDE Aenderung der Datei -
+   * auch die eigene (siehe beobachteDock() in utils/user-settings.ts),
+   * auch eine Farbe, auch eine Groesse. Ohne diesen Vergleich baute der
+   * Fuss bei jeder davon jeden Knopf neu, mitsamt Gesten, und das
+   * mitten unter dem Zeiger des Nutzers.
+   */
+  const uebernimm = (gelesen: string[]) => {
+    if (JSON.stringify(gelesen) === JSON.stringify(namen)) return
+    setzePins(gelesen)
+    // SOFORT UND NICHT BEIM NAECHSTEN EREIGNIS: ohne diese Zeile
+    // stuenden die neuen Knoepfe ohne Klick-Verbindung und ohne
+    // Zustandsklasse da, bis der Nutzer zufaellig ein Fenster bewegt.
+    update(Hyprland.refresh())
+  }
 
   // DIE GROESSE, DIE DER FUSS ZULETZT ANGEFORDERT HAT - "BxH" oder ""
   //
@@ -1678,6 +1723,22 @@ export function DockContent(): Gtk.Box {
 
   update(Hyprland.refresh())
   Hyprland.subscribe(() => update(Hyprland.refresh()))
+
+  // ZULETZT, und erst nachdem update() einmal gelaufen ist: die
+  // Einstellungen. Einmal beim Bauen - PINNED ist der Abzug des letzten
+  // Erzeugungslaufs und nicht das, was gilt (siehe dort) - und danach
+  // bei jeder Aenderung der Datei, von wem auch immer sie kommt.
+  //
+  // NACH update() UND NICHT DAVOR: uebernimm() ruft update() selbst,
+  // wenn sich die Reihe geaendert hat. Stuende die Anmeldung davor,
+  // liefe update() zweimal in derselben Sekunde, und der zweite Lauf
+  // faende genau das vor, was der erste hinterlassen hat.
+  //
+  // BEIDE Listen, und die zweite ist keine Zugabe: an ihr haengt, in
+  // welche Richtung der Menuepunkt zeigt (siehe homePunkt()).
+  beobachteDock(uebernimm)
+  beobachteHome(icons => { homeNamen = icons.map(icon => icon.name) })
+
   return box
 }
 

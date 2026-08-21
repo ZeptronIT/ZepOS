@@ -392,8 +392,23 @@ def test_template_count_is_seventy_seven():
     Stylesheet liegt unter src/styles/home-style.template und zaehlt hier
     NICHT mit, aus demselben Grund, aus dem lock-style.template dort
     nicht mitzaehlt (siehe die Rechnung weiter oben).
+
+    88 STATT 87, am 21.08.2026 (Aufgabe 53): ags-user-settings. Der
+    Nutzer wollte die Gegenrichtung in allen drei Rechtsklick-Menues
+    ("das gleiche muss bei der dock auch funktionieren, weil ich nicht
+    jedes icon auf der dock oder auf dem home haben will") und meldete
+    dazu aus 0.1.7: "wenn ich es dort mit der dock versuche dann
+    passiert nichts". Die neue Vorlage erzeugt
+    ags/utils/user-settings.ts - der eine Weg, auf dem das Dock UND das
+    Home die Einstellungsdatei lesen, ueber `settings.py dock|home
+    add|remove` aendern und ueber einen Gio.FileMonitor voneinander
+    erfahren. Sie ist ein Baustein wie kit.ts und i18n.ts und kein
+    Fenster; die zwei Fenster verlieren dabei ihre eigenen Fassungen
+    (bruecke()/gepflegtePins()/schreibePins() im Dock, frage()/lies()/
+    schreibe() im Home), es ist also netto plus eine Datei und minus
+    sechs Funktionen.
     """
-    assert len(list((SRC / "templates").glob("*.template"))) == 87
+    assert len(list((SRC / "templates").glob("*.template"))) == 88
 
 
 def test_nothing_refers_to_a_deleted_template():

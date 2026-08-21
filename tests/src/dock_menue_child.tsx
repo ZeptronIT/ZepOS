@@ -174,65 +174,152 @@ function waehle(k: Gtk.Widget, text: string): boolean {
   return false
 }
 
-// Was auf dem Fuss steht, bevor irgendetwas geklickt wird.
-mark("kinder", aufschriften())
+// =====================================================================
+// DER ANLAUF - seit dem 21.08.2026 (Aufgabe 53)
+// =====================================================================
+//
+// WARUM HIER UEBERHAUPT GEWARTET WIRD
+//     Der Fuss liest seine Anheftungen UND den Stand des Homes beim
+//     Bauen, ueber `settings.py dock` und `settings.py home` (siehe
+//     refresh() in ags-dock.template). Beides sind Unterprozesse, ihre
+//     Antwort kommt aus der Ereignisschleife zurueck.
+//
+//     Bis zum 21.08.2026 lief dieses Kind ganz ohne Schleife, wenn es
+//     nur Menues aufklappen sollte - das ging, solange ein Menue allein
+//     aus dem Zustand DIESER Sitzung entstand. Jetzt haengt die
+//     RICHTUNG zweier Punkte daran, was in der Datei steht ("Zum Home
+//     hinzufuegen" oder "Vom Home entfernen"), und ohne Schleife stand
+//     dort nie etwas. GEMESSEN am 21.08.2026: das Menue zeigte "Add to
+//     Home" fuer eine Anwendung, die in der Einstellungsdatei auf dem
+//     Home lag.
+//
+//     GEMESSEN am selben Tag, sieben Laeufe je Befehl auf dieser
+//     Maschine:
+//
+//         bash -c "python3 settings.py dock"   36 ms Median
+//         bash -c "python3 settings.py home"   34 ms Median
+//
+//     400 ms sind das Zehnfache davon. Eine Zahl und kein Abwarten auf
+//     ein Signal, weil es keines gibt: refresh() meldet nicht, dass es
+//     fertig ist - es zeichnet.
+const ANLAUF_MS = 400
 
-// DIE MENUES, DIE DIESER LAUF AUFKLAPPEN SOLL - durch "|" getrennt, weil
-// eine Aufschrift wie "Dateien (1)" ein Leerzeichen enthaelt.
-for (const gesucht of (GLib.getenv("ZEPOS_MENUES") ?? "").split("|")) {
-  if (!gesucht) continue
-  const k = knopf(gesucht)
-  if (!k) {
-    mark(`menue-ohne-knopf`, gesucht)
-    continue
-  }
-  if (!rechtsklick(k)) {
-    mark(`menue-ohne-geste`, gesucht)
-    continue
-  }
-  mark(`menue-${gesucht}`, zeilen(k).join(";"))
-  // ZUKLAPPEN UND ABNEHMEN. Das Abnehmen macht die Vorlage im Leerlauf,
-  // und dieser Zweig laeuft ohne Ereignisschleife - ein Popover, das am
-  // Knopf haengenbliebe, meldete beim Beenden "Finalizing GtkButton ...
-  // but it still has children left".
-  const offen = menueVon(k)
-  if (offen) {
-    offen.popdown()
-    if (offen.get_parent()) offen.unparent()
-  }
+// Die Ereignisschleife. Sie laeuft IMMER, seit der Fuss beim Bauen
+// liest; sie endet in schliesse().
+const loop = GLib.MainLoop.new(null, false)
+
+function schliesse(): void {
+  schreibe()
+  loop.quit()
 }
 
-// EINE AUSWAHL, als "Knopf>Zeile". Danach wird gewartet: was ein
-// Menuepunkt ausloest, geht ueber execAsync an einen anderen Prozess,
-// und dessen Antwort kommt aus der Ereignisschleife zurueck.
-const auftrag = GLib.getenv("ZEPOS_WAEHLE") ?? ""
-if (!auftrag) {
-  schreibe()
-} else {
-  const [ziel, punkt] = auftrag.split(">")
-  const k = knopf(ziel)
-  if (!k) {
-    mark("wahl-ohne-knopf", ziel)
-    schreibe()
-  } else if (!rechtsklick(k)) {
-    mark("wahl-ohne-geste", ziel)
-    schreibe()
-  } else {
-    mark("gewaehlt", waehle(k, punkt) ? punkt : `nicht-gefunden:${punkt}`)
+function hauptteil(): void {
+  // Was auf dem Fuss steht, bevor irgendetwas geklickt wird.
+  mark("kinder", aufschriften())
+
+  // DIE MENUES, DIE DIESER LAUF AUFKLAPPEN SOLL - durch "|" getrennt, weil
+  // eine Aufschrift wie "Dateien (1)" ein Leerzeichen enthaelt.
+  for (const gesucht of (GLib.getenv("ZEPOS_MENUES") ?? "").split("|")) {
+    if (!gesucht) continue
+    const k = knopf(gesucht)
+    if (!k) {
+      mark(`menue-ohne-knopf`, gesucht)
+      continue
+    }
+    if (!rechtsklick(k)) {
+      mark(`menue-ohne-geste`, gesucht)
+      continue
+    }
+    mark(`menue-${gesucht}`, zeilen(k).join(";"))
+    // ZUKLAPPEN UND ABNEHMEN. Das Abnehmen macht die Vorlage im
+    // Leerlauf; dieser Lauf kann aber schon in der naechsten Zeile enden,
+    // und ein Popover, das am Knopf haengenbliebe, meldete beim Beenden
+    // "Finalizing GtkButton ... but it still has children left".
     const offen = menueVon(k)
-    if (offen) offen.popdown()
-    // Hier NICHT von Hand abnehmen: die Ereignisschleife laeuft, also
-    // tut es die Vorlage selbst - und dass sie es tut, ist ein Teil
-    // dessen, was hier gemessen wird.
-    // Die Frist, in der die Bruecke antworten und der Fuss seine Reihe
-    // neu bauen kann. Grosszuegig: gemessen wird das Ergebnis, nicht die
-    // Dauer, und ein zu kurzes Warten maesse "nichts passiert".
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2500, () => {
+    if (offen) {
+      offen.popdown()
+      if (offen.get_parent()) offen.unparent()
+    }
+  }
+
+  // NUR WARTEN UND DANN NACHSEHEN - seit dem 21.08.2026 (Aufgabe 53).
+  //
+  // WOFUER: der Fuss soll eine Aenderung mitbekommen, die ein ANDERES
+  // Fenster geschrieben hat - das Home oder der Starter. Dieses Kind
+  // klickt dafuer gar nichts an; es steht nur da, und der Test setzt
+  // waehrenddessen von aussen `settings.py dock add ...` ab. Was danach
+  // unter "kinder-danach" steht, ist die Antwort auf "kommt es an?".
+  //
+  // Ein eigener Zweig und keine Erweiterung von ZEPOS_WAEHLE: dort wird
+  // gemessen, was ein KLICK ausloest, hier, was OHNE Klick ankommt. Zwei
+  // Fragen, und eine Marke, die beides beantworten muesste, beantwortete
+  // keines von beiden.
+  const warten = Number(GLib.getenv("ZEPOS_WARTEN") ?? "")
+
+  // EINE AUSWAHL, als "Knopf>Zeile". Danach wird gewartet: was ein
+  // Menuepunkt ausloest, geht ueber execAsync an einen anderen Prozess,
+  // und dessen Antwort kommt aus der Ereignisschleife zurueck.
+  const auftrag = GLib.getenv("ZEPOS_WAEHLE") ?? ""
+  if (!auftrag && warten > 0) {
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, warten, () => {
       mark("kinder-danach", aufschriften())
-      schreibe()
-      loop.quit()
+      // Und was ein Rechtsklick JETZT anbietet - der Punkt schlaegt um,
+      // sobald der Name im Fuss steht, und das ist ohne einen zweiten
+      // Lauf nur hier zu sehen.
+      for (const gesucht of (GLib.getenv("ZEPOS_MENUES") ?? "").split("|")) {
+        if (!gesucht) continue
+        const k = knopf(gesucht)
+        // AUCH DANN EINE MARKE, WENN ES DEN KNOPF NICHT MEHR GIBT: ein
+        // angeheftetes Fenster steht unter SEINEM SYMBOL und nicht mehr
+        // unter seinem Titel (siehe den Kopf von ags-dock.template).
+        // "Der Knopf ist fort" ist damit eine Antwort und keine Luecke -
+        // und eine fehlende Marke waere im Test nicht von einem
+        // abgestuerzten Lauf zu unterscheiden.
+        if (!k) {
+          mark(`menue-danach-${gesucht}`, "kein-knopf")
+          continue
+        }
+        if (!rechtsklick(k)) {
+          mark(`menue-danach-${gesucht}`, "keine-geste")
+          continue
+        }
+        mark(`menue-danach-${gesucht}`, zeilen(k).join(";"))
+        const offen = menueVon(k)
+        if (offen) {
+          offen.popdown()
+          if (offen.get_parent()) offen.unparent()
+        }
+      }
+      schliesse()
       return GLib.SOURCE_REMOVE
     })
+  } else if (!auftrag) {
+    schliesse()
+  } else {
+    const [ziel, punkt] = auftrag.split(">")
+    const k = knopf(ziel)
+    if (!k) {
+      mark("wahl-ohne-knopf", ziel)
+      schliesse()
+    } else if (!rechtsklick(k)) {
+      mark("wahl-ohne-geste", ziel)
+      schliesse()
+    } else {
+      mark("gewaehlt", waehle(k, punkt) ? punkt : `nicht-gefunden:${punkt}`)
+      const offen = menueVon(k)
+      if (offen) offen.popdown()
+      // Hier NICHT von Hand abnehmen: die Ereignisschleife laeuft, also
+      // tut es die Vorlage selbst - und dass sie es tut, ist ein Teil
+      // dessen, was hier gemessen wird.
+      // Die Frist, in der die Bruecke antworten und der Fuss seine Reihe
+      // neu bauen kann. Grosszuegig: gemessen wird das Ergebnis, nicht die
+      // Dauer, und ein zu kurzes Warten maesse "nichts passiert".
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2500, () => {
+        mark("kinder-danach", aufschriften())
+        schliesse()
+        return GLib.SOURCE_REMOVE
+      })
+    }
   }
 }
 
@@ -244,8 +331,8 @@ function schreibe(): void {
   print(marks.join("\n"))
 }
 
-// Die Ereignisschleife laeuft NUR, wenn auf eine Antwort gewartet wird.
-// Ohne Auftrag ist der Lauf mit der letzten Zeile fertig, und eine
-// Schleife, die niemand beendet, waere ein haengender Test.
-const loop = GLib.MainLoop.new(null, false)
-if (auftrag) loop.run()
+GLib.timeout_add(GLib.PRIORITY_DEFAULT, ANLAUF_MS, () => {
+  hauptteil()
+  return GLib.SOURCE_REMOVE
+})
+loop.run()

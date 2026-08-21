@@ -25,12 +25,30 @@
 #               GTK4-Fenster und kein eigener Zeichner, also ist ein
 #               Menue hier ein GtkPopover.
 #
-#               Geschrieben wird ueber `zepos-settings-gui --json set`,
-#               denselben Befehl und denselben Schluessel, den der Fuss
-#               benutzt (bar.dock_pins). Gelesen wird mit json-glib -
-#               die eine neue Bau-Abhaengigkeit, und nur fuer die
-#               UI-Haelfte: das Objekt, das in den Compositor geladen
-#               wird, bekommt sie NICHT.
+#               Gelesen wird mit json-glib - die eine neue
+#               Bau-Abhaengigkeit, und nur fuer die UI-Haelfte: das
+#               Objekt, das in den Compositor geladen wird, bekommt sie
+#               NICHT.
+#
+#   21.08.2026  Das Menue bekommt das HOME dazu, und beide Punkte beide
+#               Richtungen. Gemeldet woertlich: "auch im ags launcher
+#               bzw hyprlauncher kann ich nicht mit rechtsklick zu home
+#               hinzufügen, und wenn ich es dort mit der dock versuche
+#               dann passiert nichts".
+#
+#               Geschrieben und gelesen wird seither ueber `python3
+#               <settings.py> dock|home add|remove <name>` statt ueber
+#               `zepos-settings-gui --json get|set` - derselbe
+#               Unterbefehl, den der Fuss und das Home rufen. Der Grund
+#               steht im Kopf von src/AppDiscovery.cpp: die Ersatzliste
+#               zwang jeden Schreiber, ZUERST zu lesen, und das war die
+#               Regel, die dreimal abgeschrieben werden musste. Der
+#               Unterbefehl macht es in einem Prozess.
+#
+#               Der zweite Halbsatz der Meldung war KEIN Fehler dieses
+#               Programms: es schrieb richtig, nur erfuhr der Fuss nichts
+#               davon. Das ist in src/templates/ags-user-settings.template
+#               behoben (Gio.FileMonitor auf user-settings.json).
 #
 # Alle Einzelheiten und alle Messungen stehen in den Dateikoepfen selbst
 # (SPDX-License-Identifier: GPL-3.0-or-later fuer die ZepOS-Anteile).
@@ -132,7 +150,7 @@ diff -ruN a/include/hyprlaunch/AppDiscovery.hpp b/include/hyprlaunch/AppDiscover
  #include <string>
  #include <vector>
  
-@@ -11,25 +12,86 @@
+@@ -11,25 +12,114 @@
  public:
      explicit AppDiscovery(const Config& config);
  
@@ -161,30 +179,38 @@ diff -ruN a/include/hyprlaunch/AppDiscovery.hpp b/include/hyprlaunch/AppDiscover
      void addToRecent(const std::string& appId);
  
 +    // ----------------------------------------------------------------
-+    // Die Anheftungen des Docks (21.08.2026)
++    // Der Fuss und das Home (21.08.2026)
 +    // ----------------------------------------------------------------
 +    //
-+    // DERSELBE BEFEHL UND DIESELBEN SCHLUESSEL WIE IM FUSS
-+    //     src/templates/ags-dock.template haelt den Vertrag seit
-+    //     Aufgabe 45 (973d9d3) fest, und hier wird er nur benutzt - es
-+    //     gibt keinen zweiten Namensraum und keine zweite Datei:
++    // DERSELBE BEFEHL, DEN DER FUSS UND DAS HOME RUFEN
++    //     Seit dem 21.08.2026 fuehrt genau EIN Weg an die zwei Listen,
++    //     und er ist ein Unterbefehl von src/settings.py:
 +    //
-+    //       lesen      zepos-settings-gui --json get
-+    //                  -> pages[name="leiste"]
-+    //                     .controls[key="bar.dock_pins"].effective
-+    //       schreiben  zepos-settings-gui --json set
-+    //                  '{"bar.dock_pins": [...]}'
-+    //                  -> dock_baseline schreibt der Befehl SELBST mit;
-+    //                     wer es von hier aus mitschickte, ueberschriebe
-+    //                     die Vorgabe, gegen die der Nutzer sich einmal
-+    //                     entschieden hat
++    //       lesen      python3 <settings.py> dock   -> {"pins": [...]}
++    //                  python3 <settings.py> home   -> {"icons": [...]}
++    //       schreiben  python3 <settings.py> dock add|remove <name>
++    //                  python3 <settings.py> home add|remove <name>
++    //
++    //     Bis dahin lief das ueber `zepos-settings-gui --json get|set`,
++    //     und das hiess: LESEN, anhaengen, GANZ zurueckschreiben - hier,
++    //     im Fuss und im Home je einmal, und jeder musste dabei an
++    //     dieselben zwei Dinge denken (zuerst lesen; bei einem
++    //     fehlgeschlagenen Lesevorgang gar nichts schreiben). Der
++    //     Unterbefehl tut beides in einem Prozess. src/settings.py sagt
++    //     es bei _home_command(): "drei Aufrufer, die je daran denken
++    //     muessten, sind zwei, die es einmal vergessen."
++    //
++    // WARUM DER PFAD MITKOMMT UND NICHT HIER STEHT
++    //     Dieses Programm kann nicht wissen, aus welchem Paket es
++    //     stammt. Der Pfad steht in Config::settingsScript und kommt
++    //     aus der erzeugten Datei - die Begruendung steht dort.
 +    //
 +    // WARUM STATISCH
-+    //     Sie fassen kein Feld dieser Klasse an. Die Anheftungen sind
++    //     Sie fassen kein Feld dieser Klasse an. Die zwei Listen sind
 +    //     nicht der Bestand dieser Maschine, den m_apps traegt, sondern
-+    //     eine Einstellung - und die lebt in der Bruecke, nicht hier.
++    //     eine Einstellung - und die lebt in der Datei, nicht hier.
 +
-+    /** Der Name, unter dem ein .desktop-Eintrag angeheftet wird.
++    /** Der Name, unter dem ein .desktop-Eintrag in den Listen steht.
 +     *
 +     * "firefox.desktop" -> "firefox". Die Endung MUSS weg: der Fuss
 +     * setzt sie wieder an (ags-dock.template, entryFor(), `${program}
@@ -197,29 +223,49 @@ diff -ruN a/include/hyprlaunch/AppDiscovery.hpp b/include/hyprlaunch/AppDiscover
 +    /** Die WIRKSAME Anheftungsliste, oder nichts.
 +     *
 +     * Leer ist NICHT dasselbe wie nichts, und die beiden
-+     * auseinanderzuhalten ist der ganze Zweck des Rueckgabetyps -
-+     * wortgleich zur Begruendung bei gepflegtePins() im Fuss: eine
-+     * leere Liste wuerde geschrieben, ein fehlgeschlagener Lesevorgang
-+     * darf nichts schreiben. Wer hier std::nullopt bekommt und trotzdem
-+     * schriebe, loeschte dem Nutzer sein Dock.
++     * auseinanderzuhalten ist der ganze Zweck des Rueckgabetyps: eine
++     * leere Liste heisst "der Nutzer hat nichts angeheftet", nichts
++     * heisst "die Frage ist unbeantwortet". Das Menue bietet im zweiten
++     * Fall GAR KEINEN Punkt an - einer, der in die falsche Richtung
++     * zeigt, waere schlimmer als keiner.
 +     *
-+     * `.effective` und nicht `.value`: die Bruecke rechnet dort die
-+     * heutige Auslieferung gegen dock_baseline und prueft jeden Namen
-+     * gegen den Anwendungseintrag dieser Maschine. `.value` waere die
-+     * rohe Wahl, also die Liste VOR dieser Rechnung.
++     * Gefragt wird `settings.py dock`, das dieselbe Rechnung anstellt
++     * wie die Seite "Leiste" des Einstellungsfensters: die Wahl des
++     * Nutzers, die heutige Auslieferung dazugerechnet, jeder Name gegen
++     * die Anwendungseintraege dieser Maschine geprueft.
 +     */
-+    static std::optional<std::vector<std::string>> dockPins();
++    static std::optional<std::vector<std::string>> dockPins(
++        const std::string& script);
++
++    /** Die Namen, die auf dem Home liegen, oder nichts. Dieselbe Regel. */
++    static std::optional<std::vector<std::string>> homeNames(
++        const std::string& script);
 +
 +    /** Anheften. Zurueck kommen die Klagen; leer heisst: geschrieben.
 +     *
-+     * Ein Vektor und kein bool, weil die Bruecke ihre Ablehnung
++     * Ein Vektor und kein bool, weil settings.py seine Ablehnung
 +     * BEGRUENDET und die Begruendung ins Protokoll gehoert - "es hat
 +     * nicht geklappt" ist die Sorte Meldung, die niemand melden kann.
++     *
++     * KEIN LESEVORGANG DAVOR, seit dem 21.08.2026: `dock add` liest
++     * selbst, rechnet selbst und schreibt selbst. Ein Aufrufer, der
++     * zuerst liest, kann den Lesevorgang vergessen; einer, der es gar
++     * nicht kann, nicht.
 +     */
-+    static std::vector<std::string> pinToDock(const std::string& desktopId);
++    static std::vector<std::string> pinToDock(const std::string& script,
++                                              const std::string& desktopId);
 +
 +    /** Abnehmen. Dieselbe Form, derselbe Schreibweg. */
-+    static std::vector<std::string> unpinFromDock(const std::string& desktopId);
++    static std::vector<std::string> unpinFromDock(const std::string& script,
++                                                  const std::string& desktopId);
++
++    /** Aufs Home legen. Dieselbe Form, dasselbe settings.py. */
++    static std::vector<std::string> addToHome(const std::string& script,
++                                              const std::string& desktopId);
++
++    /** Vom Home nehmen. */
++    static std::vector<std::string> removeFromHome(const std::string& script,
++                                                   const std::string& desktopId);
 +
  private:
      const Config& m_config;
@@ -227,7 +273,7 @@ diff -ruN a/include/hyprlaunch/AppDiscovery.hpp b/include/hyprlaunch/AppDiscover
 diff -ruN a/include/hyprlaunch/Config.hpp b/include/hyprlaunch/Config.hpp
 --- a/include/hyprlaunch/Config.hpp	2026-02-10 08:35:57.000000000 +0100
 +++ b/include/hyprlaunch/Config.hpp	2026-08-20 22:43:40.020056370 +0200
-@@ -1,25 +1,204 @@
+@@ -1,25 +1,242 @@
 +// SPDX-License-Identifier: BSD-3-Clause
 +//
 +// Urspruenglich hyprlaunch von azzuriel, Commit
@@ -358,10 +404,48 @@ diff -ruN a/include/hyprlaunch/Config.hpp b/include/hyprlaunch/Config.hpp
 +    //     bedienbar statt tot. GEMESSEN aus src/icons_db.py am
 +    //     21.08.2026, damit hier keine Zahl geraten ist:
 +    //
-+    //         ICON_PIN    nf-fa-thumb_tack   U+F08D   ef 82 8d
-+    //         ICON_MINUS  nf-fa-minus        U+F068   ef 81 a8
++    //         ICON_PIN     nf-fa-thumb_tack     U+F08D    ef 82 8d
++    //         ICON_MINUS   nf-fa-minus          U+F068    ef 81 a8
++    //         ICON_COMPUTER nf-md-desktop_classic U+F07C0 f3 b0 9f 80
++    //
++    // DAS DRITTE ZEICHEN, SEIT DEM 21.08.2026: der Schreibtisch. Es
++    // steht fuer BEIDE Richtungen des Home-Punktes ("Zum Home
++    // hinzufuegen" und "Vom Home entfernen"), weil die beiden nie
++    // zusammen in einem Menue stehen - der Punkt schlaegt um. Das
++    // Zeichen nennt das ZIEL, der Text die Richtung; die ganze Regel
++    // steht bei ICONS in src/templates/ags-home.template, und der Fuss
++    // fuehrt dasselbe Zeichen unter HOME_ICON.
 +    std::string pinIcon = "\xef\x82\x8d";     // {{ICON_PIN}}
 +    std::string unpinIcon = "\xef\x81\xa8";   // {{ICON_MINUS}}
++    std::string homeIcon = "\xf3\xb0\x9f\x80"; // {{ICON_COMPUTER}}
++
++    // DER BEFEHL, UEBER DEN DIESES PROGRAMM EINSTELLUNGEN AENDERT
++    // (21.08.2026)
++    //
++    // WAS ER IST
++    //     Der Pfad zu src/settings.py der Installation, aus der dieser
++    //     Starter stammt. Gerufen wird `python3 <pfad> dock add <name>`
++    //     und die drei Geschwister davon - dieselben Unterbefehle, die
++    //     der Fuss und das Home rufen (src/templates/
++    //     ags-user-settings.ts). Bis zum 21.08.2026 lief dieser Weg
++    //     ueber `zepos-settings-gui --json get|set`; der Kopf von
++    //     AppDiscovery.cpp fuehrt aus, warum er es nicht mehr tut.
++    //
++    // WARUM ER DURCH DIE ERZEUGTE DATEI KOMMT
++    //     Weil dieses Programm nicht wissen kann, aus welchem Paket es
++    //     stammt - genau die Frage, die src/template_processor.py mit
++    //     {{ZEPOS_SYSTEM_ROOT}} beantwortet ("A generated artifact ends
++    //     up somewhere else entirely ... and cannot work out which
++    //     package it came from"). Ein Bau aus einem Checkout bekommt
++    //     den Checkout, ein Paket das Paket.
++    //
++    // DER GRUNDWERT IST DER AUSGELIEFERTE ORT, und das ist derselbe
++    // Rueckfall wie bei den drei Hoehen oben: ohne die erzeugte Datei
++    // bleibt der Starter bedienbar statt tot. /usr/share/zepos ist
++    // keine geratene Zeichenkette, sondern SYSTEM_ROOT aus
++    // src/paths.py - dieselbe Konstante, gegen die
++    // tests/src/test_paths.py prueft.
++    std::string settingsScript = "/usr/share/zepos/settings.py";
 +
 +    // Die Abstandsleiter aus src/sizes.py, Sprosse -> Pixel.
 +    //
@@ -523,7 +607,7 @@ diff -ruN a/include/hyprlaunch/LauncherRenderer.hpp b/include/hyprlaunch/Launche
      LauncherMode m_mode = LauncherMode::Apps;
      std::string m_query;
      std::vector<AppEntry> m_results;
-@@ -43,25 +56,79 @@
+@@ -43,25 +56,80 @@
      int m_selectedIndex = 0;
      std::atomic<bool> m_visible{false};
  
@@ -588,15 +672,16 @@ diff -ruN a/include/hyprlaunch/LauncherRenderer.hpp b/include/hyprlaunch/Launche
 +     */
 +    std::vector<MenuEntry> entryMenu(const AppEntry& entry);
 +
-+    /** Die Anheftungen neu holen und merken. */
-+    void refreshPins();
++    /** Die zwei Listen neu holen und merken. */
++    void refreshLists();
 +
-+    // Die Anheftungsliste, wie sie beim letzten Lesen aussah, und ob
-+    // das Lesen ueberhaupt geklappt hat. Zwei Felder und kein
++    // Der Fuss und das Home, wie sie beim letzten Lesen aussahen, und
++    // ob das Lesen ueberhaupt geklappt hat. Getrennte Felder und kein
 +    // std::optional, weil dieser Header ohne <optional> auskommt und
 +    // die Frage ohnehin an zwei Stellen einzeln gestellt wird.
 +    std::vector<std::string> m_pins;
-+    bool m_pinsKnown = false;
++    std::vector<std::string> m_home;
++    bool m_listsKnown = false;
 +
 +    // Handwerkszeug
      void removeAllChildren(GtkWidget* box);
@@ -831,21 +916,46 @@ diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
      size_t pos = content.find('[');
      if (pos == std::string::npos) return;
  
-@@ -462,4 +466,325 @@
+@@ -462,4 +466,273 @@
      f << "]";
  }
  
 +// ============================================================================
-+// Die Anheftungen des Docks (21.08.2026)
++// Der Fuss und das Home (21.08.2026)
 +// ============================================================================
 +//
 +// WARUM DIESES PROGRAMM UEBERHAUPT IN DIE EINSTELLUNGEN SCHREIBT
 +//     Weil der Nutzer es bestellt hat: "was das menue angeht bei
 +//     rechtsklick will ich das wir das am besten auslagern auf das
 +//     aktuelle". Ein Rechtsklick auf eine Trefferzeile heftet die
-+//     Anwendung an den Fuss. Der Fuss liest dieselbe Liste (Aufgabe 45,
-+//     973d9d3), also gibt es nichts zu verabreden - nur denselben
-+//     Befehl zu rufen.
++//     Anwendung an den Fuss oder legt sie aufs Home. Beide Listen liest
++//     die Oberflaeche aus derselben Datei, also gibt es nichts zu
++//     verabreden - nur denselben Befehl zu rufen.
++//
++// WARUM settings.py UND NICHT MEHR zepos-settings-gui --json (21.08.2026)
++//     Hier stand bis zum 21.08.2026 ein Leser, der `--json get`
++//     aufrief, sich durch pages[] -> controls[] -> effective[] hangelte,
++//     die Liste ANHAENGTE und mit `--json set` ganz zurueckschrieb.
++//     Genau dasselbe stand im Fuss (ags-dock.template) - und dem Home
++//     fehlte "Zum Dock hinzufuegen" ausdruecklich deshalb, weil es die
++//     DRITTE Abschrift gebraucht haette.
++//
++//     Abgeschrieben waeren dabei nicht die sechs Zeilen Aufruf, sondern
++//     die REGEL: bar.dock_pins ist eine ERSATZliste, also muss jeder
++//     Schreiber ZUERST lesen und bei einem fehlgeschlagenen Lesevorgang
++//     GAR NICHTS schreiben. Wer das einmal vergisst, loescht dem Nutzer
++//     jedes Symbol, das er je angeheftet hat.
++//
++//     `python3 <settings.py> dock add <name>` tut das Lesen, Rechnen
++//     und Schreiben in EINEM Prozess. Dieses Programm kann den
++//     Lesevorgang damit nicht mehr vergessen, weil es ihn nicht mehr
++//     macht. Gelesen wird hier nur noch fuer die ANZEIGE - in welche
++//     Richtung der Menuepunkt zeigt.
++//
++//     Die Antwort ist dabei nebenbei um drei Groessenordnungen
++//     kleiner geworden: GEMESSEN am 21.08.2026 antwortete
++//     `zepos-settings-gui --json get` mit 46231 Bytes, `settings.py
++//     dock` mit 122.
 +//
 +// WARUM g_spawn_sync UND NICHT popen WIE BEIM RECHNER
 +//     evaluateCalculator() weiter oben braucht eine SHELL, weil es eine
@@ -856,48 +966,52 @@ diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
 +//     Luecke. g_spawn_sync nimmt ein argv-Feld - da gibt es nichts zu
 +//     zitieren, weil nichts geparst wird.
 +//
-+//     Der zweite Grund ist der Rueckgabewert. Der Fuss muss in
-+//     ags-dock.template `; exit 0` anhaengen, weil execAsync bei jedem
-+//     Wert ungleich 0 verwirft und dabei genau die Klage wegwirft, die
-+//     die Bruecke auf STDOUT gelegt hat. g_spawn_sync reicht STDOUT,
-+//     STDERR und den Wert getrennt heraus - der Umweg entfaellt.
-+//
 +// WARUM SYNCHRON, UND WAS DAS KOSTET
-+//     GEMESSEN am 21.08.2026, fuenf Laeufe von `zepos-settings-gui
-+//     --json get` auf dieser Maschine:
++//     GEMESSEN am 21.08.2026, sieben Laeufe je Befehl auf dieser
++//     Maschine:
 +//
-+//         41, 49, 42, 39, 42 ms   Median 42 ms, 46231 Bytes Antwort
++//         python3 settings.py dock   36 ms Median
++//         python3 settings.py home   34 ms Median
 +//
-+//     42 ms zwischen Rechtsklick und Menue sind unterhalb dessen, was
-+//     als Warten gelesen wird. Ein asynchroner Weg haette dafuer ein
-+//     Menue gebraucht, das sich nach dem Aufklappen noch aendert - also
-+//     einen Punkt, der erst "Zum Dock hinzufuegen" heisst und dann
-+//     etwas anderes. Das ist schlechter als 42 ms.
++//     Zwei Aufrufe zwischen Rechtsklick und Menue sind rund 70 ms und
++//     damit an der Grenze dessen, was als Warten gelesen wird. Ein
++//     asynchroner Weg haette dafuer ein Menue gebraucht, das sich nach
++//     dem Aufklappen noch aendert - also einen Punkt, der erst "Zum
++//     Dock hinzufuegen" heisst und dann etwas anderes. Das ist
++//     schlechter als 70 ms.
 +
 +namespace {
 +
-+// Der Befehl und die Schluessel. WORTGLEICH zu ags-dock.template -
-+// aendert sich der Aufruf, aendert er sich fuer beide, und dann findet
-+// ihn `grep zepos-settings-gui` in genau drei Dateien.
-+constexpr const char* SETTINGS_COMMAND = "zepos-settings-gui";
-+constexpr const char* JSON_FLAG        = "--json";
-+constexpr const char* BAR_PAGE         = "leiste";
-+constexpr const char* PIN_KEY          = "bar.dock_pins";
++// Der Interpreter. Ein NAME und kein Pfad: welches python3 gilt,
++// entscheidet der PATH der Sitzung, und derselbe Name steht in
++// ags-user-settings.template. Der PFAD, der wirklich variabel ist -
++// der zu settings.py -, kommt aus der erzeugten Datei (Config.hpp).
++constexpr const char* PYTHON = "python3";
 +
-+/** Ein Aufruf der Bruecke. false heisst: sie ist gar nicht gelaufen.
++/** Ein Aufruf von settings.py. false heisst: es ist gar nicht gelaufen.
 + *
-+ * NICHT dasselbe wie "sie hat abgelehnt". Die Bruecke endet mit 1, WENN
-+ * sie eine Aenderung ablehnt, und legt ihre Begruendung dabei auf
-+ * STDOUT. Der Rueckgabewert wird hier deshalb NICHT geprueft -
-+ * unterschieden wird an `ok` im Dokument, genau wie im Fuss. Geprueft
-+ * wird nur, ob der Prozess ueberhaupt gestartet ist; ein fehlendes
-+ * zepos-settings-gui ist etwas anderes als ein abgelehnter Wunsch.
++ * DER RUECKGABEWERT WIRD HIER GEPRUEFT, ANDERS ALS BEI DER BRUECKE
++ *     `zepos-settings-gui` endete mit 1, WENN es eine Aenderung
++ *     ablehnte, und legte seine Klage dabei auf STDOUT - unterschieden
++ *     wurde deshalb an `ok` im Dokument. settings.py macht es
++ *     andersherum und wie jedes andere Programm: 0 heisst getan, 1
++ *     heisst "die Datei ist nicht zu lesen, es wurde nichts geaendert",
++ *     2 heisst "das Argument taugt nicht", und die Klage steht auf
++ *     STDERR. Ein Aufrufer, der den Wert uebergeht, uebersieht genau
++ *     die Faelle, in denen nichts geschrieben wurde.
 + */
-+bool callBridge(const std::vector<std::string>& args,
-+                std::string& answer, std::string& failure) {
++bool callSettings(const std::string& script,
++                  const std::vector<std::string>& args,
++                  std::string& answer, std::string& failure) {
++    if (script.empty()) {
++        failure = "kein Pfad zu settings.py (settings_script fehlt in "
++                  "~/.config/hyprlaunch/config)";
++        return false;
++    }
++
 +    std::vector<char*> argv;
-+    argv.push_back(const_cast<char*>(SETTINGS_COMMAND));
-+    argv.push_back(const_cast<char*>(JSON_FLAG));
++    argv.push_back(const_cast<char*>(PYTHON));
++    argv.push_back(const_cast<char*>(script.c_str()));
 +    for (const std::string& arg : args)
 +        argv.push_back(const_cast<char*>(arg.c_str()));
 +    argv.push_back(nullptr);
@@ -915,22 +1029,33 @@ diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
 +    if (!started) {
 +        failure = error && error->message
 +                  ? std::string(error->message)
-+                  : std::string(SETTINGS_COMMAND) + " liess sich nicht starten";
++                  : std::string(PYTHON) + " liess sich nicht starten";
 +        if (error) g_error_free(error);
 +        return false;
 +    }
 +
 +    answer = out ? out : "";
-+    // STDERR nur, falls STDOUT nichts hergibt - dann ist es das
-+    // einzige, was der Befehl hinterlassen hat.
 +    failure = err ? err : "";
 +    g_free(out);
 +    g_free(err);
-+    (void)status;
++
++    if (!g_spawn_check_wait_status(status, &error)) {
++        if (failure.empty() && error && error->message)
++            failure = error->message;
++        if (error) g_error_free(error);
++        return false;
++    }
 +    return true;
 +}
 +
-+/** Das Feld `effective` des Bedienelements bar.dock_pins, oder nichts.
++/** Ein Feld der Antwort als Namensliste, oder nichts.
++ *
++ * Zwei Formen, ein Leser: `settings.py dock` antwortet mit
++ * {"pins": ["firefox", ...]}, `settings.py home` mit
++ * {"icons": [{"name": "firefox", "col": 0, "row": 0}, ...]} - eine
++ * Zeichenkette hier, ein Objekt dort. Beide Male sind es NAMEN, und
++ * zwei Leser dafuer waeren zwei Stellen, an denen dieselbe Liste
++ * verschieden gelesen wird.
 + *
 + * Jede Ebene wird EINZELN geprueft. Ein json_object_get_array_member()
 + * auf ein fehlendes Feld ist in json-glib kein Fehler, den man
@@ -938,7 +1063,8 @@ diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
 + * ist ein Absturz. Der Starter darf an einer Einstellungsdatei nicht
 + * sterben.
 + */
-+std::optional<std::vector<std::string>> pinsFromAnswer(const std::string& text) {
++std::optional<std::vector<std::string>> namenAus(const std::string& text,
++                                                 const char* feld) {
 +    if (text.empty())
 +        return std::nullopt;
 +
@@ -958,50 +1084,30 @@ diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
 +
 +    if (root && JSON_NODE_HOLDS_OBJECT(root)) {
 +        JsonObject* top = json_node_get_object(root);
-+        if (json_object_has_member(top, "pages")) {
-+            JsonArray* pages = json_object_get_array_member(top, "pages");
-+            const guint pageCount = pages ? json_array_get_length(pages) : 0;
-+
-+            for (guint p = 0; p < pageCount && !found; p++) {
-+                JsonObject* page = json_array_get_object_element(pages, p);
-+                if (!page || !json_object_has_member(page, "name"))
-+                    continue;
-+                const char* pageName = json_object_get_string_member(page, "name");
-+                if (!pageName || std::string(pageName) != BAR_PAGE)
-+                    continue;
-+                if (!json_object_has_member(page, "controls"))
-+                    continue;
-+
-+                JsonArray* controls = json_object_get_array_member(page, "controls");
-+                const guint controlCount =
-+                    controls ? json_array_get_length(controls) : 0;
-+
-+                for (guint c = 0; c < controlCount && !found; c++) {
-+                    JsonObject* control = json_array_get_object_element(controls, c);
-+                    if (!control || !json_object_has_member(control, "key"))
-+                        continue;
-+                    const char* key = json_object_get_string_member(control, "key");
-+                    if (!key || std::string(key) != PIN_KEY)
-+                        continue;
-+                    if (!json_object_has_member(control, "effective"))
-+                        continue;
-+
-+                    JsonNode* node = json_object_get_member(control, "effective");
-+                    if (!node || !JSON_NODE_HOLDS_ARRAY(node))
-+                        continue;
-+
-+                    JsonArray* effective = json_node_get_array(node);
-+                    std::vector<std::string> names;
-+                    const guint nameCount =
-+                        effective ? json_array_get_length(effective) : 0;
-+                    for (guint n = 0; n < nameCount; n++) {
-+                        const char* name = json_array_get_string_element(effective, n);
++        if (json_object_has_member(top, feld)) {
++            JsonNode* node = json_object_get_member(top, feld);
++            if (node && JSON_NODE_HOLDS_ARRAY(node)) {
++                JsonArray* liste = json_node_get_array(node);
++                std::vector<std::string> names;
++                const guint anzahl = liste ? json_array_get_length(liste) : 0;
++                for (guint i = 0; i < anzahl; i++) {
++                    JsonNode* eintrag = json_array_get_element(liste, i);
++                    if (!eintrag) continue;
++                    if (JSON_NODE_HOLDS_VALUE(eintrag)) {
++                        const char* name = json_node_get_string(eintrag);
 +                        if (name) names.push_back(name);
++                    } else if (JSON_NODE_HOLDS_OBJECT(eintrag)) {
++                        JsonObject* objekt = json_node_get_object(eintrag);
++                        if (objekt && json_object_has_member(objekt, "name")) {
++                            const char* name =
++                                json_object_get_string_member(objekt, "name");
++                            if (name) names.push_back(name);
++                        }
 +                    }
-+                    // Auch die LEERE Liste ist eine Antwort - siehe die
-+                    // Begruendung des Rueckgabetyps im Header.
-+                    found = names;
 +                }
++                // Auch die LEERE Liste ist eine Antwort - siehe die
++                // Begruendung des Rueckgabetyps im Header.
++                found = names;
 +            }
 +        }
 +    }
@@ -1010,91 +1116,27 @@ diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
 +    return found;
 +}
 +
-+/** Hat die Bruecke die Aenderung angenommen? Klagen als Nebenausgabe. */
-+bool acceptedFromAnswer(const std::string& text,
-+                        std::vector<std::string>& problems) {
-+    JsonParser* parser = json_parser_new();
-+    GError* error = nullptr;
-+    if (!json_parser_load_from_data(parser, text.c_str(),
-+                                    static_cast<gssize>(text.size()), &error)) {
-+        if (error) g_error_free(error);
-+        g_object_unref(parser);
-+        problems.push_back(text.empty()
-+            ? std::string(SETTINGS_COMMAND) + " hat nicht geantwortet"
-+            : text);
-+        return false;
-+    }
-+
-+    bool accepted = false;
-+    JsonNode* root = json_parser_get_root(parser);
-+    if (root && JSON_NODE_HOLDS_OBJECT(root)) {
-+        JsonObject* top = json_node_get_object(root);
-+        if (json_object_has_member(top, "ok"))
-+            accepted = json_object_get_boolean_member(top, "ok");
-+        if (json_object_has_member(top, "problems")) {
-+            JsonArray* list = json_object_get_array_member(top, "problems");
-+            const guint count = list ? json_array_get_length(list) : 0;
-+            for (guint i = 0; i < count; i++) {
-+                const char* problem = json_array_get_string_element(list, i);
-+                if (problem) problems.push_back(problem);
-+            }
-+        }
-+    }
-+    g_object_unref(parser);
-+
-+    // Abgelehnt und stumm: dann ist die Antwort selbst die Auskunft.
-+    if (!accepted && problems.empty())
-+        problems.push_back(text);
-+    return accepted;
-+}
-+
-+/** Das Dokument fuer `--json set`, von json-glib gesetzt.
++/** Eine Aenderung absetzen. Leer zurueck heisst: geschrieben.
 + *
-+ * NICHT von Hand zusammengeklebt. Ein Anwendungsname aus einer fremden
-+ * .desktop-Datei darf jedes Zeichen tragen, das UTF-8 hergibt, und ein
-+ * `"` darin machte aus dem Dokument Bruch - den die Bruecke dann
-+ * ablehnte, mit einer Klage ueber etwas, das niemand geschrieben hat.
++ * Die Vorgabe, gegen die der Nutzer entschieden hat (dock_baseline,
++ * home.baseline), schreibt settings.py SELBST mit - wer sie von hier
++ * aus mitschickte, ueberschriebe genau die Liste, an der spaeter
++ * haengt, ob eine neu ausgelieferte Anwendung erscheinen darf
++ * (src/settings.py, BAR_BASELINE, fuehrt den ganzen Fall aus).
 + */
-+std::string pinsDocument(const std::vector<std::string>& names) {
-+    JsonBuilder* builder = json_builder_new();
-+    json_builder_begin_object(builder);
-+    json_builder_set_member_name(builder, PIN_KEY);
-+    json_builder_begin_array(builder);
-+    for (const std::string& name : names)
-+        json_builder_add_string_value(builder, name.c_str());
-+    json_builder_end_array(builder);
-+    json_builder_end_object(builder);
++std::vector<std::string> aendere(const std::string& script,
++                                 const std::string& bereich,
++                                 const std::string& richtung,
++                                 const std::string& desktopId) {
++    const std::string name = AppDiscovery::pinName(desktopId);
++    if (name.empty())
++        return {"der Eintrag traegt keine Kennung"};
 +
-+    JsonGenerator* generator = json_generator_new();
-+    json_generator_set_root(generator, json_builder_get_root(builder));
-+    gchar* text = json_generator_to_data(generator, nullptr);
-+    std::string document = text ? text : "";
-+
-+    g_free(text);
-+    g_object_unref(generator);
-+    g_object_unref(builder);
-+    return document;
-+}
-+
-+/** Eine neue Liste schreiben. Leer zurueck heisst: geschrieben.
-+ *
-+ * dock_baseline wird NICHT mitgeschickt - die Bruecke schreibt es
-+ * selbst. Wer es von hier aus mitschickte, ueberschriebe die Vorgabe,
-+ * gegen die der Nutzer sich einmal entschieden hat (settings.py,
-+ * BAR_BASELINE, fuehrt den ganzen Fall aus).
-+ */
-+std::vector<std::string> writePins(const std::vector<std::string>& names) {
 +    std::string answer;
 +    std::string failure;
-+    if (!callBridge({"set", pinsDocument(names)}, answer, failure))
-+        return {failure};
-+
-+    std::vector<std::string> problems;
-+    if (acceptedFromAnswer(answer, problems))
-+        return {};
-+    if (problems.empty())
-+        problems.push_back(failure.empty() ? "abgelehnt, ohne Grund" : failure);
-+    return problems;
++    if (!callSettings(script, {bereich, richtung, name}, answer, failure))
++        return {failure.empty() ? "settings.py hat nicht geantwortet" : failure};
++    return {};
 +}
 +
 +} // namespace
@@ -1109,51 +1151,42 @@ diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
 +    return desktopId;
 +}
 +
-+std::optional<std::vector<std::string>> AppDiscovery::dockPins() {
++std::optional<std::vector<std::string>> AppDiscovery::dockPins(
++        const std::string& script) {
 +    std::string answer;
 +    std::string failure;
-+    if (!callBridge({"get"}, answer, failure))
++    if (!callSettings(script, {"dock"}, answer, failure))
 +        return std::nullopt;
-+    return pinsFromAnswer(answer);
++    return namenAus(answer, "pins");
 +}
 +
-+std::vector<std::string> AppDiscovery::pinToDock(const std::string& desktopId) {
-+    const std::string name = pinName(desktopId);
-+    if (name.empty())
-+        return {"der Eintrag traegt keine Kennung"};
-+
-+    const auto current = dockPins();
-+    if (!current) {
-+        // NICHTS SCHREIBEN. Eine Liste, die auf einem
-+        // fehlgeschlagenen Lesevorgang aufbaut, waere die
-+        // Auslieferung - und der Nutzer verloere jede Anheftung, die er
-+        // je gemacht hat. Dieselbe Regel wie im Fuss.
-+        return {std::string(SETTINGS_COMMAND) +
-+                " hat die Anheftungen nicht hergegeben; es wurde nichts geschrieben"};
-+    }
-+
-+    std::vector<std::string> names = *current;
-+    if (std::find(names.begin(), names.end(), name) != names.end())
-+        return {};   // steht schon da - kein Fehler und nichts zu tun
-+
-+    names.push_back(name);
-+    return writePins(names);
++std::optional<std::vector<std::string>> AppDiscovery::homeNames(
++        const std::string& script) {
++    std::string answer;
++    std::string failure;
++    if (!callSettings(script, {"home"}, answer, failure))
++        return std::nullopt;
++    return namenAus(answer, "icons");
 +}
 +
-+std::vector<std::string> AppDiscovery::unpinFromDock(const std::string& desktopId) {
-+    const std::string name = pinName(desktopId);
-+    const auto current = dockPins();
-+    if (!current) {
-+        return {std::string(SETTINGS_COMMAND) +
-+                " hat die Anheftungen nicht hergegeben; es wurde nichts geschrieben"};
-+    }
++std::vector<std::string> AppDiscovery::pinToDock(const std::string& script,
++                                                 const std::string& desktopId) {
++    return aendere(script, "dock", "add", desktopId);
++}
 +
-+    std::vector<std::string> names = *current;
-+    const auto gone = std::remove(names.begin(), names.end(), name);
-+    if (gone == names.end())
-+        return {};   // stand gar nicht da
-+    names.erase(gone, names.end());
-+    return writePins(names);
++std::vector<std::string> AppDiscovery::unpinFromDock(
++        const std::string& script, const std::string& desktopId) {
++    return aendere(script, "dock", "remove", desktopId);
++}
++
++std::vector<std::string> AppDiscovery::addToHome(const std::string& script,
++                                                 const std::string& desktopId) {
++    return aendere(script, "home", "add", desktopId);
++}
++
++std::vector<std::string> AppDiscovery::removeFromHome(
++        const std::string& script, const std::string& desktopId) {
++    return aendere(script, "home", "remove", desktopId);
 +}
 +
  } // namespace hyprlaunch
@@ -1303,7 +1336,7 @@ diff -ruN a/src/ConfigParser.cpp b/src/ConfigParser.cpp
  
      std::string configPath = getConfigPath();
      std::ifstream file(configPath);
-@@ -75,33 +156,75 @@
+@@ -75,33 +156,91 @@
          std::string key = trim(line.substr(0, eq));
          std::string value = trim(line.substr(eq + 1));
  
@@ -1355,6 +1388,22 @@ diff -ruN a/src/ConfigParser.cpp b/src/ConfigParser.cpp
 +        }
 +        if (key == "unpin_icon") {
 +            config.unpinIcon = parseString(value);
++            continue;
++        }
++        if (key == "home_icon") {
++            config.homeIcon = parseString(value);
++            continue;
++        }
++
++        // Der Pfad zu settings.py, seit dem 21.08.2026. Config.hpp
++        // begruendet, warum er durch diese Datei geht: dieses Programm
++        // kann nicht wissen, aus welchem Paket es stammt.
++        //
++        // expandHome() darum herum wie bei helpers_dir: ein Checkout
++        // liegt oft unter ~, und ein Pfad mit einer Tilde, den niemand
++        // aufloest, ist ein Pfad, den es nicht gibt.
++        if (key == "settings_script") {
++            config.settingsScript = expandHome(parseString(value));
 +            continue;
 +        }
  
@@ -2089,7 +2138,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
          struct ClickData {
              LauncherRenderer* self;
              size_t index;
-@@ -514,13 +585,237 @@
+@@ -514,13 +585,276 @@
                  delete static_cast<ClickData*>(data);
              }, G_CONNECT_DEFAULT);
  
@@ -2166,62 +2215,101 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 +//     Fusses - "es ist komplett weiss und passt nicht zum style".
 +//     Genau dieser Fehler, ein zweites Mal, waere unentschuldbar.
 +
-+void LauncherRenderer::refreshPins() {
-+    const auto pins = AppDiscovery::dockPins();
-+    m_pinsKnown = pins.has_value();
++void LauncherRenderer::refreshLists() {
++    const std::string& script = m_config.settingsScript;
++    const auto pins = AppDiscovery::dockPins(script);
++    const auto home = AppDiscovery::homeNames(script);
++    // BEIDE oder KEINE. Antwortet nur eine der zwei Fragen, ist der
++    // Zustand halb bekannt - und ein Menue, das den einen Punkt zeigt
++    // und den anderen weglaesst, sieht aus wie eine Entscheidung, ist
++    // aber ein Fehlschlag.
++    m_listsKnown = pins.has_value() && home.has_value();
 +    m_pins = pins ? *pins : std::vector<std::string>{};
++    m_home = home ? *home : std::vector<std::string>{};
 +}
 +
 +std::vector<MenuEntry> LauncherRenderer::entryMenu(const AppEntry& entry) {
 +    // Die Hilfsskripte haben keinen Anwendungseintrag, also gibt es
-+    // nichts anzuheften - der Fuss loest Namen ueber
-+    // GioUnix.DesktopAppInfo auf, und ein Shell-Skript ist keiner.
-+    // LEER heisst hier: es klappt gar kein Menue auf. Ein Menue mit
-+    // einem Punkt, der nichts tun kann, waere schlechter als keines.
++    // nichts anzuheften und nichts abzulegen - der Fuss und das Home
++    // loesen Namen ueber GioUnix.DesktopAppInfo auf, und ein
++    // Shell-Skript ist keiner. LEER heisst hier: es klappt gar kein
++    // Menue auf. Ein Menue mit einem Punkt, der nichts tun kann, waere
++    // schlechter als keines.
 +    if (m_mode != LauncherMode::Apps || entry.id.empty())
 +        return {};
 +
 +    // Bei JEDEM Rechtsklick frisch gelesen und nicht einmal beim
-+    // Aufgehen: die Liste kann sich waehrend das Fenster offensteht
-+    // aendern - im Fuss, im Einstellungsfenster, in einem zweiten
-+    // Starter. Ein Menue, das "Zum Dock hinzufuegen" anbietet, waehrend
-+    // das Symbol schon unten steht, ist genau die Sorte Punkt, die
-+    // nichts tut. GEMESSEN: 42 ms (siehe AppDiscovery.cpp).
-+    refreshPins();
++    // Aufgehen: die Listen koennen sich waehrend das Fenster offensteht
++    // aendern - im Fuss, auf dem Home, im Einstellungsfenster, in einem
++    // zweiten Starter. Ein Menue, das "Zum Dock hinzufuegen" anbietet,
++    // waehrend das Symbol schon unten steht, ist genau die Sorte Punkt,
++    // die nichts tut. GEMESSEN: 36 und 34 ms (siehe AppDiscovery.cpp).
++    refreshLists();
 +
-+    // Hat die Bruecke nicht geantwortet, wird NICHTS angeboten. Der
-+    // Punkt haenge sonst an einem Schreibvorgang, der ohne gelesene
-+    // Liste gar nicht stattfinden darf (AppDiscovery::pinToDock
-+    // fuehrt es aus) - er waere ein Punkt, der zuverlaessig scheitert.
-+    if (!m_pinsKnown)
++    // Hat settings.py nicht geantwortet, wird NICHTS angeboten. Ein
++    // Punkt zeigte dann in eine geratene Richtung - "Zum Dock
++    // hinzufuegen" fuer etwas, das schon dort steht -, und das ist
++    // schlimmer als ein Rechtsklick, der nichts aufklappt.
++    if (!m_listsKnown)
 +        return {};
 +
 +    const std::string name = AppDiscovery::pinName(entry.id);
 +    const bool pinned =
 +        std::find(m_pins.begin(), m_pins.end(), name) != m_pins.end();
++    const bool aufDemHome =
++        std::find(m_home.begin(), m_home.end(), name) != m_home.end();
 +
-+    // ZWEI ZUSTAENDE, EIN PUNKT - UND NIE EIN TOTER
++    // ZWEI ZIELE, JE EIN PUNKT - UND NIE EIN TOTER
 +    //
-+    //     Bestellt war "Zum Dock hinzufuegen". Was aber soll ein
-+    //     Rechtsklick auf eine Anwendung anbieten, die BEREITS
-+    //     angeheftet ist? Drei Antworten waren moeglich: den Punkt
-+    //     trotzdem zeigen (er taete nichts), gar kein Menue zeigen (ein
++    //     Bestellt war am 20.08.2026 "Zum Dock hinzufuegen" und am
++    //     21.08.2026 dazu, woertlich: "auch im ags launcher bzw
++    //     hyprlauncher kann ich nicht mit rechtsklick zu home
++    //     hinzufügen". Beide Ziele stehen deshalb hier, und beide in
++    //     der Richtung, die gerade etwas bewirkt.
++    //
++    //     Was aber soll ein Rechtsklick auf eine Anwendung anbieten,
++    //     die BEREITS dort liegt? Drei Antworten waren moeglich: den
++    //     Punkt trotzdem zeigen (er taete nichts), ihn ausblenden (ein
 +    //     Rechtsklick, der mal wirkt und mal nicht), oder die
 +    //     Gegenrichtung anbieten.
 +    //
 +    //     Die dritte ist die einzige, die immer etwas sagt, und sie ist
-+    //     nicht erfunden: der Fuss traegt denselben Punkt unter
-+    //     demselben Namen (_("Remove from dock"), ags-dock.template,
-+    //     pinMenue()) und schreibt ihn ueber denselben Befehl.
++    //     nicht erfunden: der Fuss und das Home tragen dieselben vier
++    //     Punkte unter denselben Namen (ags-dock.template, homePunkt();
++    //     ags-home.template, dockPunkt()) und schreiben sie ueber
++    //     denselben Befehl. settings.py deckt sie ab: `add` auf einen
++    //     Namen, der schon dasteht, endet mit 0 und schreibt nicht.
++    //
++    //     DIE REIHENFOLGE ist die des Fusses: erst der Fuss, dann das
++    //     Home. Ein Menue, dessen Punkte je nach Fenster die Plaetze
++    //     tauschen, ist eines, in dem man zielen muss.
++    const std::string script = m_config.settingsScript;
++    const std::string id = entry.id;
++    std::vector<MenuEntry> entries;
++
 +    if (pinned) {
-+        std::string id = entry.id;
-+        return {{m_config.unpinIcon, "Vom Dock entfernen",
-+                 [id]() { AppDiscovery::unpinFromDock(id); }}};
++        entries.push_back({m_config.unpinIcon, "Vom Dock entfernen",
++            [script, id]() { AppDiscovery::unpinFromDock(script, id); }});
++    } else {
++        entries.push_back({m_config.pinIcon, "Zum Dock hinzufuegen",
++            [script, id]() { AppDiscovery::pinToDock(script, id); }});
 +    }
 +
-+    std::string id = entry.id;
-+    return {{m_config.pinIcon, "Zum Dock hinzufuegen",
-+             [id]() { AppDiscovery::pinToDock(id); }}};
++    // BEIDE RICHTUNGEN MIT DEMSELBEN ZEICHEN, und das ist eine Regel
++    // und keine Sparsamkeit: das Zeichen nennt das ZIEL, der Text die
++    // Richtung. Zusammen stehen die zwei nie. Der Fuss fuehrt dieselbe
++    // Regel unter HOME_ICON, und sie ist dort begruendet: ein zweites
++    // Minus neben "Vom Dock entfernen" waeren zwei gleiche Zeichen mit
++    // zwei Wirkungen in EINEM Menue.
++    if (aufDemHome) {
++        entries.push_back({m_config.homeIcon, "Vom Home entfernen",
++            [script, id]() { AppDiscovery::removeFromHome(script, id); }});
++    } else {
++        entries.push_back({m_config.homeIcon, "Zum Home hinzufuegen",
++            [script, id]() { AppDiscovery::addToHome(script, id); }});
++    }
++
++    return entries;
 +}
 +
 +void LauncherRenderer::showMenu(GtkWidget* anchor, double x, double y,
@@ -2328,7 +2416,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  void LauncherRenderer::updateSelection(int newIndex) {
-@@ -568,7 +863,7 @@
+@@ -568,7 +902,7 @@
  }
  
  // ============================================================================
@@ -2337,7 +2425,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  void LauncherRenderer::activateSelected() {
-@@ -593,7 +888,7 @@
+@@ -593,7 +927,7 @@
  }
  
  // ============================================================================
@@ -2346,7 +2434,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  gboolean LauncherRenderer::onKeyPress(GtkEventControllerKey*, guint keyval,
-@@ -601,6 +896,38 @@
+@@ -601,6 +935,38 @@
      auto* self = static_cast<LauncherRenderer*>(data);
      int maxIndex = static_cast<int>(self->m_resultButtons.size()) - 1;
  

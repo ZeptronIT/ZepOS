@@ -271,9 +271,23 @@ def test_das_menue_steht_ueber_der_layer_flaeche(menue):
         f"({menue['kasten_zu']}) an")
 
 
-def test_das_menue_traegt_die_beiden_punkte_einer_anheftung(menue):
-    """Auf einem angehefteten Symbol: neues Fenster, abnehmen."""
-    assert menue["punkte"] == "New window|Remove from dock", (
+def test_das_menue_traegt_die_drei_punkte_einer_anheftung(menue):
+    """Auf einem angehefteten Symbol: neues Fenster, Home, abnehmen.
+
+    DER MITTLERE IST SEIT DEM 21.08.2026 DA, und er ist die Bestellung,
+    woertlich: "das gleiche muss bei der dock auch funktionieren, weil
+    ich nicht jedes icon auf der dock oder auf dem home haben will."
+    Fuss und Home sind zwei getrennte Auswahlen; ohne diesen Punkt liesse
+    sich ein Symbol nur in eine Richtung bewegen.
+
+    WELCHE RICHTUNG der mittlere Punkt zeigt, haengt daran, ob die
+    Anwendung gerade auf dem Home liegt - dieser Lauf laesst das Home
+    seine ausgelieferte Belegung tragen, also liegt sie dort, und der
+    Punkt heisst "Vom Home entfernen". Dass er UMSCHLAEGT, misst
+    tests/src/test_dock_menue.py ohne Compositor an beiden Faellen; hier
+    geht es darum, dass er ueberhaupt dasteht.
+    """
+    assert menue["punkte"] == "New window|Remove from Home|Remove from dock", (
         f"das Menue einer Anheftung zeigt {menue['punkte']!r}")
 
 
@@ -327,21 +341,38 @@ def test_eine_auswahl_schliesst_das_menue(menue):
         f"ueber dem Fuss, Kasten {measure.bounds_of(rest)}")
 
 
-def test_ein_gescheiterter_schreibversuch_nimmt_kein_symbol_weg(menue):
-    """Die Gegenprobe zum Abnehmen, und sie faellt hier von selbst an.
+def test_das_abnehmen_wirkt_sofort_und_nicht_erst_beim_anmelden(menue):
+    """Die ganze Kette an einem Stueck, an einem laufenden Compositor.
 
-    "Vom Dock entfernen" schreibt ueber zepos-settings-gui. Auf einer
-    Entwicklermaschine gibt es den Befehl nicht (`which
-    zepos-settings-gui` findet nichts), der Schreibversuch scheitert -
-    und GENAU DANN darf die Reihe sich nicht aendern. Ein Symbol, das
-    verschwindet und beim naechsten Anmelden wieder dasteht, waere die
-    schlechtere Haelfte beider Welten.
+    Menuepunkt -> `settings.py dock remove` -> user-settings.json ->
+    Gio.FileMonitor -> die Reihe wird neu gebaut. Zwischen dem Klick und
+    dem Ergebnis liegt kein Neustart, kein Erzeugungslauf und kein `ags
+    request`.
+
+    WAS HIER BIS ZUM 21.08.2026 GEMESSEN WURDE, und warum es woanders
+    steht: der Schreibweg ging ueber `zepos-settings-gui`, den es auf
+    einer Entwicklermaschine nicht gibt - der Versuch scheiterte
+    zuverlaessig, und dieser Lauf hielt fest, dass die Reihe dann
+    UNVERAENDERT bleibt. Der Weg geht jetzt ueber `settings.py`, dessen
+    Pfad beim Erzeugen eingesetzt wird; er scheitert hier also nicht
+    mehr, und die Frage "was passiert, wenn er scheitert" ist damit
+    keine Frage an ein Bild mehr. Sie steht seither zweimal ohne
+    Compositor:
+    tests/src/test_dock_pins.py::test_eine_unlesbare_datei_wird_nicht_ueberschrieben
+    und
+    tests/src/test_launcher_pin.py::test_ein_fehlgeschlagener_schreibvorgang_aendert_nichts.
     """
     vorher, nachher = menue["angeheftet"]
     assert vorher, "es war ueberhaupt nichts angeheftet"
-    assert nachher == vorher, (
-        f"die Reihe war {vorher!r} und ist nach dem gescheiterten "
-        f"Schreibversuch {nachher!r}")
+    assert nachher != vorher, (
+        f"nach 'Vom Dock entfernen' steht die Reihe unveraendert da: "
+        f"{nachher!r}\n" + menue["protokoll"][-2000:])
+    assert len(nachher.split("|")) == len(vorher.split("|")) - 1, (
+        f"es ist nicht GENAU ein Symbol verschwunden: {vorher!r} -> "
+        f"{nachher!r}")
+    assert nachher == "|".join(vorher.split("|")[1:]), (
+        f"es ist nicht das ERSTE Symbol verschwunden, auf dem geklickt "
+        f"wurde: {vorher!r} -> {nachher!r}")
 
 
 def test_der_fuss_nimmt_die_tastatur_nie(menue):
@@ -376,13 +407,6 @@ def test_der_lauf_hat_nichts_kritisches_gemeldet(menue):
                # erster Antwort. Steht in jedem Lauf und gehoert zum
                # Aufbau.
                and "Ereignissocket" not in zeile
-               # UND die Klage ueber den fehlenden Einstellungsbefehl.
-               # Sie ist der BELEG dieses Laufs und kein Mangel: der
-               # Test waehlt absichtlich "Vom Dock entfernen", der
-               # Befehl fehlt auf dieser Maschine, und dass das Dock das
-               # SAGT statt still nichts zu tun, ist die Zusicherung
-               # test_ein_gescheiterter_schreibversuch_nimmt_kein_symbol_weg.
-               and "zepos-settings-gui" not in zeile
                # UND eine Warnung, die NICHT aus dieser Vorlage kommt.
                # Sie steht unten in ihrer eigenen Zusicherung, samt
                # Eingrenzung - hier waere sie nur eine Zahl.

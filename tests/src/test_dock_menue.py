@@ -33,17 +33,32 @@ DER AUFBAU
           hier ein echtes Programm, das "gimp" heisst - eine Kopie von
           `sleep` unter diesem Namen, GEMESSEN: comm=gimp.
 
-      ein zepos-settings-gui, das jedes Dokument aufhebt
-          Der Menuepunkt schreibt ueber diesen Befehl. Eine Attrappe,
-          die seine Aufrufe mitschreibt und antwortet wie die echte
-          Bruecke, macht aus "es hat wohl geklappt" eine Messung: das
-          Dokument steht danach auf der Platte und wird verglichen.
+      eine echte Einstellungsdatei
+          Der Menuepunkt schreibt ueber `settings.py dock|home
+          add|remove` - denselben Unterbefehl, den das Home und der
+          Starter rufen (Aufgabe 53, 21.08.2026). Dieser Lauf legt
+          deshalb eine user-settings.json hin und sieht danach nach, was
+          darin steht. Bis dahin stand hier eine Attrappe von
+          `zepos-settings-gui`; die Datei ist die bessere Messung, aus
+          demselben Grund, aus dem tests/src/test_launcher_pin.py den
+          echten Schreibweg uebersetzt statt ihn nachzubauen.
+
+WAS SEIT DEM 21.08.2026 DAZUGEKOMMEN IST
+    Die sechs Menuepunkte in beide Richtungen (anheften/abnehmen,
+    aufs Home legen/abnehmen), der Umschlag eines Punktes, wenn das
+    Programm schon dort liegt - und die Probe, die der Nutzer gemeldet
+    hat: eine Aenderung, die ein ANDERES Fenster schreibt, muss beim
+    Fuss ankommen, ohne dass irgendetwas neu startet
+    (test_eine_fremde_anheftung_erscheint_ohne_neustart).
 """
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -80,70 +95,73 @@ from src import icons_db  # noqa: E402
 
 PIN_ICON = icons_db.icons["ICON_PIN"]
 UNPIN_ICON = icons_db.icons["ICON_MINUS"]
+# Das Zeichen der zwei Home-Punkte, seit dem 21.08.2026. In BEIDE
+# Richtungen dasselbe - der Kopf von ags-dock.template begruendet, warum
+# hier das ZIEL das Zeichen bestimmt und nicht die Richtung.
+HOME_ICON = icons_db.icons["ICON_COMPUTER"]
 NEW_WINDOW_ICON = icons_db.icons["ICON_WINDOW"]
 CLOSE_ICON = icons_db.icons["ICON_WINDOW_CLOSE"]
 
+# Die ausgelieferte Auswahl DIESES Baums - dieselbe Quelle, aus der der
+# Erzeugungslauf PINNED in widget/Dock.tsx schreibt und aus der
+# settings.shipped_pins() antwortet. Nicht abgeschrieben: eine getippte
+# Liste waere eine zweite, die veraltet, sobald jemand eine Anwendung
+# aus packaging/zepos-apps/PKGBUILD nimmt.
+SRC = Path(__file__).resolve().parents[2] / "src"
+sys.path.insert(0, str(SRC))
+import apps as _apps_modul  # noqa: E402
 
-def _bruecke(binaries: Path, mitschrift: Path, antwort: Path,
-             dokument: Path) -> None:
-    """Eine Attrappe von zepos-settings-gui, die alles aufhebt.
+SHIPPED = _apps_modul.shipped(SRC)
 
-    Sie antwortet auf `--json get` mit dem Dokument, das der Test
-    hinlegt, und legt bei `--json set` das uebergebene Dokument ab.
-    Beides ist genau der Ausschnitt, den ags-dock.template benutzt -
-    mehr nachzubauen hiesse, die Bruecke nachzubauen und damit zu
-    messen, was der Nachbau tut.
 
-    PYTHON UND KEIN SHELLSKRIPT, und das ist gemessen: der PATH dieses
-    Laufs enthaelt NUR das Programmverzeichnis (siehe den Kopf von
-    dock_headless_child.tsx). Eine Fassung mit `cat` darin hat am
-    20.08.2026 eine LEERE Antwort geliefert - `cat` liegt in /usr/bin
-    und stand nicht auf dem PATH -, und das Dock hat daraufhin
-    ordnungsgemaess auf seinen eigenen Stand zurueckgegriffen. Der Test
-    war gruen im Aussehen und falsch in der Sache. Ein absoluter
-    Shebang holt sich seinen Interpreter, ohne den PATH zu fragen.
+def _einstellungen(root: Path, pins: list[str],
+                   home: list[str] | None = None) -> Path:
+    """Die Einstellungsdatei, wie sie VOR dem Lauf aussieht.
+
+    KEINE ATTRAPPE MEHR, SEIT DEM 21.08.2026 (Aufgabe 53)
+        Hier stand bis dahin ein nachgebautes `zepos-settings-gui`, das
+        `--json get` mit einem Dokument beantwortete und `--json set`
+        aufhob. Der Fuss ruft diesen Befehl nicht mehr: er ruft
+        `settings.py dock add|remove`, denselben Unterbefehl, den das
+        Home und der Starter rufen (siehe den Abschnitt "DIE
+        ANHEFTUNGEN DES NUTZERS" in ags-dock.template).
+
+        Damit braucht dieser Lauf keine Attrappe, sondern eine DATEI -
+        und das ist die bessere Messung: gemessen wird, was in
+        user-settings.json steht, nachdem der echte Schreibweg gelaufen
+        ist, und nicht, was ein Nachbau aufgeschrieben hat. Dieselbe
+        Entscheidung wie in tests/src/test_launcher_pin.py, wo der echte
+        AppDiscovery.cpp gegen den echten Schreibweg laeuft.
+
+    DIE ZWEI ANDEREN ABSCHNITTE STEHEN MIT DRIN, und zwar absichtlich:
+    settings.merge() ERSETZT einen Abschnitt (siehe dort). Ein Schreiber,
+    der nur die Anheftungen zurueckgibt, loescht die Leiste des Nutzers -
+    und genau das kann dieser Lauf danach nachsehen.
     """
-    binaries.mkdir(parents=True, exist_ok=True)
-    stub = binaries / "zepos-settings-gui"
-    stub.write_text(
-        "#!/usr/bin/python3\n"
-        "import sys\n"
-        "from pathlib import Path\n"
-        "args = sys.argv[1:]\n"
-        f"with Path({str(mitschrift)!r}).open('a') as f:\n"
-        "    f.write(' '.join(args) + '\\n')\n"
-        "schalter = args[1] if len(args) > 1 else ''\n"
-        "if schalter == 'get':\n"
-        f"    sys.stdout.write(Path({str(antwort)!r}).read_text())\n"
-        "elif schalter == 'set':\n"
-        f"    Path({str(dokument)!r}).write_text(args[2])\n"
-        "    sys.stdout.write('{\"ok\": true, \"problems\": [], "
-        "\"written\": [\"bar.dock_pins\"]}')\n"
-        "else:\n"
-        "    sys.stdout.write('{\"ok\": false, \"problems\": "
-        "[\"unbekannt\"]}')\n",
-        encoding="utf-8")
-    stub.chmod(0o755)
+    wurzel = root / "zepos"
+    wurzel.mkdir(parents=True, exist_ok=True)
+    document = {
+        "schema_version": 1,
+        "colors": {"accent": "#abcdef"},
+        "bar": {
+            "modules_left": ["custom/date"],
+            "modules_right": ["tray"],
+            "dock_pins": pins,
+            "dock_baseline": SHIPPED,
+        },
+    }
+    if home is not None:
+        document["home"] = {"icons": [{"name": name} for name in home],
+                            "baseline": SHIPPED}
+    (wurzel / "user-settings.json").write_text(
+        json.dumps(document, indent=2), encoding="utf-8")
+    return wurzel
 
 
-def _antwortdokument(pins: list[str]) -> str:
-    """Was `--json get` liefert - nur die Felder, die das Dock liest.
-
-    Die Form steht im Bericht zu Aufgabe 45 und in bridge.py,
-    _page_leiste(): pages[name="leiste"].controls[key="bar.dock_pins"]
-    .effective.
-    """
-    return json.dumps({
-        "schema": 1,
-        "ok": True,
-        "pages": [
-            {"name": "leiste", "controls": [
-                {"key": "bar.dock_pins", "kind": "order",
-                 "value": pins, "default": pins, "effective": pins,
-                 "labels": {}, "discarded": []},
-            ]},
-        ],
-    })
+def _gelesen(wurzel: Path) -> dict:
+    """Was nach dem Lauf in der Einstellungsdatei steht."""
+    ziel = wurzel / "user-settings.json"
+    return json.loads(ziel.read_text(encoding="utf-8")) if ziel.exists() else {}
 
 
 @pytest.fixture(scope="module")
@@ -155,14 +173,22 @@ def bundle(tmp_path_factory) -> tuple[Path, Path]:
 def _lauf(bundle: tuple[Path, Path], root: Path, *,
           menues: tuple[str, ...] = (), wahl: str = "",
           gepflegt: list[str] | None = None,
+          home: list[str] | None = None,
+          fremd: list[str] | None = None,
           abgelegt: bool = False) -> dict:
-    """Ein Lauf des Kindes gegen einen Compositor und eine Bruecke.
+    """Ein Lauf des Kindes gegen einen Compositor und eine echte Datei.
 
     Zurueck kommen die Spur des Kindes, die Befehle an den Compositor UND
-    das Dokument, das die Bruecke bekommen hat. Die dritte Haelfte ist
+    die Einstellungsdatei, wie sie danach dasteht. Die dritte Haelfte ist
     das eigentlich Neue: ein Menuepunkt, der richtig AUSSIEHT und das
     falsche Dokument schreibt, waere derselbe Fehler wie ein Knopf, der
     den falschen Befehl absetzt.
+
+    `fremd` ist ein Aufruf von settings.py, den DIESER Test waehrend des
+    Laufs absetzt - also eine Aenderung, die von ausserhalb des Fusses
+    kommt, so wie sie vom Starter oder vom Home kaeme. Er ist die Probe
+    auf den Fehler, den der Nutzer aus 0.1.7 gemeldet hat ("wenn ich es
+    dort mit der dock versuche dann passiert nichts").
     """
     display_server = broadwayd()
     if display_server is None:
@@ -176,6 +202,11 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
     runtime.chmod(0o700)
     share = root / "share"
     binaries = root / "bin"
+    # Legt auch `bash` und `python3` als Weitergabeskripte ab - der Fuss
+    # ruft settings.py darueber, und der PATH dieses Laufs besteht NUR
+    # aus diesem Verzeichnis (siehe den Kopf von
+    # dock_headless_child.tsx: sonst misst er, was der Entwickler
+    # zufaellig installiert hat).
     _desktop_entries(share, binaries)
 
     # DAS PROGRAMM, DAS "gimp" HEISST. _desktop_entries legt dafuer ein
@@ -187,29 +218,9 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
     (binaries / "gimp").chmod(0o755)
     prozess = subprocess.Popen([str(binaries / "gimp"), "120"])
 
-    # UND EIN `bash` IM SELBEN VERZEICHNIS, weil der PATH dieses Laufs
-    # NUR daraus besteht (siehe den Kopf von dock_headless_child.tsx:
-    # sonst misst er, was der Entwickler zufaellig installiert hat).
-    # ags-dock.template ruft die Bruecke ueber `bash -c` - dieselbe
-    # Zeile wie ags-settings.template, mit derselben Begruendung -, und
-    # ohne bash auf dem PATH scheitert der Aufruf, bevor die Attrappe
-    # ueberhaupt gerufen wird. GEMESSEN am 20.08.2026: der Lauf war
-    # gruen im Aussehen und leer in der Wirkung, keine einzige Zeile in
-    # der Mitschrift.
-    #
-    # Eine Verknuepfung und keine Kopie, und `bash` ist keine Anwendung:
-    # es traegt keinen .desktop-Eintrag, faellt also nicht in die
-    # Auswahl, die dieser Lauf misst.
-    bash = shutil.which("bash")
-    assert bash, "ohne bash kann das Dock seine Bruecke nicht rufen"
-    (binaries / "bash").symlink_to(bash)
-
-    mitschrift = root / "bruecke.log"
-    antwort = root / "bruecke-get.json"
-    dokument = root / "bruecke-set.json"
-    antwort.write_text(_antwortdokument(gepflegt if gepflegt is not None
-                                        else ANGEHEFTET), encoding="utf-8")
-    _bruecke(binaries, mitschrift, antwort, dokument)
+    wurzel = _einstellungen(
+        root, gepflegt if gepflegt is not None else ANGEHEFTET, home)
+    vorher = _gelesen(wurzel)
 
     trace = root / "trace"
     display = next(_DISPLAYS)
@@ -220,27 +231,51 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
         clients.append(_client("0xa00", "firefox", ABGELEGTES_FIREFOX,
                                MINIMIZED_ID, MINIMIZED))
     compositor = FakeCompositor(runtime, clients)
+    umgebung = {
+        "PATH": str(binaries),
+        "HOME": str(root),
+        "GDK_BACKEND": "broadway",
+        "BROADWAY_DISPLAY": f":{display}",
+        "XDG_RUNTIME_DIR": str(runtime),
+        "XDG_CONFIG_HOME": str(root / "config"),
+        "XDG_DATA_DIRS": str(share),
+        "XDG_DATA_HOME": str(root / "data"),
+        "DBUS_SESSION_BUS_ADDRESS": f"unix:path={root}/kein-bus",
+        "HYPRLAND_INSTANCE_SIGNATURE": FakeCompositor.SIGNATURE,
+        # Die Einstellungsdatei DIESES Laufs. settings.py liest sie ueber
+        # paths.user_root(), und der Fuss reicht die Umgebung an seinen
+        # Unterprozess durch.
+        "ZEPOS_USER_ROOT": str(wurzel),
+        "ZEPOS_TRACE": str(trace),
+        "ZEPOS_CSS": str(ags / "bar.css"),
+        "ZEPOS_MENUES": "|".join(menues),
+        "ZEPOS_WAEHLE": wahl,
+        "ZEPOS_WARTEN": "2500" if fremd else "",
+    }
     try:
-        result = subprocess.run(
-            [str(bundled)],
-            env={
-                "PATH": str(binaries),
-                "HOME": str(root),
-                "GDK_BACKEND": "broadway",
-                "BROADWAY_DISPLAY": f":{display}",
-                "XDG_RUNTIME_DIR": str(runtime),
-                "XDG_CONFIG_HOME": str(root / "config"),
-                "XDG_DATA_DIRS": str(share),
-                "XDG_DATA_HOME": str(root / "data"),
-                "DBUS_SESSION_BUS_ADDRESS": f"unix:path={root}/kein-bus",
-                "HYPRLAND_INSTANCE_SIGNATURE": FakeCompositor.SIGNATURE,
-                "ZEPOS_TRACE": str(trace),
-                "ZEPOS_CSS": str(ags / "bar.css"),
-                "ZEPOS_MENUES": "|".join(menues),
-                "ZEPOS_WAEHLE": wahl,
-            },
-            capture_output=True, text=True, timeout=CHILD_TIMEOUT,
-        )
+        if fremd:
+            kind = subprocess.Popen(
+                [str(bundled)], env=umgebung,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            # WARTEN, BIS DER FUSS STEHT UND EINMAL GELESEN HAT. Ohne
+            # diese Pause liefe die fremde Aenderung moeglicherweise VOR
+            # dem ersten Lesevorgang durch, und der Lauf maesse dann den
+            # Anfangswert und nicht die Meldung.
+            time.sleep(1.2)
+            fremdlauf = subprocess.run(
+                [sys.executable, str(SRC / "settings.py"), *fremd],
+                env={**umgebung, "ZEPOS_SYSTEM_ROOT": str(SRC),
+                     "PATH": os.environ.get("PATH", "/usr/bin")},
+                capture_output=True, text=True, timeout=60)
+            assert fremdlauf.returncode == 0, (
+                f"die fremde Aenderung ist gescheitert: {fremdlauf.stderr}")
+            ausgabe, fehler = kind.communicate(timeout=CHILD_TIMEOUT)
+            result = subprocess.CompletedProcess(
+                [str(bundled)], kind.returncode, ausgabe, fehler)
+        else:
+            result = subprocess.run(
+                [str(bundled)], env=umgebung,
+                capture_output=True, text=True, timeout=CHILD_TIMEOUT)
     finally:
         compositor.stop()
         stop_broadwayd(server)
@@ -252,10 +287,8 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
     return {
         "lauf": lauf,
         "dispatches": list(compositor.dispatches),
-        "aufrufe": (mitschrift.read_text().splitlines()
-                    if mitschrift.exists() else []),
-        "dokument": (json.loads(dokument.read_text())
-                     if dokument.exists() else None),
+        "vorher": vorher,
+        "nachher": _gelesen(wurzel),
     }
 
 
@@ -265,9 +298,13 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
 
 @pytest.fixture(scope="module")
 def menues(bundle, tmp_path_factory) -> dict:
-    """Beide Menues aufgeklappt, nichts angeklickt."""
+    """Beide Menues aufgeklappt, nichts angeklickt.
+
+    firefox liegt dabei AUF DEM HOME und gimp nicht - damit stehen in
+    einem einzigen Lauf beide Richtungen des Home-Punktes nebeneinander.
+    """
     return _lauf(bundle, tmp_path_factory.mktemp("menue-inhalt"),
-                 menues=("Firefox", GIMP_TITEL))
+                 menues=("Firefox", GIMP_TITEL), home=["firefox"])
 
 
 def _pins(ergebnis: dict, marke: str) -> list[str]:
@@ -277,46 +314,73 @@ def _pins(ergebnis: dict, marke: str) -> list[str]:
             if "dock-pin" in teil]
 
 
-def _menue(ergebnis: dict, knopf: str) -> list[str]:
-    marke = ergebnis["lauf"].mark(f"menue-{knopf}")
-    return [teil for teil in marke.split(";") if teil]
+def _menue(ergebnis: dict, knopf: str, marke: str = "menue") -> list[str]:
+    text = ergebnis["lauf"].mark(f"{marke}-{knopf}")
+    return [teil for teil in text.split(";") if teil]
 
 
-def test_eine_anheftung_bietet_neues_fenster_und_abnehmen(menues):
-    """Die zwei Punkte, die zu einem angehefteten Symbol gehoeren.
+def _pinliste(ergebnis: dict, wann: str = "nachher") -> list[str]:
+    """Was in der Einstellungsdatei unter bar.dock_pins steht."""
+    return ergebnis[wann].get("bar", {}).get("dock_pins")
+
+
+def _homeliste(ergebnis: dict, wann: str = "nachher") -> list[str]:
+    icons = ergebnis[wann].get("home", {}).get("icons") or []
+    return [icon["name"] for icon in icons]
+
+
+# --------------------------------------------------------------------
+# Was in einem Menue steht
+# --------------------------------------------------------------------
+
+def test_eine_anheftung_bietet_drei_punkte(menues):
+    """Die drei Punkte, die zu einem angehefteten Symbol gehoeren.
 
     "Neues Fenster" ist der EINZIGE Weg zu einem zweiten Fenster einer
     laufenden Anwendung - der Linksklick holt das erste nach vorn, und
     das soll er ("wie Apple OS", 11.08.2026).
+
+    Der mittlere Punkt ist die Bestellung vom 21.08.2026: "das gleiche
+    muss bei der dock auch funktionieren, weil ich nicht jedes icon auf
+    der dock oder auf dem home haben will". firefox liegt in diesem Lauf
+    auf dem Home, also steht dort die Gegenrichtung.
     """
     assert _menue(menues, "Firefox") == [
         f"{NEW_WINDOW_ICON} New window",
+        f"{HOME_ICON} Remove from Home",
         f"{UNPIN_ICON} Remove from dock",
     ], menues["lauf"].trace
 
 
-def test_ein_fenster_bietet_anheften_und_schliessen(menues):
+def test_ein_fenster_bietet_anheften_ablegen_und_schliessen(menues):
     """Und "Schliessen" ist derselbe Befehl wie der Mittelklick - eine
-    Geste ohne Beschriftung findet nur, wer sie schon kennt."""
+    Geste ohne Beschriftung findet nur, wer sie schon kennt.
+
+    gimp liegt in diesem Lauf WEDER im Fuss NOCH auf dem Home, also
+    zeigen beide Punkte in die Richtung "hinzufuegen".
+    """
     assert _menue(menues, GIMP_TITEL) == [
         f"{PIN_ICON} Add to dock",
+        f"{HOME_ICON} Add to Home",
         f"{CLOSE_ICON} Close",
     ], menues["lauf"].trace
 
 
-def test_jede_zeile_traegt_ihr_eigenes_zeichen(menues):
-    """Vier Punkte, vier verschiedene Zeichen.
-
-    Zwei gleiche Zeichen mit zwei verschiedenen Wirkungen sind ein
+def test_kein_menue_traegt_ein_zeichen_zweimal(menues):
+    """Zwei gleiche Zeichen mit zwei verschiedenen Wirkungen sind ein
     Bedienfehler mit Ansage - besonders zwischen "Vom Dock entfernen"
     und "Schliessen", die nebeneinander stehen koennen.
+
+    JE MENUE GEPRUEFT UND NICHT UEBER BEIDE, seit dem 21.08.2026: der
+    Home-Punkt traegt in BEIDEN Menues dasselbe Zeichen, weil er in
+    beiden dasselbe Ziel nennt. Zwei Menues sieht niemand gleichzeitig;
+    zwei Zeilen EINES Menues schon.
     """
-    zeichen = [zeile.split(" ")[0]
-               for knopf in ("Firefox", GIMP_TITEL)
-               for zeile in _menue(menues, knopf)]
-    assert len(zeichen) == 4, zeichen
-    assert len(set(zeichen)) == 4, f"nicht alle verschieden: {zeichen}"
-    assert "" not in zeichen, f"eine Zeile ohne Zeichen: {zeichen}"
+    for knopf in ("Firefox", GIMP_TITEL):
+        zeichen = [zeile.split(" ")[0] for zeile in _menue(menues, knopf)]
+        assert len(zeichen) == 3, f"{knopf}: {zeichen}"
+        assert len(set(zeichen)) == 3, f"{knopf}: nicht verschieden {zeichen}"
+        assert "" not in zeichen, f"{knopf}: eine Zeile ohne Zeichen"
 
 
 def test_kein_menue_ist_leer(menues):
@@ -337,42 +401,45 @@ def anheften(bundle, tmp_path_factory) -> dict:
                  wahl=f"{GIMP_TITEL}>Add to dock")
 
 
-def test_anheften_schreibt_genau_ein_dokument_an_die_bruecke(anheften):
-    """Die Nutzerliste aus Aufgabe 45, kein zweiter Ort.
+def test_anheften_schreibt_den_namen_in_die_nutzerliste(anheften):
+    """bar.dock_pins, kein zweiter Ort und keine zweite Datei."""
+    assert _pinliste(anheften) == ANGEHEFTET + ["gimp"], (
+        f"geschrieben wurde {_pinliste(anheften)!r}")
 
-    `dock_baseline` steht ABSICHTLICH nicht darin: den Schluessel
-    schreibt der Befehl selbst mit (Bericht Aufgabe 45). Wer ihn von
-    hier aus mitschickte, ueberschriebe die Vorgabe, gegen die der
-    Nutzer sich einmal entschieden hat.
+
+def test_anheften_schreibt_die_vorgabe_mit(anheften):
+    """dock_baseline geht MIT hinaus, und der Menuepunkt schickt es nicht.
+
+    Der Kopf bei BAR_BASELINE in src/settings.py fuehrt aus, woran das
+    haengt: ohne frische Vorgabe erschiene alles, was ZepOS seither
+    dazuliefert, beim naechsten Anmelden noch einmal - auch das, was der
+    Nutzer gerade abgenommen hat. Geschrieben wird sie von
+    `settings.py dock`, nicht vom Aufrufer; genau deshalb gibt es den
+    Unterbefehl.
     """
-    assert anheften["dokument"] == {
-        "bar.dock_pins": ANGEHEFTET + ["gimp"]}, (
-        f"geschrieben wurde {anheften['dokument']!r}\n"
-        + "\n".join(anheften["aufrufe"]))
+    assert anheften["nachher"]["bar"]["dock_baseline"] == SHIPPED
 
 
-def test_anheften_liest_erst_und_schreibt_dann(anheften):
-    """GELESEN WIRD ZUERST, und zwar bei der Bruecke.
+def test_anheften_laesst_den_rest_der_datei_stehen(anheften):
+    """settings.merge() ERSETZT einen Abschnitt.
 
-    Der Stand DIESER Sitzung ist nicht die Wahrheit - das
-    Einstellungsfenster schreibt in dieselbe Liste. Auf ihn aufzubauen
-    hiesse, eine fremde Aenderung beim naechsten Anheften
-    stillschweigend zurueckzunehmen.
+    Ein Schreiber, der nur die Anheftungen zurueckgibt, loescht die
+    Leiste des Nutzers - beide Modullisten stehen im SELBEN Abschnitt.
+    Und die Farben, die in einem anderen stehen, gehen genauso wenig
+    verloren.
     """
-    schalter = [zeile.split()[1] for zeile in anheften["aufrufe"]
-                if len(zeile.split()) > 1]
-    assert schalter == ["get", "set"], (
-        f"die Bruecke wurde so gerufen: {anheften['aufrufe']}")
+    bar = anheften["nachher"]["bar"]
+    assert bar["modules_left"] == ["custom/date"], bar
+    assert bar["modules_right"] == ["tray"], bar
+    assert anheften["nachher"]["colors"] == {"accent": "#abcdef"}
 
 
 def test_das_neue_symbol_steht_sofort_im_fuss(anheften):
     """OHNE Neustart der Oberflaeche, und das ist die halbe Bestellung.
 
-    Die erzeugte Zeile PINNED in widget/Dock.tsx kennt gimp nicht; sie
-    kommt erst beim naechsten Erzeugungslauf nach (die Marke dafuer legt
-    `zepos-settings-gui --json set`, src/bin/zepos-session liest sie
-    beim naechsten Anmelden). Was der Nutzer sieht, darf darauf nicht
-    warten.
+    Die erzeugte Zeile PINNED in widget/Dock.tsx kennt gimp nicht - sie
+    ist der Abzug des letzten Erzeugungslaufs. Was der Nutzer sieht,
+    darf auf den naechsten nicht warten.
     """
     vorher = _pins(anheften, "kinder")
     nachher = _pins(anheften, "kinder-danach")
@@ -412,9 +479,8 @@ def abnehmen(bundle, tmp_path_factory) -> dict:
 
 
 def test_abnehmen_schreibt_die_liste_ohne_diesen_namen(abnehmen):
-    assert abnehmen["dokument"] == {
-        "bar.dock_pins": ["nautilus", "btop"]}, (
-        f"geschrieben wurde {abnehmen['dokument']!r}")
+    assert _pinliste(abnehmen) == ["nautilus", "btop"], (
+        f"geschrieben wurde {_pinliste(abnehmen)!r}")
 
 
 def test_das_symbol_ist_sofort_fort(abnehmen):
@@ -425,6 +491,124 @@ def test_das_symbol_ist_sofort_fort(abnehmen):
     # Und die uebrigen stehen noch da - ein Abnehmen, das die Reihe
     # leert, waere schlimmer als keines.
     assert "Dateien[dock-button dock-pin]" in nachher, nachher
+
+
+# --------------------------------------------------------------------
+# Zum Home hinzufuegen und wieder abnehmen
+# --------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def aufs_home(bundle, tmp_path_factory) -> dict:
+    """Rechtsklick auf Firefox, "Add to Home" gewaehlt.
+
+    Das Home ist in diesem Lauf LEER (`home=[]`), also steht dort die
+    Richtung "hinzufuegen". Eine leere Liste und nicht `None`: null
+    hiesse "wie ausgeliefert", und dann laege firefox schon darauf.
+    """
+    return _lauf(bundle, tmp_path_factory.mktemp("menue-aufs-home"),
+                 wahl="Firefox>Add to Home", home=[])
+
+
+def test_aufs_home_legen_schreibt_den_home_abschnitt(aufs_home):
+    """Der Punkt, der dem Fuss bis zum 21.08.2026 gefehlt hat.
+
+    Geschrieben wird ueber `settings.py home add` - denselben
+    Unterbefehl, den das Home selbst und der Starter rufen. Der Fuss
+    weiss von home.baseline nichts und muss es nicht.
+    """
+    assert _homeliste(aufs_home) == ["firefox"], aufs_home["nachher"]
+
+
+def test_aufs_home_legen_schreibt_die_home_vorgabe_mit(aufs_home):
+    assert aufs_home["nachher"]["home"]["baseline"] == SHIPPED
+
+
+def test_aufs_home_legen_fasst_die_anheftungen_nicht_an(aufs_home):
+    """Zwei getrennte Auswahlen - das ist die Begruendung des Nutzers.
+
+    "weil ich nicht jedes icon auf der dock oder auf dem home haben
+    will": ein Symbol aufs Home zu legen darf es nicht aus dem Fuss
+    nehmen und auch nicht hineinsetzen.
+    """
+    assert _pinliste(aufs_home) == ANGEHEFTET
+
+
+@pytest.fixture(scope="module")
+def vom_home(bundle, tmp_path_factory) -> dict:
+    """Rechtsklick auf Firefox, "Remove from Home" gewaehlt."""
+    return _lauf(bundle, tmp_path_factory.mktemp("menue-vom-home"),
+                 wahl="Firefox>Remove from Home",
+                 home=["firefox", "btop"])
+
+
+def test_vom_home_nehmen_laesst_die_anderen_symbole_liegen(vom_home):
+    assert _homeliste(vom_home) == ["btop"], vom_home["nachher"]
+    assert _pinliste(vom_home) == ANGEHEFTET
+
+
+# --------------------------------------------------------------------
+# Dass eine FREMDE Aenderung ankommt
+# --------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def von_aussen(bundle, tmp_path_factory) -> dict:
+    """Niemand klickt. Waehrend der Fuss steht, heftet ein ANDERER an.
+
+    GEMELDET aus 0.1.7, woertlich: "auch im ags launcher bzw
+    hyprlauncher kann ich nicht mit rechtsklick zu home hinzufügen, und
+    wenn ich es dort mit der dock versuche dann passiert nichts".
+
+    Der Starter schrieb richtig - die Anheftung stand in
+    user-settings.json. Der Fuss erfuhr es nur nicht. Genau das ist
+    hier nachgestellt: `settings.py dock add gimp` von aussen, waehrend
+    der Fuss steht, ohne dass irgendetwas neu gestartet wird.
+
+    DAS IST WOERTLICH DER BEFEHL DER ANDEREN ZWEI MENUES, und damit
+    misst dieser eine Lauf beide Richtungen, die der Nutzer gemeldet
+    hat:
+
+        der Starter    AppDiscovery::pinToDock() setzt
+                       `python3 <settings.py> dock add <name>` ab -
+                       gemessen am UEBERSETZTEN Programm in
+                       tests/src/test_launcher_pin.py
+        das Home       dockAdd() in utils/user-settings.ts setzt
+                       denselben Befehl ab - gemessen in
+                       tests/src/test_dock_pins.py
+
+    Es gibt keinen dritten Weg, auf dem eine Anheftung entstehen
+    koennte, also gibt es auch keinen dritten Fall zu messen.
+    """
+    return _lauf(bundle, tmp_path_factory.mktemp("menue-von-aussen"),
+                 menues=(GIMP_TITEL, "GIMP (1)"), home=[],
+                 fremd=["dock", "add", "gimp"])
+
+
+def test_eine_fremde_anheftung_erscheint_ohne_neustart(von_aussen):
+    vorher = _pins(von_aussen, "kinder")
+    nachher = _pins(von_aussen, "kinder-danach")
+    assert not [name for name in vorher if name.startswith("GIMP")], (
+        f"gimp stand schon vorher im Fuss: {vorher}")
+    assert [name for name in nachher if name.startswith("GIMP")], (
+        f"die fremde Anheftung ist nicht angekommen: {nachher}\n"
+        + von_aussen["lauf"].trace)
+
+
+def test_der_menuepunkt_schlaegt_nach_einer_fremden_aenderung_um(von_aussen):
+    """Ein Menue, das "Zum Dock hinzufuegen" anbietet, waehrend das
+    Symbol schon unten steht, ist genau die Sorte Punkt, die nichts tut.
+
+    Nach dem Anheften steht das Fenster UNTER SEINEM SYMBOL und hat
+    keinen eigenen Knopf mehr (siehe den Kopf von ags-dock.template) -
+    der alte Punkt kann also gar nicht mehr aufgeklappt werden, und das
+    Menue steht am Symbol.
+    """
+    vorher = _menue(von_aussen, GIMP_TITEL)
+    assert vorher and vorher[0].endswith("Add to dock"), vorher
+    assert von_aussen["lauf"].mark(f"menue-danach-{GIMP_TITEL}") \
+        == "kein-knopf", von_aussen["lauf"].trace
+    am_symbol = _menue(von_aussen, "GIMP (1)", "menue-danach")
+    assert am_symbol and am_symbol[-1].endswith("Remove from dock"), (
+        f"am Symbol steht: {am_symbol}\n" + von_aussen["lauf"].trace)
 
 
 # --------------------------------------------------------------------
@@ -443,15 +627,14 @@ def test_schliessen_setzt_denselben_befehl_ab_wie_der_mittelklick(schliessen):
         f"abgesetzt wurde {schliessen['dispatches']!r}")
 
 
-def test_schliessen_fasst_die_anheftungen_nicht_an(schliessen):
-    """Es ruft die Bruecke gar nicht - ein Fenster zu schliessen hat mit
-    der Anheftungsliste nichts zu tun."""
-    assert schliessen["aufrufe"] == [], schliessen["aufrufe"]
-    assert schliessen["dokument"] is None
+def test_schliessen_fasst_die_einstellungen_nicht_an(schliessen):
+    """Ein Fenster zu schliessen hat mit der Anheftungsliste nichts zu
+    tun - die Datei steht danach Zeichen fuer Zeichen so da wie vorher."""
+    assert schliessen["nachher"] == schliessen["vorher"]
 
 
 # --------------------------------------------------------------------
-# Wann "Zum Dock hinzufuegen" NICHT dasteht
+# Ein Fenster, dessen Anwendung schon im Fuss steht
 # --------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
@@ -460,11 +643,10 @@ def schon_vertreten(bundle, tmp_path_factory) -> dict:
 
     Der einzige Fall, in dem ein Fenster hinter dem Trenner steht,
     obwohl seine Anwendung ein Symbol hat - siehe den Kopf von
-    ags-dock.template, "WOHIN EIN ABGELEGTES FENSTER GEHOERT". Genau
-    dort darf "Zum Dock hinzufuegen" nicht stehen.
+    ags-dock.template, "WOHIN EIN ABGELEGTES FENSTER GEHOERT".
     """
     return _lauf(bundle, tmp_path_factory.mktemp("menue-vertreten"),
-                 menues=(ABGELEGTES_FIREFOX,), abgelegt=True)
+                 menues=(ABGELEGTES_FIREFOX,), abgelegt=True, home=[])
 
 
 def test_ein_bereits_vertretener_name_wird_nicht_zweimal_angeboten(
@@ -473,16 +655,23 @@ def test_ein_bereits_vertretener_name_wird_nicht_zweimal_angeboten(
     Fehler, den ZepOS erzeugen kann.
 
     Ein zweites Firefox-Symbol waere genau das - es sieht aus wie eine
-    Anheftung und heftet nichts an, weil Firefox schon dasteht. Uebrig
-    bleibt "Schliessen", und das ist ein vollstaendiges Menue.
+    Anheftung und heftet nichts an, weil Firefox schon dasteht. Statt
+    dessen steht die GEGENRICHTUNG da, und sie trifft den Namen der
+    ANHEFTUNG: wer hier "Vom Dock entfernen" waehlt, nimmt das Symbol
+    weg, das er vor sich sieht.
     """
-    assert _menue(schon_vertreten, ABGELEGTES_FIREFOX) == [
-        f"{CLOSE_ICON} Close"], schon_vertreten["lauf"].trace
+    zeilen = _menue(schon_vertreten, ABGELEGTES_FIREFOX)
+    assert zeilen == [
+        f"{UNPIN_ICON} Remove from dock",
+        f"{HOME_ICON} Add to Home",
+        f"{CLOSE_ICON} Close",
+    ], schon_vertreten["lauf"].trace
 
 
 def test_der_lauf_meldet_nichts_ueber_ein_fehlendes_zeichen(menues):
     """Ein Menuezeichen, das die Zeichenquelle nicht kennt, waere ein
     leeres Kaestchen - und das faellt in einem Menue mehr auf als
     irgendwo sonst."""
-    for name in ("ICON_PIN", "ICON_MINUS", "ICON_WINDOW", "ICON_WINDOW_CLOSE"):
+    for name in ("ICON_PIN", "ICON_MINUS", "ICON_COMPUTER", "ICON_WINDOW",
+                 "ICON_WINDOW_CLOSE"):
         assert icons_db.icons.get(name), f"{name} fehlt in icons_db"

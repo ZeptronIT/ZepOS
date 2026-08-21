@@ -126,6 +126,12 @@
 //     Prozess ohne Anforderungen schlaeft. Wer hier einen Zeitgeber
 //     einbaut, macht aus 0.00 % eine Zahl, die nie wieder 0.00 % wird.
 //
+//     SEIT DEM 21.08.2026 HORCHT ES AUF EINE DATEI, UND DAS BLEIBT
+//     DABEI: ein Gio.FileMonitor ist inotify - er meldet sich, statt
+//     gefragt zu werden. Kein Zeitgeber, keine Abfrage, keine
+//     `frame`-Anforderung, solange niemand etwas aendert. Die Messung
+//     dazu steht im Kopf von utils/user-settings.ts.
+//
 // SIE RECHNET DIE REGELN NICHT SELBST
 //     Welche Anwendung aufs Home gehoert, was von der Auslieferung
 //     dazukommt, welcher Name auf DIESER Maschine gar nicht installiert
@@ -141,10 +147,18 @@ import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import GioUnix from "gi://GioUnix?version=2.0"
 import { Gtk, Gdk } from "ags/gtk4"
-import { execAsync } from "ags/process"
 import * as Hyprland from "../utils/hyprland"
 import { zepRow, zepDivider } from "../utils/kit"
 import { _ } from "../utils/i18n"
+// Die Einstellungsdatei, aus der Sicht der Oberflaeche - Aufgabe 53
+// (21.08.2026). Bis dahin standen frage(), lies() und schreibe() hier;
+// seit das Dock DIESELBEN Unterbefehle ruft (und "Zum Home hinzufuegen"
+// anbietet), stehen sie in ags/utils/user-settings.ts. Der Kopf dort
+// fuehrt aus, warum nicht eine zweite Fassung daneben.
+import {
+  HomeIcon, beobachteDock, beobachteHome, dockAdd, dockRemove,
+  homeRemove, homeSet,
+} from "../utils/user-settings"
 import { terminalCommand } from "./Dock"
 import { oeffneDenStarter } from "./StarterButton"
 
@@ -180,42 +194,40 @@ const ICON_SIZE = {{STYLE_HOME_ICON_SIZE}}
 //     kein eigener Platzhalter entsteht.
 const EDGE_GAP = {{STYLE_GAPS_OUT}}
 
-const HOME_DIR = GLib.get_home_dir()
-const CONFIG_HOME = GLib.getenv("XDG_CONFIG_HOME") || `${HOME_DIR}/.config`
-const ZEPOS_USER_ROOT = GLib.getenv("ZEPOS_USER_ROOT") || `${CONFIG_HOME}/zepos`
-// Beim Erzeugen eingesetzt: dieses Widget laeuft aus ~/.config/ags und
-// kann nicht wissen, aus welchem Paket es stammt. Dieselbe Zeile steht
-// in ags-style-editor.template und ags-vpn-settings.template.
-const ZEPOS_SYSTEM_ROOT = "{{ZEPOS_SYSTEM_ROOT}}"
-
-// Der eine Befehl, ueber den gelesen UND geschrieben wird.
+// DIE ZEICHEN DER ZWEI MENUES
 //
-// WARUM settings.py UND NICHT zepos-settings-gui --json
-//     Das Dock liest ueber die Bruecke, weil seine Reihenfolge dort ein
-//     Bedienelement der Seite "Leiste" IST. Das Home hat kein solches
-//     Bedienelement, sondern einen eigenen Abschnitt der
-//     Einstellungsdatei - und settings.py ist genau der Weg, den dieses
-//     Projekt fuer GJS-Fenster vorgesehen hat (siehe USAGE dort: "Both
-//     exist for the callers that cannot import this module - the
-//     generator is bash, the AGS dialogs are GJS"). Zwei andere Fenster
-//     schreiben schon so (ags-style-editor, ags-vpn-settings).
-const SETTINGS = ["python3", `${ZEPOS_SYSTEM_ROOT}/settings.py`, "home"]
-
+// DIE REGEL FUER DIE VIER NEUEN PUNKTE, SEIT DEM 21.08.2026
+//     Der Fuss hat sie am 20.08.2026 aufgeschrieben und dabei begruendet,
+//     warum sein "Abnehmen" ein Minus ist und kein Kreuz: "zwei Kreuze
+//     in einem Menue mit zwei verschiedenen Wirkungen sind ein
+//     Bedienfehler mit Ansage". Seit es in EINEM Menue zwei Punkte gibt,
+//     die etwas ENTFERNEN - eines vom Fuss, eines vom Home -, gilt
+//     dieselbe Regel fuer das Minus.
+//
+//     Also: die Punkte, die den FUSS betreffen, behalten Reissnagel und
+//     Minus, die drei Menues seit dem 20.08.2026 dafuer fuehren. Die
+//     Punkte, die das HOME betreffen, tragen den SCHREIBTISCH - in
+//     beide Richtungen dasselbe Zeichen, weil sie nie zusammen in einem
+//     Menue stehen (der Punkt schlaegt um, siehe homePunkt()). Das
+//     Zeichen nennt das ZIEL, der Text die Richtung.
+//
+//     Damit traegt kein Menue dieses Baums zwei gleiche Zeichen mit
+//     zwei Wirkungen - GEPRUEFT in tests/src/test_menue_punkte.py fuer
+//     alle drei Menues auf einmal.
 const ICONS = {
   open: "{{ICON_FOLDER_OPEN}}",
-  remove: "{{ICON_MINUS}}",
+  // Der Fuss: anheften und abnehmen. Wortgleich zu PIN_ICON/UNPIN_ICON
+  // in ags-dock.template und zu pin_icon/unpin_icon in
+  // hyprlaunch-config.template - ein Reissnagel, drei Menues.
+  pin: "{{ICON_PIN}}",
+  unpin: "{{ICON_MINUS}}",
+  // Das Home. Der Schreibtisch, in beide Richtungen.
+  home: "{{ICON_COMPUTER}}",
   starter: "{{ICON_APPS_GRID}}",
   tidy: "{{ICON_SORT}}",
   wallpaper: "{{ICON_WALLPAPER}}",
   settings: "{{ICON_SETTINGS}}",
   unknown: "{{ICON_WINDOW}}",
-}
-
-/** Ein Symbol, wie es in der Einstellungsdatei steht. */
-interface HomeIcon {
-  name: string
-  col?: number
-  row?: number
 }
 
 /** Ein Symbol mit dem Platz, den es HEUTE bekommt. */
@@ -245,79 +257,18 @@ function benennung(name: string, info: GioUnix.DesktopAppInfo | null): string {
 // =====================================================================
 // DIE EINSTELLUNGEN
 // =====================================================================
-
-/** settings.py rufen und die Ausgabe zurueckgeben, oder null.
- *
- * null heisst "nicht geantwortet" und NICHT "nichts abgelegt". Die
- * beiden auseinanderzuhalten ist der ganze Zweck des Rueckgabetyps:
- * eine leere Liste wuerde spaeter geschrieben, ein fehlgeschlagener
- * Lesevorgang darf nichts schreiben. Dasselbe Muster wie
- * gepflegtePins() in ags-dock.template.
- */
-async function frage(argumente: string[]): Promise<string | null> {
-  // UEBER EINE SHELL, WEIL DIE WURZEL MITMUSS - UND DAS IST GEMESSEN
-  //
-  //     GEMESSEN am 20.08.2026 in tests/render/test_home.py: das Home
-  //     stand da und zeigte KEIN EINZIGES Symbol, ohne eine
-  //     Fehlermeldung. settings.py lief, antwortete gueltiges JSON und
-  //     sagte `{"icons": []}` - weil shipped_pins() den Abdruck der
-  //     ausgelieferten Auswahl nicht fand. Es wusste nicht, zu welcher
-  //     Installation es gehoert.
-  //
-  //     ZEPOS_SYSTEM_ROOT beantwortet genau das. src/apps.py sagt es in
-  //     seinem main() ueber denselben Fall: "der Generator reicht ihn in
-  //     der Umgebung durch, damit ein Lauf aus einem Checkout das Rezept
-  //     dieses Checkouts liest und nicht das eines installierten
-  //     Pakets." Dieses Fenster weiss die Wurzel (sie ist beim Erzeugen
-  //     eingesetzt), also reicht es sie weiter, statt sich darauf zu
-  //     verlassen, dass sie zufaellig in der Umgebung steht.
-  //
-  //     GLib.shell_quote um JEDES Stueck - dieselbe Vorsicht wie in
-  //     bruecke() in ags-dock.template. Ein Pfad mit einem Leerzeichen
-  //     waere sonst zwei Argumente.
-  const zeile = [...SETTINGS, ...argumente]
-    .map(teil => GLib.shell_quote(teil)).join(" ")
-  const wurzel = GLib.shell_quote(ZEPOS_SYSTEM_ROOT)
-  try {
-    return await execAsync(
-      ["bash", "-c", `export ZEPOS_SYSTEM_ROOT=${wurzel}; ${zeile}`])
-  } catch (fehler) {
-    console.error("Home: settings.py hat nicht geantwortet:", String(fehler))
-    return null
-  }
-}
-
-/** Was WIRKLICH auf dem Home liegt - gefragt, nicht gerechnet. */
-async function lies(): Promise<HomeIcon[] | null> {
-  const ausgabe = await frage([])
-  if (ausgabe === null) return null
-  try {
-    const plan = JSON.parse(ausgabe)
-    if (!plan || !Array.isArray(plan.icons)) return null
-    // Die Klagen ueber verworfene Namen kommen mit und werden
-    // AUSGESPROCHEN. Ein Name, den es nicht mehr gibt, ist im Home ein
-    // Symbol, das nichts oeffnet - und settings.py hat ihn genau
-    // deshalb schon herausgenommen und begruendet.
-    for (const weg of plan.discarded ?? []) {
-      console.log(`Home: "${weg.name}" liegt nicht mehr auf dem Home (${weg.why})`)
-    }
-    return plan.icons as HomeIcon[]
-  } catch (fehler) {
-    console.error("Home: settings.py hat kein JSON geliefert:", String(fehler))
-    return null
-  }
-}
-
-/** Eine neue Belegung schreiben. Zurueck kommt, ob es geklappt hat.
- *
- * Die Vorgabe, gegen die der Nutzer entschieden hat, schreibt
- * settings.py SELBST mit (home_write() dort) - wer sie von hier aus
- * mitschickte, ueberschriebe genau die Zahl, an der spaeter haengt, ob
- * eine neu ausgelieferte Anwendung erscheinen darf.
- */
-async function schreibe(argumente: string[]): Promise<boolean> {
-  return (await frage(argumente)) !== null
-}
+//
+// HIER STAND BIS ZUM 21.08.2026 frage(), lies() UND schreibe()
+//     Drei Funktionen, die settings.py riefen und seine Antwort lasen.
+//     Sie stehen jetzt in ags/utils/user-settings.ts, weil das Dock
+//     dieselben Unterbefehle ruft, seit sein Menue "Zum Home
+//     hinzufuegen" anbietet - und weil beide Fenster ueber DENSELBEN
+//     Gio.FileMonitor erfahren, dass jemand anders die Datei geaendert
+//     hat. Der Kopf dort fuehrt beides aus.
+//
+//     Zurueck bleibt hier nichts als der Aufruf. Das ist die Absicht:
+//     dieses Fenster entscheidet, WAS auf dem Home liegt, und nicht,
+//     wie eine Einstellungsdatei gelesen wird.
 
 // =====================================================================
 // DIE ANWENDUNG HINTER EINEM NAMEN
@@ -578,8 +529,6 @@ function zeigeMenue(anker: Gtk.Widget, eintraege: MenueEintrag[],
 
 export interface HomeHandle {
   windows: Astal.Window[]
-  /** Neu einlesen und neu zeichnen - fuer einen Schreiber von aussen. */
-  refresh: () => void
 }
 
 /** Das Home.
@@ -596,13 +545,24 @@ export default function Home(
   const windows: Astal.Window[] = []
   if (!display) {
     console.error("Keine Anzeige - es gibt kein Home")
-    return { windows, refresh: () => {} }
+    return { windows }
   }
 
   // Der Zustand: was zuletzt gelesen wurde. Er steht hier und nicht in
   // einem Modul-Feld, damit zwei Homes (falls je zwei entstehen) sich
   // nicht ins Gehege kommen.
   let icons: HomeIcon[] = []
+
+  // Was zuletzt GEZEICHNET wurde, als Text. Ein Text und keine Liste,
+  // weil verglichen und nicht gerechnet wird - dieselbe Ueberlegung, aus
+  // der `angefordert` in ags-dock.template "BxH" ist und nicht zwei
+  // Zahlen. Wozu er da ist, steht bei uebernimm().
+  let gezeichnet = ""
+
+  // Was im FUSS steht. Nicht der Zustand dieses Fensters, sondern der
+  // des anderen - gebraucht fuer die Richtung des Menuepunkts (siehe
+  // dockPunkt()) und frisch gehalten von derselben Ueberwachung.
+  let dockNamen: string[] = []
 
   const monitors = display.get_monitors()
 
@@ -849,18 +809,80 @@ export default function Home(
           tun: () => starte(info),
         })
       }
+      // DER PUNKT, DER SEIT DEM 21.08.2026 HIER STEHT
+      //
+      //     BESTELLT, woertlich: "rechtsklick auf ags home icons 'zum
+      //     dock hinzufügen' und 'entfernen von home'. das gleiche muss
+      //     bei der dock auch funktionieren, weil ich nicht jedes icon
+      //     auf der dock oder auf dem home haben will."
+      //
+      //     Der letzte Halbsatz ist die Begruendung: Fuss und Home sind
+      //     zwei getrennte Auswahlen. Ohne diesen Punkt liesse sich ein
+      //     Symbol nur in EINE Richtung bewegen.
+      //
+      //     Der Auftrag zum Home hat ihn am 20.08.2026 weggelassen, weil
+      //     er "die dritte Abschrift von bruecke()" gebraucht haette.
+      //     Er braucht sie nicht mehr: `settings.py dock add|remove`
+      //     macht Lesen, Rechnen und Schreiben in einem Prozess, und
+      //     dieses Fenster ruft es ueber dasselbe Modul wie alles
+      //     andere.
+      eintraege.push(dockPunkt(platz.icon.name))
       eintraege.push({
-        symbol: ICONS.remove,
+        // Der Schreibtisch und nicht mehr das Minus - siehe die Regel
+        // bei ICONS: eine Zeile darueber kann jetzt "Vom Dock
+        // entfernen" stehen, und zwei Minus mit zwei Wirkungen sind
+        // genau der Bedienfehler, den ags-dock.template fuer sein
+        // Kreuz schon einmal aufgeschrieben hat.
+        symbol: ICONS.home,
         text: _("Remove from Home"),
-        tun: () => {
-          void schreibe(["remove", platz.icon.name]).then(ok => {
-            if (ok) refresh()
-          })
-        },
+        // OHNE EIGENES NEUZEICHNEN, seit dem 21.08.2026: die Aenderung
+        // kommt ueber die Ueberwachung der Einstellungsdatei zurueck,
+        // genau wie eine Aenderung aus dem Fuss oder aus dem Starter.
+        // Ein Aufruf hier waere ein ZWEITER Weg zum selben Neuzeichnen -
+        // und der eine, den nur der eigene Schreibvorgang nimmt, waere
+        // der einzige, der je gepflegt wuerde.
+        tun: () => void homeRemove(platz.icon.name),
       })
       zeigeMenue(knopf, eintraege)
     })
     knopf.add_controller(geste)
+  }
+
+  /** Der Punkt, der dieses Programm an den Fuss heftet - oder abnimmt.
+   *
+   * ER SCHLAEGT UM UND WIRD NICHT AUSGEGRAUT
+   *     Drei Antworten waren moeglich auf "was, wenn es schon im Fuss
+   *     steht": den Punkt trotzdem zeigen (er taete nichts - Spec §7.4
+   *     verbietet genau das), ihn ausblenden (ein Rechtsklick, der mal
+   *     einen Punkt hat und mal nicht), oder die Gegenrichtung
+   *     anbieten.
+   *
+   *     Die dritte ist die einzige, die immer etwas sagt, und sie ist
+   *     nicht erfunden: der Starter traegt seit dem 20.08.2026 genau
+   *     diesen Umschlag (43b8b25), und der Fuss traegt beide Haelften
+   *     unter denselben zwei Namen. Ausgegraut gibt es in diesem Haus
+   *     ueberhaupt nicht - der Kopf von ags-dock.template sagt es fuer
+   *     seinen Fall: "eine fehlende Anwendung im Fuss bekommt keinen
+   *     ausgegrauten Knopf".
+   *
+   * `dockNamen` ist der Stand, den DIESE Sitzung zuletzt gelesen hat -
+   * frisch gehalten von derselben Ueberwachung, die auch die Symbole
+   * frisch haelt (beobachteDock()). Ein Lesevorgang beim Aufklappen
+   * waere ein Menue, das 40 ms auf sich warten laesst.
+   */
+  function dockPunkt(name: string): MenueEintrag {
+    if (dockNamen.includes(name)) {
+      return {
+        symbol: ICONS.unpin,
+        text: _("Remove from dock"),
+        tun: () => void dockRemove(name),
+      }
+    }
+    return {
+      symbol: ICONS.pin,
+      text: _("Add to dock"),
+      tun: () => void dockAdd(name),
+    }
   }
 
   function rechtsklickAufDieFlaeche(fixed: Gtk.Fixed): void {
@@ -951,9 +973,10 @@ export default function Home(
       col: Math.floor(stelle / zeilen),
       row: stelle % zeilen,
     }))
-    void schreibe(["set", JSON.stringify(geordnet)]).then(ok => {
-      if (ok) refresh()
-    })
+    // Ohne eigenes Neuzeichnen - die Ueberwachung der Einstellungsdatei
+    // bringt die neue Belegung zurueck, genau wie bei jedem anderen
+    // Schreiber. Siehe den Punkt "Vom Home entfernen" weiter oben.
+    void homeSet(geordnet)
   }
 
   // ===================================================================
@@ -1021,9 +1044,7 @@ export default function Home(
       const neu = flaeche.gelegt.map(p => p.icon.name === name
         ? { name, col, row }
         : { name: p.icon.name, col: p.col, row: p.row })
-      void schreibe(["set", JSON.stringify(neu)]).then(ok => {
-        if (ok) refresh()
-      })
+      void homeSet(neu)
       return true
     })
     flaeche.fixed.add_controller(ziel)
@@ -1037,21 +1058,27 @@ export default function Home(
   // LESEN UND NEU ZEICHNEN
   // ===================================================================
 
-  function refresh(): void {
-    void lies().then(gelesen => {
-      // null heisst "settings.py hat nicht geantwortet" - dann bleibt
-      // stehen, was da ist. Ein leeres Home an dieser Stelle waere ein
-      // Home, das der naechste Schreibvorgang festschreibt.
-      if (!gelesen) return
-      icons = gelesen
-      // Neu einlesen heisst: es kann sich etwas geaendert haben, auch an
-      // den installierten Anwendungen. Der Zwischenspeicher faellt
-      // deshalb hier und nur hier - bei einer blossen
-      // Groessenaenderung waere er ein zweites Mal aufzustellen, ohne
-      // dass sich etwas geaendert haben koennte.
-      verwirfIndex()
-      zeichne()
-    })
+  /** Was auf dem Home liegt, ist neu gelesen worden. */
+  function uebernimm(gelesen: HomeIcon[]): void {
+    // NUR NEU ZEICHNEN, WENN ES ETWAS ZU ZEICHNEN GIBT - seit dem
+    // 21.08.2026, und das ist der Preis der Ueberwachung: dieser
+    // Rueckruf laeuft jetzt auch nach dem EIGENEN Schreibvorgang (siehe
+    // beobachteHome() in utils/user-settings.ts) und nach jeder
+    // Aenderung, die gar nicht das Home betrifft - eine Farbe, eine
+    // Groesse, eine Anheftung. Ohne diesen Vergleich baute das Home bei
+    // jeder davon jeden Knopf neu, mitsamt Ziehquelle und Menuegeste,
+    // und zwar mitten unter dem Zeiger des Nutzers.
+    const wie = JSON.stringify(gelesen)
+    if (wie === gezeichnet) return
+    gezeichnet = wie
+    icons = gelesen
+    // Neu einlesen heisst: es kann sich etwas geaendert haben, auch an
+    // den installierten Anwendungen. Der Zwischenspeicher faellt
+    // deshalb hier und nur hier - bei einer blossen Groessenaenderung
+    // waere er ein zweites Mal aufzustellen, ohne dass sich etwas
+    // geaendert haben koennte.
+    verwirfIndex()
+    zeichne()
   }
 
   // Neu zeichnen, wenn sich die Flaeche aendert - genau der Fall aus
@@ -1082,7 +1109,7 @@ export default function Home(
   //
   //     Die Surface gibt es erst nach dem Abbilden, also wird sie im
   //     "map" geholt. Dort wird auch einmal gezeichnet: beim ersten
-  //     refresh() ist die Flaeche noch 0x0, und zeichnen kann man erst,
+  //     Lesevorgang ist die Flaeche noch 0x0, und zeichnen kann man erst,
   //     wenn es eine Flaeche gibt.
   //
   // Kein Zeitgeber: die Meldung kommt vom Compositor ueber GTK, und
@@ -1130,7 +1157,31 @@ export default function Home(
 
   for (const flaeche of flaechen) verfolgeGroesse(flaeche.window)
 
-  refresh()
+  // DASS EINE FREMDE AENDERUNG HIER ANKOMMT - seit dem 21.08.2026
+  //
+  //     GEMELDET aus 0.1.7: "wenn ich es dort mit der dock versuche dann
+  //     passiert nichts". Es galt in beide Richtungen: wer im Fuss oder
+  //     im Starter etwas an den Symbolen aenderte, sah davon auf dem
+  //     Home nichts, bis er sich neu anmeldete.
+  //
+  //     Der Grund war einfach und stand nirgends: gelesen wurde genau
+  //     dreimal - beim Bauen, nach einem EIGENEN Schreibvorgang und
+  //     sonst nie. Die Datei aendert sich aber auch, wenn ein anderes
+  //     Fenster sie aendert.
+  //
+  //     Kein Zeitgeber und kein Abonnement bei einem anderen Fenster:
+  //     ein Gio.FileMonitor meldet sich, statt gefragt zu werden, und
+  //     erreicht damit auch den Starter, der von AGS nichts weiss. Die
+  //     Messung dazu (ein Ereignis je Schreibvorgang, 0 % im Leerlauf)
+  //     steht im Kopf von utils/user-settings.ts.
+  //
+  //     BEIDE Listen, und die zweite ist keine Zugabe: an ihr haengt,
+  //     in welche Richtung der Menuepunkt zeigt (siehe dockPunkt()).
+  //     Sie wird hier mitgelesen und nicht beim Aufklappen - ein Menue,
+  //     das erst nach einem Unterprozess erscheint, fuehlt sich an wie
+  //     eines, das haengt.
+  beobachteHome(uebernimm)
+  beobachteDock(pins => { dockNamen = pins })
 
-  return { windows, refresh }
+  return { windows }
 }

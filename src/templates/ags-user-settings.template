@@ -1,0 +1,546 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Die Einstellungsdatei, aus der Sicht der Oberflaeche
+// Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+// Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/ags-user-settings.template kopieren
+//
+// Erzeugt nach ags/utils/user-settings.ts. Kein Fenster, sondern das,
+// worueber Fenster die Einstellungen des Nutzers lesen, aendern und
+// voneinander erfahren.
+//
+// =====================================================================
+// WARUM ES DIESE DATEI SEIT DEM 21.08.2026 GIBT
+// =====================================================================
+//
+// DER AUFTRAG, WOERTLICH (21.08.2026)
+//     "was noch fehlt: rechtsklick auf ags home icons 'zum dock
+//     hinzufügen' und 'entfernen von home'. das gleiche muss bei der
+//     dock auch funktionieren, weil ich nicht jedes icon auf der dock
+//     oder auf dem home haben will."
+//
+//     und, aus dem laufenden 0.1.7:
+//
+//     "auch im ags launcher bzw hyprlauncher kann ich nicht mit
+//     rechtsklick zu home hinzufügen, und wenn ich es dort mit der dock
+//     versuche dann passiert nichts"
+//
+// DREI MENUES, DIE DASSELBE AENDERN - UND DIE ABSCHRIFT, DIE DROHTE
+//     Am 20.08.2026 hat das Dock sein Rechtsklick-Menue bekommen
+//     (0f64a7f) und dafuer `bruecke()` gebaut: sechs Zeilen, die
+//     `zepos-settings-gui --json` rufen. Der Starter hat sie am selben
+//     Tag ein zweites Mal bekommen, in C++ (43b8b25). Das Home hat
+//     "Zum Dock hinzufuegen" DESHALB nicht bekommen - der Auftrag dazu
+//     hat es ausdruecklich weggelassen, mit der Begruendung, "es
+//     braeuchte die dritte Abschrift von bruecke()".
+//
+//     Die Abschrift war nie das eigentliche Problem. Was dreimal
+//     dastuende, sind nicht sechs Zeilen execAsync, sondern die REGEL:
+//     bar.dock_pins ist eine ERSATZliste, also heisst anheften lesen,
+//     anhaengen, ganz zurueckschreiben - und dabei muss jeder Aufrufer
+//     an zwei Dinge denken, die man einmal vergisst:
+//
+//       ZUERST LESEN      sonst nimmt er eine Aenderung aus dem
+//                         Einstellungsfenster still zurueck
+//       BEI EINEM FEHL-
+//       SCHLAG NICHTS
+//       SCHREIBEN         sonst loescht er dem Nutzer jedes Symbol, das
+//                         er je angeheftet hat
+//
+//     Der Auftrag zum Home hat fuer seine Seite bereits die richtige
+//     Antwort gegeben und sie auch aufgeschrieben (src/settings.py,
+//     _home_command()): "drei Aufrufer, die je daran denken muessten,
+//     sind zwei, die es einmal vergessen." Seit dem 21.08.2026 gilt
+//     dasselbe fuer das Dock - `settings.py dock add|remove` macht das
+//     Lesen, Rechnen und Schreiben in EINEM Prozess.
+//
+//     Damit bleibt fuer diese Datei genau eine Aufgabe: den Befehl
+//     rufen. Sie tut es EINMAL fuer beide Fenster dieses Prozesses,
+//     statt dass Dock und Home je eine eigene Fassung tragen.
+//
+// WAS DER STARTER TUT, UND WARUM ER TROTZDEM NICHT HIER STEHT
+//     hyprlaunch ist ein eigenes Programm in C++ und kann kein
+//     TypeScript-Modul importieren. Es ruft DIESELBEN Unterbefehle
+//     (AppDiscovery.cpp im Patch unter packaging/zepos-hyprlaunch/).
+//     Geteilt ist damit das, was geteilt werden kann - die Regel, nicht
+//     der Aufruf.
+//
+// =====================================================================
+// WARUM settings.py UND NICHT zepos-settings-gui --json
+// =====================================================================
+//
+//     Bis zum 21.08.2026 nahm das Dock den Weg ueber die Bruecke, weil
+//     seine Reihenfolge dort ein Bedienelement der Seite "Leiste" IST.
+//     Das Home nahm den Weg ueber settings.py, weil es kein solches
+//     Bedienelement hat. Beide Begruendungen waren richtig, und zusammen
+//     ergaben sie zwei Wege zu einer Datei.
+//
+//     Es ist jetzt einer, und zwar der von settings.py, aus drei
+//     Gruenden:
+//
+//       * settings.py IST der Weg, den dieses Projekt fuer Aufrufer
+//         vorgesehen hat, die es nicht importieren koennen. Seine USAGE
+//         sagt es selbst: "Both exist for the callers that cannot
+//         import this module - the generator is bash, the AGS dialogs
+//         are GJS".
+//       * `--json get` antwortet mit dem GANZEN Einstellungsfenster -
+//         GEMESSEN am 21.08.2026: 46231 Bytes, und die Anheftungen
+//         liegen darin drei Ebenen tief. `settings.py dock` antwortet
+//         mit der Liste.
+//       * Der Starter braucht denselben Weg, und ein Weg, den ein
+//         C++-Programm gehen kann, ist einer ohne json-glib-Turnerei
+//         durch sieben Seiten.
+//
+//     GERECHNET WIRD DABEI NICHT ANDERS. settings.dock_plan() ruft
+//     genau die vier Funktionen, die die Bruecke fuer dasselbe
+//     Bedienelement ruft (bar_choice, dock_effective, pinnable,
+//     bar_order) - es ist dieselbe Antwort aus denselben Funktionen und
+//     keine zweite.
+//
+// =====================================================================
+// DASS EIN FENSTER VOM ANDEREN ERFAEHRT
+// =====================================================================
+//
+// DER FEHLER, DEN DAS BEHEBT - GEMELDET AUS 0.1.7
+//     "wenn ich es dort mit der dock versuche dann passiert nichts".
+//
+//     Der Starter hat richtig geschrieben; die Anheftung stand in
+//     user-settings.json. Nur hat es niemandem jemand gesagt. Das Dock
+//     horchte allein auf Hyprland (Fenster gehen auf und zu) und baute
+//     seine Reihe nur dann neu, wenn es SELBST etwas geschrieben hatte.
+//     Von aussen kam nichts an - `grep` nach FileMonitor, watch oder
+//     reload ueber ags-dock.template fand am 21.08.2026 null Treffer.
+//
+// WARUM EINE DATEIUEBERWACHUNG UND KEIN SIGNAL
+//     Es sind DREI Schreiber und DREI Leser, und einer davon ist ein
+//     C++-Programm ohne jede AGS-Anbindung. Ein Signal ueber `ags
+//     request` erreichte nur die zwei TypeScript-Fenster; der Starter
+//     muesste den Aufruf kennen, und das Einstellungsfenster (ein
+//     vierter Schreiber, ebenfalls ohne AGS) auch. Jeder neue Schreiber
+//     muesste daran denken - dieselbe Falle wie beim Schreibweg oben,
+//     nur eine Ebene hoeher.
+//
+//     Die DATEI dagegen aendert sich, egal wer sie schreibt. Wer sie
+//     ueberwacht, braucht von den Schreibern nichts zu wissen.
+//
+// WAS SIE IM LEERLAUF KOSTET: NICHTS, UND DAS IST GEMESSEN
+//     Ein Gio.FileMonitor ist inotify und kein Zeitgeber - er meldet
+//     sich, statt gefragt zu werden. Das Home hat 0,00 % im Leerlauf
+//     (siehe den Kopf von ags-home.template) und behaelt sie.
+//
+//     GEMESSEN am 21.08.2026 mit einem gjs-Probeprogramm auf genau
+//     diesen Monitor, gegen drei aufeinanderfolgende Schreibvorgaenge
+//     von settings.py:
+//
+//         1008.3 ms  ereignis=8 (RENAMED)   nr=1
+//         2043.9 ms  ereignis=8 (RENAMED)   nr=2
+//         3080.9 ms  ereignis=8 (RENAMED)   nr=3
+//         SUMME 3
+//
+//     GENAU EIN Ereignis je Schreibvorgang, und der Monitor ueberlebt
+//     das Ersetzen der Datei. Beides war zu pruefen und nicht
+//     anzunehmen: settings.save() schreibt in eine frische Datei und
+//     zieht sie mit os.replace() darueber (siehe dort, "no other
+//     process can hand us one at a looser mode"), der ueberwachte
+//     Inode ist danach also ein anderer. Deshalb steht hier KEINE
+//     Entprellung - eine Zahl, die es nicht braucht, waere eine Zahl,
+//     die jemand spaeter erklaeren muss.
+//
+//     GEMESSEN am selben Tag: der Monitor meldet auch, wenn die Datei
+//     beim Anmelden noch gar nicht da war (frische Installation) -
+//     1119.6 ms, ereignis=8, auf ein Verzeichnis ohne
+//     user-settings.json.
+//
+// WER SICH SELBST HOERT
+//     Ja - wer schreibt, bekommt sein eigenes Ereignis zurueck. Das ist
+//     Absicht und kostet nichts: die Aufrufer vergleichen, was sie
+//     gelesen haben, mit dem, was sie zeigen, und bauen nur bei einem
+//     Unterschied neu. Ein Monitor, der den eigenen Schreibvorgang
+//     ausblenden wollte, muesste sich merken, wann er zuletzt
+//     geschrieben hat - und laege daneben, sobald zwei Aenderungen
+//     dicht aufeinander folgen.
+
+import Gio from "gi://Gio"
+import GLib from "gi://GLib"
+import { execAsync } from "ags/process"
+
+// Beim Erzeugen eingesetzt: dieses Modul laeuft aus ~/.config/ags und
+// kann nicht wissen, aus welchem Paket es stammt. Dieselbe Zeile steht
+// in ags-style-editor.template und ags-vpn-settings.template.
+const ZEPOS_SYSTEM_ROOT = "{{ZEPOS_SYSTEM_ROOT}}"
+
+const HOME_DIR = GLib.get_home_dir()
+const CONFIG_HOME = GLib.getenv("XDG_CONFIG_HOME") || `${HOME_DIR}/.config`
+// Die Wurzel BLEIBT eine Laufzeitfrage und ist ausdruecklich kein
+// Platzhalter - src/template_processor.py sagt warum: "Only the SYSTEM
+// root is baked in. The user root deliberately stays a run-time default
+// in the artifacts: it follows XDG_CONFIG_HOME, which an artifact can
+// read for itself and which may legitimately differ between generating
+// and running."
+const ZEPOS_USER_ROOT = GLib.getenv("ZEPOS_USER_ROOT") || `${CONFIG_HOME}/zepos`
+
+// Der Dateiname steht in src/settings.py (FILENAME) und hier - wie in
+// ags-vpn.template, das dieselbe Datei aus demselben Grund selbst
+// findet. Es ist ein NAME und keine Einstellung; wer ihn aendert,
+// aendert ihn in settings.py, und dann faellt tests/src/test_settings.py
+// darueber, das beide gegeneinander haelt.
+const SETTINGS_FILE = `${ZEPOS_USER_ROOT}/user-settings.json`
+
+const SETTINGS = ["python3", `${ZEPOS_SYSTEM_ROOT}/settings.py`]
+
+/** Ein Symbol, wie es in der Einstellungsdatei steht. */
+export interface HomeIcon {
+  name: string
+  col?: number
+  row?: number
+}
+
+/** Ein Name, der herausgefallen ist, und warum. */
+export interface Verworfen {
+  name: string
+  why: string
+}
+
+/** Was WIRKLICH im Fuss steht. */
+export interface DockPlan {
+  pins: string[]
+  discarded: Verworfen[]
+  chosen: boolean
+}
+
+/** Was WIRKLICH auf dem Home liegt. */
+export interface HomePlan {
+  icons: HomeIcon[]
+  discarded: Verworfen[]
+  chosen: boolean
+}
+
+/** settings.py rufen und die Ausgabe zurueckgeben, oder null.
+ *
+ * null heisst "nicht geantwortet" und NICHT "nichts eingestellt". Die
+ * beiden auseinanderzuhalten ist der ganze Zweck des Rueckgabetyps:
+ * eine leere Liste wuerde gezeigt und beim naechsten Anheften
+ * festgeschrieben, ein fehlgeschlagener Lesevorgang darf nichts
+ * bewirken.
+ *
+ * UEBER EINE SHELL, WEIL DIE WURZEL MITMUSS - UND DAS IST GEMESSEN
+ *     GEMESSEN am 20.08.2026 in tests/render/test_home.py: das Home
+ *     stand da und zeigte KEIN EINZIGES Symbol, ohne eine
+ *     Fehlermeldung. settings.py lief, antwortete gueltiges JSON und
+ *     sagte `{"icons": []}` - weil shipped_pins() den Abdruck der
+ *     ausgelieferten Auswahl nicht fand. Es wusste nicht, zu welcher
+ *     Installation es gehoert.
+ *
+ *     ZEPOS_SYSTEM_ROOT beantwortet genau das. src/apps.py sagt es in
+ *     seinem main() ueber denselben Fall: "der Generator reicht ihn in
+ *     der Umgebung durch, damit ein Lauf aus einem Checkout das Rezept
+ *     dieses Checkouts liest und nicht das eines installierten Pakets."
+ *
+ *     GLib.shell_quote um JEDES Stueck: ein Pfad mit einem Leerzeichen
+ *     waere sonst zwei Argumente, und ein Anwendungsname aus einer
+ *     fremden .desktop-Datei darf jedes Zeichen tragen, das UTF-8
+ *     hergibt.
+ */
+async function frage(argumente: string[]): Promise<string | null> {
+  const zeile = [...SETTINGS, ...argumente]
+    .map(teil => GLib.shell_quote(teil)).join(" ")
+  const wurzel = GLib.shell_quote(ZEPOS_SYSTEM_ROOT)
+  try {
+    return await execAsync(
+      ["bash", "-c", `export ZEPOS_SYSTEM_ROOT=${wurzel}; ${zeile}`])
+  } catch (fehler) {
+    // execAsync verwirft bei jedem Rueckgabewert ungleich 0. Genau das
+    // ist hier richtig: settings.py endet mit 1, wenn die Datei nicht
+    // zu lesen ist, und mit 2 bei einem falschen Argument - in beiden
+    // Faellen hat es NICHTS geschrieben und sagt es auf STDERR.
+    console.error("Einstellungen: settings.py hat nicht geantwortet:",
+                  String(fehler))
+    return null
+  }
+}
+
+/** Ein Plan, aus JSON gelesen. null heisst "nicht geantwortet". */
+async function plan<T>(argumente: string[], feld: string): Promise<T | null> {
+  const ausgabe = await frage(argumente)
+  if (ausgabe === null) return null
+  try {
+    const gelesen = JSON.parse(ausgabe)
+    if (!gelesen || !Array.isArray(gelesen[feld])) return null
+    // Die Klagen ueber verworfene Namen kommen mit und werden
+    // AUSGESPROCHEN. Ein Name, den es nicht mehr gibt, ist im Fuss ein
+    // Knopf, der nichts oeffnet, und auf dem Home ein Symbol, das
+    // nichts startet - settings.py hat ihn genau deshalb schon
+    // herausgenommen UND begruendet.
+    for (const weg of gelesen.discarded ?? []) {
+      console.log(`Einstellungen: "${weg.name}" faellt weg (${weg.why})`)
+    }
+    return gelesen as T
+  } catch (fehler) {
+    console.error("Einstellungen: settings.py hat kein JSON geliefert:",
+                  String(fehler))
+    return null
+  }
+}
+
+/** Was WIRKLICH im Fuss steht - gefragt, nicht gerechnet.
+ *
+ * NICHT exportiert: wer die Liste braucht, meldet sich mit
+ * beobachteDock() an und bekommt sie dann UND bei jeder Aenderung.
+ * Ein zweiter Weg daneben waere ein Fenster, das einmal liest und
+ * danach nichts mehr erfaehrt - genau der Fehler aus 0.1.7.
+ */
+async function dockPlan(): Promise<DockPlan | null> {
+  return plan<DockPlan>(["dock"], "pins")
+}
+
+/** Was WIRKLICH auf dem Home liegt. Nicht exportiert, siehe oben. */
+async function homePlan(): Promise<HomePlan | null> {
+  return plan<HomePlan>(["home"], "icons")
+}
+
+/** Eine Aenderung schreiben. Zurueck kommt, ob sie angekommen ist.
+ *
+ * Die Vorgabe, gegen die der Nutzer entschieden hat (dock_baseline,
+ * home.baseline), schreibt settings.py SELBST mit - wer sie von hier
+ * aus mitschickte, ueberschriebe genau die Liste, an der spaeter
+ * haengt, ob eine neu ausgelieferte Anwendung erscheinen darf.
+ */
+async function aendere(argumente: string[]): Promise<boolean> {
+  return (await frage(argumente)) !== null
+}
+
+/** Ans Dock heften. Steht der Name schon dort, geschieht nichts - und
+ * das ist kein Fehler (settings.py endet mit 0 und schreibt nicht). */
+export async function dockAdd(name: string): Promise<boolean> {
+  return aendere(["dock", "add", name])
+}
+
+export async function dockRemove(name: string): Promise<boolean> {
+  return aendere(["dock", "remove", name])
+}
+
+export async function homeAdd(name: string): Promise<boolean> {
+  return aendere(["home", "add", name])
+}
+
+export async function homeRemove(name: string): Promise<boolean> {
+  return aendere(["home", "remove", name])
+}
+
+/** Die ganze Belegung des Homes setzen - der Weg des Homes selbst,
+ * wenn dort etwas gezogen oder aufgeraeumt wurde. */
+export async function homeSet(icons: HomeIcon[]): Promise<boolean> {
+  return aendere(["home", "set", JSON.stringify(icons)])
+}
+
+// =====================================================================
+// DIE UEBERWACHUNG
+// =====================================================================
+
+// Die Monitore leben so lange wie der Prozess. Sie stehen in einem
+// Modul-Feld und nicht nur in einer lokalen Veraenderlichen, weil GJS
+// ein GObject einsammelt, sobald niemand mehr darauf zeigt - ein
+// Monitor, den nur seine eigene Signalverbindung am Leben haelt, hoert
+// irgendwann still auf zu melden.
+const monitore: Gio.FileMonitor[] = []
+
+/** Eine Wache anlegen, oder null. Die Klage steht im Protokoll.
+ *
+ * WATCH_MOVES, weil settings.save() die Datei nicht beschreibt, sondern
+ * eine frische darueberzieht (os.replace). GEMESSEN am 21.08.2026: das
+ * Ereignis ist dann RENAMED (8), genau eines je Schreibvorgang - die
+ * Zahlen stehen im Kopf dieser Datei.
+ */
+function wache(ziel: Gio.File, ordner: boolean): Gio.FileMonitor | null {
+  try {
+    const monitor = ordner
+      ? ziel.monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES, null)
+      : ziel.monitor_file(Gio.FileMonitorFlags.WATCH_MOVES, null)
+    // Am Leben halten - siehe den Kopf bei `monitore`.
+    monitore.push(monitor)
+    return monitor
+  } catch (fehler) {
+    // Kein Abbruch der Sitzung: ohne Ueberwachung bleibt alles beim
+    // Stand des letzten Lesevorgangs, und das ist genau das Verhalten
+    // von vor dem 21.08.2026. Es gehoert ins Protokoll, weil sonst
+    // niemand erfuehre, warum eine Aenderung nicht ankommt.
+    console.error(`Einstellungen: keine Ueberwachung fuer `
+                  + `${ziel.get_path()}: ${String(fehler)}`)
+    return null
+  }
+}
+
+/** Auf die Einstellungsdatei horchen. `folge` bei jeder Aenderung.
+ *
+ * DER ORDNER MUSS ES GEBEN, SONST WIRD ES LANGSAM - UND DAS IST GEMESSEN
+ *     inotify horcht auf einen ORDNER und filtert nach dem Namen darin.
+ *     Gibt es den Ordner nicht, kann GIO keine Wache setzen und faellt
+ *     auf ein regelmaessiges Nachsehen zurueck.
+ *
+ *     GEMESSEN am 21.08.2026 mit einem gjs-Probeprogramm: Wache auf
+ *     <ordner>/user-settings.json bei t=0, `settings.py dock add` bei
+ *     t=1000 ms, gemessen wird, wann die Meldung kommt.
+ *
+ *         Ordner vorhanden                    1008.3 ms  (RENAMED)
+ *         Ordner fehlt, Wache nur auf die
+ *         Datei                               4726.3 ms  (CREATED)
+ *         Ordner fehlt, mit dem Rueckfall
+ *         auf den Vorfahren                   1005.9 ms
+ *
+ *     Fast VIER SEKUNDEN Verzug, und zwar genau beim ersten Mal -
+ *     naemlich dann, wenn ein Nutzer zum allerersten Mal etwas anheftet
+ *     und $XDG_CONFIG_HOME/zepos dabei ueberhaupt erst entsteht.
+ *     "Sofort sichtbar" ist das nicht. Der Fehlschlag ist ausserdem
+ *     nicht theoretisch: tests/render/test_home.py hat ihn am selben
+ *     Tag gefunden - dort gibt es den Ordner beim Start der Oberflaeche
+ *     nicht, und nach sechs Sekunden hatte sich auf dem Bild NICHTS
+ *     geaendert.
+ *
+ *     Also: fehlt der Ordner, wird auf seinen naechsten vorhandenen
+ *     VORFAHREN gehorcht (~/.config gibt es immer, sonst gaebe es
+ *     diesen Prozess nicht) und die Wache neu gesetzt, sobald er
+ *     auftaucht. Danach folgt ein Lesevorgang, weil der Schreibvorgang,
+ *     der den Ordner angelegt hat, die Datei im selben Zug hingelegt
+ *     hat - ohne ihn faende die neue Wache nichts mehr zu melden.
+ */
+function horche(folge: () => void): void {
+  const datei = Gio.File.new_for_path(SETTINGS_FILE)
+  const ordner = datei.get_parent()
+
+  if (ordner && !ordner.query_exists(null)) {
+    let vorfahre: Gio.File | null = ordner.get_parent()
+    while (vorfahre && !vorfahre.query_exists(null)) {
+      vorfahre = vorfahre.get_parent()
+    }
+    if (!vorfahre) {
+      console.error(`Einstellungen: weder ${SETTINGS_FILE} noch ein `
+                    + `Verzeichnis darueber gibt es - keine Ueberwachung`)
+      return
+    }
+    const draussen = wache(vorfahre, true)
+    if (!draussen) return
+    let umgestellt = false
+    draussen.connect("changed", () => {
+      if (umgestellt || !ordner.query_exists(null)) return
+      umgestellt = true
+      horche(folge)
+      folge()
+    })
+    return
+  }
+
+  const monitor = wache(datei, false)
+  if (!monitor) return
+  monitor.connect("changed", () => folge())
+}
+
+// =====================================================================
+// WER WAS ERFAHREN WILL
+// =====================================================================
+//
+// EIN LESEVORGANG FUER ALLE, UND NICHT EINER JE FENSTER
+//     Das Dock und das Home laufen im selben Prozess, und beide wollen
+//     BEIDE Listen wissen: jedes zeichnet seine eigene, und jedes
+//     braucht die andere fuer die Richtung seines Menuepunktes ("Zum
+//     Home hinzufuegen" oder "Vom Home entfernen"). Vier Anmeldungen,
+//     und wenn jede fuer sich lesen wuerde, waeren das VIER
+//     Unterprozesse je Aenderung.
+//
+//     Hier liest das Modul: einmal `settings.py dock`, einmal
+//     `settings.py home`, und das Ergebnis geht an alle, die es hoeren
+//     wollen.
+//
+// NUR DIE JUENGSTE ANTWORT ZAEHLT - UND DAS IST GEMESSEN
+//     GEMESSEN am 21.08.2026 in tests/render/test_home.py: fuenfzehn
+//     `settings.py home remove` hintereinander (rund 540 ms), und das
+//     Home stand danach mit FUENF Symbolen da statt mit keinem. Die
+//     Zahl schwankte von Lauf zu Lauf (2018 und 1009 abweichende
+//     Bildpunkte).
+//
+//     Der Grund ist keine verlorene Meldung - die kamen alle, GEMESSEN
+//     mit demselben Probeprogramm (sechs Schreibvorgaenge, sechs
+//     Meldungen; GIOs `rate_limit` von 800 ms gilt fuer die
+//     abfragenden Rueckfaelle und nicht fuer inotify). Der Grund ist,
+//     dass jede Meldung einen eigenen Unterprozess startete und die
+//     Antworten in BELIEBIGER Reihenfolge zurueckkamen: gezeichnet
+//     wurde, was zuletzt ANTWORTETE, und nicht, was zuletzt in der
+//     Datei stand.
+//
+//     `lauf` ist die Nummer des juengsten Lesevorgangs. Eine Antwort,
+//     die nicht mehr die juengste ist, wird weggeworfen - es ist
+//     bereits ein neuerer unterwegs, und der hat die Datei NACH dem
+//     letzten Schreibvorgang gelesen.
+
+type DockFolge = (pins: string[]) => void
+type HomeFolge = (icons: HomeIcon[]) => void
+
+const dockFolgen: DockFolge[] = []
+const homeFolgen: HomeFolge[] = []
+
+let lauf = 0
+let geplant = false
+let wacht = false
+
+function lies(): void {
+  const meiner = ++lauf
+  if (dockFolgen.length) {
+    void dockPlan().then(plan => {
+      if (meiner !== lauf || !plan) return
+      for (const folge of dockFolgen) folge(plan.pins)
+    })
+  }
+  if (homeFolgen.length) {
+    void homePlan().then(plan => {
+      if (meiner !== lauf || !plan) return
+      for (const folge of homeFolgen) folge(plan.icons)
+    })
+  }
+}
+
+/** Bald lesen - und mehrere Anlaesse im selben Zug zu EINEM machen.
+ *
+ * Zwei Anlaesse gibt es dafuer, und beide treten wirklich auf: vier
+ * Anmeldungen beim Bauen der Oberflaeche (Dock und Home, je zwei), und
+ * ein Schreibvorgang, der mehr als eine Meldung ausloest. Ein
+ * Leerlauf-Anlauf kostet nichts und macht aus vier Lesevorgaengen
+ * einen.
+ */
+function baldLesen(): void {
+  if (geplant) return
+  geplant = true
+  GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+    geplant = false
+    lies()
+    return GLib.SOURCE_REMOVE
+  })
+}
+
+function melde(): void {
+  baldLesen()
+  if (wacht) return
+  wacht = true
+  horche(() => baldLesen())
+}
+
+/** Die wirksame Anheftungsliste - jetzt und bei jeder Aenderung.
+ *
+ * `folge` wird auch nach der EIGENEN Aenderung gerufen; der Aufrufer
+ * vergleicht, bevor er neu baut. Ein Modul, das den eigenen
+ * Schreibvorgang ausblenden wollte, muesste sich merken, wann es
+ * zuletzt geschrieben hat - und laege daneben, sobald zwei Aenderungen
+ * dicht aufeinander folgen.
+ */
+export function beobachteDock(folge: DockFolge): void {
+  dockFolgen.push(folge)
+  melde()
+}
+
+/** Dasselbe fuer die Symbole des Homes. */
+export function beobachteHome(folge: HomeFolge): void {
+  homeFolgen.push(folge)
+  melde()
+}
+
+/** Wo die Datei liegt - fuer eine Fehlermeldung, die den Ort nennt. */
+export function settingsPath(): string {
+  return SETTINGS_FILE
+}
