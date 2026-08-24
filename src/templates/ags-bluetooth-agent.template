@@ -1,0 +1,811 @@
+// Der Bluetooth-Kopplungsagent (AGS v3, GTK4)
+// Von ZepOS erzeugt - NICHT direkt bearbeiten, siehe
+// src/templates/ags-bluetooth-agent.template
+//
+// WAS DIESE DATEI IST, UND WARUM SIE UEBERHAUPT EXISTIERT
+//     Sie ist die Antwort auf eine Meldung des Nutzers vom 21.08.2026:
+//     "wenn ich mich bei zepos bluetooth versuche zu verbinden klappt
+//     das, es steht verbunden - aber es fehlt die kopplungsanfrage, die
+//     man mit ja oder nein bestaetigen muss. sie erscheint nicht als
+//     schwebendes fenster oben drauf."
+//
+//     Das war keine fehlende Meldung, sondern eine Sicherheitsluecke,
+//     und die Kette dahin ist gemessen (Aufgabe 54, Stufe 0):
+//
+//       1. Kein Programm dieses Baums meldete einen BlueZ-Agenten an.
+//       2. `bluetoothctl` tut es im Stapelbetrieb ABSICHTLICH nicht:
+//          bluez 5.87 client/main.c:501 haengt agent_register an
+//          `!bt_shell_get_env("NON_INTERACTIVE")`, und
+//          src/shared/shell.c:1415 setzt genau das, sobald Argumente da
+//          sind - `bluetoothctl connect <adresse>` hat welche.
+//       3. Ohne Agenten setzt bluetoothd die E/A-Faehigkeit des
+//          Adapters auf NoInputNoOutput (src/agent.c:126-137 ->
+//          src/adapter.c:9167-9173).
+//       4. Und dann bestaetigt der KERN die Kopplung selbst: Linux v7.1
+//          net/bluetooth/hci_event.c:5397 schickt
+//          HCI_OP_USER_CONFIRM_REPLY, ohne dem Benutzerland ein Wort zu
+//          sagen. Das Verfahren heisst Just Works und hat per
+//          Bluetooth-Kernspezifikation KEINEN MITM-Schutz.
+//
+//     Diese Datei loest die Zwischenloesung ab, die vom 21.08.2026 bis
+//     heute lief: ein `exec-once` auf `blueman-applet` samt drei
+//     Fensterregeln in hyprland-universal-config.template. Sie sind mit
+//     dieser Aufgabe GEFALLEN (Regel 14 - loeschen statt als veraltet
+//     markieren). Zwei Agenten am selben Adapter waeren schlimmer als
+//     einer, und blueman ist GTK3 - gegen die Entscheidung vom
+//     11.08.2026, die tests/src/test_gtk4_only.py bewacht.
+//
+//     Das PAKET blueman bleibt: es ist der einzige Weg zur
+//     Bluetooth-Dateiuebertragung in diesem Baum (gemessen 21.08.2026,
+//     `grep` nach obex/sendto ueber src/ und packaging/ findet nichts
+//     sonst), und der Knopf in ags-bluetooth.template fuehrt weiter
+//     dorthin. Nur der AGENT ist jetzt unserer.
+//
+// ============================================================================
+// DIE FORM DER D-BUS-METHODEN IST GEMESSEN UND NICHT ABGESCHRIEBEN
+// ============================================================================
+//     Jede Rueckfrage unten heisst `<Name>Async(params, invocation)` und
+//     NICHT `<Name>(args…)`. Der Grund ist eine Messung vom 21.08.2026
+//     an gjs 2:1.88.1-1 (der Fassung, von der aylurs-gtk-shell 3.1.2
+//     abhaengt), gegen einen privaten Bus:
+//
+//       Form                              zweites Argument
+//       --------------------------------  --------------------------
+//       Method(args…, x)                  NULL bzw. die UnixFDList
+//       MethodAsync(params, invocation)   die echte Invocation
+//
+//     Der synchrone Pfad von gjs haengt die FD-Liste an, nicht die
+//     Invocation - `Gio.js:371-390`:
+//
+//         const args = parameters.deepUnpack();
+//         args.push(invocation.get_message().get_unix_fd_list());
+//         retval = method.apply(this, args);
+//
+//     Ein `invocation.get_sender()` in der synchronen Form wirft damit
+//     bei JEDEM Aufruf `TypeError: invocation is null`. Nachgestellt und
+//     reproduziert. Genau diese Form steht in ags-tray.template:327;
+//     der Befund ist gemeldet und liegt als eigene Aufgabe vor - hier
+//     wird sie NICHT benutzt.
+//
+//     Ebenfalls gemessen, weil eine Ablehnung sonst nicht ankaeme:
+//     `invocation.return_dbus_error("org.bluez.Error.Rejected", …)`
+//     erreicht den Anrufer unter genau diesem Namen, und
+//     `invocation.return_value(null)` ist die leere Antwort, die die
+//     beiden Anzeige-Rueckfragen brauchen.
+//
+// ============================================================================
+// ALLE SIEBEN RUECKFRAGEN, UND ZWEI FALLEN DARIN
+// ============================================================================
+//     org.bluez.Agent(5) kennt sieben Rueckfragen an den Nutzer plus
+//     Release und Cancel. Ein Agent, der nur eine davon kann, laesst den
+//     Nutzer beim naechsten Geraet wieder im Regen stehen:
+//
+//       RequestConfirmation   Zahlenvergleich, Ja/Nein   Telefon, Rechner
+//       RequestAuthorization  Ja/Nein ohne Zahl          Just-Works-Geraet
+//       RequestPasskey        Zahl eingeben (0-999999)   Tastatur
+//       RequestPinCode        Text eingeben (1-16)       Altgeraet
+//       DisplayPasskey        nur anzeigen               Tastatur
+//       DisplayPinCode        nur anzeigen               Tastatur vor 2.1
+//       AuthorizeService      Ja/Nein je Dienst          Dateiuebertragung
+//
+//     FALLE 1: `DisplayPasskey` wird WIEDERHOLT gerufen. Der Parameter
+//     `entered` zaehlt die Tasten mit, die auf der Gegenstelle schon
+//     gedrueckt wurden, und bluetoothd ruft die Methode bei jeder
+//     Aenderung erneut. Wer daraufhin ein NEUES Fenster aufmacht, baut
+//     dem Nutzer beim Eintippen einer sechsstelligen Zahl bis zu sechs
+//     Fenster uebereinander. Deshalb aktualisiert `zeigeAnzeige()` ein
+//     BESTEHENDES Fenster, solange dieselbe Geraeteadresse fragt.
+//
+//     FALLE 2: `DisplayPasskey` und `DisplayPinCode` bekommen KEINE
+//     Antwort vom Nutzer. Sie sind Anzeigen, keine Fragen - die leere
+//     D-Bus-Antwort geht SOFORT zurueck, und beendet wird die Anzeige
+//     von aussen ueber `Cancel()`. Wer hier auf einen Knopfdruck
+//     wartet, laesst bluetoothd in seine Zeitgrenze laufen.
+//
+// ============================================================================
+// WARUM KeyboardDisplay UND KEINE ANDERE FAEHIGKEIT
+// ============================================================================
+//     org.bluez.AgentManager(5) laesst sechs zu: "", DisplayOnly,
+//     DisplayYesNo, KeyboardOnly, NoInputNoOutput, KeyboardDisplay.
+//     Nur KeyboardDisplay deckt alle sieben Rueckfragen ab - es sagt
+//     der Gegenstelle, dass dieser Rechner sowohl anzeigen als auch
+//     tippen kann. Jede kleinere Angabe schneidet Verfahren weg:
+//     NoInputNoOutput waere genau der Zustand, den diese Aufgabe
+//     beendet, und DisplayYesNo koennte keine Tastatur koppeln.
+//
+// ============================================================================
+// TASTATUR UND LAGE
+// ============================================================================
+//     Das Fenster kommt aus createOverlayWindow() und erbt damit
+//     `Astal.Keymode.ON_DEMAND` - es nimmt den Tastaturfokus beim
+//     Aufgehen und gibt ihn beim Schliessen zurueck. Das ist die
+//     bewusste Wahl und keine Vorgabe, die nur nicht angefasst wurde:
+//
+//       NONE       nimmt die Tastatur NIE. Dann liesse sich ein
+//                  Zahlenschluessel (RequestPasskey) nicht eintippen.
+//       EXCLUSIVE  SPERRT DIE SITZUNG AUS. Zweimal gemessen, siehe
+//                  ags-home.template Kopf, Punkt 3: das Fenster bekommt
+//                  dann GAR KEINE Zeigerereignisse mehr.
+//       ON_DEMAND  richtig.
+//
+//     Der Fokus liegt auf dem Eingabefeld, wenn es eines gibt, sonst auf
+//     ABLEHNEN. Dieselbe Regel wie in ags-logout.template ("der
+//     harmloseste der sechs Knoepfe bekommt den Fokus, damit eine
+//     zufaellige Eingabetaste nicht auf einem 'kritisch'-Knopf landet") -
+//     hier ist sie sicherheitsrelevant: eine Kopplung darf nicht aus
+//     Reflex bestaetigt werden.
+
+import { Gtk } from "ags/gtk4"
+import Gio from "gi://Gio"
+import GLib from "gi://GLib"
+import { execAsync } from "ags/process"
+import { createOverlayWindow, OverlayAnchor, OverlayWidget }
+  from "../utils/overlay"
+import { _, format } from "../utils/i18n"
+import { zepButton } from "../utils/kit"
+
+const WINDOW_NAME = "bluetooth-pairing"
+
+// Der Objektpfad ist FREI WAEHLBAR - org.bluez.Agent(5) sagt es
+// ausdruecklich ("Object path: freely definable"), und der Dienst ist
+// der eigene Busname ("Service: unique name"). Es muss also KEIN
+// Busname besessen und KEINE Regel unter /usr/share/dbus-1/ abgelegt
+// werden. Gemessen am 21.08.2026:
+// /usr/share/dbus-1/system.d/bluetooth.conf traegt
+// `<policy context="default"><allow send_destination="org.bluez"/>`,
+// jeder Nutzerprozess darf also RegisterAgent rufen, und die
+// root-Regel erlaubt `send_interface="org.bluez.Agent1"` fuer den
+// Rueckweg.
+const AGENT_PATH = "/org/zepos/BluetoothAgent"
+const BLUEZ = "org.bluez"
+const BLUEZ_ROOT = "/org/bluez"
+const AGENT_MANAGER = "org.bluez.AgentManager1"
+const CAPABILITY = "KeyboardDisplay"
+
+const ICONS = {
+  bluetooth: "{{ICON_BLUETOOTH}}",
+  key: "{{ICON_KEY}}",
+  keyboard: "{{ICON_KEYBOARD}}",
+}
+
+// Ein Deckel, kein Versprechen: createOverlayWindow() nimmt config.width
+// nur als Obergrenze und faellt auf die natuerliche Breite zurueck, wenn
+// die kleiner ist (siehe dort, `win.set_default_size`). M und nicht S,
+// weil die laengste der sieben Fragen ein Geraetename plus Satz ist.
+const WIN_WIDTH = {{STYLE_MODAL_WIDTH_M}}
+
+// Die Schnittstelle, wortlaut aus org.bluez.Agent(5). Jede Methode, die
+// hier fehlte, beantwortete bluetoothd mit UNKNOWN_METHOD - und die
+// Kopplung liefe in ihre Zeitgrenze, ohne dass jemand etwas saehe.
+const AGENT_XML = `
+<node>
+  <interface name="org.bluez.Agent1">
+    <method name="Release"/>
+    <method name="RequestPinCode">
+      <arg type="o" direction="in"/>
+      <arg type="s" direction="out"/>
+    </method>
+    <method name="DisplayPinCode">
+      <arg type="o" direction="in"/>
+      <arg type="s" direction="in"/>
+    </method>
+    <method name="RequestPasskey">
+      <arg type="o" direction="in"/>
+      <arg type="u" direction="out"/>
+    </method>
+    <method name="DisplayPasskey">
+      <arg type="o" direction="in"/>
+      <arg type="u" direction="in"/>
+      <arg type="q" direction="in"/>
+    </method>
+    <method name="RequestConfirmation">
+      <arg type="o" direction="in"/>
+      <arg type="u" direction="in"/>
+    </method>
+    <method name="RequestAuthorization">
+      <arg type="o" direction="in"/>
+    </method>
+    <method name="AuthorizeService">
+      <arg type="o" direction="in"/>
+      <arg type="s" direction="in"/>
+    </method>
+    <method name="Cancel"/>
+  </interface>
+</node>`
+
+/** Eine offene Rueckfrage: die Invocation und was eine Ablehnung ist. */
+interface OffeneFrage {
+  invocation: Gio.DBusMethodInvocation
+  /** Der Objektpfad des Geraets - fuer die Wiedererkennung bei
+   *  DisplayPasskey (Falle 1 im Kopf). */
+  geraet: string
+  /** Beantwortet, sobald der Nutzer geklickt hat. Danach darf niemand
+   *  ein zweites Mal antworten - D-Bus laesst genau eine Antwort zu. */
+  beantwortet: boolean
+}
+
+// ============================================================================
+// ZWEI VERWEISE, DIE DAS MODUL HALTEN MUSS - GEMESSEN, NICHT VORSICHT
+// ============================================================================
+//     `Gio.DBusExportedObject.wrapJSObject()` gibt ein Objekt zurueck,
+//     das den Methodenblock am Bus haelt. Es wird von NIEMANDEM sonst
+//     referenziert: die Rueckrufe zeigen auf `handler`, nicht auf das
+//     Ergebnis von wrapJSObject.
+//
+//     Stand es in einer Ortsvariablen von BluetoothAgent(), raeumte gjs
+//     es nach dem ersten Sammellauf weg - und das Objekt verschwand vom
+//     Bus, waehrend der Agent laut AgentManager1 noch angemeldet war.
+//
+//     GEMESSEN am 21.08.2026 im verschachtelten Compositor, genau
+//     dieser Ablauf:
+//
+//         RegisterAgent            ok
+//         RequestDefaultAgent      ok
+//         RequestConfirmation      Fenster kam, Antwort kam
+//         ... erster Sammellauf ...
+//         Cancel                   UnknownMethod: Object does not exist
+//                                  at path /org/zepos/BluetoothAgent
+//         RequestPasskey           dieselbe Meldung
+//         jede weitere Rueckfrage  dieselbe Meldung
+//
+//     Der Agent war also nach der ERSTEN Kopplung still tot, und
+//     bluetoothd haette ab da wieder niemanden gefunden - genau der
+//     Zustand, den diese Aufgabe beendet, nur eine Ebene tiefer
+//     versteckt. Deshalb stehen beide Verweise HIER und nicht in der
+//     Funktion.
+let systemBus: Gio.DBusConnection | null = null
+let exportiert: Gio.DBusExportedObject | null = null
+
+export default function BluetoothAgent(): OverlayWidget {
+  let inhalt: Gtk.Box | null = null
+  let schliessen: (() => void) | null = null
+  let offen: OffeneFrage | null = null
+  // Das Label der sechsstelligen Zahl, solange eine Anzeige laeuft -
+  // siehe Falle 1 im Kopf: aktualisieren statt neu oeffnen.
+  let zahlLabel: Gtk.Label | null = null
+  let zuFokussieren: Gtk.Widget | null = null
+  // Vor dem Methodenblock erklaert, nicht darunter: ReleaseAsync setzt
+  // `angemeldet` zurueck, und eine Erklaerung danach laege in der
+  // zeitlichen Totzone von `let`.
+  let angemeldet = false
+
+  // ==========================================================
+  // Der Systembus
+  // ==========================================================
+  try {
+    systemBus = Gio.bus_get_sync(Gio.BusType.SYSTEM, null)
+  } catch (e) {
+    console.error("Bluetooth-Agent: kein Systembus:", e)
+  }
+
+  /** Der Anzeigename eines Geraets, aus seinen Eigenschaften.
+   *
+   * Alias zuerst - das ist der Name, den der Nutzer im
+   * Bluetooth-Fenster sieht und gegebenenfalls selbst vergeben hat.
+   * Faellt alles aus, bleibt die Adresse: sie steht auch auf dem
+   * anderen Geraet und ist damit immer noch eine Auskunft, waehrend ein
+   * leerer Name gar keine waere.
+   */
+  const geraeteName = (pfad: string): string => {
+    if (!systemBus) return pfad
+    for (const eigenschaft of ["Alias", "Name", "Address"]) {
+      try {
+        const antwort = systemBus.call_sync(
+          BLUEZ, pfad, "org.freedesktop.DBus.Properties", "Get",
+          new GLib.Variant("(ss)", ["org.bluez.Device1", eigenschaft]),
+          null, Gio.DBusCallFlags.NONE, 2000, null)
+        const wert = antwort.recursiveUnpack() as unknown[]
+        const name = wert && wert[0]
+        if (typeof name === "string" && name.length > 0) return name
+      } catch (e) {
+        // Eine Eigenschaft, die es nicht gibt, ist kein Fehler - die
+        // naechste wird gefragt. Erst wenn alle drei ausfallen, steht
+        // der Pfad da.
+      }
+    }
+    return _("Unnamed device")
+  }
+
+  // ==========================================================
+  // Antworten - genau EINE je Rueckfrage
+  // ==========================================================
+
+  /** Zustimmen. `wert` ist die Rueckgabe, oder null fuer eine leere. */
+  const zustimmen = (wert: GLib.Variant | null) => {
+    if (!offen || offen.beantwortet) return
+    offen.beantwortet = true
+    offen.invocation.return_value(wert)
+    offen = null
+    schliessen?.()
+  }
+
+  /** Ablehnen. Der Fehlername ist der, den org.bluez.Agent(5) nennt.
+   *
+   * WARUM DAS AUCH BEIM SCHLIESSEN PASSIERT
+   *     Ein Fenster, das zugeht, ohne zu antworten, laesst bluetoothd
+   *     in seine Zeitgrenze laufen - und die Kopplung haengt, ohne dass
+   *     irgendwo etwas stuende. Deshalb haengt dieser Aufruf an
+   *     `onHide` und damit an JEDEM Weg nach draussen: ESC, das
+   *     Schliesskreuz im Kopf, und ein `Cancel()` von der Gegenseite
+   *     gehen alle hier durch (siehe createOverlayWindow(): sowohl der
+   *     ESC-Controller als auch der Kreuzknopf rufen closeWindow(), und
+   *     das ruft config.onHide).
+   */
+  const ablehnen = () => {
+    if (!offen || offen.beantwortet) return
+    offen.beantwortet = true
+    offen.invocation.return_dbus_error(
+      "org.bluez.Error.Rejected", "The user refused the pairing")
+    offen = null
+  }
+
+  // ==========================================================
+  // Das Fenster
+  // ==========================================================
+
+  const leeren = () => {
+    if (!inhalt) return
+    let kind = inhalt.get_first_child()
+    while (kind) {
+      const naechstes = kind.get_next_sibling()
+      inhalt.remove(kind)
+      kind = naechstes
+    }
+    zahlLabel = null
+    zuFokussieren = null
+  }
+
+  /** Die gemeinsame Form aller sieben Fragen.
+   *
+   * Ueberschrift, optional eine grosse Zahl, optional ein Eingabefeld,
+   * und die Knopfzeile. Dass alle sieben durch DIESELBE Funktion gehen,
+   * ist Absicht: sieben Bauwege waeren sieben Gelegenheiten, den Fokus
+   * oder die Antwort zu vergessen.
+   */
+  const baueFrage = (opts: {
+    frage: string
+    zahl?: string
+    eingabe?: "zahl" | "text"
+    /** Fehlt sie, ist es eine reine Anzeige ohne Zustimmung. */
+    beiZustimmung?: (eingegeben: string) => void
+    /** Zusaetzlicher Knopf links, heute nur "Immer erlauben". */
+    zusatz?: { text: string; aktion: () => void }
+  }) => {
+    if (!inhalt) return
+    leeren()
+
+    const frageLbl = new Gtk.Label({ label: opts.frage, wrap: true })
+    frageLbl.add_css_class("btp-frage")
+    frageLbl.set_xalign(0)
+    inhalt.append(frageLbl)
+
+    if (opts.zahl !== undefined) {
+      zahlLabel = new Gtk.Label({ label: opts.zahl })
+      zahlLabel.add_css_class("btp-zahl")
+      inhalt.append(zahlLabel)
+    }
+
+    let feld: Gtk.Entry | null = null
+    if (opts.eingabe) {
+      feld = new Gtk.Entry({ hexpand: true })
+      feld.add_css_class("btp-feld")
+      if (opts.eingabe === "zahl") {
+        // Sechs Stellen, und nur Ziffern. RequestPasskey gibt eine Zahl
+        // zwischen 0 und 999999 zurueck (org.bluez.Agent(5)); ein
+        // Buchstabe darin ergaebe beim Umwandeln NaN und damit eine
+        // Kopplung, die ohne Grund scheitert.
+        feld.set_max_length(6)
+        feld.set_input_purpose(Gtk.InputPurpose.DIGITS)
+      } else {
+        // RequestPinCode: 1 bis 16 Zeichen, alphanumerisch.
+        feld.set_max_length(16)
+      }
+      inhalt.append(feld)
+      zuFokussieren = feld
+    }
+
+    const knopfReihe = new Gtk.Box({ spacing: 8 })
+    knopfReihe.add_css_class("btp-knoepfe")
+
+    if (opts.zusatz) {
+      knopfReihe.append(zepButton(opts.zusatz.text, "still", opts.zusatz.aktion))
+    }
+
+    knopfReihe.append(new Gtk.Box({ hexpand: true }))
+
+    // Ablehnen zuerst gebaut, damit es den Fokus bekommen kann, wenn es
+    // kein Eingabefeld gibt - siehe Kopf, Abschnitt TASTATUR UND LAGE.
+    const ablehnenBtn = zepButton(_("Deny"), "umrandet", () => {
+      ablehnen()
+      schliessen?.()
+    })
+    knopfReihe.append(ablehnenBtn)
+
+    if (opts.beiZustimmung) {
+      const zustimmenAktion = () => {
+        opts.beiZustimmung?.(feld ? feld.get_text() : "")
+      }
+      knopfReihe.append(zepButton(_("Confirm"), "voll", zustimmenAktion))
+      // Die Eingabetaste im Feld ist dasselbe wie ein Klick auf
+      // Bestaetigen - wer eine Zahl eintippt, drueckt danach Enter.
+      feld?.connect("activate", zustimmenAktion)
+    }
+
+    if (!zuFokussieren) zuFokussieren = ablehnenBtn
+
+    inhalt.append(knopfReihe)
+  }
+
+  const widget = createOverlayWindow({
+    name: WINDOW_NAME,
+    width: WIN_WIDTH,
+    // Ebenfalls ein Deckel. Die Fragen sind kurz; die hoechste ist
+    // RequestPinCode mit Satz, Feld und Knopfzeile.
+    height: 260,
+    cssClass: "BluetoothPairing",
+    headerIcon: ICONS.bluetooth,
+    headerTitle: _("Pairing request"),
+    onShow: () => zuFokussieren?.grab_focus(),
+    // JEDER Weg nach draussen beantwortet die offene Frage - siehe
+    // ablehnen() oben.
+    onHide: () => ablehnen(),
+    buildContent: (_win, closeWindow) => {
+      schliessen = closeWindow
+      inhalt = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 12,
+      })
+      inhalt.add_css_class("btp-inhalt")
+      return inhalt
+    },
+  })
+
+  /** Der Anhaltspunkt: die MITTE des Schirms, auf dem gearbeitet wird.
+   *
+   * WARUM DIESES FENSTER ALS EINZIGES EINEN EIGENEN BEKOMMT
+   *     Jede andere Ueberlagerung dieses Baums geht auf, WEIL jemand
+   *     etwas angeklickt hat - sie bekommt die Mitte dieses
+   *     Bedienelements gereicht und erscheint daneben. Ohne Angabe
+   *     nimmt die Fabrik den Mauszeiger, und das ist dort die richtige
+   *     Naeherung: die Maus ist dann das Letzte, was der Nutzer angefasst
+   *     hat.
+   *
+   *     Hier stimmt beides nicht. Diese Frage geht UNGEFRAGT auf, weil
+   *     ein fremdes Geraet anklopft - der Zeiger steht irgendwo, unter
+   *     Umstaenden auf einem zweiten Schirm, auf den der Nutzer gerade
+   *     nicht sieht.
+   *
+   *     GEMESSEN am 21.08.2026 im verschachtelten Compositor, ohne
+   *     Zeiger (kopfloser Ausgang): die Fabrik faellt auf ihren
+   *     Rueckfall zurueck und klemmt die Flaeche an die obere linke
+   *     Ecke - Namensraum bluetooth-pairing bei (4024,24) auf einem
+   *     Schirm ab (4000,0), also genau EDGE_GAP von beiden Raendern.
+   *     Sichtbar ist das, aber es ist eine Ecke und keine Mitte.
+   *
+   *     Der Nutzer hat woertlich verlangt, die Frage solle "oben drauf,
+   *     direkt zu sehen" erscheinen. Deshalb sagt dieses Fenster selbst,
+   *     wo es hingehoert: in die Mitte des Schirms, der gerade den Fokus
+   *     hat.
+   *
+   * Gerechnet wird hier KEINE Lage - das bleibt Sache der Fabrik.
+   * Geliefert wird nur der Anhaltspunkt, denselben Weg, den auch die
+   * Leiste fuer ihre Module benutzt (OverlayAnchor).
+   *
+   * Die Umrechnung der Schirmmasse ist dieselbe wie dort: Hyprland
+   * meldet die Masse der Hardware, also durch `scale` teilen, und die
+   * Drehungen 90/270 vertauschen Breite und Hoehe.
+   */
+  const mittigerAnker = async (): Promise<OverlayAnchor | undefined> => {
+    try {
+      const roh = await execAsync("hyprctl monitors -j")
+      const schirme = JSON.parse(roh) as Array<{
+        name: string; width: number; height: number
+        scale: number; transform: number; focused: boolean
+      }>
+      const schirm = schirme.find(s => s.focused) ?? schirme[0]
+      if (!schirm) return undefined
+      const gedreht = (schirm.transform & 1) === 1
+      const breite = gedreht
+        ? schirm.height / schirm.scale
+        : schirm.width / schirm.scale
+      return { monitor: schirm.name, x: Math.round(breite / 2) }
+    } catch (e) {
+      // Kein Compositor, keine Antwort: dann nimmt die Fabrik ihren
+      // eigenen Rueckfall. Ein Fenster in der Ecke ist immer noch
+      // besser als keines.
+      console.error("Bluetooth-Agent: Schirm nicht bestimmbar:", e)
+      return undefined
+    }
+  }
+
+  /** Das Fenster zeigen, mittig auf dem Schirm mit dem Fokus. */
+  const zeigen = () => {
+    mittigerAnker()
+      .then(anker => widget.show(anker))
+      .catch((e: unknown) =>
+        console.error("Bluetooth-Agent: Fenster ging nicht auf:", e))
+  }
+
+  /** Eine Frage stellen: Inhalt bauen, Fenster zeigen. */
+  const frageStellen = (invocation: Gio.DBusMethodInvocation,
+                        geraet: string,
+                        bauen: () => void) => {
+    // Eine zweite Frage, waehrend eine offen ist: die alte wird
+    // abgelehnt, nicht verschluckt. Zwei Kopplungen gleichzeitig sind
+    // selten, aber eine verschluckte Antwort haengt bluetoothd auf.
+    ablehnen()
+    offen = { invocation, geraet, beantwortet: false }
+    bauen()
+    zeigen()
+  }
+
+  // ==========================================================
+  // Die neun Methoden von org.bluez.Agent1
+  // ==========================================================
+  //
+  // Alle in der Async-Form, siehe Kopf. `params` ist das ausgepackte
+  // Tupel, `invocation` die echte Invocation.
+  const handler = {
+    // ---- Verwaltung ----
+
+    ReleaseAsync(_params: unknown[], invocation: Gio.DBusMethodInvocation) {
+      // bluetoothd hat uns abgemeldet. Laut org.bluez.Agent(5) ist eine
+      // eigene Abmeldung danach weder noetig noch moeglich - der Agent
+      // ist bereits fort. Wir merken es uns, damit die Ueberwachung
+      // unten neu anmeldet, sobald bluez zurueckkommt.
+      console.log("Bluetooth-Agent: Release - bluetoothd hat abgemeldet")
+      angemeldet = false
+      ablehnen()
+      schliessen?.()
+      invocation.return_value(null)
+    },
+
+    CancelAsync(_params: unknown[], invocation: Gio.DBusMethodInvocation) {
+      // Die Gegenseite hat aufgegeben. Das offene Fenster muss weg -
+      // besonders bei DisplayPasskey/DisplayPinCode, die auf gar keine
+      // Antwort warten und sonst stehen blieben (Falle 2 im Kopf).
+      console.log("Bluetooth-Agent: Cancel")
+      // Die offene Rueckfrage bekommt IHRE Antwort, und zwar
+      // "Canceled" - org.bluez.Agent(5) nennt den Namen. Sie einfach
+      // fallenzulassen waere zweierlei Schaden: die Invocation bliebe
+      // liegen, und wenn bluetoothd sie doch noch erwartet, haengt es
+      // in seiner Zeitgrenze. Eine Antwort auf eine Frage, die der Bote
+      // schon zurueckgezogen hat, verwirft D-Bus dagegen still.
+      if (offen && !offen.beantwortet) {
+        offen.beantwortet = true
+        offen.invocation.return_dbus_error(
+          "org.bluez.Error.Canceled", "The remote side gave up")
+      }
+      offen = null
+      schliessen?.()
+      invocation.return_value(null)
+    },
+
+    // ---- Die vier echten Fragen ----
+
+    RequestConfirmationAsync(params: unknown[],
+                             invocation: Gio.DBusMethodInvocation) {
+      const [pfad, passkey] = params as [string, number]
+      const name = geraeteName(pfad)
+      frageStellen(invocation, pfad, () => baueFrage({
+        frage: format(_("Does this number match the one shown on {device}?"),
+                      { device: name }),
+        // Sechsstellig mit fuehrenden Nullen - org.bluez.Agent(5) sagt
+        // es ausdruecklich: "the passkey will always be a 6-digit
+        // number, so the display should be zero-padded". Ohne die
+        // Nullen verglichen zwei Geraete verschiedene Zeichenfolgen.
+        zahl: String(passkey).padStart(6, "0"),
+        beiZustimmung: () => zustimmen(null),
+      }))
+    },
+
+    RequestAuthorizationAsync(params: unknown[],
+                              invocation: Gio.DBusMethodInvocation) {
+      const [pfad] = params as [string]
+      const name = geraeteName(pfad)
+      frageStellen(invocation, pfad, () => baueFrage({
+        frage: format(_("Allow {device} to pair with this computer?"),
+                      { device: name }),
+        beiZustimmung: () => zustimmen(null),
+      }))
+    },
+
+    RequestPasskeyAsync(params: unknown[],
+                        invocation: Gio.DBusMethodInvocation) {
+      const [pfad] = params as [string]
+      const name = geraeteName(pfad)
+      frageStellen(invocation, pfad, () => baueFrage({
+        frage: format(_("Enter the passkey shown on {device}"),
+                      { device: name }),
+        eingabe: "zahl",
+        beiZustimmung: (eingegeben) => {
+          const zahl = Number.parseInt(eingegeben, 10)
+          if (!Number.isFinite(zahl) || zahl < 0 || zahl > 999999) {
+            // Eine unbrauchbare Eingabe ist keine Zustimmung. Ablehnen
+            // ist hier ehrlicher als eine 0 zu schicken, die sicher
+            // nicht passt und wie ein Fehler der Gegenstelle aussaehe.
+            ablehnen()
+            schliessen?.()
+            return
+          }
+          zustimmen(new GLib.Variant("(u)", [zahl]))
+        },
+      }))
+    },
+
+    RequestPinCodeAsync(params: unknown[],
+                        invocation: Gio.DBusMethodInvocation) {
+      const [pfad] = params as [string]
+      const name = geraeteName(pfad)
+      frageStellen(invocation, pfad, () => baueFrage({
+        frage: format(_("Enter the PIN for {device}"), { device: name }),
+        eingabe: "text",
+        beiZustimmung: (eingegeben) => {
+          // 1 bis 16 Zeichen, org.bluez.Agent(5). Leer waere kein PIN.
+          if (eingegeben.length < 1) {
+            ablehnen()
+            schliessen?.()
+            return
+          }
+          zustimmen(new GLib.Variant("(s)", [eingegeben]))
+        },
+      }))
+    },
+
+    AuthorizeServiceAsync(params: unknown[],
+                          invocation: Gio.DBusMethodInvocation) {
+      const [pfad, uuid] = params as [string, string]
+      const name = geraeteName(pfad)
+      frageStellen(invocation, pfad, () => baueFrage({
+        frage: format(_("Allow {device} to use this service?"),
+                      { device: name }),
+        // Die UUID steht als Zahl da und nicht als Dienstname: eine
+        // Tabelle der Bluetooth-UUIDs waere eine zweite Wahrheit neben
+        // der von bluez, und eine unvollstaendige dazu.
+        zahl: uuid,
+        beiZustimmung: () => zustimmen(null),
+        // "Immer erlauben" setzt Trusted auf dem Geraet - danach fragt
+        // bluetoothd fuer dieses Geraet nicht mehr. Es ist die
+        // weitreichendere Antwort und steht deshalb links, in der
+        // stillen Rolle, nicht neben "Bestaetigen".
+        zusatz: {
+          text: _("Always allow"),
+          aktion: () => {
+            try {
+              systemBus?.call_sync(
+                BLUEZ, pfad, "org.freedesktop.DBus.Properties", "Set",
+                new GLib.Variant("(ssv)", [
+                  "org.bluez.Device1", "Trusted",
+                  GLib.Variant.new_boolean(true),
+                ]), null, Gio.DBusCallFlags.NONE, 2000, null)
+            } catch (e) {
+              console.error("Bluetooth-Agent: Trusted liess sich nicht "
+                + "setzen:", e)
+            }
+            zustimmen(null)
+          },
+        },
+      }))
+    },
+
+    // ---- Die zwei Anzeigen ----
+    //
+    // Beide antworten SOFORT (Falle 2 im Kopf): sie sind keine Fragen.
+    // Beendet werden sie von aussen ueber Cancel().
+
+    DisplayPasskeyAsync(params: unknown[],
+                        invocation: Gio.DBusMethodInvocation) {
+      const [pfad, passkey, entered] = params as [string, number, number]
+      const text = String(passkey).padStart(6, "0")
+      const name = geraeteName(pfad)
+
+      // FALLE 1: bei jeder weiteren Taste auf der Gegenstelle kommt
+      // dieser Aufruf ERNEUT. Steht das Fenster schon fuer dasselbe
+      // Geraet, wird die Zahl AKTUALISIERT statt ein zweites Fenster
+      // aufzumachen.
+      if (offen && offen.geraet === pfad && zahlLabel
+          && widget.window.visible) {
+        zahlLabel.set_label(text)
+      } else {
+        offen = { invocation, geraet: pfad, beantwortet: true }
+        baueFrage({
+          frage: format(
+            _("Type this passkey on {device} and confirm there"),
+            { device: name }),
+          zahl: text,
+        })
+        zeigen()
+      }
+      // `entered` steht im Protokoll und nicht auf dem Schirm: eine
+      // mitzaehlende Anzeige waere ein Hinweis darauf, wieviel jemand
+      // schon getippt hat, und das steht auf der Gegenstelle ohnehin.
+      console.log(`Bluetooth-Agent: DisplayPasskey ${text}, ${entered} Taste(n)`)
+      invocation.return_value(null)
+    },
+
+    DisplayPinCodeAsync(params: unknown[],
+                        invocation: Gio.DBusMethodInvocation) {
+      const [pfad, pincode] = params as [string, string]
+      const name = geraeteName(pfad)
+      // Anders als DisplayPasskey wird diese Methode laut
+      // org.bluez.Agent(5) nur EINMAL gerufen ("This method will only
+      // ever be called once since older keyboards do not support typing
+      // notification") - hier gibt es also nichts zu aktualisieren.
+      offen = { invocation, geraet: pfad, beantwortet: true }
+      baueFrage({
+        frage: format(_("Type this PIN on {device} and confirm there"),
+                      { device: name }),
+        zahl: pincode,
+      })
+      zeigen()
+      invocation.return_value(null)
+    },
+  }
+
+  // ==========================================================
+  // Anmelden - und wieder anmelden, wenn bluez neu startet
+  // ==========================================================
+  if (systemBus) {
+    try {
+      exportiert = Gio.DBusExportedObject.wrapJSObject(AGENT_XML, handler)
+      exportiert.export(systemBus, AGENT_PATH)
+    } catch (e) {
+      console.error("Bluetooth-Agent: Objekt liess sich nicht anbieten:", e)
+    }
+  }
+
+  const anmelden = () => {
+    if (!systemBus || angemeldet) return
+    systemBus.call(
+      BLUEZ, BLUEZ_ROOT, AGENT_MANAGER, "RegisterAgent",
+      new GLib.Variant("(os)", [AGENT_PATH, CAPABILITY]),
+      null, Gio.DBusCallFlags.NONE, 5000, null,
+      (quelle: Gio.DBusConnection | null, ergebnis: Gio.AsyncResult) => {
+        try {
+          quelle?.call_finish(ergebnis)
+          angemeldet = true
+          console.log(`Bluetooth-Agent: angemeldet (${CAPABILITY})`)
+          // RequestDefaultAgent ERST nach erfolgreichem RegisterAgent -
+          // org.bluez.AgentManager(5) verlangt es ausdruecklich ("The
+          // application is required to register an agent").
+          //
+          // Es ist nicht bloss Kosmetik: ohne den Vorgabe-Agenten
+          // bedient bluetoothd nur Kopplungen, die dieselbe Anwendung
+          // ANGESTOSSEN hat. Ein Geraet, das VON SICH AUS anklopft,
+          // faende dann niemanden - und genau das ist die Haelfte der
+          // Luecke, die diese Aufgabe schliesst.
+          systemBus?.call(
+            BLUEZ, BLUEZ_ROOT, AGENT_MANAGER, "RequestDefaultAgent",
+            new GLib.Variant("(o)", [AGENT_PATH]),
+            null, Gio.DBusCallFlags.NONE, 5000, null,
+            (q: Gio.DBusConnection | null, r: Gio.AsyncResult) => {
+              try {
+                q?.call_finish(r)
+                console.log("Bluetooth-Agent: ist Vorgabe-Agent")
+              } catch (e) {
+                console.error("Bluetooth-Agent: RequestDefaultAgent "
+                  + "abgelehnt:", e)
+              }
+            })
+        } catch (e) {
+          // Schon angemeldet (AlreadyExists) ist kein Fehler, sondern
+          // der Normalfall nach einem Neustart der Oberflaeche, bei dem
+          // bluetoothd den alten Agenten noch fuehrt.
+          console.error("Bluetooth-Agent: RegisterAgent fehlgeschlagen:", e)
+        }
+      })
+  }
+
+  // bluetoothd kann neu starten - ein `systemctl restart bluetooth`
+  // oder ein Absturz -, und danach kennt es keinen Agenten mehr. Ohne
+  // diese Ueberwachung waere die Sitzung ab dann wieder ohne
+  // Bestaetigung, und niemand merkte es: genau der stille Zustand, den
+  // diese Aufgabe beendet.
+  if (systemBus) {
+    Gio.bus_watch_name_on_connection(
+      systemBus, BLUEZ, Gio.BusNameWatcherFlags.NONE,
+      () => { angemeldet = false; anmelden() },
+      () => { angemeldet = false })
+  }
+
+  return widget
+}

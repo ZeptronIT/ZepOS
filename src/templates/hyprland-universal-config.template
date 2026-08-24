@@ -62,87 +62,21 @@ exec-once = systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESK
 exec-once = dbus-update-activation-environment --all
 exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 
-# DER BLUETOOTH-KOPPLUNGSAGENT - Zwischenloesung, Aufgabe 54, 21.08.2026
+# Der Bluetooth-Kopplungsagent lief hier vom 21.08. bis zum 21.08.2026
+# als `exec-once` auf blueman-applet, mit zwei gsettings-Zeilen davor.
+# Er ist mit Aufgabe 54, Stufe 2 GEFALLEN (Regel 14 - geloescht, nicht
+# als veraltet markiert): der Agent ist seither ein Fenster im
+# AGS-Prozess, der ohnehin laeuft, und die Begruendung samt der
+# gemessenen Kette bis in den Kern steht im Kopf von
+# src/templates/ags-bluetooth-agent.template.
 #
-# WAS OHNE DIESE ZEILE PASSIERT, UND ES IST EINE SICHERHEITSLUECKE
-#     Bis heute meldet auf ZepOS NIEMAND einen Agenten bei BlueZ an.
-#     `grep` ueber den ganzen Baum fand null Treffer fuer
-#     org.bluez.Agent1 und AgentManager1, und bluetoothctl meldet im
-#     Stapelbetrieb absichtlich keinen an: client/main.c:501 von bluez
-#     5.87 haengt agent_register an `!bt_shell_get_env("NON_INTERACTIVE")`,
-#     und src/shared/shell.c:1415 setzt genau das, sobald Argumente da
-#     sind - `bluetoothctl connect <adresse>`, wie das Bluetooth-Fenster
-#     es ruft, hat welche.
+# Zwei Agenten am selben Adapter waeren schlimmer als einer - deshalb
+# faellt diese Zeile im SELBEN Schritt, in dem der eigene Agent kommt,
+# und nicht einen spaeter.
 #
-#     Ohne Agenten setzt bluetoothd die E/A-Faehigkeit des Adapters auf
-#     NoInputNoOutput (src/agent.c:126-137 -> src/adapter.c:9167-9173),
-#     und dann bestaetigt der KERN die Kopplung selbst:
-#     net/bluetooth/hci_event.c:5397 in Linux v7.1 schickt
-#     HCI_OP_USER_CONFIRM_REPLY, ohne dem Benutzerland ein Wort zu sagen.
-#     Kein D-Bus-Ereignis, kein Fenster, keine Spur. Das Verfahren heisst
-#     Just Works und hat per Kernspezifikation KEINEN MITM-Schutz.
-#
-#     Zwei Folgen: die Kopplung fragt nie nach - das ist die Meldung des
-#     Nutzers vom 21.08.2026 - und eine Bluetooth-Tastatur laesst sich
-#     UEBERHAUPT NICHT koppeln, weil sie RequestPasskey braucht und das
-#     ueber new_auth() laeuft (src/device.c:7620-7645), das ohne Agenten
-#     NULL liefert.
-#
-# WARUM ALLES IN EINER ZEILE UND MIT &&
-#     exec-once-Zeilen laufen NEBENLAEUFIG, nicht nacheinander. blueman
-#     liest beide Einstellungen beim Start; stuenden sie als eigene
-#     Zeilen darueber, entschiede der Zufall, ob sie rechtzeitig da sind.
-#
-# WARUM notification-daemon false TRAGEND IST UND NICHT BEIWERK
-#     GEMESSEN am 21.08.2026 in einem verschachtelten Hyprland gegen ein
-#     nachgebautes org.bluez (der Dienst des Nutzers blieb unberuehrt):
-#     MIT der Vorgabe zeigt blueman die Kopplungsanfrage als
-#     BENACHRICHTIGUNG mit den Aktionen confirm/deny und Zeitlimit 0 -
-#     BluezAgent.py:200-217. AstalNotifd meldet "actions" als Faehigkeit
-#     (strings an libastal-notifd.so.0.1.0), also waehlt blueman in
-#     gui/Notification.py:296 die Blase; ZepOS zeichnet aber NIRGENDS
-#     Aktionsknoepfe. Ergebnis der Messung: NULL Fenster, dafuer eine
-#     Benachrichtigung, die nie verfaellt und die niemand beantworten
-#     kann. Mit `false` erzwingt gui/Notification.py:287 den eigenen
-#     Dialog - gemessen: ein echtes Fenster, Klasse blueman-applet.
-#     Die Zeile stand seit dem 03.08.2026 als offener Posten in
-#     docs/specs/2026-08-03-zepos-design.md:589.
-#
-# WARUM !ShowConnected NEBEN !StatusIcon STEHEN MUSS
-#     Das war die Falle. __load_plugin in main/PluginManager.py:137-141
-#     laedt cls.__depends__ BEDINGUNGSLOS, ohne die Abschaltliste zu
-#     fragen. ShowConnected haengt an StatusIcon, holte es also zurueck:
-#     GEMESSEN lief blueman-tray mit `['!StatusIcon']` allein weiter, und
-#     erst mit beiden Namen verschwand der Prozess. Ein zweites
-#     Ablagesymbol neben dem eigenen Bluetooth-Feld der Leiste waere ein
-#     Rueckschritt.
-#
-# WARUM DIE VIER WEITEREN NAMEN
-#     Sie fassen denselben Adapter an wie das Bluetooth-Feld der Leiste,
-#     und zwei davon arbeiten gegen die Entscheidungen des Nutzers:
-#     AutoConnect verbindet von sich aus wieder, was er getrennt hat, und
-#     DiscvManager schaltet die Sichtbarkeit ein - bei einer Aufgabe, die
-#     gerade eine Kopplungsluecke schliesst, genau das Falsche.
-#     ConnectionNotifier meldet ein zweites Mal, was ZepOS schon meldet.
-#     PowerManager schaltet den Adapter ein und aus; KillSwitch MUSS
-#     mit, weil es an PowerManager haengt und es sonst nach derselben
-#     Regel zurueckholt wie ShowConnected das Symbol.
-#
-# WAS HIER NICHT STEHT UND WARUM
-#     AuthAgent selbst wird NICHT abgeschaltet - es ist der ganze Zweck.
-#     Es hat kein __depends__ und niemand haengt daran, es ueberlebt
-#     jede der Abschaltungen oben. GEMESSEN meldet es sich mit der
-#     Faehigkeit KeyboardDisplay an und ruft RequestDefaultAgent;
-#     KeyboardDisplay ist die einzige der sechs Faehigkeiten, die alle
-#     sieben Rueckfragen von org.bluez.Agent(5) abdeckt.
-#
-# DIESE ZEILE IST EINE ZWISCHENLOESUNG UND GEHT WIEDER WEG
-#     blueman ist GTK3 - BluezAgent.py:18 sagt gi.require_version("Gtk",
-#     "3.0"). Das steht gegen die Entscheidung vom 11.08.2026, dass jede
-#     Oberflaeche auf GTK4 steht (siehe tests/src/test_gtk4_only.py).
-#     Ein eigener Agent als AGS-Fenster loest sie ab; dann faellt diese
-#     Zeile ersatzlos, nach Regel 14 und nicht als "veraltet" markiert.
-exec-once = gsettings set org.blueman.general notification-daemon false && gsettings set org.blueman.general plugin-list "['!StatusIcon','!ShowConnected','!AutoConnect','!ConnectionNotifier','!DiscvManager','!PowerManager','!KillSwitch']" && sleep 3 && setsid -f blueman-applet >/dev/null 2>&1
+# Das PAKET blueman bleibt Abhaengigkeit von zepos-desktop: es ist der
+# einzige Weg zur Bluetooth-Dateiuebertragung in diesem Baum, und der
+# Knopf in ags-bluetooth.template fuehrt weiter dorthin.
 
 # GTK Configuration
 exec-once = gsettings set org.gtk.Settings.FileChooser window-size '(1024,768)'
@@ -595,39 +529,12 @@ windowrule = match:class ^(gcr-prompter)$, center on
 windowrule = match:class ^(gcr-prompter)$, pin on
 windowrule = match:class ^(gcr-prompter)$, workspace 1
 
-# Bluetooth-Kopplungsbestaetigung (Aufgabe 54, 21.08.2026)
-#
-# Dieselbe Form wie gcr-prompter darueber, und aus demselben Grund: es
-# ist ein Auth-Dialog. Der Nutzer hat woertlich gemeldet, die Anfrage
-# erscheine "nicht als schwebendes fenster oben drauf" - eine Frage, die
-# hinter dem Browser aufgeht, ist so gut wie keine.
-#
-# DIE KLASSE IST GEMESSEN, NICHT GERATEN
-#     Am 21.08.2026 in einem verschachtelten Hyprland, mit einem
-#     nachgebauten org.bluez auf einem privaten Bus, damit der
-#     Bluetooth-Dienst des Nutzers unberuehrt bleibt:
-#     `hyprctl -j clients` meldete class=blueman-applet,
-#     initialClass=blueman-applet, title=Bluetooth, xwayland=false.
-#     Es ist die Klasse des APPLETS, nicht die von blueman-manager -
-#     der Dialog gehoert dem Agentenprozess.
-#
-# WAS DIE REGEL WIRKLICH AENDERT, EHRLICH GEMESSEN
-#     float on und center on beschreiben, was ohnehin geschieht: der
-#     GTK3-Dialog kam auch OHNE Regel schon floating=true und mittig
-#     (Ausgang 456x521 an (4000,0), Fenster 438x198 an (4009,162) -
-#     das IST die Mitte). Sie stehen trotzdem hier, damit die Lage nicht
-#     von einer GTK-Vorgabe abhaengt, die sich aendern kann.
-#     `pin on` ist der gemessene Unterschied: pinned sprang von false
-#     auf true. Damit folgt die Frage dem Nutzer ueber die
-#     Arbeitsbereiche, statt auf dem zu bleiben, auf dem er zufaellig
-#     war, als das Geraet anklopfte.
-#
-# KEIN `size`: der Dialog bemisst sich am Text. Eine feste Groesse
-# schnitte die laengeren Rueckfragen ab - RequestPinCode traegt eine
-# Eingabezeile, DisplayPasskey eine sechsstellige Zahl mit Erklaerung.
-windowrule = match:class ^(blueman-applet)$, float on
-windowrule = match:class ^(blueman-applet)$, center on
-windowrule = match:class ^(blueman-applet)$, pin on
+# Hier standen drei Fensterregeln fuer die Klasse blueman-applet
+# (float/center/pin). Sie sind mit demselben Schritt gefallen wie die
+# Startzeile oben: der eigene Agent ist eine LAYER-SHELL-Flaeche und
+# kein Fenster des Fenstermanagers - `windowrule` greift auf ihn gar
+# nicht. Seine Lage kommt aus createOverlayWindow(), seine Glasregeln
+# aus GLASS_LAYERS ("bluetooth-pairing").
 
 # =========================================
 # JetBrains IDE Focus Fix

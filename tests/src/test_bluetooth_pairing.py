@@ -5,51 +5,58 @@ WARUM DIESE DATEI EXISTIERT
     Weil der Ausfall, den sie bewacht, VOLLKOMMEN STILL war. Der Nutzer
     hat am 21.08.2026 gemeldet: "wenn ich mich bei zepos bluetooth
     versuche zu verbinden klappt das, es steht verbunden - aber es fehlt
-    die kopplungsanfrage, die man mit ja oder nein bestaetigen muss."
+    die kopplungsanfrage, die man mit ja oder nein bestaetigen muss. sie
+    erscheint nicht als schwebendes fenster oben drauf."
 
     Es gab keinen Fehler, kein Protokoll, keinen leeren Dialog. Es gab
     nur eine Kopplung, die gelang, ohne zu fragen - und das ist die
     Beschreibung einer Sicherheitsluecke, nicht einer fehlenden Meldung.
 
 DIE KETTE, GEMESSEN AM 21.08.2026 AN QUELLTEXT UND AM LAUFENDEN SYSTEM
-    1. Niemand meldet auf ZepOS einen BlueZ-Agenten an. `grep` ueber den
-       ganzen Baum: null Treffer fuer org.bluez.Agent1 und
-       AgentManager1.
+    1. Niemand meldete auf ZepOS einen BlueZ-Agenten an. `grep` ueber
+       den ganzen Baum: null Treffer fuer org.bluez.Agent1.
     2. bluetoothctl meldet im Stapelbetrieb ABSICHTLICH keinen an.
        bluez 5.87 client/main.c:501 haengt agent_register an
        `!bt_shell_get_env("NON_INTERACTIVE")`, und
        src/shared/shell.c:1415 setzt das, sobald Argumente da sind.
        `bluetoothctl connect <adresse>` - so ruft es
-       ags-bluetooth.template:642 - hat welche.
+       ags-bluetooth.template - hat welche.
     3. Ohne Agenten setzt bluetoothd NoInputNoOutput
        (src/agent.c:126-137 -> src/adapter.c:9167-9173).
     4. Und dann bestaetigt der KERN selbst. Linux v7.1
        net/bluetooth/hci_event.c:5397 schickt HCI_OP_USER_CONFIRM_REPLY,
-       ohne dem Benutzerland etwas zu sagen. Kein D-Bus-Ereignis, kein
-       Fenster. Das Verfahren heisst Just Works und hat per
-       Kernspezifikation KEINEN MITM-Schutz.
+       ohne dem Benutzerland etwas zu sagen. Das Verfahren heisst Just
+       Works und hat per Kernspezifikation KEINEN MITM-Schutz.
 
-    Nebenbefund derselben Messung, den niemand kannte: eine
-    Bluetooth-TASTATUR ist auf ZepOS ueberhaupt nicht koppelbar. Sie
-    braucht RequestPasskey, das laeuft ueber new_auth()
-    (src/device.c:7620-7645), und das liefert ohne Agenten NULL.
+    Nebenbefund derselben Messung: eine Bluetooth-TASTATUR war auf
+    ZepOS ueberhaupt nicht koppelbar. Sie braucht RequestPasskey, das
+    laeuft ueber new_auth() (src/device.c:7620-7645), und das liefert
+    ohne Agenten NULL.
+
+DIE ZWEI STUFEN, UND WARUM DIESE DATEI BEIDE UEBERLEBT HAT
+    STUFE 1 (21.08.2026, in 0.1.9 veroeffentlicht) war blueman-applet
+    als Zwischenloesung - ein `exec-once` und drei Fensterregeln. Sie
+    hat die Luecke am selben Tag geschlossen, um den Preis eines
+    GTK3-Prozesses in der Sitzung.
+
+    STUFE 2 (dieselbe Aufgabe) ist der eigene Agent:
+    src/templates/ags-bluetooth-agent.template, ein org.bluez.Agent1 im
+    AGS-Prozess. Mit ihm sind die Zeilen aus Stufe 1 GEFALLEN (Regel 14).
+
+    Die Zusicherungen haben dabei die Zielangabe gewechselt, nicht den
+    Zweck: die Frage "erscheint die Bestaetigung ueberhaupt, und kann
+    man sie beantworten" ist von blueman unabhaengig. Deshalb prueft
+    diese Datei jetzt BEIDE Richtungen - dass der eigene Agent
+    vollstaendig da ist, UND dass der Vorgaenger wirklich weg ist.
 
 WAS DIESE DATEI MISST UND WAS NICHT
-    Sie misst TEXT - die Vorlage und das Rezept. Ob der Dialog auf einem
-    echten Schirm wirklich obenauf schwebt, wurde am 21.08.2026 EINMAL
-    in einem verschachtelten Hyprland gegen ein nachgebautes org.bluez
-    gemessen (der Bluetooth-Dienst des Nutzers blieb dabei unberuehrt);
-    das Ergebnis steht in den einzelnen Zusicherungen, wo es die Zahl
-    begruendet. Ein Dauerlauf dafuer haette einen Compositor UND einen
-    Bluetooth-Adapter gebraucht - den zweiten hat kein Testrechner.
-
-DIESE DATEI IST EINE ZWISCHENLOESUNG UND WEISS DAS
-    blueman ist GTK3 (BluezAgent.py:18: gi.require_version("Gtk",
-    "3.0")) und steht damit gegen die Entscheidung vom 11.08.2026, die
-    tests/src/test_gtk4_only.py bewacht. Ein eigener Agent als
-    AGS-Fenster loest ihn ab. Wenn das geschieht, faellt diese Datei
-    NICHT weg - sie wechselt die Zielangabe. Die Frage "erscheint die
-    Bestaetigung ueberhaupt" ist von blueman unabhaengig.
+    Sie misst TEXT. Ob das Fenster auf einem echten Schirm obenauf
+    kommt und die Tastatur bekommt, wurde am 21.08.2026 in einem
+    verschachtelten Compositor gegen ein nachgebautes org.bluez
+    gemessen (der Bluetooth-Dienst des Nutzers blieb unberuehrt); die
+    Zahlen stehen in den Zusicherungen, wo sie etwas begruenden. Ein
+    Dauerlauf dafuer braeuchte einen Bluetooth-Adapter, den kein
+    Testrechner hat.
 """
 import re
 from pathlib import Path
@@ -57,15 +64,25 @@ from pathlib import Path
 import pytest
 
 from tests.generated_tree import GeneratedTree, build
+# Auf Modulebene wie in tests/src/test_glass.py: ein Import
+# INNERHALB eines Tests legt beim Uebersetzen ein __pycache__
+# neben der Quelle an, und der Isolationswaechter in
+# tests/conftest.py laesst das zu Recht nicht zu.
+from tests.src import test_sizes
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 SRC = REPOSITORY / "src"
 PACKAGING = REPOSITORY / "packaging"
 
 UNIVERSAL = SRC / "templates" / "hyprland-universal-config.template"
+AGENT = SRC / "templates" / "ags-bluetooth-agent.template"
+APP = SRC / "templates" / "ags-config.template"
+GENERATOR = SRC / "generate_config.sh"
 
-# Der Lauf spawnt den Generator - dieselbe Marke und derselbe Grund wie
-# in tests/src/test_usable_desktop.py.
+# Der Namensraum der Layer-Shell-Flaeche. An EINER Stelle, weil mehrere
+# Zusicherungen ihn brauchen.
+NAMESPACE = "bluetooth-pairing"
+
 pytestmark = pytest.mark.allow_subprocess
 
 
@@ -74,305 +91,428 @@ def tree(tmp_path_factory) -> GeneratedTree:
     return build(tmp_path_factory.mktemp("bluetooth-pairing"))
 
 
-def _uncommented(text: str) -> list[str]:
-    """Die Zeilen ohne die, die nur Kommentar sind.
+def _ohne_kommentare(text: str, marker: str = "//") -> str:
+    """Der Quelltext ohne die Zeilen, die nur Kommentar sind.
 
-    Dieselbe Falle wie in tests/src/test_gtk4_only.py, und hier ist sie
-    besonders scharf: der Block ueber der Startzeile ERKLAERT auf
-    achtzig Zeilen, was ohne ihn passiert, und nennt dabei jeden Namen,
-    nach dem hier gesucht wird. Eine Pruefung als Teilzeichenkette waere
-    von der Erklaerung wahr geworden.
+    DIESE DATEI BRAUCHT DAS DRINGENDER ALS JEDE ANDERE. Der Kopf von
+    ags-bluetooth-agent.template ERKLAERT auf ueber hundert Zeilen, was
+    ohne ihn passiert, und nennt dabei jeden Namen, nach dem hier
+    gesucht wird - NoInputNoOutput, EXCLUSIVE, blueman-applet, die
+    kaputte synchrone Form. Eine Pruefung als Teilzeichenkette waere von
+    der Erklaerung wahr geworden, und zwar in beide Richtungen.
     """
-    return [line.strip() for line in text.splitlines()
-            if not line.lstrip().startswith("#")]
+    return "\n".join(zeile for zeile in text.splitlines()
+                     if not zeile.lstrip().startswith(marker))
 
 
-def _startup_lines(text: str) -> list[str]:
-    return [line for line in _uncommented(text) if line.startswith("exec-once")]
+def _uncommented_lines(text: str, marker: str = "#") -> list[str]:
+    return [zeile.strip() for zeile in text.splitlines()
+            if not zeile.lstrip().startswith(marker)]
 
 
-def _agent_line(text: str) -> str:
-    """Die eine Startzeile, die den Kopplungsagenten hochbringt."""
-    found = [line for line in _startup_lines(text) if "blueman-applet" in line]
-    assert len(found) == 1, (
-        "es gibt nicht genau eine Startzeile fuer den Kopplungsagenten: "
-        f"{found}")
-    return found[0]
+def _agent_code() -> str:
+    return _ohne_kommentare(AGENT.read_text(encoding="utf-8"))
 
 
 # --------------------------------------------------------------------
-# 1. Es gibt ueberhaupt einen Agenten
+# 1. Es gibt einen Agenten - und GENAU einen
 # --------------------------------------------------------------------
 
-def test_the_session_starts_a_bluetooth_pairing_agent_at_all():
-    """Die Zusicherung, die den Ausfall vom 21.08.2026 gefunden haette.
+def test_the_tree_registers_exactly_one_bluetooth_agent():
+    """Die Zusicherung, die den Ausfall vom 21.08.2026 gefunden haette -
+    und zugleich die, die den Umstieg absichert.
 
-    Ohne sie ist "es koppelt ohne zu fragen" ein Zustand, den niemand
-    bemerkt - es gibt keinen Fehler, den man sehen koennte. Genau
-    deshalb hat er es bis in eine veroeffentlichte Fassung geschafft.
+    ZWEI Agenten am selben Adapter waeren schlimmer als einer: bluez
+    fuehrt zwar mehrere, aber nur EINER ist der Vorgabe-Agent, und
+    welcher gefragt wird, haengt dann daran, welche Anwendung die
+    Kopplung angestossen hat. Der Nutzer saehe mal das eine Fenster,
+    mal das andere - oder gar keines.
+
+    Deshalb wird hier GEZAEHLT und nicht nur auf Vorhandensein geprueft.
     """
-    line = _agent_line(UNIVERSAL.read_text(encoding="utf-8"))
-    assert "setsid -f blueman-applet" in line, (
-        "der Agent wird nicht abgekoppelt gestartet - ohne setsid haengt "
-        f"er an der Startzeile: {line}")
+    aufrufe = []
+    for pfad in sorted((SRC / "templates").glob("*.template")):
+        code = _ohne_kommentare(pfad.read_text(encoding="utf-8"))
+        if "RegisterAgent" in code:
+            aufrufe.append(pfad.name)
+
+    assert aufrufe == ["ags-bluetooth-agent.template"], (
+        "genau eine Vorlage darf einen BlueZ-Agenten anmelden, gefunden: "
+        f"{aufrufe}")
 
 
-def test_the_desktop_really_ships_the_agent_it_starts():
-    """Eine Startzeile auf ein Programm, das kein Paket installiert,
-    scheitert einmal pro Anmeldung, lautlos.
+def test_the_agent_registers_with_the_only_capability_that_covers_all_seven():
+    """KeyboardDisplay, und keine der anderen fuenf.
 
-    WARUM DAS HIER STEHT UND NICHT IN test_usable_desktop.py
-        Der dortige Waechter liest Startzeilen mit
-        keybinds.command_words(), und das nimmt von jedem
-        `&&`-Abschnitt nur das ERSTE Wort. In `setsid -f blueman-applet`
-        ist das `setsid`, ein Programm des Grundsystems - der Name
-        dahinter faellt durch. GEMESSEN am 21.08.2026: die Suite lief
-        gruen, obwohl `blueman-applet` in keiner Tabelle stand.
-        Dieselbe Luecke haben die Zeilen fuer ags und vpn-watcher; sie
-        zu schliessen hiesse, command_words() eine setsid-Klammer
-        beizubringen, und das gehoert nicht in diese Aufgabe. Bis dahin
-        deckt diese Zusicherung den einen Namen ab, den sie einbringt.
+    org.bluez.AgentManager(5) laesst "", DisplayOnly, DisplayYesNo,
+    KeyboardOnly, NoInputNoOutput und KeyboardDisplay zu. Nur die letzte
+    deckt alle sieben Rueckfragen ab. NoInputNoOutput waere genau der
+    Zustand, den diese Aufgabe beendet - der Adapter erzwaenge damit
+    Just Works, also gar keine Rueckfrage.
     """
-    recipe = (PACKAGING / "zepos-desktop" / "PKGBUILD").read_text(
-        encoding="utf-8")
-    depends = [line.strip() for line in _uncommented(recipe)]
-    assert "'blueman'" in depends, (
-        "die Sitzung startet blueman-applet, aber zepos-desktop "
-        "installiert blueman nicht als harte Abhaengigkeit")
+    code = _agent_code()
+    assert 'CAPABILITY = "KeyboardDisplay"' in code, (
+        "der Agent meldet sich nicht mit KeyboardDisplay an")
+    for schwaecher in ("NoInputNoOutput", "DisplayOnly", "KeyboardOnly"):
+        assert f'"{schwaecher}"' not in code, (
+            f"{schwaecher} steht im Quelltext - eine schwaechere Faehigkeit "
+            "schneidet Kopplungsverfahren weg")
 
 
-# --------------------------------------------------------------------
-# 2. Die Frage wird ein FENSTER, keine Blase
-# --------------------------------------------------------------------
+def test_the_agent_also_asks_to_become_the_default_agent():
+    """Ohne RequestDefaultAgent bleibt die halbe Luecke offen.
 
-def test_the_pairing_question_is_forced_into_a_window():
-    """Die Zeile, ohne die der ganze Rest wirkungslos waere.
-
-    WAS GEMESSEN WURDE, UND ES HAT DIE ENTSCHEIDUNG GEDREHT
-        blueman zeigt RequestConfirmation NICHT als Fenster, sondern als
-        Benachrichtigung mit den Aktionen confirm/deny
-        (BluezAgent.py:200-217). Welche der beiden Formen es nimmt,
-        entscheidet gui/Notification.py:287-305 an den Faehigkeiten des
-        Benachrichtigungsdienstes.
-
-        AstalNotifd meldet "actions" - gemessen mit `strings` an
-        /usr/lib/libastal-notifd.so.0.1.0: body, actions, action-icons.
-        ZepOS zeichnet aber NIRGENDS Aktionsknoepfe; `grep` nach
-        `.actions`, `invoke(` und `get_actions` ueber alle Vorlagen
-        findet nichts, und in ags-notifications.template ist der einzige
-        Knopf einer Karte das X zum Schliessen.
-
-        Am 21.08.2026 in einem verschachtelten Hyprland gegen ein
-        nachgebautes org.bluez, mit einem Dienst, der genau AstalNotifds
-        Faehigkeiten meldet:
-          OHNE diese Zeile:  0 Fenster, dafuer eine Benachrichtigung mit
-                             actions=[confirm, Confirm, deny, Deny] und
-                             Zeitlimit 0 - sie verfaellt also nie und
-                             traegt in ZepOS keinen einzigen Knopf.
-          MIT dieser Zeile:  1 Fenster, Klasse blueman-applet,
-                             Titel "Bluetooth".
-
-        Ohne sie waere die Behebung also keine: der Nutzer saehe die
-        Anfrage und koennte sie nicht beantworten, waehrend die Kopplung
-        wartet. Die Zeile stand seit dem 03.08.2026 als offener Posten
-        in docs/specs/2026-08-03-zepos-design.md:589.
+    org.bluez.AgentManager(5): ohne Vorgabe-Agenten bedient bluetoothd
+    nur Kopplungen, die dieselbe Anwendung ANGESTOSSEN hat. Ein Geraet,
+    das VON SICH AUS anklopft, faende dann niemanden - und genau das ist
+    der Fall, in dem der Nutzer gar nichts tut und trotzdem etwas
+    passiert.
     """
-    line = _agent_line(UNIVERSAL.read_text(encoding="utf-8"))
-    assert "gsettings set org.blueman.general notification-daemon false" in line, (
-        "ohne notification-daemon=false zeigt blueman eine "
-        "Benachrichtigung, und ZepOS zeichnet deren Knoepfe nicht")
-
-
-def test_the_settings_are_applied_before_the_agent_starts():
-    """Nebenlaeufigkeit, und sie ist hier nicht theoretisch.
-
-    Hyprland fuehrt exec-once-Zeilen NICHT nacheinander aus. Stuenden
-    die beiden `gsettings set` als eigene Zeilen ueber dem Start, dann
-    entschiede der Zufall, ob blueman sie beim Lesen schon sieht - und
-    ein Fehler, der nur manchmal auftritt, ist teurer als einer, der
-    immer auftritt. Deshalb EINE Zeile mit `&&`.
-    """
-    line = _agent_line(UNIVERSAL.read_text(encoding="utf-8"))
-
-    for setting in ("notification-daemon", "plugin-list"):
-        assert line.index(setting) < line.index("blueman-applet"), (
-            f"{setting} wird erst nach dem Start des Agenten gesetzt")
-
-    # Und keine der beiden Einstellungen darf zusaetzlich als EIGENE
-    # Startzeile auftauchen - das waere die nebenlaeufige Form zurueck.
-    others = [other for other in _startup_lines(
-                  UNIVERSAL.read_text(encoding="utf-8"))
-              if "org.blueman" in other and other != line]
-    assert others == [], (
-        f"Blueman-Einstellungen in eigenen, nebenlaeufigen Zeilen: {others}")
+    assert "RequestDefaultAgent" in _agent_code(), (
+        "der Agent bittet nicht darum, Vorgabe-Agent zu werden")
 
 
 # --------------------------------------------------------------------
-# 3. Was abgeschaltet gehoert - und was auf keinen Fall
+# 2. Alle sieben Rueckfragen, in der Form, die wirklich funktioniert
 # --------------------------------------------------------------------
 
-def _disabled(line: str) -> set[str]:
-    """Die Namen aus der plugin-list, ohne das `!`."""
-    match = re.search(r"plugin-list\s+\"\[(.*?)\]\"", line)
-    assert match, f"keine plugin-list in der Startzeile: {line}"
-    return set(re.findall(r"'!([A-Za-z]+)'", match.group(1)))
+# Die sieben Rueckfragen an den Nutzer plus die zwei Verwaltungsaufrufe.
+# Wortlaut aus org.bluez.Agent(5).
+RUECKFRAGEN = (
+    "RequestPinCode", "DisplayPinCode", "RequestPasskey", "DisplayPasskey",
+    "RequestConfirmation", "RequestAuthorization", "AuthorizeService",
+)
+VERWALTUNG = ("Release", "Cancel")
 
 
-def test_the_tray_icon_is_off_together_with_the_plugin_that_pulls_it_back():
-    """Die Falle, die eine reine Quelltextlesung uebersehen hat.
+def test_all_seven_questions_and_both_housekeeping_calls_are_answered():
+    """Ein Agent, der nur eine davon kann, laesst den Nutzer beim
+    naechsten Geraet wieder im Regen stehen.
 
-    ZepOS hat ein eigenes Bluetooth-Feld in der Leiste. Ein zweites
-    Ablagesymbol daneben waere ein Rueckschritt, und `StatusIcon` ist
-    abschaltbar - es traegt kein `__unloadable__ = False`.
+    Eine fehlende Methode beantwortet bluetoothd mit UNKNOWN_METHOD, und
+    die Kopplung laeuft in ihre Zeitgrenze - ohne dass irgendwo etwas
+    stuende. Genau die Sorte Ausfall, die diese Datei bewacht.
 
-    NUR REICHT DAS NICHT, UND DAS IST GEMESSEN
-        __load_plugin in main/PluginManager.py:137-141 laedt
-        `cls.__depends__` BEDINGUNGSLOS - die Abschaltliste wird dabei
-        gar nicht gefragt. `ShowConnected` haengt an `StatusIcon` und
-        holt es damit zurueck.
-
-        Am 21.08.2026 im verschachtelten Lauf nachgestellt:
-          plugin-list=['!StatusIcon']                  -> blueman-tray LAEUFT
-          plugin-list=['!StatusIcon','!ShowConnected'] -> blueman-tray WEG
+    Geprueft wird BEIDES: dass die Methode in der angebotenen
+    Schnittstelle steht (sonst ruft bluez sie nie) und dass es einen
+    Rumpf dafuer gibt (sonst ruft es ins Leere).
     """
-    disabled = _disabled(_agent_line(UNIVERSAL.read_text(encoding="utf-8")))
-    assert "StatusIcon" in disabled, (
-        "das Ablagesymbol von blueman ist an - zwei Symbole fuer dieselbe "
-        "Sache")
-    assert "ShowConnected" in disabled, (
-        "ShowConnected haengt an StatusIcon und holt es ueber "
-        "__load_plugin zurueck - GEMESSEN lief blueman-tray dann weiter")
+    code = _agent_code()
+    fehlend = []
+    for name in RUECKFRAGEN + VERWALTUNG:
+        if f'<method name="{name}"' not in code:
+            fehlend.append(f"{name} (nicht in der Schnittstelle)")
+        if f"{name}Async(" not in code:
+            fehlend.append(f"{name} (kein Rumpf)")
+    assert fehlend == [], f"unbeantwortete Rueckfragen: {fehlend}"
 
 
-def test_the_agent_itself_is_never_switched_off():
-    """Die Gegenrichtung, und ohne sie waere jede Zusicherung oben auch
-    fuer eine Sitzung ohne Kopplungsbestaetigung wahr.
+def test_every_method_uses_the_async_form_that_was_measured_to_work():
+    """Die Form ist gemessen, nicht abgeschrieben - und das ist hier
+    keine Feinheit.
 
-    `AuthAgent` IST der Zweck der ganzen Zeile. Es traegt kein
-    __depends__ und niemand haengt daran, es ueberlebt also jede
-    Abschaltung oben - solange niemand es selbst hineinschreibt.
+    GEMESSEN am 21.08.2026 an gjs 2:1.88.1-1 (die Fassung, von der
+    aylurs-gtk-shell 3.1.2 abhaengt), gegen einen privaten Bus:
+
+        Form                              zweites Argument
+        --------------------------------  -------------------------
+        Method(args…, x)                  NULL bzw. die UnixFDList
+        MethodAsync(params, invocation)   die echte Invocation
+
+    Der synchrone Pfad von gjs haengt die FD-Liste an, nicht die
+    Invocation (Gio.js:371-390, `args.push(invocation.get_message().
+    get_unix_fd_list())`). Ein `invocation.get_sender()` darin wirft bei
+    JEDEM Aufruf `TypeError: invocation is null` - nachgestellt und
+    reproduziert.
+
+    Fuer diesen Agenten waere die synchrone Form nicht bloss unsauber,
+    sondern falsch: er MUSS die Antwort zurueckhalten, bis der Mensch
+    geklickt hat. Wer sofort zurueckkehrt, hat die Kopplung schon
+    bestaetigt, bevor jemand die Zahl gelesen hat.
     """
-    disabled = _disabled(_agent_line(UNIVERSAL.read_text(encoding="utf-8")))
-    assert "AuthAgent" not in disabled, (
-        "AuthAgent ist abgeschaltet - damit startet ein Agentenprozess "
-        "ohne Agenten, und die Luecke ist zurueck")
+    code = _agent_code()
+    falsch = []
+    for name in RUECKFRAGEN + VERWALTUNG:
+        # Ein Methodenrumpf `Name(` OHNE das Async dahinter waere die
+        # kaputte Form. Der Name kommt auch in der XML-Schnittstelle vor,
+        # deshalb wird auf die Rumpfform geprueft: Name gefolgt von "(".
+        if re.search(rf"(?<![\w])({name})\s*\(", code) \
+                and f"{name}Async(" not in code:
+            falsch.append(name)
+    assert falsch == [], (
+        "diese Methoden stehen in der synchronen Form da - auf gjs 1.88 "
+        f"bekommen sie die Invocation nicht: {falsch}")
 
 
-def test_the_plugins_that_fight_the_bar_over_the_adapter_are_off():
-    """blueman-applet bringt ein Dutzend Module mit, nicht nur den
-    Agenten. Fuenf davon fassen denselben Adapter an wie das
-    Bluetooth-Feld der Leiste.
+def test_a_refused_pairing_answers_with_the_error_name_bluez_expects():
+    """Ablehnen ist eine ANTWORT, kein Schweigen.
 
-    WARUM JEDER EINZELNE NAME
-        AutoConnect       verbindet von sich aus wieder, was der Nutzer
-                          getrennt hat - es arbeitet gegen seine
-                          Entscheidungen, und niemand braechte das mit
-                          Bluetooth in Verbindung.
-        DiscvManager      schaltet die Sichtbarkeit ein. Bei einer
-                          Aufgabe, die gerade eine Kopplungsluecke
-                          schliesst, ist das genau das Falsche.
-        ConnectionNotifier meldet ein zweites Mal, was ZepOS meldet.
-        PowerManager      schaltet den Adapter ein und aus.
-        KillSwitch        MUSS mit: es haengt an PowerManager und holte
-                          es sonst nach derselben Regel zurueck, mit der
-                          ShowConnected das Symbol zurueckholt.
+    org.bluez.Agent(5) nennt org.bluez.Error.Rejected und
+    org.bluez.Error.Canceled. Wer stattdessen gar nicht antwortet,
+    laesst bluetoothd in seine Zeitgrenze laufen: die Kopplung haengt,
+    und der Nutzer sieht ein Fenster, das nichts bewirkt hat.
+
+    GEMESSEN am 21.08.2026, dass der Name wirklich ankommt:
+    `invocation.return_dbus_error("org.bluez.Error.Rejected", …)` kommt
+    beim Anrufer als genau dieser Fehler an.
     """
-    disabled = _disabled(_agent_line(UNIVERSAL.read_text(encoding="utf-8")))
-    for plugin in ("AutoConnect", "DiscvManager", "ConnectionNotifier",
-                   "PowerManager", "KillSwitch"):
-        assert plugin in disabled, (
-            f"{plugin} laeuft mit und fasst denselben Adapter an wie das "
-            "Bluetooth-Feld der Leiste")
+    code = _agent_code()
+    assert "return_dbus_error(" in code, (
+        "der Agent kann eine Kopplung gar nicht ablehnen")
+    assert '"org.bluez.Error.Rejected"' in code, (
+        "die Ablehnung traegt nicht den Namen, den org.bluez.Agent(5) nennt")
 
 
-# --------------------------------------------------------------------
-# 4. Das Fenster steht obenauf
-# --------------------------------------------------------------------
+def test_no_way_out_of_the_window_leaves_bluez_waiting():
+    """Das Fenster hat drei Ausgaenge, und alle drei muessen antworten.
 
-def _rules_for(text: str, klass: str) -> list[str]:
-    return [line for line in _uncommented(text)
-            if line.startswith("windowrule") and f"^({klass})$" in line]
-
-
-def test_the_pairing_window_floats_centred_and_pinned():
-    """Die woertliche Beschwerde des Nutzers: sie erscheine "nicht als
-    schwebendes fenster oben drauf".
-
-    DIE KLASSE IST GEMESSEN, NICHT GERATEN
-        Am 21.08.2026 im verschachtelten Hyprland meldete
-        `hyprctl -j clients`: class=blueman-applet,
-        initialClass=blueman-applet, title=Bluetooth, xwayland=false.
-        Es ist die Klasse des APPLETS - der Dialog gehoert dem
-        Agentenprozess, nicht blueman-manager.
-
-    WAS DIE REGEL WIRKLICH AENDERT, EHRLICH
-        float und center beschreiben, was ohnehin geschieht: der Dialog
-        kam auch ohne Regel floating und mittig (Ausgang 456x521 an
-        (4000,0), Fenster 438x198 an (4009,162) - das IST die Mitte).
-        Sie stehen trotzdem da, damit die Lage nicht an einer
-        GTK-Vorgabe haengt. `pin` ist der gemessene Unterschied: pinned
-        sprang von false auf true, und damit folgt die Frage dem Nutzer
-        ueber die Arbeitsbereiche.
+    ESC, das Schliesskreuz im Kopf und ein `Cancel()` von der
+    Gegenseite. createOverlayWindow() fuehrt die ersten beiden durch
+    closeWindow(), und das ruft config.onHide - deshalb haengt die
+    Ablehnung DORT und nicht an den Knoepfen. Ein Fenster, das zugeht,
+    ohne zu antworten, ist der Ausfall dieser Datei in klein.
     """
-    rules = _rules_for(UNIVERSAL.read_text(encoding="utf-8"), "blueman-applet")
-    assert rules, "es gibt keine Fensterregel fuer den Kopplungsdialog"
-
-    body = " ".join(rules)
-    for wanted in ("float on", "center on", "pin on"):
-        assert wanted in body, (
-            f"der Kopplungsdialog hat kein `{wanted}`: {rules}")
-
-
-def test_the_pairing_rule_uses_the_syntax_hyprland_still_understands():
-    """Hyprland 0.53 hat `windowrulev2` fallengelassen.
-
-    Eine Regel in der alten Form wird nicht etwa abgelehnt - sie wird
-    ignoriert, und der Dialog geht wieder irgendwo auf. Derselbe stille
-    Ausfall wie der, den diese Datei bewacht.
-    """
-    rules = _rules_for(UNIVERSAL.read_text(encoding="utf-8"), "blueman-applet")
-    for rule in rules:
-        assert rule.startswith("windowrule ="), (
-            f"keine 0.53er-Schreibweise: {rule}")
-        assert "match:class" in rule, (
-            f"die Regel waehlt das Fenster nicht ueber match:class: {rule}")
-
-    # Und die alte Form nirgends in der ganzen Vorlage - sonst waere die
-    # Zusicherung oben erfuellt und die Datei trotzdem halb veraltet.
-    stale = [line for line in _uncommented(UNIVERSAL.read_text(encoding="utf-8"))
-             if line.startswith("windowrulev2")]
-    assert stale == [], f"abgelegte windowrulev2-Zeilen: {stale}"
+    assert re.search(r"onHide:\s*\(\)\s*=>\s*ablehnen\(\)", _agent_code()), (
+        "onHide beantwortet die offene Frage nicht - ESC und das "
+        "Schliesskreuz liessen bluetoothd dann warten")
 
 
 # --------------------------------------------------------------------
-# 5. Und es ueberlebt den Generator
+# 3. Die zwei Fallen aus der Messung
 # --------------------------------------------------------------------
 
-def test_all_of_it_survives_the_generator_and_not_only_the_template(tree):
-    """Die Vorlage ist nicht die Datei, die Hyprland liest.
+def test_a_repeated_display_passkey_updates_instead_of_opening_again():
+    """FALLE 1, und sie steht so in org.bluez.Agent(5).
 
-    Jede Zusicherung darueber misst src/templates/. Wenn der Generator
-    die Zeile verschluckte - an einem Platzhalter, an einer
-    Anfuehrungszeichen-Behandlung, an einer Route, die es fuer diese
-    Vorlage gar nicht gibt - waere alles davon gruen und der Schreibtisch
-    trotzdem ohne Kopplungsbestaetigung.
+    "During the pairing process this method might be called multiple
+    times to update the entered value" - der Parameter `entered` zaehlt
+    die Tasten mit, die auf der Gegenstelle schon gedrueckt wurden, und
+    bluetoothd ruft DisplayPasskey bei jeder Aenderung erneut.
 
-    Die Anfuehrungszeichen sind hier kein Nebenschauplatz: die
-    plugin-list traegt einfache Anfuehrungszeichen INNERHALB doppelter,
-    und genau so muss sie bei der Shell ankommen.
+    Wer daraufhin ein neues Fenster aufmacht, baut dem Nutzer beim
+    Eintippen einer sechsstelligen Zahl bis zu sechs Fenster
+    uebereinander - waehrend er auf die Tastatur sieht und es nicht
+    merkt.
     """
-    generated = tree.config / "hypr" / "hyprland.conf"
-    assert generated.is_file(), f"{generated} wurde nicht erzeugt"
-    text = generated.read_text(encoding="utf-8")
+    code = _agent_code()
+    stelle = code.index("DisplayPasskeyAsync(")
+    rumpf = code[stelle:stelle + 1600]
+    assert "set_label(" in rumpf, (
+        "DisplayPasskey aktualisiert die Zahl nicht - es oeffnet bei jeder "
+        "Taste der Gegenstelle ein weiteres Fenster")
+    assert "offen.geraet === pfad" in rumpf, (
+        "DisplayPasskey erkennt nicht, dass dasselbe Geraet erneut fragt")
 
-    line = _agent_line(text)
-    assert "notification-daemon false" in line
-    assert "'!StatusIcon'" in line and "'!ShowConnected'" in line, (
-        "die plugin-list hat die Anfuehrungszeichen nicht ueberlebt: "
-        f"{line}")
 
-    rules = _rules_for(text, "blueman-applet")
-    body = " ".join(rules)
-    for wanted in ("float on", "center on", "pin on"):
-        assert wanted in body, (
-            f"`{wanted}` fehlt in der ERZEUGTEN Konfiguration: {rules}")
+def test_the_two_display_calls_answer_at_once_and_do_not_wait_for_a_click():
+    """FALLE 2: DisplayPasskey und DisplayPinCode sind ANZEIGEN, keine
+    Fragen.
+
+    Der Nutzer tippt die Zahl auf dem ANDEREN Geraet ein; hier gibt es
+    nichts zu bestaetigen. Die leere D-Bus-Antwort muss sofort zurueck,
+    und beendet wird die Anzeige von aussen ueber Cancel(). Wer hier auf
+    einen Knopfdruck wartet, laesst bluetoothd in seine Zeitgrenze
+    laufen - und die Kopplung scheitert, obwohl der Nutzer alles richtig
+    gemacht hat.
+
+    Woran man es im Quelltext abliest: die beiden bauen ihre Frage OHNE
+    `beiZustimmung`, bekommen also gar keinen Bestaetigen-Knopf, und
+    rufen return_value(null) unmittelbar.
+    """
+    code = _agent_code()
+    for name in ("DisplayPasskeyAsync", "DisplayPinCodeAsync"):
+        stelle = code.index(name + "(")
+        rumpf = code[stelle:stelle + 1600]
+        assert "invocation.return_value(null)" in rumpf, (
+            f"{name} antwortet nicht sofort")
+        assert "beiZustimmung" not in rumpf, (
+            f"{name} baut einen Bestaetigen-Knopf - es ist aber eine "
+            "Anzeige, auf die niemand antwortet")
+
+
+def test_the_passkey_is_padded_to_six_digits():
+    """org.bluez.Agent(5) sagt es zweimal ausdruecklich: "the passkey
+    will always be a 6-digit number, so the display should be
+    zero-padded at the start".
+
+    Ohne die Nullen verglichen zwei Geraete verschiedene Zeichenfolgen -
+    auf dem einen steht 001234, bei uns 1234 -, und der Nutzer lehnt
+    eine Kopplung ab, die in Ordnung war. Genau die Sorte Fehler, die
+    wie ein Angriff aussieht.
+    """
+    assert _agent_code().count('padStart(6, "0")') >= 2, (
+        "der Zahlenschluessel wird nicht auf sechs Stellen aufgefuellt - "
+        "RequestConfirmation und DisplayPasskey brauchen es beide")
+
+
+# --------------------------------------------------------------------
+# 4. Tastatur und Lage
+# --------------------------------------------------------------------
+
+def test_the_window_can_take_the_keyboard_and_never_locks_the_session():
+    """Ohne Tastatur laesst sich ein Zahlenschluessel nicht eintippen -
+    mit der falschen Einstellung ist die Sitzung weg.
+
+    Das Fenster kommt aus createOverlayWindow() und erbt damit
+    `Astal.Keymode.ON_DEMAND`: es nimmt den Fokus beim Aufgehen und gibt
+    ihn beim Schliessen zurueck. Die beiden Gegenbeispiele sind in
+    diesem Baum gemessen:
+
+      NONE       nimmt die Tastatur NIE (ags-notifications.template,
+                 ags-power-button.template). RequestPasskey waere damit
+                 nicht bedienbar.
+      EXCLUSIVE  SPERRT DIE SITZUNG AUS - zweimal gemessen, siehe den
+                 Kopf von ags-home.template, Punkt 3: das Fenster
+                 bekommt dann GAR KEINE Zeigerereignisse mehr.
+
+    Diese Zusicherung haelt zweierlei fest: dass der Agent die Fabrik
+    benutzt (und damit ON_DEMAND bekommt), und dass er sich NICHT selbst
+    einen Tastenmodus setzt - denn dann waere die Wahl wieder offen.
+    """
+    code = _agent_code()
+    assert "createOverlayWindow({" in code, (
+        "der Agent baut sein Fenster nicht mit der Fabrik - dann haengt "
+        "der Tastenmodus an einer eigenen Zeile")
+    assert "keymode" not in code, (
+        "der Agent setzt einen eigenen Tastenmodus, statt ON_DEMAND aus "
+        "der Fabrik zu erben")
+
+    fabrik = _ohne_kommentare(
+        (SRC / "templates" / "ags-overlay-utils.template").read_text(
+            encoding="utf-8"))
+    assert "keymode: Astal.Keymode.ON_DEMAND" in fabrik, (
+        "die Fabrik gibt nicht mehr ON_DEMAND - der Agent bekaeme dann "
+        "einen anderen Tastenmodus, ohne dass hier etwas faellt")
+
+
+def test_a_stray_return_key_cannot_confirm_a_pairing():
+    """Die Bestaetigung darf nicht aus Reflex passieren.
+
+    Dieselbe Regel wie in ags-logout.template ("der harmloseste der
+    sechs Knoepfe bekommt den Fokus, damit eine zufaellige Eingabetaste
+    nicht auf einem 'kritisch'-Knopf landet") - hier ist sie
+    sicherheitsrelevant: das Fenster geht UNGEFRAGT auf, waehrend der
+    Nutzer etwas anderes tut. Landet der Fokus auf "Bestaetigen", koppelt
+    ein Tastendruck, der einem anderen Fenster galt.
+
+    Gibt es ein Eingabefeld, bekommt DAS den Fokus - sonst koennte man
+    den Zahlenschluessel nicht eintippen, ohne vorher zu klicken.
+    """
+    code = _agent_code()
+    assert "onShow: () => zuFokussieren?.grab_focus()" in code, (
+        "beim Aufgehen bekommt nichts den Fokus")
+    assert "zuFokussieren = feld" in code, (
+        "ein vorhandenes Eingabefeld bekommt den Fokus nicht")
+    assert "if (!zuFokussieren) zuFokussieren = ablehnenBtn" in code, (
+        "ohne Eingabefeld faellt der Fokus nicht auf ABLEHNEN")
+
+
+def test_the_surface_is_named_in_exactly_one_of_the_three_glass_lists(
+        monkeypatch, tmp_path):
+    """Jede Flaeche dieses Baums steht in genau einer der drei Listen.
+
+    Die Vollzaehligkeit selbst prueft tests/src/test_glass.py fuer ALLE
+    Flaechen. Hier steht die Zeile, die sagt, WELCHE der drei es fuer
+    diese Flaeche sein muss und warum: Glas.
+
+    Sie malt einen Grund, den man messen kann - anders als das Home, das
+    einzige Mitglied von PLAIN_LAYERS. Eine Kopplungsfrage ohne Platte
+    laege als Schrift auf der Tapete, und zwar genau in dem Moment, in
+    dem jemand eine sechsstellige Zahl vergleichen soll.
+    """
+    test_sizes._no_compositor(monkeypatch)
+    style = test_sizes._import_style(tmp_path, monkeypatch)
+
+    assert NAMESPACE in style.GLASS_LAYERS, (
+        f"{NAMESPACE} steht nicht in GLASS_LAYERS")
+    assert NAMESPACE not in style.PLAIN_LAYERS, (
+        f"{NAMESPACE} steht in PLAIN_LAYERS - es malt aber einen Grund")
+    assert NAMESPACE in style.GLASS_PLATES, (
+        f"fuer {NAMESPACE} ist keine Platte aufgeschrieben")
+
+
+# --------------------------------------------------------------------
+# 5. Der Vorgaenger ist WEG, nicht bloss ueberholt
+# --------------------------------------------------------------------
+
+def test_the_session_no_longer_starts_a_second_agent_process():
+    """Regel 14: geloescht, nicht als veraltet markiert.
+
+    Stufe 1 startete blueman-applet beim Anmelden. Bliebe die Zeile
+    neben dem eigenen Agenten stehen, waeren ZWEI Agenten am selben
+    Adapter - und welcher gefragt wird, entschiede, wer zuerst
+    Vorgabe-Agent geworden ist. Der Nutzer saehe mal ein GTK3-Fenster,
+    mal unseres.
+
+    Zeilengenau und ohne Kommentare: die Vorlage ERKLAERT an der Stelle
+    ausdruecklich, was dort stand.
+    """
+    zeilen = _uncommented_lines(UNIVERSAL.read_text(encoding="utf-8"))
+    startend = [z for z in zeilen if z.startswith(("exec-once", "exec "))]
+    treffer = [z for z in startend if "blueman" in z]
+    assert treffer == [], f"die Sitzung startet weiterhin blueman: {treffer}"
+
+    regeln = [z for z in zeilen
+              if z.startswith("windowrule") and "blueman" in z]
+    assert regeln == [], (
+        "es stehen noch Fensterregeln fuer blueman da - der eigene Agent "
+        f"ist eine Layer-Flaeche, auf die keine greift: {regeln}")
+
+
+def test_the_package_stays_because_it_is_the_only_way_to_send_a_file():
+    """Die Gegenrichtung, und sie ist gemessen.
+
+    `grep` nach obex/sendto ueber src/ und packaging/ am 21.08.2026:
+    ausser blueman gibt es in diesem Baum KEINEN Weg, eine Datei ueber
+    Bluetooth zu schicken. Der Knopf in ags-bluetooth.template fuehrt
+    weiter dorthin.
+
+    Nur der AGENT ist unserer geworden. Das Paket mit zu entfernen waere
+    kein Aufraeumen, sondern der stille Verlust einer Funktion - genau
+    die Sorte Schaden, vor der Regel 14 NICHT schuetzt, weil hier nichts
+    tot ist.
+    """
+    zeilen = _uncommented_lines(
+        (PACKAGING / "zepos-desktop" / "PKGBUILD").read_text(encoding="utf-8"))
+    assert "'blueman'" in zeilen, (
+        "blueman ist keine Abhaengigkeit mehr - damit faellt die "
+        "Bluetooth-Dateiuebertragung ersatzlos weg")
+
+
+# --------------------------------------------------------------------
+# 6. Und es kommt wirklich an
+# --------------------------------------------------------------------
+
+def test_the_generator_and_the_shell_both_know_the_new_window(tree):
+    """Eine Vorlage, die niemand erzeugt und niemand einhaengt, ist eine
+    Datei im Baum und kein Fenster auf dem Schirm.
+
+    Drei Enden muessen zusammenpassen, und jedes einzelne ist schon
+    einmal das fehlende gewesen: die Route im Generator, der Import in
+    app.ts und der Aufruf darin. Geprueft wird zusaetzlich am ERZEUGTEN
+    Baum, nicht nur an den Vorlagen - der Unterschied ist der ganze
+    Zweck.
+    """
+    generator = "\n".join(_uncommented_lines(
+        GENERATOR.read_text(encoding="utf-8")))
+    assert "ags-bluetooth-agent)" in generator, (
+        "der Generator kennt keine Route fuer den Agenten")
+    assert 'CONFIG_FILE="BluetoothAgent.tsx"' in generator, (
+        "die Route schreibt nicht BluetoothAgent.tsx")
+
+    app = _ohne_kommentare(APP.read_text(encoding="utf-8"))
+    assert 'from "./widget/BluetoothAgent"' in app, (
+        "app.ts importiert den Agenten nicht")
+    assert "BluetoothAgent()" in app, (
+        "app.ts ruft den Agenten nicht auf - er wuerde nie angemeldet")
+
+    erzeugt = tree.config / "ags" / "widget" / "BluetoothAgent.tsx"
+    assert erzeugt.is_file(), f"{erzeugt} wurde nicht erzeugt"
+    code = _ohne_kommentare(erzeugt.read_text(encoding="utf-8"))
+    assert "org.bluez.Agent1" in code, (
+        "die erzeugte Datei bietet die Agentenschnittstelle nicht an")
+    assert "{{" not in code, (
+        "in der erzeugten Datei stehen noch Platzhalter")
+    assert f'"{NAMESPACE}"' in code, (
+        "die erzeugte Datei meldet den Namensraum nicht an, auf den die "
+        "Glasregeln zeigen")

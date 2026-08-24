@@ -42,6 +42,12 @@ import Settings from "./widget/Settings"
 // hier, kein eigenes Programm mehr - siehe den Kopf von
 // ags-logout.template.
 import Logout from "./widget/Logout"
+// Der Bluetooth-Kopplungsagent - Aufgabe 54, Stufe 2 (21.08.2026). Er
+// hat KEINE Taste und KEINEN Knopf: er geht auf, wenn ein Geraet
+// anklopft, und sonst nie. Deshalb steht er auch nicht in `widgets`
+// unten - es gibt nichts umzuschalten. Siehe den Kopf von
+// ags-bluetooth-agent.template.
+import BluetoothAgent from "./widget/BluetoothAgent"
 // Der Abschaltknopf am Dock - Aufgabe 26, Teil 3 (19.08.2026). Baut
 // selbst ein Astal.Window je Schirm (wie Bar/Dock, keine Ueberlagerung
 // aus utils/overlay) und liefert keinen Zustand zurueck, den app.ts
@@ -342,6 +348,22 @@ app.start({
       console.log("Notifications loaded successfully")
     } catch (e) {
       console.error("Failed to create Notifications:", e)
+    }
+
+    // Der Bluetooth-Kopplungsagent. Wie die Einblendungen selbstaendig
+    // und ohne Umschalter - er meldet sich beim Anlegen bei BlueZ an
+    // und zeigt sein Fenster, wenn eine Kopplung bestaetigt werden
+    // muss.
+    //
+    // EIGENES try, und das ist hier nicht Formsache: schluege die
+    // Anmeldung fehl und risse den Rest von main() mit, verlaere die
+    // Sitzung Leiste und Dock wegen eines Bluetooth-Adapters, den
+    // dieser Rechner vielleicht gar nicht hat.
+    try {
+      BluetoothAgent()
+      console.log("BluetoothAgent loaded successfully")
+    } catch (e) {
+      console.error("Failed to create BluetoothAgent:", e)
     }
 
     // Das Meldungszentrum. NACH dem Stapel, weil beide denselben

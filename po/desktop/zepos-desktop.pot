@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
-"POT-Creation-Date: 2026-08-21 11:27+0200\n"
+"POT-Creation-Date: 2026-08-24 20:30+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -121,12 +121,57 @@ msgstr ""
 msgid "Power"
 msgstr ""
 
-#: src/templates/ags-bluetooth.template:256
-msgid "bluetoothctl is not answering ({error}). Usually the service is not running: systemctl enable --now bluetooth.service"
-msgstr ""
-
+#: src/templates/ags-bluetooth-agent.template:274
 #: src/templates/ags-bluetooth.template:340
 msgid "Unnamed device"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:386
+msgid "Deny"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:396
+msgid "Confirm"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:415
+msgid "Pairing request"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:484
+msgid "Does this number match the one shown on {device}?"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:500
+msgid "Allow {device} to pair with this computer?"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:511
+msgid "Enter the passkey shown on {device}"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:534
+msgid "Enter the PIN for {device}"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:553
+msgid "Allow {device} to use this service?"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:565
+msgid "Always allow"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:606
+msgid "Type this passkey on {device} and confirm there"
+msgstr ""
+
+#: src/templates/ags-bluetooth-agent.template:630
+msgid "Type this PIN on {device} and confirm there"
+msgstr ""
+
+#: src/templates/ags-bluetooth.template:256
+msgid "bluetoothctl is not answering ({error}). Usually the service is not running: systemctl enable --now bluetooth.service"
 msgstr ""
 
 #: src/templates/ags-bluetooth.template:374
@@ -517,11 +562,11 @@ msgid "New window"
 msgstr ""
 
 #: src/templates/ags-dock.template:1238 src/templates/ags-dock.template:1356
-#: src/templates/ags-home.template:879
+#: src/templates/ags-home.template:877
 msgid "Remove from dock"
 msgstr ""
 
-#: src/templates/ags-dock.template:1274 src/templates/ags-home.template:839
+#: src/templates/ags-dock.template:1274 src/templates/ags-home.template:837
 msgid "Remove from Home"
 msgstr ""
 
@@ -529,7 +574,7 @@ msgstr ""
 msgid "Add to Home"
 msgstr ""
 
-#: src/templates/ags-dock.template:1361 src/templates/ags-home.template:885
+#: src/templates/ags-dock.template:1361 src/templates/ags-home.template:883
 msgid "Add to dock"
 msgstr ""
 
@@ -537,23 +582,23 @@ msgstr ""
 msgid "Close"
 msgstr ""
 
-#: src/templates/ags-home.template:810 src/templates/ags-network.template:499
+#: src/templates/ags-home.template:808
 msgid "Open"
 msgstr ""
 
-#: src/templates/ags-home.template:923
+#: src/templates/ags-home.template:921
 msgid "Open application launcher"
 msgstr ""
 
-#: src/templates/ags-home.template:928
+#: src/templates/ags-home.template:926
 msgid "Tidy up icons"
 msgstr ""
 
-#: src/templates/ags-home.template:936
+#: src/templates/ags-home.template:934
 msgid "Choose wallpaper"
 msgstr ""
 
-#: src/templates/ags-home.template:941
+#: src/templates/ags-home.template:939
 msgid "Settings"
 msgstr ""
 
@@ -589,81 +634,86 @@ msgstr ""
 msgid "Password for \"{ssid}\""
 msgstr ""
 
-#: src/templates/ags-network.template:514
+#: src/templates/ags-network.template:516
+msgctxt "wifi security"
+msgid "Open"
+msgstr ""
+
+#: src/templates/ags-network.template:531
 msgid "Please enter the password"
 msgstr ""
 
-#: src/templates/ags-network.template:517 src/templates/ags-vpn.template:498
+#: src/templates/ags-network.template:534 src/templates/ags-vpn.template:498
 msgid "Connecting ..."
 msgstr ""
 
-#: src/templates/ags-network.template:521 src/templates/ags-vpn.template:569
+#: src/templates/ags-network.template:538 src/templates/ags-vpn.template:569
 msgid "Connection failed"
 msgstr ""
 
-#: src/templates/ags-network.template:559
+#: src/templates/ags-network.template:576
 msgid "{signal}% • {security}"
 msgstr ""
 
-#: src/templates/ags-network.template:561
+#: src/templates/ags-network.template:578
 msgid "open"
 msgstr ""
 
-#: src/templates/ags-network.template:624
+#: src/templates/ags-network.template:641
 msgid "Turn Wi-Fi on or off"
 msgstr ""
 
-#: src/templates/ags-network.template:710
+#: src/templates/ags-network.template:727
 msgid "Searching for Wi-Fi networks …"
 msgstr ""
 
-#: src/templates/ags-network.template:775
-#: src/templates/ags-network.template:960
+#: src/templates/ags-network.template:792
+#: src/templates/ags-network.template:977
 msgid "Back"
 msgstr ""
 
-#: src/templates/ags-network.template:779
+#: src/templates/ags-network.template:796
 msgid "Password for network"
 msgstr ""
 
-#: src/templates/ags-network.template:787
+#: src/templates/ags-network.template:804
 msgid "Enter the Wi-Fi password ..."
 msgstr ""
 
-#: src/templates/ags-network.template:795 src/templates/ags-vpn.template:827
+#: src/templates/ags-network.template:812 src/templates/ags-vpn.template:827
 msgid "Connect"
 msgstr ""
 
-#: src/templates/ags-network.template:847
+#: src/templates/ags-network.template:864
 msgid "Wi-Fi networks"
 msgstr ""
 
-#: src/templates/ags-network.template:867
+#: src/templates/ags-network.template:884
 msgid "Scan again"
 msgstr ""
 
-#: src/templates/ags-network.template:890
+#: src/templates/ags-network.template:907
 msgid "Open network management"
 msgstr ""
 
-#: src/templates/ags-network.template:991
+#: src/templates/ags-network.template:1008
 msgid "IP address"
 msgstr ""
 
-#: src/templates/ags-network.template:993
+#: src/templates/ags-network.template:1010
 msgid "Gateway"
 msgstr ""
 
-#: src/templates/ags-network.template:995
+#: src/templates/ags-network.template:1012
 #: src/templates/ags-vpn-settings.template:918
 msgid "DNS"
 msgstr ""
 
-#: src/templates/ags-network.template:997
+#: src/templates/ags-network.template:1014
 msgid "Security"
 msgstr ""
 
-#: src/templates/ags-network.template:1008 src/templates/ags-vpn.template:402
+#: src/templates/ags-network.template:1025 src/templates/ags-vpn.template:402
 #: src/templates/ags-vpn.template:611 src/templates/ags-vpn.template:682
 msgid "Disconnect"
 msgstr ""

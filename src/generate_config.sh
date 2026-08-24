@@ -1426,6 +1426,15 @@ case "$CONFIG_NAME" in
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
         CONFIG_FILE="Logout.tsx"
         ;;
+    # Der Bluetooth-Kopplungsagent, seit Aufgabe 54 Stufe 2
+    # (21.08.2026). Er loest blueman-applet ab: kein zweites Programm
+    # in der Sitzung mehr, sondern ein Fenster in dem Prozess, der
+    # ohnehin laeuft. Die Begruendung samt der gemessenen Kette bis in
+    # den Kern steht im Kopf von ags-bluetooth-agent.template.
+    ags-bluetooth-agent)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
+        CONFIG_FILE="BluetoothAgent.tsx"
+        ;;
     ags-battery)
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/widget"
         CONFIG_FILE="Battery.tsx"

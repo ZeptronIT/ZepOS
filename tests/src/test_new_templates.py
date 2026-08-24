@@ -1246,5 +1246,17 @@ def test_the_template_count_is_seventy_seven():
     Fenster. Die vollstaendige Rechnung und der Wortlaut der Bestellung
     stehen bei der Zwillingszusicherung in tests/src/test_inventory.py;
     beide muessen zusammen wandern.
+
+    89 STATT 88, am 21.08.2026 (Aufgabe 54, Stufe 2):
+    ags-bluetooth-agent. Sie erzeugt ags/widget/BluetoothAgent.tsx - ein
+    org.bluez.Agent1 auf dem Systembus, der alle sieben Rueckfragen von
+    org.bluez.Agent(5) beantwortet und sein Fenster aus derselben
+    createOverlayWindow()-Fabrik holt wie die uebrigen zwoelf.
+
+    Sie ersetzt blueman-applet, das seit Stufe 1 als `exec-once` in der
+    Sitzung lief - netto plus eine Vorlage und minus ein fremdes
+    GTK3-Programm. Die vollstaendige Begruendung samt der gemessenen
+    Kette bis in den Kern steht bei der Zwillingszusicherung in
+    tests/src/test_inventory.py.
     """
-    assert len(list(TEMPLATES.glob("*.template"))) == 88
+    assert len(list(TEMPLATES.glob("*.template"))) == 89

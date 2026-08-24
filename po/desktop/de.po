@@ -11,7 +11,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
-"POT-Creation-Date: 2026-08-21 11:27+0200\n"
+"POT-Creation-Date: 2026-08-24 20:30+0200\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -121,13 +121,58 @@ msgstr "Restzeit"
 msgid "Power"
 msgstr "Leistung"
 
-#: src/templates/ags-bluetooth.template:256
-msgid "bluetoothctl is not answering ({error}). Usually the service is not running: systemctl enable --now bluetooth.service"
-msgstr "bluetoothctl antwortet nicht ({error}). Meist läuft der Dienst nicht: systemctl enable --now bluetooth.service"
-
+#: src/templates/ags-bluetooth-agent.template:274
 #: src/templates/ags-bluetooth.template:340
 msgid "Unnamed device"
 msgstr "Unbenanntes Gerät"
+
+#: src/templates/ags-bluetooth-agent.template:386
+msgid "Deny"
+msgstr "Ablehnen"
+
+#: src/templates/ags-bluetooth-agent.template:396
+msgid "Confirm"
+msgstr "Bestätigen"
+
+#: src/templates/ags-bluetooth-agent.template:415
+msgid "Pairing request"
+msgstr "Kopplungsanfrage"
+
+#: src/templates/ags-bluetooth-agent.template:484
+msgid "Does this number match the one shown on {device}?"
+msgstr "Stimmt diese Zahl mit der auf {device} überein?"
+
+#: src/templates/ags-bluetooth-agent.template:500
+msgid "Allow {device} to pair with this computer?"
+msgstr "Soll sich {device} mit diesem Rechner koppeln dürfen?"
+
+#: src/templates/ags-bluetooth-agent.template:511
+msgid "Enter the passkey shown on {device}"
+msgstr "Zahlenschlüssel eingeben, der auf {device} steht"
+
+#: src/templates/ags-bluetooth-agent.template:534
+msgid "Enter the PIN for {device}"
+msgstr "PIN für {device} eingeben"
+
+#: src/templates/ags-bluetooth-agent.template:553
+msgid "Allow {device} to use this service?"
+msgstr "Soll {device} diesen Dienst nutzen dürfen?"
+
+#: src/templates/ags-bluetooth-agent.template:565
+msgid "Always allow"
+msgstr "Immer erlauben"
+
+#: src/templates/ags-bluetooth-agent.template:606
+msgid "Type this passkey on {device} and confirm there"
+msgstr "Diesen Zahlenschlüssel auf {device} eintippen und dort bestätigen"
+
+#: src/templates/ags-bluetooth-agent.template:630
+msgid "Type this PIN on {device} and confirm there"
+msgstr "Diese PIN auf {device} eintippen und dort bestätigen"
+
+#: src/templates/ags-bluetooth.template:256
+msgid "bluetoothctl is not answering ({error}). Usually the service is not running: systemctl enable --now bluetooth.service"
+msgstr "bluetoothctl antwortet nicht ({error}). Meist läuft der Dienst nicht: systemctl enable --now bluetooth.service"
 
 #: src/templates/ags-bluetooth.template:374
 #: src/templates/ags-control-center.template:449
@@ -523,11 +568,11 @@ msgid "New window"
 msgstr "Neues Fenster"
 
 #: src/templates/ags-dock.template:1238 src/templates/ags-dock.template:1356
-#: src/templates/ags-home.template:879
+#: src/templates/ags-home.template:877
 msgid "Remove from dock"
 msgstr "Vom Dock entfernen"
 
-#: src/templates/ags-dock.template:1274 src/templates/ags-home.template:839
+#: src/templates/ags-dock.template:1274 src/templates/ags-home.template:837
 msgid "Remove from Home"
 msgstr "Vom Home entfernen"
 
@@ -535,7 +580,7 @@ msgstr "Vom Home entfernen"
 msgid "Add to Home"
 msgstr "Zum Home hinzufügen"
 
-#: src/templates/ags-dock.template:1361 src/templates/ags-home.template:885
+#: src/templates/ags-dock.template:1361 src/templates/ags-home.template:883
 msgid "Add to dock"
 msgstr "Zum Dock hinzufügen"
 
@@ -543,23 +588,23 @@ msgstr "Zum Dock hinzufügen"
 msgid "Close"
 msgstr "Schließen"
 
-#: src/templates/ags-home.template:810 src/templates/ags-network.template:499
+#: src/templates/ags-home.template:808
 msgid "Open"
-msgstr "Offen"
+msgstr "Öffnen"
 
-#: src/templates/ags-home.template:923
+#: src/templates/ags-home.template:921
 msgid "Open application launcher"
 msgstr "Anwendungsstarter öffnen"
 
-#: src/templates/ags-home.template:928
+#: src/templates/ags-home.template:926
 msgid "Tidy up icons"
 msgstr "Symbole ordnen"
 
-#: src/templates/ags-home.template:936
+#: src/templates/ags-home.template:934
 msgid "Choose wallpaper"
 msgstr "Hintergrundbild wählen"
 
-#: src/templates/ags-home.template:941
+#: src/templates/ags-home.template:939
 msgid "Settings"
 msgstr "Einstellungen"
 
@@ -595,27 +640,32 @@ msgstr "Netzwerk"
 msgid "Password for \"{ssid}\""
 msgstr "Passwort für \"{ssid}\""
 
-#: src/templates/ags-network.template:514
+#: src/templates/ags-network.template:516
+msgctxt "wifi security"
+msgid "Open"
+msgstr "Offen"
+
+#: src/templates/ags-network.template:531
 msgid "Please enter the password"
 msgstr "Bitte Passwort eingeben"
 
-#: src/templates/ags-network.template:517 src/templates/ags-vpn.template:498
+#: src/templates/ags-network.template:534 src/templates/ags-vpn.template:498
 msgid "Connecting ..."
 msgstr "Verbinde ..."
 
-#: src/templates/ags-network.template:521 src/templates/ags-vpn.template:569
+#: src/templates/ags-network.template:538 src/templates/ags-vpn.template:569
 msgid "Connection failed"
 msgstr "Verbindung fehlgeschlagen"
 
-#: src/templates/ags-network.template:559
+#: src/templates/ags-network.template:576
 msgid "{signal}% • {security}"
 msgstr "{signal}% • {security}"
 
-#: src/templates/ags-network.template:561
+#: src/templates/ags-network.template:578
 msgid "open"
 msgstr "offen"
 
-#: src/templates/ags-network.template:624
+#: src/templates/ags-network.template:641
 msgid "Turn Wi-Fi on or off"
 msgstr "WLAN ein- oder ausschalten"
 
@@ -624,57 +674,57 @@ msgstr "WLAN ein- oder ausschalten"
 # laeuft seither im Hintergrund, waehrend die Liste des letzten Laufs
 # schon dasteht. Ohne diese Zeile saehe der Nutzer nur eine Liste, die
 # sich irgendwann von selbst aendert.
-#: src/templates/ags-network.template:710
+#: src/templates/ags-network.template:727
 msgid "Searching for Wi-Fi networks …"
 msgstr "WLAN-Netze werden gesucht …"
 
-#: src/templates/ags-network.template:775
-#: src/templates/ags-network.template:960
+#: src/templates/ags-network.template:792
+#: src/templates/ags-network.template:977
 msgid "Back"
 msgstr "Zurück"
 
-#: src/templates/ags-network.template:779
+#: src/templates/ags-network.template:796
 msgid "Password for network"
 msgstr "Passwort für Netzwerk"
 
-#: src/templates/ags-network.template:787
+#: src/templates/ags-network.template:804
 msgid "Enter the Wi-Fi password ..."
 msgstr "WLAN-Passwort eingeben ..."
 
-#: src/templates/ags-network.template:795 src/templates/ags-vpn.template:827
+#: src/templates/ags-network.template:812 src/templates/ags-vpn.template:827
 msgid "Connect"
 msgstr "Verbinden"
 
-#: src/templates/ags-network.template:847
+#: src/templates/ags-network.template:864
 msgid "Wi-Fi networks"
 msgstr "WLAN-Netzwerke"
 
-#: src/templates/ags-network.template:867
+#: src/templates/ags-network.template:884
 msgid "Scan again"
 msgstr "Erneut suchen"
 
-#: src/templates/ags-network.template:890
+#: src/templates/ags-network.template:907
 msgid "Open network management"
 msgstr "Netzwerkverwaltung öffnen"
 
-#: src/templates/ags-network.template:991
+#: src/templates/ags-network.template:1008
 msgid "IP address"
 msgstr "IP-Adresse"
 
-#: src/templates/ags-network.template:993
+#: src/templates/ags-network.template:1010
 msgid "Gateway"
 msgstr "Gateway"
 
-#: src/templates/ags-network.template:995
+#: src/templates/ags-network.template:1012
 #: src/templates/ags-vpn-settings.template:918
 msgid "DNS"
 msgstr "DNS"
 
-#: src/templates/ags-network.template:997
+#: src/templates/ags-network.template:1014
 msgid "Security"
 msgstr "Sicherheit"
 
-#: src/templates/ags-network.template:1008 src/templates/ags-vpn.template:402
+#: src/templates/ags-network.template:1025 src/templates/ags-vpn.template:402
 #: src/templates/ags-vpn.template:611 src/templates/ags-vpn.template:682
 msgid "Disconnect"
 msgstr "Trennen"
@@ -1364,6 +1414,3 @@ msgstr "Ja"
 
 #~ msgid "VPN connection"
 #~ msgstr "VPN Verbindung"
-
-#~ msgid "Confirmation"
-#~ msgstr "Bestätigung"

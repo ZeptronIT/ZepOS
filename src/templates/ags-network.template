@@ -168,7 +168,7 @@ import Pango from "gi://Pango"
 // die Fabrik umgeht (siehe die Begruendung in ags-bluetooth.template,
 // Aufgabe 7, an derselben Stelle).
 import type { ShellSeite } from "../utils/overlay"
-import { _, format } from "../utils/i18n"
+import { _, format, pgettext } from "../utils/i18n"
 import { zepButton, zepRow, zepStateHeader, zepToggle, zepSectionLabel, zepDivider, zepBusy } from "../utils/kit"
 
 // UMGESTELLT AUF DAS BAUTEIL-KIT, 18.08.2026 (task-C, Stufe 4)
@@ -495,8 +495,25 @@ export const networkSeite: ShellSeite = {
 
       try {
         const secOut = await execAsync(`bash -c "LANG=C nmcli -t -f 802-11-wireless-security.key-mgmt connection show '${currentConnectionInfo.name}' 2>/dev/null | cut -d: -f2"`)
+        // "Offen" im Sinne von UNGESICHERT, nicht im Sinne von
+        // "oeffnen".
+        //
+        // GEMESSEN am 21.08.2026: dieselbe msgid `_("Open")` stand hier
+        // UND in ags-home.template:810, dort als Menuepunkt, der eine
+        // Datei OEFFNET. Ein Katalog kennt aber nur EINEN Eintrag je
+        // msgid, und der stand auf "Offen" - also las der Nutzer im
+        // Rechtsklickmenue des Schreibtischs ein Adjektiv, wo ein
+        // Befehl hingehoert.
+        //
+        // Beides zugleich geht nicht ohne Zusatz. Der Zusatz steht
+        // HIER, weil dieses Wort das seltenere ist: `msgid "Open"` ohne
+        // Zusatz bleibt der Befehl (jetzt "Oeffnen"), und die
+        // Sicherheitsangabe bekommt ihren eigenen Eintrag. Dieselbe
+        // Bauweise wie bei der Schirmausrichtung in
+        // ags-wallpaper.template.
         detailSecurityLabel.set_text(
-          secOut.trim() ? secOut.trim().toUpperCase() : _("Open"))
+          secOut.trim() ? secOut.trim().toUpperCase()
+            : pgettext("wifi security", "Open"))
       } catch { detailSecurityLabel.set_text(NOTHING) }
     }
 

@@ -407,8 +407,26 @@ def test_template_count_is_seventy_seven():
     (bruecke()/gepflegtePins()/schreibePins() im Dock, frage()/lies()/
     schreibe() im Home), es ist also netto plus eine Datei und minus
     sechs Funktionen.
+
+    89 STATT 88, am 21.08.2026 (Aufgabe 54, Stufe 2):
+    ags-bluetooth-agent. Der Nutzer meldete, die Kopplung gelinge ohne
+    Rueckfrage ("es fehlt die kopplungsanfrage, die man mit ja oder nein
+    bestaetigen muss"). Gemessen war es keine fehlende Meldung, sondern
+    eine Sicherheitsluecke: ohne angemeldeten BlueZ-Agenten setzt
+    bluetoothd NoInputNoOutput, und der KERN bestaetigt die Kopplung
+    dann selbst (Linux v7.1 net/bluetooth/hci_event.c:5397,
+    HCI_OP_USER_CONFIRM_REPLY) - Just Works, ohne MITM-Schutz. Die neue
+    Vorlage erzeugt ags/widget/BluetoothAgent.tsx: ein org.bluez.Agent1
+    auf dem Systembus mit allen sieben Rueckfragen, dessen Fenster aus
+    derselben createOverlayWindow()-Fabrik kommt wie die uebrigen zwoelf.
+
+    Sie ist netto plus eine Datei und MINUS ein fremdes Programm in der
+    Sitzung: die Zwischenloesung (`exec-once` auf blueman-applet samt
+    drei Fensterregeln in hyprland-universal-config.template) faellt mit
+    ihr, nach Regel 14. Das PAKET blueman bleibt - es ist der einzige
+    Weg zur Bluetooth-Dateiuebertragung in diesem Baum.
     """
-    assert len(list((SRC / "templates").glob("*.template"))) == 88
+    assert len(list((SRC / "templates").glob("*.template"))) == 89
 
 
 def test_nothing_refers_to_a_deleted_template():

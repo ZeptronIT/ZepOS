@@ -2379,6 +2379,17 @@ GLASS_LAYERS = (
     # "logout", ...})` in ags-logout.template, dieselbe `.overlay-outer`-
     # Platte wie sie alle.
     "logout",
+    # Die Bluetooth-Kopplungsbestaetigung, seit Aufgabe 54 Stufe 2
+    # (21.08.2026). Ein Fenster aus createOverlayWindow() wie die
+    # uebrigen, also dieselbe `.overlay-outer`-Platte - GLAS und nicht
+    # PLAIN: es malt einen Grund, den man messen kann.
+    #
+    # Es ist zugleich das EINZIGE Fenster dieses Baums, das ungefragt
+    # aufgeht: ein fremdes Geraet klopft an, und der Nutzer soll die
+    # Zahl lesen koennen, ohne sie zu suchen. Genau deshalb steht es
+    # hier und nicht in PLAIN_LAYERS - eine Frage ohne Platte laege als
+    # Schrift auf der Tapete.
+    "bluetooth-pairing",
     "hyprlaunch",
     "clipboard-manager",
     "zepos-menu",
@@ -2579,6 +2590,9 @@ GLASS_PLATES = {
     # eigener Wahlausdruck "window", leeres `text` mit `covered_by`
     # "button") - siehe die Anmerkung bei "WARUM covered_by" oben.
     "logout": _OVERLAY,
+    # Die Kopplungsbestaetigung (Aufgabe 54, Stufe 2, 21.08.2026):
+    # createOverlayWindow(), also dieselbe Platte wie die uebrigen.
+    "bluetooth-pairing": _OVERLAY,
     # "vpn" ist am 18.08.2026 (Aufgabe 9) gefallen - siehe der Kommentar
     # bei GLASS_LAYERS oben. VPN malt sich seither auf der Platte des
     # Namensraums "control".

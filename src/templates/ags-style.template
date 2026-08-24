@@ -3153,6 +3153,61 @@ modelbutton {
 }
 
 // ---------------------------------------------------------------------
+// DIE BLUETOOTH-KOPPLUNGSBESTAETIGUNG (Aufgabe 54, Stufe 2, 21.08.2026)
+// ---------------------------------------------------------------------
+//
+// Das Fenster kommt aus createOverlayWindow() und traegt damit dieselbe
+// Platte wie die anderen zwoelf (`.overlay-outer`) - deshalb steht hier
+// KEIN Hintergrund und kein Rahmen, genauso wie bei .Logout darueber.
+// GLASS_PLATES fuehrt "bluetooth-pairing" folgerichtig als _OVERLAY.
+//
+// Es ist das einzige Fenster dieses Baums, das UNGEFRAGT aufgeht: ein
+// fremdes Geraet klopft an, und der Nutzer soll in derselben Sekunde
+// lesen koennen, was gefragt ist. Darum die grosse Zahl.
+.BluetoothPairing {
+  background: transparent;
+}
+
+.btp-inhalt {
+  padding: {{STYLE_SPACE_16}};
+}
+
+.btp-frage {
+  font-size: {{STYLE_FONT_BODY}};
+  color: {{STYLE_COLOR_OVERLAY_TEXT}};
+}
+
+// Die sechsstellige Zahl, die verglichen wird.
+//
+// WARUM SIE SO GROSS IST UND SPERRT
+//     Sie ist der ganze Zweck des Fensters: der Nutzer haelt sie gegen
+//     die Zahl auf dem anderen Geraet. Zwei Zahlen zu vergleichen, die
+//     in Fliesstextgroesse dastehen, ist genau die Aufgabe, bei der
+//     Menschen Ziffern verwechseln - deshalb HERO und ein Sperrsatz,
+//     der die Ziffern einzeln stehen laesst.
+//
+//     Dieselbe Klasse traegt auch die Dienst-UUID bei AuthorizeService.
+//     Die ist laenger; `wrap` faengt sie ab, statt das Fenster zu
+//     dehnen.
+.btp-zahl {
+  font-size: {{STYLE_FONT_HERO}};
+  font-weight: {{STYLE_FONT_WEIGHT}};
+  color: {{STYLE_COLOR_OVERLAY_ACCENT}};
+  letter-spacing: {{STYLE_SPACE_4}};
+  padding: {{STYLE_SPACE_8}} 0;
+}
+
+.btp-feld {
+  font-size: {{STYLE_FONT_LEAD}};
+  border-radius: {{STYLE_RADIUS_CONTROL}};
+  padding: {{STYLE_SPACE_8}};
+}
+
+.btp-knoepfe {
+  padding-top: {{STYLE_SPACE_8}};
+}
+
+// ---------------------------------------------------------------------
 // DIE BEWEGUNG
 // ---------------------------------------------------------------------
 //

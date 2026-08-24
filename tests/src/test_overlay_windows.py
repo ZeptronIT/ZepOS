@@ -215,7 +215,20 @@ FENSTER_UND_KASTEN = {
 # AUFGESCHRIEBEN statt geloescht, aus demselben Grund wie oben: die
 # naechste Vorlage ohne min-width braucht einen Platz, an dem sie
 # hingehoert, keine Leere, die niemand mehr erklaert.
-OHNE_MIN_WIDTH: set[str] = set()
+OHNE_MIN_WIDTH: set[str] = {
+    # Die Kopplungsbestaetigung, seit Aufgabe 54 Stufe 2 (21.08.2026).
+    # `.btp-inhalt` traegt bewusst KEINE min-width: der Inhalt ist bei
+    # jeder der sieben Rueckfragen ein anderer - mal eine Frage mit zwei
+    # Knoepfen, mal eine sechsstellige Zahl in Grossschrift, mal ein
+    # Eingabefeld. Eine Mindestbreite muesste die breiteste davon
+    # abschreiben und waere fuer die uebrigen sechs zu gross.
+    #
+    # Die Breite kommt stattdessen aus Schrift und Innenabstand, also
+    # aus der Leiter in src/sizes.py, gedeckelt durch WIN_WIDTH
+    # (STYLE_MODAL_WIDTH_M) - genau die Begruendung, die in
+    # ags-style.template ueber .bt-power-btn steht.
+    "ags-bluetooth-agent.template",
+}
 
 # DIE SENKRECHTE BILDLAUFLEISTE, GEMESSEN und nicht geschaetzt.
 #
