@@ -172,6 +172,16 @@ RENDERED = {
     "templates/ags-settings.template": "widget/Settings.tsx",
     "templates/ags-network.template": "widget/NetworkManager.tsx",
     "templates/ags-bluetooth.template": "widget/BluetoothManager.tsx",
+    # Der Bluetooth-Kopplungsagent, seit 405a248 (24.08.2026) - der
+    # case-Zweig dazu heisst `ags-bluetooth-agent)` in
+    # src/generate_config.sh. Ohne diese Zeile entsteht
+    # widget/BluetoothAgent.tsx im Bauplatz nie, app.ts importiert es
+    # trotzdem, und `ags bundle` bricht mit "Could not resolve
+    # ./widget/BluetoothAgent" ab - also KEIN Render-Test mehr, nicht
+    # bloss einer. Genau der Fall, gegen den
+    # tests/src/test_render_table.py geschrieben ist, und er ist am
+    # 24.08.2026 zum zweiten Mal eingetreten.
+    "templates/ags-bluetooth-agent.template": "widget/BluetoothAgent.tsx",
     "templates/ags-wallpaper.template": "widget/WallpaperSelector.tsx",
     "templates/ags-style-editor.template": "widget/StyleEditor.tsx",
     "templates/ags-vpn.template": "widget/VpnManager.tsx",

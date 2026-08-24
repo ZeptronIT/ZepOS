@@ -489,16 +489,17 @@ it *saves* about 40 %.
   tree; the launcher is built from a pinned upstream commit plus
   `packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch`, so this is a patch, not
   a one-line fix, and it was not this task's file.
-- **`RENDERED` in `tests/render/desktop_session.py` was out of date again**, in
-  exactly the way `tests/src/test_render_table.py` was written to catch:
-  `generate_config.sh` and `ags-config.template` both knew
-  `ags-bluetooth-agent`, the table did not, and `ags bundle` broke with
-  `Could not resolve "./widget/BluetoothAgent"` — which stops **every** render
-  test, not just this one. Somebody was working on that file at the time, so it
-  was left alone; `tests/render/film.py` reads the same `case` branches the
-  table is copied from and renders whatever the table is missing, into its own
-  build directory only. That patch does nothing once the table is complete
-  again.
+- **`RENDERED` in `tests/render/desktop_session.py` fell out of date a second
+  time**, in exactly the way `tests/src/test_render_table.py` was written to
+  catch: `generate_config.sh` and `ags-config.template` both knew
+  `ags-bluetooth-agent` (`405a248`), the table did not, and `ags bundle` broke
+  with `Could not resolve "./widget/BluetoothAgent"` — which stops **every**
+  render test, not just one. The missing line is entered, and the guard is
+  green again. `tests/render/film.py` additionally reads the same `case`
+  branches the table is copied from and renders whatever the table is still
+  missing, into its own build directory only; that belt does nothing while the
+  table is complete, and it is what let the animation be made before the line
+  existed.
 - **`po/build/` was stale.** `po/desktop/de.po` was last touched on
   21.08.2026, the compiled `po/build/de/LC_MESSAGES/zepos-desktop.mo` on the
   20th. Every string added on the 21st — the Home menus, the dock menu, the
