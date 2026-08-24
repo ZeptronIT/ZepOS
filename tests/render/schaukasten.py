@@ -695,6 +695,81 @@ def required_tools() -> list[str]:
     return fehlend
 
 
+def verbotene_begriffe() -> set[str]:
+    """Wonach gesucht wird - GEFRAGT und nicht in diese Datei geschrieben.
+
+    WARUM KEIN EINZIGER DIESER NAMEN HIER STEHT
+        Der erste Entwurf trug den Kontonamen, den Rechnernamen, das
+        Notebookmodell und die Mailadresse des Nutzers als Zeichenketten
+        im Quelltext. tests/src/test_inventory.py hat das am 24.08.2026
+        gefunden und den Lauf rot gemacht - vollkommen zu Recht: eine
+        Pruefung auf Personenbezug, die den Personenbezug selbst
+        einchecken muss, hat ihre eigene Aufgabe nicht verstanden.
+
+        Gefragt wird deshalb die Maschine. Das ist ausserdem das
+        Robustere: auf einer anderen Maschine sucht dieselbe Funktion
+        nach DEREN Namen und nicht nach denen von hier.
+    """
+    begriffe: set[str] = set()
+
+    def dazu(wert: str | None) -> None:
+        if wert and len(wert) >= 3:
+            begriffe.add(wert)
+            begriffe.add(wert.lower())
+            begriffe.add(wert.upper())
+
+    # Wer an dieser Maschine sitzt.
+    for name in ("USER", "LOGNAME"):
+        dazu(os.environ.get(name))
+    dazu(Path.home().name)
+    zeiger = subprocess.run(["git", "-C", str(ROOT), "config", "user.email"],
+                            capture_output=True, text=True, timeout=20)
+    if "@" in zeiger.stdout:
+        dazu(zeiger.stdout.strip().split("@", 1)[1])
+
+    # Wie sie heisst, und was sie ist. Beides steht ohne erhoehte Rechte
+    # da; der Rechnername wird ausserdem an seinen Trennern zerlegt, weil
+    # er hier aus Modell UND Konto zusammengesetzt ist.
+    rechner = subprocess.run(["hostname"], capture_output=True, text=True,
+                             timeout=20).stdout.strip()
+    dazu(rechner)
+    for teil in rechner.replace(".", "-").split("-"):
+        dazu(teil)
+    for datei in ("product_name", "sys_vendor", "board_name",
+                  "product_serial"):
+        pfad = Path("/sys/devices/virtual/dmi/id") / datei
+        try:
+            dazu(pfad.read_text(errors="replace").strip())
+        except OSError:
+            pass
+
+    # Pfade und Bauplaetze, die auf keinem Schaukastenbild etwas zu
+    # suchen haben.
+    begriffe.update({"/home/", "dev/shm", "zepschau", "zepfilm", "zepshot",
+                     ".ssh", "id_rsa", "BEGIN OPENSSH", "BEGIN RSA"})
+
+    # Und die Anwendungen, die auf DIESER Maschine liegen, die ZepOS aber
+    # NICHT ausliefert. Genau eine davon ist dem Vorgaenger in den
+    # Anwendungsstarter gerutscht; die Liste wird deshalb ausgerechnet
+    # und nicht gepflegt.
+    sys.path.insert(0, str(SRC))
+    try:
+        import apps
+        ausgeliefert = {n.lower() for n in apps.shipped(SRC)}
+    except Exception:                                    # pragma: no cover
+        ausgeliefert = set()
+    finally:
+        if str(SRC) in sys.path:
+            sys.path.remove(str(SRC))
+    verzeichnis = Path("/usr/share/applications")
+    if verzeichnis.is_dir():
+        for eintrag in verzeichnis.glob("*.desktop"):
+            kurz = eintrag.stem.split(".")[-1]
+            if kurz.lower() not in ausgeliefert and len(kurz) >= 5:
+                begriffe.add(kurz)
+    return {w for w in begriffe if len(w) >= 3}
+
+
 def pruefe_persoenliches(wurzel: Path) -> list[str]:
     """Jedes Einzelbild und jedes Erzeugnis auf Verraeterisches absuchen.
 
@@ -709,16 +784,7 @@ def pruefe_persoenliches(wurzel: Path) -> list[str]:
     Rechnername, jeder Pfad unter /home, der Bauplatz dieses Laufs und
     die Namen der Programme, die ZepOS NICHT ausliefert.
     """
-    verboten = [os.environ.get("USER", "lmarzoll"), "lmarzoll", "LMARZOLL",
-                "/home/", "home/l", "dev/shm", "zepschau", "zepfilm",
-                "Thunar", "thunar", "hyprlaunch-ui", "NetworkManager",
-                "T14", "AMILO", ".ssh", "id_rsa", "@axro"]
-    rechner = subprocess.run(["hostname"], capture_output=True, text=True,
-                             timeout=10).stdout.strip()
-    if rechner:
-        verboten.append(rechner)
-        verboten.append(rechner.split("-")[0])
-    verboten = sorted(set(w for w in verboten if w))
+    verboten = sorted(verbotene_begriffe())
 
     dateien = sorted(p for p in wurzel.rglob("*")
                      if p.is_file() and p.suffix in (".ppm", ".webp"))
@@ -748,7 +814,17 @@ def pruefe_persoenliches(wurzel: Path) -> list[str]:
             # sagt, was davon zu halten ist.
             kopfende = rohdaten.find(b"255\n") + 4 if pfad.suffix == ".ppm" else 64
             wo = "IM KOPF" if stelle < kopfende else "in den Bildpunkten"
-            treffer.append(f"{wort!r} in {pfad.name} bei Byte {stelle} ({wo})")
+            # Ein Fund von drei Zeichen in den Bildpunkten ist keine
+            # Zeichenkette, sondern eine Farbe - siehe den
+            # Kontrollversuch weiter unten. Er wird gemeldet und
+            # ausdruecklich als das benannt, was er ist; ein Fund von
+            # vier Zeichen oder mehr, oder einer im Kopf, ist ein
+            # BEFUND und steht ohne diese Einschraenkung da.
+            zusatz = ("  <- drei Zeichen in Bildpunkten, siehe "
+                      "Kontrollversuch" if len(wort) <= 3 and stelle >= kopfende
+                      else "  <- BEFUND")
+            treffer.append(f"{wort!r} in {pfad.name} bei Byte {stelle} "
+                           f"({wo}){zusatz}")
 
     # DER KONTROLLVERSUCH, UND OHNE IHN IST DIE OBIGE LISTE WERTLOS
     #     Zwanzig DREI Zeichen lange Folgen, die mit dieser Maschine
