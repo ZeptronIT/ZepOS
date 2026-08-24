@@ -15,14 +15,19 @@ own — and the AI coding agent already on the disk.**
 
 ![The ZepOS desktop at 1920×1080: the bar across the top with its modules, the Home with its application icons behind every window, the dock and the two corner buttons at the bottom](docs/bilder/schreibtisch.webp)
 
-<sup>Every picture in this file is a screenshot of a program in **this** tree —
-no mock-up, no composite, no retouching. 23 of the 27 were taken by
-`tests/render/` in a nested Hyprland with the shipped wallpaper behind the
-glass, at a real 1920×1080; the four installer pictures come from QEMU, off the
-release medium, and carry an older version stamp because of it.
-[`docs/bilder/README.md`](docs/bilder/README.md) says how each one is made,
-what was deliberately kept out of frame, how it was checked for anything
-personal, and how to remake them.</sup>
+<sup>Every picture in this file is a recording of a program in **this** tree —
+no mock-up, no composite, no retouching. **Sixteen of the twenty-eight move**:
+fifteen short loops as animated WebP, plus the recording just below as a GIF.
+Each shows one real gesture in real time, at a **measured 24.2 to 25.0 frames
+per second** with not one frame dropped. Twelve stayed stills — where nothing
+moves, or where this rig cannot trigger the gesture it would take;
+[`docs/bilder/README.md`](docs/bilder/README.md) names every one of them with
+its reason. 24 of the 28 were taken by `tests/render/` in a nested Hyprland
+with the shipped wallpaper behind the glass, at a real 1920×1080; the four
+installer pictures come from QEMU, off the release medium, and carry an older
+version stamp because of it. The same file says how each one is made, what was
+deliberately kept out of frame, how it was checked for anything personal, and
+how to remake them.</sup>
 
 ---
 
@@ -46,6 +51,22 @@ shows the same fixed stand-in date as every picture below.</sup>
 Every window below is the shipped one, from this commit. Click a picture for
 the full-size version.
 
+**Most of it moves.** Where a window opens, you watch it open — and the fade is
+Hyprland's own, with the values out of `hyprland-universal-config.template`, so
+it is the one an installation runs. Every one of these recordings is triggered
+the same way the key binding triggers it in use (`ags request …`, literally the
+line from the generated `hyprland.conf`); the dock's right-click menu through
+the gesture a pointer would fire. **What you will not see is a mouse pointer** —
+there is no tool on the rig that presses a pointer button, and a drawn-in
+cursor would be an invention.
+
+<sub>The recordings are animated WebP. GitHub serves it byte for byte and the
+browser plays it on its own — checked, not hoped. The price is stated with it:
+unlike a GIF, a WebP carries no `data-animated-image` on GitHub, so GitHub's
+regard for `prefers-reduced-motion` does not reach it. A reader who asked for
+less motion still gets these fifteen moving; that is why the big recording
+above stays a GIF, and that one he gets as a still with a button.</sub>
+
 <table>
 <tr>
 <td colspan="2" align="center">
@@ -55,7 +76,7 @@ the full-size version.
 </tr>
 <tr>
 <td width="50%" align="center" valign="top">
-<a href="docs/bilder/starter.webp"><img src="docs/bilder/starter.webp" width="420" loading="lazy" alt="The application launcher open over the desktop, with the search field and two application rows"></a><br>
+<a href="docs/bilder/starter.webp"><img src="docs/bilder/starter.webp" width="420" loading="lazy" alt="The application launcher opening over the desktop: first the wallpaper with bar, Home and dock, then the window fades in with its search field and six applications"></a><br>
 <b>The launcher</b><br><sub><code>SUPER+SPACE</code> — hyprlaunch with the ZepOS patch, and it calculates too</sub>
 </td>
 <td width="50%" align="center" valign="top">
@@ -1099,5 +1120,5 @@ four days, and they are marked below.
 | ~40 ms for a pin to arrive everywhere | measured for release 0.1.8, in all three directions |
 | Published 0.1.9, 24 packages, key, build time ← *was 0.1.3* | fetched from `https://zeptronit.github.io/ZepOS/manifest.txt` |
 | 3254 passed / 13 skipped / 1 failed / 7 errors in 11 min 55 s | `.venv/bin/python -m pytest -q --continue-on-collection-errors`, 24.08.2026 |
-| 27 pictures, 2 058 966 bytes = 1.96 MiB | `du -cb docs/bilder/*.webp`; three are a whole 1920×1080 desktop, one a whole 1366×768 one, four are 1280×800 out of QEMU, the other nineteen are cropped to the window they show — `magick identify` on the committed files, not on the setting that produced them |
+| 28 pictures, 4 995 994 bytes = 4.76 MiB | `du -cb docs/bilder/*.webp docs/bilder/*.gif`; of these **16 recordings** (15 animated WebP, 3 352 374 bytes, plus `dateien-finden.gif`, 806 856 bytes) and **12 stills** (836 764 bytes). Three show a whole 1920×1080 desktop, one a whole 1366×768 one, four are 1280×800 out of QEMU, the rest are cropped to the window they show — `magick identify` on the committed files, not on the setting that produced them |
 | Every conversion to WebP lossless | `magick compare -metric AE` printed `0` for every picture converted whole |

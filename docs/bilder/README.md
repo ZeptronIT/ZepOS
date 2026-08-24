@@ -1,9 +1,17 @@
 # The pictures in the two READMEs
 
-28 files, **2 865 822 bytes — 2.73 MiB** in total: 27 stills in lossless WebP
-(2 058 966 bytes) and **one animation**, `dateien-finden.gif`, 806 856 bytes.
-Taken on **24.08.2026** from `4a1d8f0` (the stills) and `72d5bdf` (the
-animation) unless the table below says otherwise.
+28 files, **4 995 994 bytes — 4.76 MiB** in total: **16 recordings**
+(15 animated WebP, 3 352 374 bytes, plus `dateien-finden.gif`, 806 856 bytes)
+and **12 stills** in lossless WebP (836 764 bytes). Taken on **24.08.2026**;
+the stills from `4a1d8f0`, `dateien-finden.gif` from `72d5bdf`, the fifteen
+WebP recordings from the tree at `291b393` plus the new
+`tests/render/schaukasten.py`, unless the tables below say otherwise.
+
+The fifteen short recordings replaced the stills of the same name on
+24.08.2026, on one instruction: *"alle bilder auf die everything on the screen
+als animation machen bitte, alle ja"*, and *"lasse sie etwas flüssiger
+aussehen"*. They keep the file names they replaced, so every `<img src>` in
+both READMEs went on working unchanged.
 
 Every one of them is a screenshot of a program in this tree, running in a real
 compositor. None is a mock-up, a composite, or retouched. What each one needed
@@ -37,11 +45,31 @@ different thing, and the rule now says so explicitly, in the same list.
 
 ### The price, named
 
-**Every replaced picture stays in the history forever.** 2.73 MiB is what a
-clone carries today — 1.96 for the 27 stills, 0.77 for the animation. A second
-full set of stills makes it 4.7, a second animation 3.5. There is no taking one
-back out short of rewriting history, and that is the reason the animation is
-960 px and thirteen seconds and not 1920 and forty.
+**Every replaced picture stays in the history forever.** 4.76 MiB is what a
+clone carries after the change of 24.08.2026 — 0.80 for the 12 remaining
+stills, 3.20 for the 15 recordings, 0.77 for the GIF. Before it, 2.73 MiB; the
+whole showcase went from one moving picture to sixteen for **+2.03 MiB**, and
+the old stills stay in the history on top of that.
+
+That number was kept down on purpose, and the three levers are measured, not
+guessed:
+
+- **short loops, not long takes.** The flagship GIF runs 12.8 s because it
+  explains something. A menu that opens needs 1.6 s, a window that appears 2.6.
+  Every recording is trimmed to the gesture and a short hold.
+- **animated WebP instead of GIF.** Measured on the existing GIF: re-encoded as
+  animated WebP it is 122 508 bytes at q=50 and 196 204 at q=80, against
+  806 856 as a GIF — a fifth to a seventh, at a quality that is
+  indistinguishable at 250 % zoom.
+- **only what differs costs.** Consecutive byte-identical frames are collapsed
+  into one frame carrying the sum of their durations, so the still parts of a
+  recording are nearly free. Of `kontrollzentrum`'s 41 frames, 9 are distinct.
+
+What was **not** done, and the number for it: encoding lossless, the way the
+stills are. Measured per frame on five recordings, lossless costs **2.2× to
+8.3× (mean ≈ 5×)** what q=80 costs, which would put the set near 17 MiB for a
+difference nobody can see on a two-second loop. The stills stay lossless
+because a still is looked at closely; a loop is not.
 
 That is why:
 
@@ -55,37 +83,79 @@ That is why:
 
 ---
 
-## The 27 stills
+## The 16 recordings
 
-| File | Size | Bytes | What is on it |
-|---|---|---:|---|
-| `schreibtisch.webp` | 1920×1080 | 191 324 | the whole desktop: bar, Home with seven icons, dock, both corner buttons |
-| `starter.webp` | 1920×1080 | 215 578 | the same desktop with the **application launcher** open |
-| `dateien.webp` | 1920×1080 | 68 642 | the same desktop **in use**: file manager open, dock marking the running window |
-| `schreibtisch-1366.webp` | 1366×768 | 158 064 | the same desktop on a notebook screen |
-| `leiste.webp` | 1920×84 | 29 624 | the bar alone, cropped to its own layer geometry |
-| `dock.webp` | 441×128 | 14 812 | the dock alone, with wallpaper around it |
-| `dock-minimiert.webp` | 499×128 | 16 644 | the same dock with **one minimised window** right of the divider |
-| `kontrollzentrum.webp` | 936×596 | 129 538 | the control centre: sidebar, two groups, six pages |
-| `tastenkuerzel.webp` | 936×596 | 141 126 | the shortcut list, filled from the generated keybindings |
-| `sitzungsmenue.webp` | 667×381 | 41 894 | the session menu, six actions with letter keys |
-| `kalender.webp` | 552×596 | 88 252 | the calendar overlay |
-| `stil-editor.webp` | 528×596 | 78 658 | the style editor, colours tab |
-| `einstellungsfenster.webp` | 936×596 | 173 554 | the shell's own settings window, size page |
-| `einstellungen-app.webp` | 1920×1004 | 59 742 | `zepos-settings-gui`, the separate application, colours page |
-| `vpn-einstellungen.webp` | 716×596 | 95 686 | the VPN settings, four tabs |
-| `benachrichtigung.webp` | 505×206 | 19 368 | a notification arriving, top right |
-| `benachrichtigungszentrum.webp` | 556×596 | 64 638 | the notification centre with the do-not-disturb switch |
-| `home-menue-symbol.webp` | 343×335 | 17 796 | right-click on a Home **icon** |
-| `home-menue-flaeche.webp` | 417×341 | 18 754 | right-click on the **empty Home surface** |
-| `dock-menue.webp` | 343×311 | 14 070 | right-click in the dock |
-| `starter-menue.webp` | 367×155 | 14 478 | right-click in the launcher (`43b8b25`) |
-| `auswahlfenster.webp` | 1920×1004 | 65 012 | `zepos-menu`, the picker every list goes through |
-| `sperrbildschirm.webp` | 1920×780 | 59 130 | `zepos-lock` — see its own section below |
-| `installer-sprache.webp` | 1280×800 | 66 362 | installer, step 1 of 8 |
-| `installer-einteilung.webp` | 1280×800 | 85 062 | installer, step 3 — laying out the disk |
-| `installer-bestaetigung.webp` | 1280×800 | 70 998 | installer, step 8 — the last question |
-| `installer-fertig.webp` | 1280×800 | 60 160 | installer, finished, package log behind it |
+Fifteen of them are animated WebP, made by **`tests/render/schaukasten.py`** in
+one nested session (the dock menu needs a second one, see below). The sixteenth
+is `dateien-finden.gif`, which has its own section further down.
+
+The frame rate in this table is **measured, not set**: the recorder writes down
+the clock reading for every frame it pulls, and the rate is computed from those
+readings afterwards. The tick asked for was 40 ms = 25.0 frames/s. **Not one
+frame was dropped in any of the fifteen.**
+
+| File | Size | Frames | Length | Frames/s measured | Bytes |
+|---|---|---|---|---|---|
+| `starter.webp` | 960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540 | 11 | 2.57 s | **24.95** | 291 676 |
+| `dateien.webp` | 960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540 | 28 | 4.54 s | **24.89** | 504 588 |
+| `dock.webp` | 528×132528×132528×132528×132528×132528×132528×132528×132528×132528×132528×132528×132528×132528×132528×132528×132 | 16 | 2.90 s | **24.86** | 54 648 |
+| `dock-minimiert.webp` | 528×132528×132528×132528×132528×132528×132528×132528×132528×132528×132528×132528×132 | 12 | 2.69 s | **24.92** | 51 496 |
+| `dock-menue.webp` | 342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310342×310 | 22 | 3.30 s | **24.84** | 95 382 |
+| `kontrollzentrum.webp` | 936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596 | 11 | 1.63 s | **24.60** | 179 074 |
+| `tastenkuerzel.webp` | 936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596 | 30 | 1.62 s | **24.66** | 662 074 |
+| `kalender.webp` | 552×596552×596552×596552×596552×596552×596552×596552×596552×596552×596552×596 | 11 | 1.62 s | **24.66** | 156 244 |
+| `stil-editor.webp` | 528×596528×596528×596528×596528×596528×596528×596528×596528×596528×596528×596528×596528×596 | 13 | 1.62 s | **24.69** | 159 552 |
+| `einstellungsfenster.webp` | 936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596936×596 | 11 | 1.63 s | **24.61** | 350 062 |
+| `einstellungen-app.webp` | 960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540960×540 | 18 | 2.64 s | **24.21** | 384 328 |
+| `vpn-einstellungen.webp` | 716×596716×596716×596716×596716×596716×596716×596716×596716×596716×596716×596 | 11 | 1.62 s | **24.66** | 151 900 |
+| `benachrichtigung.webp` | 572×254572×254572×254572×254572×254572×254572×254572×254572×254572×254572×254 | 11 | 2.21 s | **24.83** | 70 616 |
+| `benachrichtigungszentrum.webp` | 438×416438×416438×416438×416438×416438×416438×416438×416438×416438×416438×416438×416438×416438×416438×416438×416438×416438×416 | 18 | 1.62 s | **24.69** | 117 196 |
+| `sitzungsmenue.webp` | 666×380666×380666×380666×380666×380666×380666×380666×380666×380666×380666×380666×380666×380666×380 | 14 | 1.62 s | **24.68** | 123 538 |
+
+<sub>"Frames" is the number of `ANMF` blocks counted in the committed file, not
+the number the recorder pulled — see *The encoder that quietly threw frames
+away* below for why that distinction had to be made and checked.</sub>
+
+### What is on each one
+
+- **`starter.webp`** — the application launcher opens over the desktop
+- **`dateien.webp`** — `datei` is typed letter by letter, Return, the file manager appears on the home folder
+- **`dock.webp`** — `SUPER+B`: the dock slides away and comes back
+- **`dock-minimiert.webp`** — a window is minimised: it disappears and an eighth, dimmed icon appears right of the dock's divider
+- **`dock-menue.webp`** — right-click on a pinned dock icon, the menu opens, Escape closes it
+- **`kontrollzentrum.webp`** — the control centre fades in over the desktop — sidebar, two groups, six pages
+- **`tastenkuerzel.webp`** — the shortcut list fades in, filled from the generated keybindings
+- **`kalender.webp`** — the calendar overlay fades in over the wallpaper
+- **`stil-editor.webp`** — the style editor fades in, colours tab
+- **`einstellungsfenster.webp`** — the shell's own settings window fades in, size page
+- **`einstellungen-app.webp`** — `zepos-settings-gui` opens as an ordinary window — the one recording that shows Hyprland's **window** animation, not a layer one
+- **`vpn-einstellungen.webp`** — the VPN settings fade in, four tabs
+- **`benachrichtigung.webp`** — a notification arrives top right and settles
+- **`benachrichtigungszentrum.webp`** — the notification centre fades in, do-not-disturb switch on top
+- **`sitzungsmenue.webp`** — the session menu fades in, six actions with letter keys
+
+---
+
+## The 12 stills
+
+These twelve did **not** become recordings, and each line says why. The rule
+was the user's own instruction turned around: where nothing moves, a still is
+more honest than an animation that fakes movement.
+
+| File | Size | Bytes | What is on it | Why it stayed a still |
+|---|---|---:|---|---|
+| `schreibtisch.webp` | 1920×1080 | 191 324 | the whole desktop: bar, Home with icons, dock, both corner buttons | **nothing moves.** A desktop at rest is a desktop at rest; the bar's modules are the fixtures from `module_payloads()` and do not tick |
+| `schreibtisch-1366.webp` | 1366×768 | 158 064 | the same desktop on a notebook screen | same, and it exists to show a *size*, not a gesture |
+| `leiste.webp` | 1920×84 | 29 624 | the bar alone, cropped to its own layer geometry | same. What the bar *does* when you use it is `kontrollzentrum`, `kalender` and `tastenkuerzel`, and all three of those now move |
+| `home-menue-symbol.webp` | 343×335 | 17 796 | right-click on a Home **icon** | **no rig.** The child that fires this gesture lived in the scratchpad of the session that took the still and is gone; `tests/render/` has one for the dock (`dock_menue_child.tsx`) and for the launcher, but none for the Home |
+| `home-menue-flaeche.webp` | 417×341 | 18 754 | right-click on the **empty Home surface** | same |
+| `starter-menue.webp` | 367×155 | 14 478 | right-click in the launcher (`43b8b25`) | `launcher_menue_child.cpp` exists, but it needs the patched upstream tree built against it — a second toolchain run for one two-state loop that a `Gtk.Popover` does not animate anyway (measured on the dock menu: **zero** in-between frames on the way open) |
+| `auswahlfenster.webp` | 1920×1004 | 65 012 | `zepos-menu`, the picker every list goes through | `zepos-menu` is not installed here and ships as a tarball in `packaging/`; building it was out of scope for this pass |
+| `sperrbildschirm.webp` | 1920×780 | 59 130 | `zepos-lock` — see its own section below | **deliberately not re-run.** `ext-session-lock-v1` stays locked when the locking program dies, and the user is sitting at this machine working. The still was taken once, under three separate safeguards; a recording would have meant doing it again for no new information |
+| `installer-sprache.webp` | 1280×800 | 66 362 | installer, step 1 of 8 | the installer does not run in the nested compositor — it wants a whole machine and a disk to erase (see below) |
+| `installer-einteilung.webp` | 1280×800 | 85 062 | installer, step 3 — laying out the disk | same |
+| `installer-bestaetigung.webp` | 1280×800 | 70 998 | installer, step 8 — the last question | same |
+| `installer-fertig.webp` | 1280×800 | 60 160 | installer, finished, package log behind it | same |
 
 **The four installer pictures are older and from somewhere else.** They were
 taken on **17.08.2026** by `./iso/test-boot.py --scenario release-install`, in
@@ -223,7 +293,147 @@ READMEs say so in the caption.
 
 ---
 
-## How the other 23 are made
+## How the fifteen recordings are made
+
+`tests/render/schaukasten.py`, 25.0 frames/s asked for, **24.2 to 25.0
+measured**, zero frames dropped. It reuses `tests/render/film.py` for the parts
+that were already paid for — building the launcher out of the pinned tarball
+plus this repo's patch, the private `/tmp` that keeps the launcher's hard-coded
+control socket away from the user's own session, the filtered `XDG_DATA_DIRS`,
+the session bus, switching off the host output — and adds what a *film* needs
+that a still does not.
+
+### `grim` is still the recorder, but not the same `grim`
+
+`grim -l 1` writes a compressed PNG in 64 ms, which caps the rate at 15
+frames/s — half of what was asked for. **`grim -t ppm` compresses nothing and
+takes 32 ms**, leaving room for 25. The price is a 6.2 MB file per frame; a
+full run pulls over 800 of them, so the raw frames live in `/dev/shm` and only
+the *distinct* ones are kept afterwards, as PNG. Cropped scenes are pulled with
+`-g`, because a 342×310 menu has no business costing a 1920×1080 read.
+
+### The animations are switched back **on**, and that is the whole point
+
+`tests/render/desktop_session.py` starts its compositor with
+`animations { enabled = false }`, and for a **still** that is right — it says so
+itself: *"damit das Bild nicht mitten in einer Einblendung entsteht"*. For a
+recording it is the defect itself: with animations off there is **no in-between
+frame at all** between shut and open, and the recording would be two stills
+after one another.
+
+`schaukasten.py` therefore switches them on at run time with the values read out
+of the **generated** `hyprland.conf` — `bezier zepos, 0.05, 0.9, 0.1, 1.05` and
+the five `animation` lines — so what fades in on these recordings fades in
+exactly the way it does on an installation. Through `hyprctl keyword`, in that
+run's own session: `desktop_session.py` is not touched and no existing
+measurement session behaves differently.
+
+### What triggers each one, and why it is not a staged click
+
+`app.ts` carries a `requestHandler` with these names in it (`control`,
+`calendar`, `shortcuts`, `settings`, `style`, `logout`, `notifications`,
+`vpn-settings`, `dock`, …). That handler **is** the path every key binding of
+this system takes: the generated `hyprland.conf` binds `ags request control` to
+a key, not a function. Firing `ags request control` is therefore literally what
+the user's keystroke does — minus the keystroke, which cannot be delivered into
+this nesting (`film.py`, `_WARUM_KEIN_TASTENDRUCK`).
+
+Typing and Return in `dateien.webp` are real key events through `wtype`.
+`dock-minimiert.webp` uses `movetoworkspacesilent special:minimized,address:0x…`
+— the dispatcher the title bar's minimise button runs.
+
+### The pointer button, which two people before stopped at
+
+There is still **no tool on this machine that presses a pointer button** —
+`ydotool`, `wlrctl` and `dotool` are all absent, `wtype` does keys only,
+`hyprctl dispatch movecursor` moves the cursor and cannot press. That is why
+the previous two passes left the right-click menus as stills.
+
+`dock-menue.webp` moves anyway, and the answer was already in the tree:
+`tests/render/dock_menue_child.tsx`, used **unchanged**. It builds the
+*generated* dock on a real layer-shell surface in a real compositor with both
+generated stylesheets, and fires the gesture where GTK would take it — the
+`pressed` signal of the `Gtk.GestureClick` the template hangs on the button,
+found through `observe_controllers()`. No cursor in frame, the same visible
+consequence: a menu that opens.
+
+It needs its **own** session, because the child builds the dock itself and
+running the whole shell beside it would put two docks on top of each other —
+the same split `tests/render/test_menue.py` has used since 20.08.2026.
+
+Where the menu lands is **measured, not guessed**: a `Gtk.Popover` is an
+xdg_popup, `hyprctl layers` does not know it, and the dock's own box does not
+grow around it. So one frame is taken shut, one open, and
+`measure.changed_bounds` returns the smallest rectangle in which they differ.
+
+Two things fell out of that and are worth writing down: `rechtsklick` **opens**,
+it does not toggle — a second call leaves the menu open and only writes
+`Tried to map a grabbing popup with a non-top most parent` into the log, so the
+recording is closed with `Escape` through the compositor, the way a person
+closes it. And a `Gtk.Popover` has **no** transition on the way open: between
+shut and open there is not one in-between frame. Recording only the opening
+would have been a two-state loop that blinks, so the recording is the whole
+gesture — right-click, look, `Escape` — which is four states long, runs round,
+and invents nothing.
+
+### The encoder that quietly threw frames away
+
+This is the one that would have ruined the job, and it is invisible unless you
+count the `ANMF` blocks in the finished file. Measured on one recording of the
+control centre, 41 frames pulled, 9 of them distinct:
+
+| how it was encoded | frames in the file | bytes |
+|---|---:|---:|
+| `libwebp_anim`, lossy | **5** | 80 762 |
+| `libwebp_anim`, lossless | 9 | 837 334 |
+| `libwebp`, lossy | 42 | 695 004 |
+| **collapsed first, then `libwebp`, lossy** | **9** | **163 688** |
+
+`libwebp_anim` collapses identical frames — and in lossy mode throws away
+**different** ones too. Four of the nine steps of a fade were gone, and the
+recording stuttered at exactly the place it is supposed to be smooth. `libwebp`
+throws none away but also collapses none, and writes 42 full frames.
+
+So `schaukasten.py` does what neither does properly: consecutive **byte-identical**
+frames are merged into one frame carrying the sum of their durations — that is
+not a shortening, it is what was recorded — and everything left over is
+different and goes into the file whole. Then it **counts the `ANMF` blocks in
+the written file** and fails if there are fewer than it put in. A recording that
+does not check this is a recording that merely claims its frame rate.
+
+### Why WebP, measured on GitHub and not assumed
+
+The previous pass proved that GitHub plays a GIF by itself in a README. The
+same proof was run for WebP on 24.08.2026, with the same tool and the same
+second question put to a real, foreign page:
+
+1. GitHub's renderer (`gh api -X POST /markdown`, mode `gfm`) **keeps**
+   `<img src="….webp">`, from HTML and from Markdown, and adds
+   `style="max-width: 100%"` of its own. What it does **not** add is
+   `data-animated-image=""` — only `.gif` gets that. (`.png` and `.apng` do not
+   either.)
+2. That is the point. `data-animated-image` is the mark GitHub's accessibility
+   layer uses to wrap an image in a player with a pause button once the reader
+   has `prefers-reduced-motion` set. A WebP does not carry the mark, so it is an
+   ordinary `<img>` — the browser plays it, always, with no button.
+3. Looked at on a real page rather than assumed:
+   `github.com/quick-lint/quick-lint-js/tree/master/plugin/vscode` shows
+   `demo.webp` (105 882 bytes, 75 frames, 51 `ANMF` blocks) as a plain
+   `<img src="/quick-lint/quick-lint-js/raw/master/plugin/vscode/demo.webp"
+   alt="…" style="max-width: 100%">` — no player, no button, no poster frame.
+4. And the bytes arrive unchanged: through `github.com/…/raw/…` and through
+   `raw.githubusercontent.com` GitHub serves the identical file, same sha256,
+   `Content-Type: image/webp`. It transcodes nothing and drops no animation.
+
+**The price is named, because it is the one thing GIF does better here.** With
+no mark, a WebP ignores `prefers-reduced-motion`. A reader who asked his system
+for less motion gets a still and a button for `dateien-finden.gif` and gets
+these fifteen moving anyway. That is why the long, explaining recording stays a
+GIF and only the short loops are WebP, and why both READMEs say so.
+
+---
+
+## How the 12 stills are made
 
 `tests/render/desktop_session.py` builds the configuration with the **real**
 template processor, bundles the shell with `ags bundle`, starts a **Hyprland
@@ -366,8 +576,9 @@ first. Where the animation differs, it says so below.
    names, mount points and a disk model. Both daemons are reachable here
    (`nmcli`, `bluetoothctl` exist). The **control** page *was* checked on the
    picture itself: "Nicht verbunden", "VPN: Aus", "Bluetooth" — no name.
-3. **By looking.** All 27 were opened at full resolution and every legible
-   string enumerated. None of them is `lmarzoll`, a host name, a path under
+3. **By looking.** All 27 of the original stills were opened at full
+   resolution and every legible string enumerated; the 216 distinct frames of
+   the fifteen recordings were checked the same way, see below. None of them is `lmarzoll`, a host name, a path under
    `/home/lmarzoll`, a network name, a device name, a serial number or an
    address. What is legible: application labels that exist on every Linux, the
    standard XDG folder names, the German strings of the interface itself, the
@@ -380,11 +591,56 @@ first. Where the animation differs, it says so below.
    name.
 4. **Metadata.** `grim` writes no `tEXt` and no EXIF block, and the WebP
    conversion runs with `-strip` anyway. `magick identify -format "%[profiles]"`
-   returns empty for all 27, and `magick identify -verbose` finds no `exif:`,
+   returns empty for all of them, and `magick identify -verbose` finds no `exif:`,
    `comment:`, `Software:`, `Artist` or `Copyright` field. `strings` over the
    raw bytes finds no match for `lmarzoll`, `/home/`, a host name or an SSID.
 
-### The animation, frame by frame
+### The fifteen recordings, frame by frame
+
+851 raw frames, **1 989 227 696 bytes**, and every one of them was searched —
+not the first one of each. Two things made a complete check affordable and one
+of them had to be *invented*, because a naive byte search over raw pixels is
+worthless.
+
+**Distinct frames, not all frames, for the looking.** `sha256` over all 851
+frames leaves **216 distinct**; every other frame is byte-identical to one of
+those. All 216 were kept as PNG under `out/schaukasten/bilder/<name>/` and
+looked at — as contact sheets per recording, and at full resolution for every
+recording whose *content* changes rather than just its opacity
+(`dateien`, `starter`, `tastenkuerzel`, `einstellungen-app`).
+
+What is legible on them: the interface's own German strings, the shipped
+application names, the standard XDG folder names, the placeholder bar with its
+fixed clock, `Nicht verbunden` / `VPN: Aus` / `Bluetooth` with no names, an
+empty `VPN Server` field with the template's default connection name `work`,
+and the notification this run sent to its own bus. **No account name, no host
+name, no path under `/home/lmarzoll`, no network name, no device name, no
+serial number.**
+
+**And the byte search, with a control experiment, because otherwise it lies.**
+The sweep looks for 17 terms — the account name, the host name and its first
+component, `/home/`, `dev/shm`, this run's own directory prefixes, the names of
+programs ZepOS does not ship, and more. On the run that produced the committed
+files it found **nothing**.
+
+On an earlier run it found `T14` — the first three characters of this machine's
+host name — in one raw frame. That is where the check had to get honest instead
+of alarmed: a PPM is a ~16-byte ASCII header and then nothing but pixels, three
+bytes each. The hit sat at byte **3 700 081**, deep in the pixel data, and the
+full host name, `lmarzoll`, `/home/` and the machine's model number scored
+**zero**. Twenty **random** three-letter sequences with no relation to this
+machine were then searched for as a control: they hit **2 of 17** files in that
+set, and **600 times** across the 851 frames of the committed run. A
+three-character string in six megabytes of pixel data is noise, and the check
+now says so itself — it prints the byte offset, whether the hit is in the header
+or in the pixels, and the control count next to the findings, so nobody has to
+guess later.
+
+The finished WebP files were searched too: 15 files, 1 368 732 bytes, no term
+found, and the same control hitting 3 times. `ffmpeg` writes no EXIF and no
+comment chunk.
+
+### The GIF, frame by frame
 
 A film has many pictures, and "I looked at the first one" is not a check. What
 made a complete one affordable: `sha256sum` over the 127 frames gives **25
@@ -444,7 +700,24 @@ files in `main`:
 4. Repeat all four checks above. Then `git add docs/bilder/<name>.webp` **by
    name**, and commit.
 
-The animation is one command and needs no cropping step:
+The fifteen short recordings are one command and need no cropping step — the
+crop of each is measured at run time from the layer the window actually takes:
+
+```bash
+.venv/bin/python -m tests.render.schaukasten --out out/schaukasten --guete 80
+```
+
+It writes one `<name>.webp` per scene, every distinct frame as PNG under
+`out/schaukasten/bilder/<name>/`, and `out/schaukasten/messwerte.txt` with the
+measured frame rate per scene, the marks for what happened when, the byte size
+and `sha256` of every file, and the result of the personal-data sweep.
+`--takt` sets the tick in milliseconds (40 = 25.0 frames/s), `--guete` the WebP
+quality (80), `--nur name,name` records only those scenes, `--nur-bilder` stops
+before encoding. It needs the same tools as `film.py` plus `notify-send` and
+`magick`. Installing the result is a plain copy into this directory, under the
+**same file names** the stills had.
+
+The long, explaining animation is a second command:
 
 ```bash
 .venv/bin/python -m tests.render.film --out out/film
@@ -474,13 +747,48 @@ it *saves* about 40 %.
 | network page, Bluetooth page, disk overlay, battery overlay | check 2 above — real devices, over the system bus and `/sys` |
 | the wallpaper selector | it opens and it is **empty**: the rig has no wallpaper directory, and the monitor buttons read `WAYLAND-1 [Q]` / `HEADLESS-1 [Q]`, which are names of the test rig. That is a picture of a rig, not of ZepOS |
 | the login screen (`regreet`) | not installed here, and it does not start without `$GREETD_SOCK`. `tests/render/greeter_shot.py` **rebuilds** its widget tree to measure colours; a reconstruction has no business being called a screenshot |
-| a **second** animation — pinning by right-click | it needs a *pointer button*, and there is still no tool on this machine that presses one: `ydotool`, `wlrctl` and `dotool` are absent, `wtype` does keys only, `hyprctl dispatch` moves the cursor but cannot click. The file-finding animation works because it is keyboard work from start to finish. Pinning is not, so it stays a still (`starter-menue.webp`) |
+| a recording of the **Home**'s two right-click menus | the same pointer-button problem — `ydotool`, `wlrctl` and `dotool` are still absent and `wtype` does keys only — but no longer an unsolvable one: `dock-menue.webp` moves, because `tests/render/dock_menue_child.tsx` fires the gesture inside the application. What is missing for the Home is that child; the one that took the two stills lived in a scratchpad and is gone. Writing it is a job, not a blocker |
+| a recording of the **launcher**'s right-click menu | `tests/render/launcher_menue_child.cpp` exists and would do it, but it has to be compiled against the patched upstream tree — a second toolchain run for a menu that, as measured on the dock, has **no** opening transition at all |
+| a **mouse pointer** on any recording | nothing on this machine can put one there, and drawing one in would be an invention. Every recording shows the *consequence* of the gesture, never a fake cursor |
 | a second, smaller copy of each picture as a thumbnail | it would double what the history carries forever. `<img width>` in the READMEs does the same job for nothing |
 
 ---
 
 ## Findings that came out of making them, and were not fixed here
 
+- **`ffmpeg`'s `libwebp_anim` silently drops distinct frames in lossy mode.**
+  Measured 24.08.2026: 9 distinct frames in, **5** `ANMF` blocks out; lossless
+  keeps all 9, and the plain `libwebp` encoder keeps all 9 as well (but
+  collapses no duplicates). Anyone building an animation with `libwebp_anim`
+  and not counting the `ANMF` blocks afterwards is shipping a stutter he
+  cannot see. Upstream `ffmpeg`/`libwebp`, not this repository —
+  `schaukasten.py` works around it and checks the count.
+- **`tests/render/settings_shot.py` cannot start the settings app from this
+  project's venv.** It spawns `[sys.executable, LAUNCHER, …]`, and
+  `.venv/bin/python` here has no PyGObject: `ModuleNotFoundError: No module
+  named 'gi'`. `/usr/bin/python3` has it, and the command carries
+  `#!/usr/bin/env python3` and finds it by itself — which is how `app.ts` calls
+  it, and how `schaukasten.py` now calls it. One word in one line; **not
+  changed here**, because `tests/render/settings_shot.py` is an existing
+  measurement session and this pass does not alter how those behave.
+- **The shell's settings window shows the rig's own config path.** It prints
+  the file it edits, and in a rig run that is a throwaway directory:
+  `/dev/shm/zepschau-bau-…/zepo…` on the recording,
+  `/tmp/zepschau-9yt96zz1/zepos/user-s…` on the still it replaced. Both are
+  correct — the window is telling the truth about where it is writing — and
+  both are a rig artefact rather than something a user sees. It carries no
+  account name. Removing it would mean faking the path, which is worse.
+- **The Home draws a placeholder for every application this machine does not
+  have.** Eight of ZepOS' fifteen are not installed here, so the first
+  recordings had eight grey boxes among seven real icons. Solved the same way
+  the stills solve it, through the ordinary `home.icons` user setting — but the
+  underlying question, whether the Home *should* draw a placeholder for a
+  missing application at all, is untouched and belongs to whoever owns
+  `ags-home.template`.
+- **A `Gtk.Popover` in this shell has no opening transition.** Between shut and
+  open there is not one in-between frame (measured on the dock menu at 25
+  frames/s); on the way closed there are. Whether that is wanted is a question
+  for the stylesheet, not for the rig.
 - **The launcher window does not shrink with the result list.** It is sized
   once, at start, to as many rows as the shortest monitor allows, and keeps
   that height however few results are left. In the animation you watch six rows

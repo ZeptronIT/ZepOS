@@ -16,13 +16,19 @@ Installer – und dem KI-Programmieragenten schon auf der Platte.**
 ![Der ZepOS-Schreibtisch in 1920×1080: oben die Leiste mit ihren Modulen, dahinter das Home mit seinen Programmsymbolen, unten das Dock und die beiden Eckknöpfe](docs/bilder/schreibtisch.webp)
 
 <sup>Jedes Bild in dieser Datei ist eine Aufnahme eines Programms aus **diesem**
-Baum – kein Entwurf, kein Zusammenschnitt, keine Nachbearbeitung. 23 der 27
-sind von `tests/render/` in einem geschachtelten Hyprland gemacht, mit der
-ausgelieferten Tapete hinter dem Glas, in echten 1920×1080; die vier Bilder des
-Installers kommen aus QEMU, vom Freigabemedium, und tragen deshalb einen
-älteren Versionsstempel. [`docs/bilder/README.md`](docs/bilder/README.md) sagt,
-wie jedes entsteht, was mit Absicht nicht darauf ist, wie auf Persönliches
-geprüft wurde, und wie man sie neu macht.</sup>
+Baum – kein Entwurf, kein Zusammenschnitt, keine Nachbearbeitung. **Sechzehn
+der achtundzwanzig bewegen sich**: fünfzehn kurze Schleifen als animiertes WebP,
+dazu die Aufnahme gleich unten als GIF. Jede zeigt einen Handgriff in echter
+Zeit, mit **gemessenen 24,2 bis 25,0 Bildern je Sekunde** und keinem einzigen
+verlorenen Bild. Zwölf sind Standbilder geblieben, und zwar dort, wo sich
+nichts bewegt oder wo dieser Messstand die nötige Bedienung nicht auslösen kann
+– [`docs/bilder/README.md`](docs/bilder/README.md) nennt jedes einzeln mit
+Grund. 24 der 28 sind von `tests/render/` in einem geschachtelten Hyprland
+gemacht, mit der ausgelieferten Tapete hinter dem Glas, in echten 1920×1080;
+die vier Bilder des Installers kommen aus QEMU, vom Freigabemedium, und tragen
+deshalb einen älteren Versionsstempel. Dieselbe Datei sagt auch, wie jedes
+entsteht, was mit Absicht nicht darauf ist, wie auf Persönliches geprüft wurde,
+und wie man sie neu macht.</sup>
 
 ---
 
@@ -47,6 +53,24 @@ Leiste zeigt dieselbe feste Platzhalterzeit wie jedes Bild darunter.</sup>
 Jedes Fenster hier unten ist das ausgelieferte, aus diesem Commit. Ein Klick
 auf ein Bild öffnet es in voller Größe.
 
+**Das meiste davon bewegt sich.** Wo ein Fenster aufgeht, sieht man es aufgehen
+– die Einblendung ist Hyprlands eigene, mit den Werten aus
+`hyprland-universal-config.template`, also die, die auf einer Installation
+läuft. Ausgelöst wird jede dieser Aufnahmen auf demselben Weg wie durch die
+Tastenbindung, die sie im Betrieb auslöst (`ags request …`, wörtlich die Zeile
+aus der erzeugten `hyprland.conf`); das Rechtsklick-Menü des Docks über die
+Geste, die auch ein Zeiger auslösen würde. **Was Sie nicht sehen, ist ein
+Mauszeiger** – es gibt auf dem Messstand kein Werkzeug, das eine Zeigertaste
+drückt, und ein hineingemalter Zeiger wäre eine Erfindung.
+
+<sub>Die Aufnahmen sind animiertes WebP. GitHub liefert das unverändert aus und
+der Browser spielt es von selbst ab – nachgeprüft, nicht gehofft. Der Preis
+steht dabei: anders als ein GIF trägt ein WebP bei GitHub kein
+`data-animated-image`, und damit greift auch dessen Rücksicht auf
+`prefers-reduced-motion` nicht. Wer weniger Bewegung eingestellt hat, bekommt
+diese fünfzehn trotzdem laufend zu sehen; die große Aufnahme oben bleibt
+deshalb ein GIF, und die bekommt er als Standbild mit Knopf.</sub>
+
 <table>
 <tr>
 <td colspan="2" align="center">
@@ -56,7 +80,7 @@ auf ein Bild öffnet es in voller Größe.
 </tr>
 <tr>
 <td width="50%" align="center" valign="top">
-<a href="docs/bilder/starter.webp"><img src="docs/bilder/starter.webp" width="420" loading="lazy" alt="Der Anwendungsstarter offen über dem Schreibtisch, mit Suchfeld und zwei Trefferzeilen"></a><br>
+<a href="docs/bilder/starter.webp"><img src="docs/bilder/starter.webp" width="420" loading="lazy" alt="Der Anwendungsstarter geht über dem Schreibtisch auf: erst die Tapete mit Leiste, Home und Dock, dann blendet das Fenster mit Suchfeld und sechs Anwendungen ein"></a><br>
 <b>Der Anwendungsstarter</b><br><sub><code>SUPER+SPACE</code> – hyprlaunch mit dem ZepOS-Patch, und er rechnet auch</sub>
 </td>
 <td width="50%" align="center" valign="top">
@@ -1160,5 +1184,5 @@ vier Tage später überholt, und sie sind unten gekennzeichnet.
 | rund 40 ms, bis eine Anheftung überall ankommt | für Freigabe 0.1.8 gemessen, in allen drei Richtungen |
 | Veröffentlicht 0.1.9, 24 Pakete, Schlüssel, Bauzeit ← *war 0.1.3* | abgefragt bei `https://zeptronit.github.io/ZepOS/manifest.txt` |
 | 3254 bestanden / 13 übersprungen / 1 fehlgeschlagen / 7 Fehler in 11 min 55 s | `.venv/bin/python -m pytest -q --continue-on-collection-errors`, 24.08.2026 |
-| 27 Bilder, 2 058 966 Byte = 1,96 MiB | `du -cb docs/bilder/*.webp`; drei sind ein ganzer Schreibtisch in 1920×1080, einer einer in 1366×768, vier sind 1280×800 aus QEMU, die übrigen neunzehn sind auf das gezeigte Fenster zugeschnitten – `magick identify` auf den eingecheckten Dateien, nicht auf der Einstellung, die sie erzeugt hat |
+| 28 Bilder, 4 995 994 Byte = 4,76 MiB | `du -cb docs/bilder/*.webp docs/bilder/*.gif`; davon **16 Aufnahmen** (15 animiertes WebP, 3 352 374 Byte, plus `dateien-finden.gif`, 806 856 Byte) und **12 Standbilder** (836 764 Byte). Drei zeigen einen ganzen Schreibtisch in 1920×1080, einer einen in 1366×768, vier sind 1280×800 aus QEMU, die übrigen sind auf das gezeigte Fenster zugeschnitten – `magick identify` auf den eingecheckten Dateien, nicht auf der Einstellung, die sie erzeugt hat |
 | Jede Umwandlung nach WebP verlustfrei | `magick compare -metric AE` gab für jedes ganz umgewandelte Bild `0` |
