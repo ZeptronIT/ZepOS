@@ -45,8 +45,8 @@ That is why:
   The READMEs scale with `<img width="…">`, so the repository stores each
   picture exactly once and the browser does the resizing.
 - everything that is not a whole desktop is **cropped to the element it shows**.
-  The calendar is 552×596 and 88 kB, not 1920×1080 and 400 kB. Nine of the
-  crops are under 20 kB.
+  The calendar is 552×596 and 88 kB, not 1920×1080 and 400 kB. Seven of the
+  27 files are under 20 kB; only three are a whole 1920×1080 desktop.
 - a picture is remade when it is **wrong**, not when it could be nicer.
 
 ---

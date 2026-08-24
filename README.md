@@ -1084,5 +1084,5 @@ four days, and they are marked below.
 | ~40 ms for a pin to arrive everywhere | measured for release 0.1.8, in all three directions |
 | Published 0.1.9, 24 packages, key, build time ← *was 0.1.3* | fetched from `https://zeptronit.github.io/ZepOS/manifest.txt` |
 | 3254 passed / 13 skipped / 1 failed / 7 errors in 11 min 55 s | `.venv/bin/python -m pytest -q --continue-on-collection-errors`, 24.08.2026 |
-| 27 pictures, 2 058 966 bytes = 1.96 MiB | `du -cb docs/bilder/*.webp`; the four whole-desktop ones are 1920×1080 (the notebook one 1366×768), the rest are cropped to the window they show — `magick identify` on the committed files, not on the setting that produced them |
+| 27 pictures, 2 058 966 bytes = 1.96 MiB | `du -cb docs/bilder/*.webp`; three are a whole 1920×1080 desktop, one a whole 1366×768 one, four are 1280×800 out of QEMU, the other nineteen are cropped to the window they show — `magick identify` on the committed files, not on the setting that produced them |
 | Every conversion to WebP lossless | `magick compare -metric AE` printed `0` for every picture converted whole |

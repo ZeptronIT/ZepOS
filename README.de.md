@@ -1144,5 +1144,5 @@ vier Tage später überholt, und sie sind unten gekennzeichnet.
 | rund 40 ms, bis eine Anheftung überall ankommt | für Freigabe 0.1.8 gemessen, in allen drei Richtungen |
 | Veröffentlicht 0.1.9, 24 Pakete, Schlüssel, Bauzeit ← *war 0.1.3* | abgefragt bei `https://zeptronit.github.io/ZepOS/manifest.txt` |
 | 3254 bestanden / 13 übersprungen / 1 fehlgeschlagen / 7 Fehler in 11 min 55 s | `.venv/bin/python -m pytest -q --continue-on-collection-errors`, 24.08.2026 |
-| 27 Bilder, 2 058 966 Byte = 1,96 MiB | `du -cb docs/bilder/*.webp`; die vier ganzen Schreibtische sind 1920×1080 (das Notebookbild 1366×768), der Rest ist auf das gezeigte Fenster zugeschnitten – `magick identify` auf den eingecheckten Dateien, nicht auf der Einstellung, die sie erzeugt hat |
+| 27 Bilder, 2 058 966 Byte = 1,96 MiB | `du -cb docs/bilder/*.webp`; drei sind ein ganzer Schreibtisch in 1920×1080, einer einer in 1366×768, vier sind 1280×800 aus QEMU, die übrigen neunzehn sind auf das gezeigte Fenster zugeschnitten – `magick identify` auf den eingecheckten Dateien, nicht auf der Einstellung, die sie erzeugt hat |
 | Jede Umwandlung nach WebP verlustfrei | `magick compare -metric AE` gab für jedes ganz umgewandelte Bild `0` |
