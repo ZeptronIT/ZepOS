@@ -3,15 +3,203 @@
 **An Arch-based Linux distribution with a Hyprland desktop, an installer of its
 own — and the AI coding agent already on the disk.**
 
+[![Latest release](https://img.shields.io/github/v/release/ZeptronIT/ZepOS?label=release&color=0096C0)](https://github.com/ZeptronIT/ZepOS/releases)
+[![Licence](https://img.shields.io/github/license/ZeptronIT/ZepOS?color=0096C0)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/ZeptronIT/ZepOS/main?color=0096C0)](https://github.com/ZeptronIT/ZepOS/commits/main)
+![Arch-based](https://img.shields.io/badge/Arch-based-1793D1?logo=archlinux&logoColor=white)
+![Hyprland](https://img.shields.io/badge/Hyprland-Wayland-58E1FF)
+![GTK4](https://img.shields.io/badge/GTK4-everywhere-2B6EA5)
+![Status](https://img.shields.io/badge/status-beta-FFCB00)
+
 *[Deutsch lesen →](README.de.md)*
 
-![The ZepOS desktop at 1920×1080: the bar across the top with its modules, the Home with its application icons behind every window, the dock and the two corner buttons at the bottom](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/schreibtisch.webp)
+![The ZepOS desktop at 1920×1080: the bar across the top with its modules, the Home with its application icons behind every window, the dock and the two corner buttons at the bottom](docs/bilder/schreibtisch.webp)
 
-<sup>Every picture in this file is a screenshot of **this** tree, taken by
+<sup>Every picture in this file is a screenshot of a program in **this** tree —
+no mock-up, no composite, no retouching. 23 of the 27 were taken by
 `tests/render/` in a nested Hyprland with the shipped wallpaper behind the
-glass, at a real 1920×1080 — no mock-up, no composite, no retouching.
-[`docs/bilder/README.md`](docs/bilder/README.md) says how they are made, what
-was deliberately kept out of frame, and how to remake them.</sup>
+glass, at a real 1920×1080; the four installer pictures come from QEMU, off the
+release medium, and carry an older version stamp because of it.
+[`docs/bilder/README.md`](docs/bilder/README.md) says how each one is made,
+what was deliberately kept out of frame, how it was checked for anything
+personal, and how to remake them.</sup>
+
+---
+
+## Everything on the screen
+
+Every window below is the shipped one, from this commit. Click a picture for
+the full-size version.
+
+<table>
+<tr>
+<td colspan="2" align="center">
+<a href="docs/bilder/leiste.webp"><img src="docs/bilder/leiste.webp" width="860" loading="lazy" alt="The bar: date and time, CPU, memory, keyboard layout, ten workspaces, tray, network, Bluetooth, volume, microphone, battery, style editor, settings"></a><br>
+<b>The bar</b> · <sub>date, load, ten workspaces, tray and eight status modules — each one opens something</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" align="center" valign="top">
+<a href="docs/bilder/starter.webp"><img src="docs/bilder/starter.webp" width="420" loading="lazy" alt="The application launcher open over the desktop, with the search field and two application rows"></a><br>
+<b>The launcher</b><br><sub><code>SUPER+SPACE</code> — hyprlaunch with the ZepOS patch, and it calculates too</sub>
+</td>
+<td width="50%" align="center" valign="top">
+<a href="docs/bilder/kontrollzentrum.webp"><img src="docs/bilder/kontrollzentrum.webp" width="420" loading="lazy" alt="The control centre: a sidebar with network, Bluetooth, VPN, control, sound and display, and the control page beside it"></a><br>
+<b>The control centre</b><br><sub>one window, six pages, two groups in the sidebar</sub>
+</td>
+</tr>
+<tr>
+<td align="center" valign="top">
+<a href="docs/bilder/dock-minimiert.webp"><img src="docs/bilder/dock-minimiert.webp" width="420" loading="lazy" alt="The dock with seven pinned applications and, to the right of the divider, one minimised window"></a><br>
+<b>The dock</b><br><sub>pinned applications, and to the right of the divider a <i>minimised</i> window</sub>
+</td>
+<td align="center" valign="top">
+<a href="docs/bilder/sitzungsmenue.webp"><img src="docs/bilder/sitzungsmenue.webp" width="420" loading="lazy" alt="The session menu with six actions: lock, log out, restart, shut down, standby, hibernate, each with its own letter key"></a><br>
+<b>The session menu</b><br><sub><code>SUPER+M</code> — six actions, each with its own letter key</sub>
+</td>
+</tr>
+<tr>
+<td align="center" valign="top">
+<a href="docs/bilder/tastenkuerzel.webp"><img src="docs/bilder/tastenkuerzel.webp" width="420" loading="lazy" alt="The keyboard shortcut overview in columns by group, showing the key on the left and what it does on the right"></a><br>
+<b>The shortcut list</b><br><sub>read out of the generated configuration, so it cannot drift</sub>
+</td>
+<td align="center" valign="top">
+<a href="docs/bilder/stil-editor.webp"><img src="docs/bilder/stil-editor.webp" width="420" loading="lazy" alt="The style editor showing status colours with their swatches and hex values, and a Themes tab"></a><br>
+<b>The style editor</b><br><sub>69 colour keys, live, from the same file the rest of the system reads</sub>
+</td>
+</tr>
+<tr>
+<td align="center" valign="top">
+<a href="docs/bilder/sperrbildschirm.webp"><img src="docs/bilder/sperrbildschirm.webp" width="420" loading="lazy" alt="The lock screen: clock and date at the top, an avatar with the account name in the middle, and the password field below it"></a><br>
+<b>The lock screen</b><br><sub><code>zepos-lock</code>, C and GTK4, on <code>ext-session-lock-v1</code></sub>
+</td>
+<td align="center" valign="top">
+<a href="docs/bilder/installer-einteilung.webp"><img src="docs/bilder/installer-einteilung.webp" width="420" loading="lazy" alt="The installer on step 3 of 8, laying out the disk: mount point, filesystem, size, and the two partitions it will create"></a><br>
+<b>The installer</b><br><sub>eight steps, its own — not archinstall with a skin</sub>
+</td>
+</tr>
+</table>
+
+<details>
+<summary><b>And the other seventeen</b> — the Home and its two menus, the dock and launcher menus, the calendar, notifications, both settings windows, the picker, a 1366×768 notebook screen, and three more installer steps</summary>
+
+### The Home, and the two menus on it
+
+The Home is the surface behind every window. Right-click an icon, or right-click
+the empty surface beside it — two menus, two jobs:
+
+<table>
+<tr>
+<td width="50%" align="center" valign="top">
+<a href="docs/bilder/home-menue-symbol.webp"><img src="docs/bilder/home-menue-symbol.webp" width="330" loading="lazy" alt="Right-click on an application icon on the Home: Open, Remove from dock, Remove from Home"></a><br>
+<sub>on an icon</sub>
+</td>
+<td width="50%" align="center" valign="top">
+<a href="docs/bilder/home-menue-flaeche.webp"><img src="docs/bilder/home-menue-flaeche.webp" width="330" loading="lazy" alt="Right-click on the empty Home surface: Open application launcher, Tidy up icons, Choose wallpaper, Settings"></a><br>
+<sub>on the empty surface</sub>
+</td>
+</tr>
+</table>
+
+### The same right-click, in the other two places
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/dock.webp"><img src="docs/bilder/dock.webp" width="280" loading="lazy" alt="The dock with seven pinned applications and no window open"></a><br>
+<sub>the dock, nothing running</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/dock-menue.webp"><img src="docs/bilder/dock-menue.webp" width="280" loading="lazy" alt="Right-click on a dock icon: New window, Remove from Home, Remove from dock"></a><br>
+<sub>right-click in the dock</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/starter-menue.webp"><img src="docs/bilder/starter-menue.webp" width="280" loading="lazy" alt="Right-click on a launcher row: Add to dock, Add to Home"></a><br>
+<sub>right-click in the launcher</sub>
+</td>
+</tr>
+</table>
+
+### What the bar opens
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/kalender.webp"><img src="docs/bilder/kalender.webp" width="280" loading="lazy" alt="The calendar overlay: the day in large type, the month grid below it, the week starting on Monday"></a><br>
+<sub>the calendar</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/benachrichtigung.webp"><img src="docs/bilder/benachrichtigung.webp" width="280" loading="lazy" alt="A notification popup in the top right corner: sender, time, title and body"></a><br>
+<sub>a notification arriving</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/benachrichtigungszentrum.webp"><img src="docs/bilder/benachrichtigungszentrum.webp" width="280" loading="lazy" alt="The notification centre with a do-not-disturb switch at the top and the notification history below it"></a><br>
+<sub>the notification centre</sub>
+</td>
+</tr>
+</table>
+
+### Settings — two windows, one settings file
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/einstellungsfenster.webp"><img src="docs/bilder/einstellungsfenster.webp" width="280" loading="lazy" alt="The settings window of the shell: a sidebar with seven pages, and the size page open beside it"></a><br>
+<sub>the shell's settings window</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/einstellungen-app.webp"><img src="docs/bilder/einstellungen-app.webp" width="280" loading="lazy" alt="The settings application on its colours page: status, accent and overlay colour keys with their swatches"></a><br>
+<sub><code>zepos-settings-gui</code>, the separate application</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/vpn-einstellungen.webp"><img src="docs/bilder/vpn-einstellungen.webp" width="280" loading="lazy" alt="The VPN settings window with four tabs: general, phase 1, phase 2, DNS"></a><br>
+<sub>the VPN settings</sub>
+</td>
+</tr>
+</table>
+
+### The picker, the desktop in use, and a notebook screen
+
+`zepos-menu` is the picker every list in ZepOS goes through — clipboard
+history, printer selection, device selection. One window, one style.
+
+<a href="docs/bilder/auswahlfenster.webp"><img src="docs/bilder/auswahlfenster.webp" width="860" loading="lazy" alt="The zepos-menu picker: a prompt field at the top and four selectable lines below it, the first one highlighted"></a>
+
+The desktop while somebody works at it — Files open, the bar above, the dock
+below with the running window marked:
+
+<a href="docs/bilder/dateien.webp"><img src="docs/bilder/dateien.webp" width="860" loading="lazy" alt="The desktop in use: the file manager open across the screen, the bar above it, the dock below it"></a>
+
+And the same desktop on a 1366×768 notebook screen. The bar does not overflow;
+it moves three of its status modules behind the collapse button on the right,
+which is what that button is for:
+
+<a href="docs/bilder/schreibtisch-1366.webp"><img src="docs/bilder/schreibtisch-1366.webp" width="860" loading="lazy" alt="The ZepOS desktop at 1366×768, with three status modules folded behind the collapse button"></a>
+
+### Three more steps of the installer
+
+These three are not from the nested compositor: they were taken by
+`./iso/test-boot.py --scenario release-install`, in QEMU, off the release
+medium — which is why the version stamp along the bottom names an older build.
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/installer-sprache.webp"><img src="docs/bilder/installer-sprache.webp" width="280" loading="lazy" alt="The installer, step 1 of 8: choose a language"></a><br>
+<sub>step 1 — language</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/installer-bestaetigung.webp"><img src="docs/bilder/installer-bestaetigung.webp" width="280" loading="lazy" alt="The installer's confirmation dialog: it names the disk it will erase, what it will create, and says plainly that a lost passphrase means lost data"></a><br>
+<sub>step 8 — the last question</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/installer-fertig.webp"><img src="docs/bilder/installer-fertig.webp" width="280" loading="lazy" alt="The installer while it works, the package log running behind the dialog that says the installation is finished"></a><br>
+<sub>finished</sub>
+</td>
+</tr>
+</table>
+
+</details>
 
 ZepOS is an Arch-based Linux distribution with a Hyprland/Wayland desktop,
 shipped as a bootable live medium with its own graphical installer. Everything
@@ -245,7 +433,7 @@ battery, wallpaper, the shortcut overview, the style editor and the settings.
 All of them are built from the same kit, so a row, a button and a header look
 the same wherever they appear.
 
-![The control centre: a sidebar with the six pages, and the general page beside it](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/kontrollzentrum.webp)
+![The control centre: a sidebar with the six pages, and the general page beside it](docs/bilder/kontrollzentrum.webp)
 
 ### The three places an application can live
 
@@ -282,31 +470,9 @@ worse than one that always says what it will do. The change arrives everywhere
 without a re-login: every surface watches the settings file, measured at about
 **40 ms** in all three directions.
 
-![The desktop while it is used: Files open, the bar above it, the dock below with the running window marked](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/dateien.webp)
-
-<details>
-<summary><b>Four more pictures</b> — session menu, calendar, settings, and a 1366×768 notebook screen</summary>
-
-The session menu on `SUPER+M`, and from the power button in the left corner:
-
-![The session menu: lock, log out, restart, shut down, standby, hibernate, each with its own letter key](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/sitzungsmenue.webp)
-
-The calendar, one of the overlays the bar's modules open:
-
-![The calendar overlay, opened from the date module at the left end of the bar](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/kalender.webp)
-
-The settings window, colours page — every one of the 69 colour keys is reachable
-here:
-
-![The settings window on its colours page, showing the status, accent and overlay colour keys with their swatches](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/einstellungen.webp)
-
-And the same desktop on a 1366×768 notebook screen. The bar does not overflow;
-it moves three of its status modules behind the collapse button on the right,
-which is what that button is for:
-
-![The ZepOS desktop at 1366×768, with three status modules folded behind the collapse button](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/schreibtisch-1366.webp)
-
-</details>
+All three menus are up in [Everything on the screen](#everything-on-the-screen),
+next to each other — and so is what the desktop looks like while somebody is
+working at it.
 
 ### What is installed
 
@@ -918,4 +1084,5 @@ four days, and they are marked below.
 | ~40 ms for a pin to arrive everywhere | measured for release 0.1.8, in all three directions |
 | Published 0.1.9, 24 packages, key, build time ← *was 0.1.3* | fetched from `https://zeptronit.github.io/ZepOS/manifest.txt` |
 | 3254 passed / 13 skipped / 1 failed / 7 errors in 11 min 55 s | `.venv/bin/python -m pytest -q --continue-on-collection-errors`, 24.08.2026 |
-| Every screenshot 1920×1080 (the notebook one 1366×768) | `magick identify` on the published files, not on the setting that produced them |
+| 27 pictures, 2 058 966 bytes = 1.96 MiB | `du -cb docs/bilder/*.webp`; the four whole-desktop ones are 1920×1080 (the notebook one 1366×768), the rest are cropped to the window they show — `magick identify` on the committed files, not on the setting that produced them |
+| Every conversion to WebP lossless | `magick compare -metric AE` printed `0` for every picture converted whole |

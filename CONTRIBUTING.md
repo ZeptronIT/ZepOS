@@ -168,8 +168,29 @@ not optional.
   distribution was extracted from a personal configuration precisely by
   removing these; they must not come back. Machine-specific values come from
   settings or from detection.
-- **Screenshots.** `out/` is gitignored. What an image *shows* belongs in a
-  report; the image itself does not belong in the history of a branch.
+- **Measurement screenshots.** `out/` is gitignored, and everything a test run
+  or a report produced stays there. What such an image *shows* belongs in the
+  report as a sentence; the image itself does not belong in the history of a
+  branch, because it is evidence for one run and stale the day after.
+
+**Showcase pictures are the exception, and they are a different thing.** The
+pictures the two READMEs display are part of the product the way the READMEs
+themselves are: curated, remade on purpose, and a reader needs them to be
+there. They live in `docs/bilder/`, they are committed, and both READMEs
+reference them by **relative** path — which works on github.com *and* in a
+clone, in an editor, in any preview, where an absolute `raw.githubusercontent`
+link does not. The rules for them:
+
+- lossless WebP, `-strip`, no metadata;
+- cropped to the element they show, so a menu is a menu and not a 1920×1080
+  wallpaper with a menu somewhere on it;
+- nothing on the frame that identifies a machine or a person — the four checks
+  are written down in [`docs/bilder/README.md`](docs/bilder/README.md);
+- one file per element, and no second, smaller copy as a thumbnail: the READMEs
+  scale with `<img width>` instead, so the repository carries each picture once.
+
+They are **replaced**, not accumulated, and every replaced version stays in the
+history forever. Remake a picture when it is wrong, not when it could be nicer.
 
 ---
 

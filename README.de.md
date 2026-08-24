@@ -3,16 +3,203 @@
 **Eine Arch-basierte Linux-Distribution mit Hyprland-Desktop, eigenem
 Installer – und dem KI-Programmieragenten schon auf der Platte.**
 
+[![Aktuelle Freigabe](https://img.shields.io/github/v/release/ZeptronIT/ZepOS?label=release&color=0096C0)](https://github.com/ZeptronIT/ZepOS/releases)
+[![Lizenz](https://img.shields.io/github/license/ZeptronIT/ZepOS?color=0096C0)](LICENSE)
+[![Letzter Commit](https://img.shields.io/github/last-commit/ZeptronIT/ZepOS/main?color=0096C0)](https://github.com/ZeptronIT/ZepOS/commits/main)
+![Arch-basiert](https://img.shields.io/badge/Arch-based-1793D1?logo=archlinux&logoColor=white)
+![Hyprland](https://img.shields.io/badge/Hyprland-Wayland-58E1FF)
+![GTK4](https://img.shields.io/badge/GTK4-everywhere-2B6EA5)
+![Stand](https://img.shields.io/badge/status-beta-FFCB00)
+
 *[Read in English →](README.md)*
 
-![Der ZepOS-Schreibtisch in 1920×1080: oben die Leiste mit ihren Modulen, dahinter das Home mit seinen Programmsymbolen, unten das Dock und die beiden Eckknöpfe](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/schreibtisch.webp)
+![Der ZepOS-Schreibtisch in 1920×1080: oben die Leiste mit ihren Modulen, dahinter das Home mit seinen Programmsymbolen, unten das Dock und die beiden Eckknöpfe](docs/bilder/schreibtisch.webp)
 
-<sup>Jedes Bild in dieser Datei ist eine Aufnahme **dieses** Baums, gemacht von
-`tests/render/` in einem geschachtelten Hyprland mit der ausgelieferten Tapete
-hinter dem Glas, in echten 1920×1080 – kein Entwurf, kein Zusammenschnitt,
-keine Nachbearbeitung. [`docs/bilder/README.md`](docs/bilder/README.md) sagt,
-wie sie entstehen, was mit Absicht nicht darauf ist, und wie man sie neu
-macht.</sup>
+<sup>Jedes Bild in dieser Datei ist eine Aufnahme eines Programms aus **diesem**
+Baum – kein Entwurf, kein Zusammenschnitt, keine Nachbearbeitung. 23 der 27
+sind von `tests/render/` in einem geschachtelten Hyprland gemacht, mit der
+ausgelieferten Tapete hinter dem Glas, in echten 1920×1080; die vier Bilder des
+Installers kommen aus QEMU, vom Freigabemedium, und tragen deshalb einen
+älteren Versionsstempel. [`docs/bilder/README.md`](docs/bilder/README.md) sagt,
+wie jedes entsteht, was mit Absicht nicht darauf ist, wie auf Persönliches
+geprüft wurde, und wie man sie neu macht.</sup>
+
+---
+
+## Alles, was auf dem Schirm steht
+
+Jedes Fenster hier unten ist das ausgelieferte, aus diesem Commit. Ein Klick
+auf ein Bild öffnet es in voller Größe.
+
+<table>
+<tr>
+<td colspan="2" align="center">
+<a href="docs/bilder/leiste.webp"><img src="docs/bilder/leiste.webp" width="860" loading="lazy" alt="Die Leiste: Datum und Uhrzeit, CPU, Speicher, Tastaturbelegung, zehn Arbeitsflächen, Ablage, Netz, Bluetooth, Lautstärke, Mikrofon, Akku, Stil-Editor, Einstellungen"></a><br>
+<b>Die Leiste</b> · <sub>Datum, Last, zehn Arbeitsflächen, Ablage und acht Statusmodule – jedes davon öffnet etwas</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" align="center" valign="top">
+<a href="docs/bilder/starter.webp"><img src="docs/bilder/starter.webp" width="420" loading="lazy" alt="Der Anwendungsstarter offen über dem Schreibtisch, mit Suchfeld und zwei Trefferzeilen"></a><br>
+<b>Der Anwendungsstarter</b><br><sub><code>SUPER+SPACE</code> – hyprlaunch mit dem ZepOS-Patch, und er rechnet auch</sub>
+</td>
+<td width="50%" align="center" valign="top">
+<a href="docs/bilder/kontrollzentrum.webp"><img src="docs/bilder/kontrollzentrum.webp" width="420" loading="lazy" alt="Das Kontrollzentrum: eine Seitenleiste mit Netzwerk, Bluetooth, VPN, Kontrolle, Ton und Anzeige, daneben die Seite Kontrolle"></a><br>
+<b>Das Kontrollzentrum</b><br><sub>ein Fenster, sechs Seiten, zwei Gruppen in der Seitenleiste</sub>
+</td>
+</tr>
+<tr>
+<td align="center" valign="top">
+<a href="docs/bilder/dock-minimiert.webp"><img src="docs/bilder/dock-minimiert.webp" width="420" loading="lazy" alt="Das Dock mit sieben angehefteten Anwendungen und, rechts vom Trenner, einem minimierten Fenster"></a><br>
+<b>Das Dock</b><br><sub>angeheftete Anwendungen, und rechts vom Trenner ein <i>minimiertes</i> Fenster</sub>
+</td>
+<td align="center" valign="top">
+<a href="docs/bilder/sitzungsmenue.webp"><img src="docs/bilder/sitzungsmenue.webp" width="420" loading="lazy" alt="Das Sitzungsmenü mit sechs Aktionen: sperren, abmelden, neu starten, herunterfahren, Bereitschaft, Ruhezustand, jede mit eigenem Buchstaben"></a><br>
+<b>Das Sitzungsmenü</b><br><sub><code>SUPER+M</code> – sechs Aktionen, jede mit eigener Buchstabentaste</sub>
+</td>
+</tr>
+<tr>
+<td align="center" valign="top">
+<a href="docs/bilder/tastenkuerzel.webp"><img src="docs/bilder/tastenkuerzel.webp" width="420" loading="lazy" alt="Die Kürzelübersicht in Spalten nach Gruppen, links die Taste, rechts was sie tut"></a><br>
+<b>Die Kürzelliste</b><br><sub>aus der erzeugten Konfiguration gelesen, sie kann also nicht auseinanderlaufen</sub>
+</td>
+<td align="center" valign="top">
+<a href="docs/bilder/stil-editor.webp"><img src="docs/bilder/stil-editor.webp" width="420" loading="lazy" alt="Der Stil-Editor mit den Statusfarben, ihren Farbfeldern und Hex-Werten, daneben ein Reiter Themes"></a><br>
+<b>Der Stil-Editor</b><br><sub>69 Farbschlüssel, sofort wirksam, aus derselben Datei, die alles andere liest</sub>
+</td>
+</tr>
+<tr>
+<td align="center" valign="top">
+<a href="docs/bilder/sperrbildschirm.webp"><img src="docs/bilder/sperrbildschirm.webp" width="420" loading="lazy" alt="Der Sperrbildschirm: oben Uhr und Datum, in der Mitte ein Kreis mit dem Kontonamen, darunter das Passwortfeld"></a><br>
+<b>Der Sperrbildschirm</b><br><sub><code>zepos-lock</code>, C und GTK4, auf <code>ext-session-lock-v1</code></sub>
+</td>
+<td align="center" valign="top">
+<a href="docs/bilder/installer-einteilung.webp"><img src="docs/bilder/installer-einteilung.webp" width="420" loading="lazy" alt="Der Installer in Schritt 3 von 8, Einteilung der Festplatte: Einhängepunkt, Dateisystem, Größe und die zwei Partitionen, die er anlegen wird"></a><br>
+<b>Der Installer</b><br><sub>acht Schritte, ein eigener – nicht archinstall mit einem Anstrich</sub>
+</td>
+</tr>
+</table>
+
+<details>
+<summary><b>Und die übrigen siebzehn</b> – das Home und seine zwei Menüs, die Menüs von Dock und Starter, der Kalender, die Benachrichtigungen, beide Einstellungsfenster, das Auswahlfenster, ein 1366×768-Notebookschirm und drei weitere Schritte des Installers</summary>
+
+### Das Home und seine zwei Menüs
+
+Das Home ist die Fläche hinter allen Fenstern. Rechtsklick auf ein Symbol, oder
+Rechtsklick auf die leere Fläche daneben – zwei Menüs, zwei Aufgaben:
+
+<table>
+<tr>
+<td width="50%" align="center" valign="top">
+<a href="docs/bilder/home-menue-symbol.webp"><img src="docs/bilder/home-menue-symbol.webp" width="330" loading="lazy" alt="Rechtsklick auf ein Programmsymbol des Homes: Offen, Vom Dock entfernen, Vom Home entfernen"></a><br>
+<sub>auf einem Symbol</sub>
+</td>
+<td width="50%" align="center" valign="top">
+<a href="docs/bilder/home-menue-flaeche.webp"><img src="docs/bilder/home-menue-flaeche.webp" width="330" loading="lazy" alt="Rechtsklick auf die leere Fläche des Homes: Anwendungsstarter öffnen, Symbole ordnen, Hintergrundbild wählen, Einstellungen"></a><br>
+<sub>auf der leeren Fläche</sub>
+</td>
+</tr>
+</table>
+
+### Derselbe Rechtsklick an den anderen zwei Orten
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/dock.webp"><img src="docs/bilder/dock.webp" width="280" loading="lazy" alt="Das Dock mit sieben angehefteten Anwendungen und ohne offenes Fenster"></a><br>
+<sub>das Dock, nichts läuft</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/dock-menue.webp"><img src="docs/bilder/dock-menue.webp" width="280" loading="lazy" alt="Rechtsklick auf ein Dock-Symbol: Neues Fenster, Vom Home entfernen, Vom Dock entfernen"></a><br>
+<sub>Rechtsklick im Dock</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/starter-menue.webp"><img src="docs/bilder/starter-menue.webp" width="280" loading="lazy" alt="Rechtsklick auf eine Trefferzeile des Starters: Zum Dock hinzufügen, Zum Home hinzufügen"></a><br>
+<sub>Rechtsklick im Starter</sub>
+</td>
+</tr>
+</table>
+
+### Was die Leiste öffnet
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/kalender.webp"><img src="docs/bilder/kalender.webp" width="280" loading="lazy" alt="Das Kalenderfenster: der Tag groß, darunter das Monatsraster, die Woche beginnt am Montag"></a><br>
+<sub>der Kalender</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/benachrichtigung.webp"><img src="docs/bilder/benachrichtigung.webp" width="280" loading="lazy" alt="Eine Benachrichtigung in der oberen rechten Ecke: Absender, Uhrzeit, Titel und Text"></a><br>
+<sub>eine Benachrichtigung kommt an</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/benachrichtigungszentrum.webp"><img src="docs/bilder/benachrichtigungszentrum.webp" width="280" loading="lazy" alt="Das Benachrichtigungszentrum mit dem Schalter Nicht stören oben und dem Verlauf darunter"></a><br>
+<sub>das Benachrichtigungszentrum</sub>
+</td>
+</tr>
+</table>
+
+### Einstellungen – zwei Fenster, eine Einstellungsdatei
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/einstellungsfenster.webp"><img src="docs/bilder/einstellungsfenster.webp" width="280" loading="lazy" alt="Das Einstellungsfenster der Oberfläche: eine Seitenleiste mit sieben Seiten, daneben die Seite Größe"></a><br>
+<sub>das Einstellungsfenster der Oberfläche</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/einstellungen-app.webp"><img src="docs/bilder/einstellungen-app.webp" width="280" loading="lazy" alt="Die Einstellungsanwendung auf der Farbseite: Status-, Akzent- und Überlagerungsfarben mit ihren Farbfeldern"></a><br>
+<sub><code>zepos-settings-gui</code>, die eigene Anwendung</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/vpn-einstellungen.webp"><img src="docs/bilder/vpn-einstellungen.webp" width="280" loading="lazy" alt="Das VPN-Einstellungsfenster mit vier Reitern: Allgemein, Phase 1, Phase 2, DNS"></a><br>
+<sub>die VPN-Einstellungen</sub>
+</td>
+</tr>
+</table>
+
+### Das Auswahlfenster, der Schreibtisch im Gebrauch, und ein Notebookschirm
+
+`zepos-menu` ist das Auswahlfenster, durch das jede Liste in ZepOS geht –
+Zwischenablage, Druckerauswahl, Geräteauswahl. Ein Fenster, ein Stil.
+
+<a href="docs/bilder/auswahlfenster.webp"><img src="docs/bilder/auswahlfenster.webp" width="860" loading="lazy" alt="Das Auswahlfenster zepos-menu: oben ein Eingabefeld, darunter vier wählbare Zeilen, die erste hervorgehoben"></a>
+
+Der Schreibtisch, während jemand daran arbeitet – der Dateiverwalter offen,
+darüber die Leiste, darunter das Dock mit dem laufenden Fenster markiert:
+
+<a href="docs/bilder/dateien.webp"><img src="docs/bilder/dateien.webp" width="860" loading="lazy" alt="Der Schreibtisch im Gebrauch: der Dateiverwalter offen über den Schirm, darüber die Leiste, darunter das Dock"></a>
+
+Und derselbe Schreibtisch auf einem 1366×768-Notebookschirm. Die Leiste läuft
+nicht über; sie legt drei ihrer Statusmodule hinter den Einklapp-Knopf rechts,
+und genau dafür ist der da:
+
+<a href="docs/bilder/schreibtisch-1366.webp"><img src="docs/bilder/schreibtisch-1366.webp" width="860" loading="lazy" alt="Der ZepOS-Schreibtisch in 1366×768, mit drei Statusmodulen hinter dem Einklapp-Knopf"></a>
+
+### Drei weitere Schritte des Installers
+
+Diese drei kommen nicht aus dem geschachtelten Compositor: sie stammen von
+`./iso/test-boot.py --scenario release-install`, aus QEMU, vom Freigabemedium –
+darum nennt der Versionsstempel am unteren Rand einen älteren Bau.
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/installer-sprache.webp"><img src="docs/bilder/installer-sprache.webp" width="280" loading="lazy" alt="Der Installer, Schritt 1 von 8: Sprache wählen"></a><br>
+<sub>Schritt 1 – Sprache</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/installer-bestaetigung.webp"><img src="docs/bilder/installer-bestaetigung.webp" width="280" loading="lazy" alt="Die Rückfrage des Installers: er nennt die Platte, die er löscht, was er anlegt, und sagt geradeheraus, dass eine verlorene Passphrase verlorene Daten bedeutet"></a><br>
+<sub>Schritt 8 – die letzte Frage</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<a href="docs/bilder/installer-fertig.webp"><img src="docs/bilder/installer-fertig.webp" width="280" loading="lazy" alt="Der Installer bei der Arbeit, das Paketprotokoll läuft hinter dem Fenster, das die Installation für abgeschlossen erklärt"></a><br>
+<sub>fertig</sub>
+</td>
+</tr>
+</table>
+
+</details>
 
 ZepOS ist eine Arch-basierte Linux-Distribution mit einem Hyprland/Wayland-
 Desktop, ausgeliefert als bootfähiges Live-Medium mit eigenem grafischen
@@ -263,7 +450,7 @@ Kürzelübersicht, der Stil-Editor und die Einstellungen. Alle sind aus demselbe
 Bausatz gebaut, damit eine Zeile, ein Knopf und eine Kopfzeile überall gleich
 aussehen.
 
-![Das Kontrollzentrum: eine Seitenleiste mit den sechs Seiten, daneben die Seite „Kontrolle"](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/kontrollzentrum.webp)
+![Das Kontrollzentrum: eine Seitenleiste mit den sechs Seiten, daneben die Seite „Kontrolle"](docs/bilder/kontrollzentrum.webp)
 
 ### Die drei Orte, an denen ein Programm liegen kann
 
@@ -301,31 +488,9 @@ schlimmer als einer, der immer sagt, was er tun wird. Die Änderung kommt ohne
 Neuanmeldung überall an: jede Fläche überwacht die Einstellungsdatei, gemessen
 rund **40 ms**, in allen drei Richtungen.
 
-![Der Schreibtisch im Gebrauch: der Dateiverwalter offen, darüber die Leiste, darunter das Dock mit dem laufenden Fenster markiert](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/dateien.webp)
-
-<details>
-<summary><b>Vier weitere Bilder</b> – Sitzungsmenü, Kalender, Einstellungen und ein 1366×768-Notebookschirm</summary>
-
-Das Sitzungsmenü auf `SUPER+M`, und über den Abschaltknopf in der linken Ecke:
-
-![Das Sitzungsmenü: sperren, abmelden, neu starten, herunterfahren, Bereitschaft, Ruhezustand, jedes mit eigenem Buchstaben](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/sitzungsmenue.webp)
-
-Der Kalender, eine der Überlagerungen, die die Leistenmodule öffnen:
-
-![Das Kalenderfenster, geöffnet vom Datumsmodul am linken Ende der Leiste](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/kalender.webp)
-
-Das Einstellungsfenster, Seite „Farben" – hier ist jeder der 69 Farbschlüssel
-erreichbar:
-
-![Das Einstellungsfenster auf der Farbseite, mit den Status-, Akzent- und Überlagerungsfarben und ihren Farbfeldern](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/einstellungen.webp)
-
-Und derselbe Schreibtisch auf einem 1366×768-Notebookschirm. Die Leiste läuft
-nicht über; sie legt drei ihrer Statusmodule hinter den Einklapp-Knopf rechts,
-und genau dafür ist er da:
-
-![Der ZepOS-Schreibtisch in 1366×768, mit drei Statusmodulen hinter dem Einklapp-Knopf](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/schreibtisch-1366.webp)
-
-</details>
+Alle drei Menüs stehen oben unter [Alles, was auf dem Schirm steht](#alles-was-auf-dem-schirm-steht)
+nebeneinander – und ebenso, wie der Schreibtisch aussieht, während
+jemand daran arbeitet.
 
 ### Was installiert wird
 
@@ -979,4 +1144,5 @@ vier Tage später überholt, und sie sind unten gekennzeichnet.
 | rund 40 ms, bis eine Anheftung überall ankommt | für Freigabe 0.1.8 gemessen, in allen drei Richtungen |
 | Veröffentlicht 0.1.9, 24 Pakete, Schlüssel, Bauzeit ← *war 0.1.3* | abgefragt bei `https://zeptronit.github.io/ZepOS/manifest.txt` |
 | 3254 bestanden / 13 übersprungen / 1 fehlgeschlagen / 7 Fehler in 11 min 55 s | `.venv/bin/python -m pytest -q --continue-on-collection-errors`, 24.08.2026 |
-| Jedes Bild 1920×1080 (das Notebookbild 1366×768) | `magick identify` auf den veröffentlichten Dateien, nicht auf der Einstellung, die sie erzeugt hat |
+| 27 Bilder, 2 058 966 Byte = 1,96 MiB | `du -cb docs/bilder/*.webp`; die vier ganzen Schreibtische sind 1920×1080 (das Notebookbild 1366×768), der Rest ist auf das gezeigte Fenster zugeschnitten – `magick identify` auf den eingecheckten Dateien, nicht auf der Einstellung, die sie erzeugt hat |
+| Jede Umwandlung nach WebP verlustfrei | `magick compare -metric AE` gab für jedes ganz umgewandelte Bild `0` |
