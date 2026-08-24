@@ -308,6 +308,16 @@ it *saves* about 40 %.
   fixes it (309 → 319 messages) and the pictures were remade. `po/build/` is
   gitignored, so nothing about this is committed; anybody rendering from a
   fresh checkout has to run it first.
+
+  **Running it turns one test red, and that test is the one that is wrong.**
+  `tests/render/test_menue.py::test_das_menue_traegt_die_drei_punkte_einer_anheftung`
+  asserts `New window|Remove from Home|Remove from dock` — English, in a session
+  where `desktop_session.py` deliberately sets `LANG=de_DE.UTF-8`. It was green
+  only because the stale catalogue made gettext fall back to the msgid.
+  `tests/render/test_launcher_menue.py:444` checks the same kind of menu in
+  German and stays green; `tests/src/test_dock_menue.py` checks English and
+  stays green *correctly*, because it runs headless without `LANG`. One line in
+  `test_menue.py` fixes it. `tests/` was not this task's file.
 - **`Open` is translated as `Offen`** in `po/desktop/de.po` — an adjective
   where the menu wants a verb (`Öffnen`). It is legible on
   `home-menue-symbol.webp`. Not changed here: `po/` is not this task's file.
