@@ -26,6 +26,21 @@ personal, and how to remake them.</sup>
 
 ---
 
+## Finding your files
+
+<a href="docs/bilder/dateien-finden.gif"><img src="docs/bilder/dateien-finden.gif" width="860" alt="Thirteen seconds on the ZepOS desktop: the launcher opens over the wallpaper, the word datei is typed one letter at a time, the result list narrows from six applications to one, Return, and the file manager opens on the home folder with its nine folders"></a>
+
+<sup>**12.8 seconds, 9.9 frames per second measured** — 127 frames, none
+dropped, 960×540, 788 kB. A recording and not a demo reel: one nested session
+from end to end, made by `tests/render/film.py`, with nothing cut, sped up or
+retouched. The typing and the Return key are real key events. **The launcher is
+opened by the command `SUPER+SPACE` runs, not by the key itself** — a synthetic
+keyboard cannot trigger a compositor keybinding, which is measured and written
+down in [`docs/bilder/README.md`](docs/bilder/README.md). The clock in the bar
+shows the same fixed stand-in date as every picture below.</sup>
+
+---
+
 ## Everything on the screen
 
 Every window below is the shipped one, from this commit. Click a picture for

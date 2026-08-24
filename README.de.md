@@ -26,6 +26,22 @@ geprüft wurde, und wie man sie neu macht.</sup>
 
 ---
 
+## Wie man seine Dateien findet
+
+<a href="docs/bilder/dateien-finden.gif"><img src="docs/bilder/dateien-finden.gif" width="860" alt="Dreizehn Sekunden auf dem ZepOS-Schreibtisch: der Starter geht über der Tapete auf, das Wort datei wird Buchstabe für Buchstabe getippt, die Trefferliste wird von sechs Anwendungen auf eine kürzer, Eingabetaste, und der Dateiverwalter steht auf dem persönlichen Ordner mit seinen neun Ordnern"></a>
+
+<sup>**12,8 Sekunden, gemessene 9,9 Bilder je Sekunde** – 127 Bilder, keines
+verloren, 960×540, 788 kB. Eine Aufnahme und kein Werbefilm: eine einzige
+geschachtelte Sitzung von vorn bis hinten, gemacht von `tests/render/film.py`,
+nichts geschnitten, nichts beschleunigt, nichts nachbearbeitet. Das Tippen und
+die Eingabetaste sind echte Tastenereignisse. **Den Starter öffnet der Befehl,
+den `SUPER+SPACE` ausführt, und nicht die Taste selbst** – eine synthetische
+Tastatur kann keine Bindung des Compositors auslösen; das ist gemessen und
+steht in [`docs/bilder/README.md`](docs/bilder/README.md). Die Uhr in der
+Leiste zeigt dieselbe feste Platzhalterzeit wie jedes Bild darunter.</sup>
+
+---
+
 ## Alles, was auf dem Schirm steht
 
 Jedes Fenster hier unten ist das ausgelieferte, aus diesem Commit. Ein Klick

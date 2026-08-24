@@ -1,7 +1,9 @@
 # The pictures in the two READMEs
 
-27 files, **2 058 966 bytes — 1.96 MiB** in total, lossless WebP, taken on
-**24.08.2026** from `4a1d8f0` unless the table below says otherwise.
+28 files, **2 865 822 bytes — 2.73 MiB** in total: 27 stills in lossless WebP
+(2 058 966 bytes) and **one animation**, `dateien-finden.gif`, 806 856 bytes.
+Taken on **24.08.2026** from `4a1d8f0` (the stills) and `72d5bdf` (the
+animation) unless the table below says otherwise.
 
 Every one of them is a screenshot of a program in this tree, running in a real
 compositor. None is a mock-up, a composite, or retouched. What each one needed
@@ -35,9 +37,11 @@ different thing, and the rule now says so explicitly, in the same list.
 
 ### The price, named
 
-**Every replaced picture stays in the history forever.** 1.96 MiB is what a
-clone carries today; a second full set makes it 3.9, a third 5.9. There is no
-taking one back out short of rewriting history.
+**Every replaced picture stays in the history forever.** 2.73 MiB is what a
+clone carries today — 1.96 for the 27 stills, 0.77 for the animation. A second
+full set of stills makes it 4.7, a second animation 3.5. There is no taking one
+back out short of rewriting history, and that is the reason the animation is
+960 px and thirteen seconds and not 1920 and forty.
 
 That is why:
 
@@ -51,7 +55,7 @@ That is why:
 
 ---
 
-## The 27 pictures
+## The 27 stills
 
 | File | Size | Bytes | What is on it |
 |---|---|---:|---|
@@ -89,6 +93,133 @@ QEMU, off the release medium — which is why the version stamp along their
 bottom edge says `ZepOS 2026.08.17 824b70b`. That is honest and both READMEs
 say it. The installer does not run in the nested compositor: it wants a whole
 machine and a disk to erase.
+
+---
+
+## The animation
+
+`dateien-finden.gif` — **960×540, 12.8 s, 128 frames, 806 856 bytes (788 kB)**,
+made by `tests/render/film.py` from `72d5bdf`. It answers the one question the
+user asked for by name: *how do I find my files.* Desktop at rest → the
+launcher opens → `datei` is typed one letter at a time → the result list
+narrows from six applications to one → Return → the file manager stands on the
+home folder with its nine folders.
+
+### It is a recording, and here is what "recording" means here
+
+There is no screen recorder for `wlr-screencopy` on this machine — `wf-recorder`
+and `gifski` are both absent, and nothing may be installed. **`grim` is the
+recorder**, one frame long: a background thread pulls frames at a fixed tick
+and writes down the clock reading for each; `ffmpeg` builds the GIF from frames
+*plus measured times*. The frame rate is therefore not set, it is **measured**,
+and the number in both READMEs is the measured one:
+
+| | |
+|---|---|
+| tick asked for | 100 ms = 10.0 frames/s |
+| frames | 127 |
+| length | 12.70 s |
+| **frame rate reached** | **9.92 frames/s** |
+| gap between frames | 100 / 101 / 184 ms (min / mean / max) |
+| frames dropped | 0 |
+
+One session from beginning to end. Nothing cut, nothing sped up, no second take
+spliced in, no retouching. Of the 127 frames, **25 are distinct** and the other
+102 are byte-identical repeats of one of those 25 — which is why a 12.8 s
+animation of a desktop costs 788 kB: `ffmpeg` writes a still frame as a 1×1
+pixel update.
+
+### Why GIF, measured and not assumed
+
+Both READMEs were run through GitHub's own renderer
+(`gh api -X POST /markdown`, mode `gfm`, context `ZeptronIT/ZepOS`):
+
+- `<img src="…gif">` survives, and GitHub adds `data-animated-image=""` and
+  `style="max-width: 100%"` of its own — it renders as an image, and a browser
+  plays an animated GIF by itself, with no click and no play button.
+- `<video src="docs/video/x.mp4" controls autoplay loop>` is **stripped
+  entirely**; the paragraph comes back empty. `[x.mp4](…)` becomes a link one
+  has to click, and `![](…mp4)` becomes an `<img>` that no browser can draw.
+  GitHub embeds a player only for files **uploaded through its web interface**,
+  which is not a file in the repository.
+
+So GIF is not a habit here, it is the only format that plays by itself from a
+path in the tree.
+
+**And it really does play by itself** — checked against a live README and not
+guessed. A repository page whose README carries GIFs
+(`github.com/charmbracelet/vhs`) serves them as plain `<img …
+data-animated-image="">`: no player, no click, no poster frame. The page's
+`<html>` element carries `data-a11y-animated-images="system"`, which is
+GitHub's *Animated images* accessibility setting; `system` — the default —
+means it follows the viewer's `prefers-reduced-motion`. A visitor who has asked
+their system for less motion, or who has switched that setting off, sees the
+first frame and a control instead. That is the only case in which it does not
+run on its own, and it is the right one to honour.
+
+Our own file is animated in the way that needs: 128 Graphic Control blocks with
+their own delays and one Netscape application block, so it loops forever.
+
+### The keystroke that is not in it, and why
+
+The nested compositor of `tests/render/desktop_session.py` drives on a minimal
+`hyprland.conf`: monitor, `misc`, animations off, `decoration`, `layerrule`.
+**Not one `bind` line** — the measurement sessions need geometry and glass, not
+a keyboard. So `SUPER+SPACE` does nothing there.
+
+Switching it on at run time works and changes no existing session:
+`hyprctl keyword bind …` registered three bindings and `hyprctl -j binds`
+listed all three back — `(0, F9)`, `(64, SPACE)`, `(12, T)`. **None of them
+ever fired.** Six `wtype` variants — bare key, modifier as state, modifier as a
+real key, each with and without pauses — all returned 0 and the receipt file
+stayed empty every time, while `hyprctl dispatch exec` of the same command
+wrote it instantly. Keys from a virtual keyboard *do* arrive: the same `wtype`
+call types `datei` into the launcher's search field in this very recording.
+They reach the focused client and not the compositor's binding matcher.
+
+Whether Hyprland ignores `zwp_virtual_keyboard_v1` for bindings in general, or
+whether it is this nesting, **cannot be decided here**: the counter-test is a
+press on the real keyboard, and that belongs to the person working next door.
+
+The recording therefore does not fake the keystroke. It opens the launcher with
+the command the plugin runs on that key — `hyprlaunch-ui --toggle`, word for
+word out of `sendUICommand()` in `src/Globals.cpp` of the pinned commit. Both
+READMEs say so in the caption.
+
+### Three more things the rig needed, each one measured
+
+1. **Its own `/tmp` for the launcher.** `hyprlaunch-ui` carries its control
+   socket as a literal: `/tmp/hyprlaunch-ui.sock`. On start it *unlinks* that
+   path and binds its own; with a command on the line it first sends the
+   command to whoever already listens there. On this machine **the developer's
+   own running launcher listens on it**, in his own session. Calling
+   `hyprlaunch-ui` from a render run would therefore either open *his* window
+   or delete the socket under his feet. The launcher now runs in its own mount
+   namespace with a private `/tmp`, and the three conditions are chained with
+   `&&` so that a failure runs nothing at all:
+   `mount -t tmpfs none /tmp && test ! -e /tmp/hyprlaunch-ui.sock && exec …`.
+   Runtime directory, build directory and the binary itself live under
+   `/dev/shm` for the same reason — that private `/tmp` would otherwise hide
+   them.
+2. **The session bus has to be told which session it is in.**
+   `org.gnome.Nautilus.desktop` carries `DBusActivatable=true`, so GIO does not
+   start it — the session bus does, and the bus hands the child *its own*
+   environment. `Session.start_bus()` gives that daemon three variables on
+   purpose (`PATH`, `HOME`, `XDG_RUNTIME_DIR`), so it inherits nothing from the
+   human's session — and a Nautilus started that way has no `WAYLAND_DISPLAY`.
+   The first run pressed Return, the launcher closed, and **no window came**:
+   the recording ended on an empty desktop. `dbus-update-activation-environment`
+   with a named list — the same program a real login runs — fixes it.
+3. **The rig's second output had to go.** The nested compositor has two:
+   the headless one being filmed (1920×1080) and `WAYLAND-1`, the window at the
+   host, measured at 931×521. `LauncherRenderer::fittingHeight()` looks for the
+   **shortest** monitor and derives from it how many result rows the window may
+   be — the shortest was that 521 px host window, so the launcher showed **two**
+   rows although seven applications resolve. `monitor = WAYLAND-1, disable` at
+   run time leaves exactly one output, and the launcher shows six. This is not
+   flattery; it is removing a piece of scenery only this rig has. **The same
+   artefact is on `starter.webp` in this directory** — that is why its launcher
+   has two rows and the animation's has six.
 
 ---
 
@@ -216,7 +347,9 @@ side effect: the real account name is not on the picture.
 
 ## Nothing personal is in them, and this is how that was checked
 
-Four checks, all four repeated for this set on 24.08.2026.
+Four checks, all four repeated for this set on 24.08.2026 — and repeated again
+for the animation, where each one had to cover **every frame** and not just the
+first. Where the animation differs, it says so below.
 
 1. **Structurally.** `HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
    `XDG_DATA_HOME` and `DBUS_SESSION_BUS_ADDRESS` all point into a throwaway
@@ -251,6 +384,37 @@ Four checks, all four repeated for this set on 24.08.2026.
    `comment:`, `Software:`, `Artist` or `Copyright` field. `strings` over the
    raw bytes finds no match for `lmarzoll`, `/home/`, a host name or an SSID.
 
+### The animation, frame by frame
+
+A film has many pictures, and "I looked at the first one" is not a check. What
+made a complete one affordable: `sha256sum` over the 127 frames gives **25
+distinct images**; every other frame is byte-identical to one of them. So:
+
+- **All 25 distinct frames were opened at full resolution and read.** Legible on
+  them: the bar with its stand-in clock `Di 12.08.2026 14:07`, CPU 12 %,
+  memory 38 %, 66 shortcuts, ten workspaces, battery 87 %; the Home's icon
+  labels, all of them names of applications ZepOS ships; the launcher with
+  Archivverwaltung, Dateien, Druckerverwaltung, Festplattenbelegungsanalyse,
+  Mozilla Firefox, btop++; the search text growing `d → da → dat → date →
+  datei`; and the file manager on `Persönlicher Ordner` with Bilder, Dokumente,
+  Downloads, Musik, Öffentlich, Projekte, Schreibtisch, Videos, Vorlagen. Not
+  one user name, host name, path under `/home/lmarzoll`, network name, device
+  name or serial number.
+- The nine folder names come from `xdg-user-dirs-update` reading the stock
+  `/etc/xdg/user-dirs.defaults` — including `Projekte`, which is Arch's default
+  `PROJECTS=Projects` translated, not a folder of this machine.
+- The launcher would have shown foreign entries again: the first run answered
+  `datei` with **Dateien *and* Dateimanager Thunar**, a program ZepOS does not
+  ship. The filtered `XDG_DATA_DIRS` above is what keeps the list to the ten
+  entries of the shipped packages.
+- **By bytes.** `grep -rlF` over all 127 frames *and* the finished GIF finds
+  zero files containing `lmarzoll`, `LMARZOLL`, `T14`, `/home/`, `Thunar`,
+  `dev/shm`, `hyprlaunch-ui` or `NetworkManager`.
+- **Metadata.** The GIF's extension blocks were counted out of the raw bytes:
+  128 × Graphic Control (`0x21F9`) and 1 × Application (`0x21FF`, the Netscape
+  loop). **No comment block (`0x21FE`) at all**, and `strings -n 6` finds
+  nothing beyond the `GIF89a` header.
+
 ---
 
 ## Remaking them
@@ -280,6 +444,23 @@ files in `main`:
 4. Repeat all four checks above. Then `git add docs/bilder/<name>.webp` **by
    name**, and commit.
 
+The animation is one command and needs no cropping step:
+
+```bash
+.venv/bin/python -m tests.render.film --out out/film
+```
+
+It writes `out/film/dateien-finden.gif`, every single frame under
+`out/film/bilder/`, and `out/film/messwerte.txt` with the measured frame rate,
+the marks for what happened when, and the size and `sha256` of the GIF.
+`--breite` sets the width in pixels (960 by default, an exact halving of
+1920 — a non-integer scale visibly softens the type), `--takt` the tick in
+milliseconds, `--nur-bilder` stops before the GIF. It needs `cmake`, `ninja`,
+`wtype`, `ffmpeg`, `unshare` and `xdg-user-dirs-update` on top of what
+`shoot.py` needs; it builds `hyprlaunch-ui` itself, out of the pinned tarball
+and the patch in `packaging/zepos-hyprlaunch/`, so what is filmed is what that
+recipe builds and not whatever binary happens to lie on the machine.
+
 Lossless was chosen over `-q92` deliberately: it costs about four times the
 bytes of lossy but lets "no retouching" stand without a footnote. Against PNG
 it *saves* about 40 %.
@@ -293,13 +474,31 @@ it *saves* about 40 %.
 | network page, Bluetooth page, disk overlay, battery overlay | check 2 above — real devices, over the system bus and `/sys` |
 | the wallpaper selector | it opens and it is **empty**: the rig has no wallpaper directory, and the monitor buttons read `WAYLAND-1 [Q]` / `HEADLESS-1 [Q]`, which are names of the test rig. That is a picture of a rig, not of ZepOS |
 | the login screen (`regreet`) | not installed here, and it does not start without `$GREETD_SOCK`. `tests/render/greeter_shot.py` **rebuilds** its widget tree to measure colours; a reconstruction has no business being called a screenshot |
-| a video or a GIF | no screen recorder for `wlr-screencopy` here (`wf-recorder`, `gifski` both absent) and no tool for synthetic pointer clicks. A demonstration *without clicks* is not a demonstration. `dateien.webp` answers "how do I find my files" as a still |
+| a **second** animation — pinning by right-click | it needs a *pointer button*, and there is still no tool on this machine that presses one: `ydotool`, `wlrctl` and `dotool` are absent, `wtype` does keys only, `hyprctl dispatch` moves the cursor but cannot click. The file-finding animation works because it is keyboard work from start to finish. Pinning is not, so it stays a still (`starter-menue.webp`) |
 | a second, smaller copy of each picture as a thumbnail | it would double what the history carries forever. `<img width>` in the READMEs does the same job for nothing |
 
 ---
 
 ## Findings that came out of making them, and were not fixed here
 
+- **The launcher window does not shrink with the result list.** It is sized
+  once, at start, to as many rows as the shortest monitor allows, and keeps
+  that height however few results are left. In the animation you watch six rows
+  become one and a large empty box stay behind it for two seconds. Visible from
+  second 5 of `dateien-finden.gif`. `plugins/` holds only a `LICENSE` in this
+  tree; the launcher is built from a pinned upstream commit plus
+  `packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch`, so this is a patch, not
+  a one-line fix, and it was not this task's file.
+- **`RENDERED` in `tests/render/desktop_session.py` was out of date again**, in
+  exactly the way `tests/src/test_render_table.py` was written to catch:
+  `generate_config.sh` and `ags-config.template` both knew
+  `ags-bluetooth-agent`, the table did not, and `ags bundle` broke with
+  `Could not resolve "./widget/BluetoothAgent"` — which stops **every** render
+  test, not just this one. Somebody was working on that file at the time, so it
+  was left alone; `tests/render/film.py` reads the same `case` branches the
+  table is copied from and renders whatever the table is missing, into its own
+  build directory only. That patch does nothing once the table is complete
+  again.
 - **`po/build/` was stale.** `po/desktop/de.po` was last touched on
   21.08.2026, the compiled `po/build/de/LC_MESSAGES/zepos-desktop.mo` on the
   20th. Every string added on the 21st — the Home menus, the dock menu, the
