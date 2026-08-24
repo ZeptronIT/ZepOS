@@ -35,7 +35,7 @@ the full-size version.
 <tr>
 <td colspan="2" align="center">
 <a href="docs/bilder/leiste.webp"><img src="docs/bilder/leiste.webp" width="860" loading="lazy" alt="The bar: date and time, CPU, memory, keyboard layout, ten workspaces, tray, network, Bluetooth, volume, microphone, battery, style editor, settings"></a><br>
-<b>The bar</b> · <sub>date, load, ten workspaces, tray and eight status modules — each one opens something</sub>
+<b>The bar</b> · <sub>date, load and keyboard layout on the left, ten workspaces in the middle, eight status modules on the right — each one opens something</sub>
 </td>
 </tr>
 <tr>

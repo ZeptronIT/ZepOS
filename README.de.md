@@ -35,7 +35,7 @@ auf ein Bild öffnet es in voller Größe.
 <tr>
 <td colspan="2" align="center">
 <a href="docs/bilder/leiste.webp"><img src="docs/bilder/leiste.webp" width="860" loading="lazy" alt="Die Leiste: Datum und Uhrzeit, CPU, Speicher, Tastaturbelegung, zehn Arbeitsflächen, Ablage, Netz, Bluetooth, Lautstärke, Mikrofon, Akku, Stil-Editor, Einstellungen"></a><br>
-<b>Die Leiste</b> · <sub>Datum, Last, zehn Arbeitsflächen, Ablage und acht Statusmodule – jedes davon öffnet etwas</sub>
+<b>Die Leiste</b> · <sub>links Datum, Last und Tastaturbelegung, in der Mitte zehn Arbeitsflächen, rechts acht Statusmodule – jedes davon öffnet etwas</sub>
 </td>
 </tr>
 <tr>
