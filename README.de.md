@@ -1,6 +1,18 @@
 # ZepOS
 
+**Eine Arch-basierte Linux-Distribution mit Hyprland-Desktop, eigenem
+Installer – und dem KI-Programmieragenten schon auf der Platte.**
+
 *[Read in English →](README.md)*
+
+![Der ZepOS-Schreibtisch in 1920×1080: oben die Leiste mit ihren Modulen, dahinter das Home mit seinen Programmsymbolen, unten das Dock und die beiden Eckknöpfe](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/schreibtisch.webp)
+
+<sup>Jedes Bild in dieser Datei ist eine Aufnahme **dieses** Baums, gemacht von
+`tests/render/` in einem geschachtelten Hyprland mit der ausgelieferten Tapete
+hinter dem Glas, in echten 1920×1080 – kein Entwurf, kein Zusammenschnitt,
+keine Nachbearbeitung. [`docs/bilder/README.md`](docs/bilder/README.md) sagt,
+wie sie entstehen, was mit Absicht nicht darauf ist, und wie man sie neu
+macht.</sup>
 
 ZepOS ist eine Arch-basierte Linux-Distribution mit einem Hyprland/Wayland-
 Desktop, ausgeliefert als bootfähiges Live-Medium mit eigenem grafischen
@@ -51,17 +63,96 @@ haben:
   Commit, den Arch-Stichtag und die sha256-Summe jedes Pakets.
 - Medien: die [Releases-Seite](https://github.com/ZeptronIT/ZepOS/releases).
 
-*Gemessen am 20.08.2026:* die Paketquelle lieferte **0.1.3 mit 24 Paketen**,
-signiert mit `157C1725A578B80C`; das neueste Medium war
-**`zepos-2026.08.19-x86_64.iso`, 1 324 056 576 Byte (1,23 GiB)**. Dieser
-Arbeitsbaum stand da bereits auf `0.1.4`, und das ist nicht dasselbe wie
-veröffentlicht – [`VERSION`](VERSION) sagt, wo der Baum steht, die zwei Links
-oben sagen, was wirklich draußen ist.
+*Gemessen am 24.08.2026:* die Paketquelle lieferte **0.1.9 mit 24 Paketen**,
+gebaut am `2026-08-24T14:06:09Z` aus Commit `54269d9` und signiert mit
+`157C1725A578B80C`; das neueste Medium war weiterhin
+**`zepos-2026.08.19-x86_64.iso`, 1 324 056 576 Byte (1,23 GiB)**, weil seither
+keine Freigabe ein Abbild getragen hat. Baum und Paketquelle stehen heute beide
+auf `0.1.9` – [`VERSION`](VERSION) sagt, wo der Baum steht, die zwei Links oben
+sagen, was wirklich draußen ist; beim nächsten Commit gehen sie wieder
+auseinander.
 
 **Was Beta nicht heißt.** Nicht: fertig, nur mit Fehlern. Ganze Fähigkeiten
 fehlen mit Absicht, und sie stehen unten beim Namen, unter
 [Was heute nicht geht](#was-heute-nicht-geht). Diesen Abschnitt bitte lesen,
 bevor irgendetwas installiert wird.
+
+---
+
+## KI zuerst – und genau, was das heißt
+
+Die Zeile ganz oben ist eine Behauptung, also steht sie hier vollständig, mit
+der Datei, die jeden Teil davon trägt. Nichts davon ist geplant, in Arbeit oder
+demnächst; jede Zeile steht heute im Baum.
+
+**Claude Code ist ein Paket dieser Distribution und nichts, was man hinterher
+installiert.** `packaging/zepos-claude-code/PKGBUILD` baut es aus einem
+angehefteten, sha256-geprüften Archiv der npm-Registry – in der
+veröffentlichten Paketquelle Fassung `2.1.233-4` – und es ist mit demselben
+Schlüssel signiert wie alles andere, was ZepOS ausliefert. `zepos-apps` hängt
+davon ab, es kommt also mit dem Schreibtisch; es ist im Dock angeheftet und
+liegt auf dem Home. Nach der ersten Anmeldung einer frischen Installation ist
+der Agent bereits auf der Maschine.
+
+**Ein gewöhnlicher Nutzer kann Agenten-Werkzeug global installieren, ohne
+`sudo`.** ZepOS liefert Node 24 LTS und npm mit (`nodejs-lts-krypton`, `npm`,
+beide Abhängigkeiten von `zepos-desktop`), und `/etc/npmrc` aus `zepos-config`
+setzt npms Präfix auf `~/.local` – ein Verzeichnis, das die Shell und
+`zepos-session` ohnehin im `PATH` haben. Eine Zeile genügt damit für einen
+Orchestrierer, der Claude Code in mehreren Agentenrollen steuert:
+
+```bash
+npm i -g claude-flow
+claude-flow --version
+```
+
+Kein root, und nichts wird in pacmans `/usr/lib/node_modules/` geschrieben. Die
+eigene `~/.npmrc` gewinnt weiterhin gegen die Systemdatei – am 20.08.2026 in
+einem leeren Container gemessen. **Ruflo (`claude-flow`) liegt mit Absicht
+nicht vorinstalliert bei**; die Begründung steht unter
+[Was installiert wird](#was-installiert-wird).
+
+**Die Distribution ist so gebaut, dass ein Agent an ihr weiterarbeiten kann.**
+Das ist der Teil, den man leicht unscharf sagt, also genau: Fast jede
+Entscheidung in diesem Baum steht neben dem Code, den sie betrifft, samt der
+Messung, aus der sie kam – das sind die Dateiköpfe in `src/` und `packaging/`.
+Zwei einzige Quellen der Wahrheit sorgen dafür, dass eine Farbe oder ein
+Zeichen an einer Stelle geändert wird und 88 Vorlagen erreicht. Und
+`tests/conftest.py` installiert eine Isolationssicherung, die jedem Test
+verbietet, einen Prozess zu starten oder außerhalb eines temporären
+Verzeichnisses zu schreiben – das ist es, was es erträglich macht, die Suite
+von etwas laufen zu lassen, das kein Mensch ist, auf einer Maschine, auf die es
+ankommt. ZepOS ist selbst so geschrieben worden, mit Claude an der Tastatur für
+einen großen Teil des Baums; die Gepflogenheiten sind der Rückstand davon und
+keine Verkaufsposition.
+
+### Was es nicht ist
+
+Deutlich gesagt, weil eine README, die mehr verspricht als die erste
+Installation hält, der teuerste Fehler ist, den eine Beta machen kann.
+
+- **Kein lokales Modell und keine Inferenz.** Kein llama.cpp, kein ollama, kein
+  GPU-/CUDA-/ROCm-Unterbau, keine quantisierten Gewichte. Nichts auf dem Medium
+  führt ein Modell aus.
+- **Keine KI im Schreibtisch selbst.** Kein Assistent in der Leiste, kein
+  Eingabefeld für natürliche Sprache, keine Sprachsteuerung, keine KI im
+  Installer, keine KI in Hilfe oder Diagnose. `zepos-doctor` ist gewöhnliches
+  Python.
+- **Kein Gedächtnis, keine Vektordatenbank, keine mitgelieferten
+  Agentenrollen.** Es gibt keinen eingebetteten Speicher, kein Retrieval, kein
+  ZepOS-eigenes Agenten-Gerüst und keinen ab Werk eingerichteten MCP-Dienst.
+- **Claude Code braucht ein Anthropic-Konto und ein Netz.** Es ist Anthropics
+  proprietäres Programm unter eigener Lizenz, nicht Teil von ZepOS' GPL, und
+  ohne Netz tut es nichts. Wer es nicht will, entfernt das Paket.
+- **„KI zuerst" heißt hier: der Arbeitsplatz, nicht das Innere des
+  Betriebssystems.** ZepOS bringt einen Agenten in einem Schritt statt in fünf
+  zum Laufen, und sein Baum ist so geschrieben, dass einer daran arbeiten kann.
+  Es denkt nicht, und es führt kein Modell für Sie aus.
+
+**Vorhaben, und deshalb nicht behauptet:** eine Assistenzfläche, die zum
+Schreibtisch gehört statt zum Terminal. Das ist ein *Plan*, er steht noch nicht
+in [`docs/specs/`](docs/specs/), und nichts in diesem Repository setzt
+irgendeinen Teil davon um.
 
 ---
 
@@ -131,9 +222,10 @@ und das ist alles.
 
 Es gibt keine automatische Anmeldung – die Maske fragt immer. Die erste
 Anmeldung eines Kontos erzeugt dessen gesamte Konfiguration aus den Vorlagen.
-Gemessen am 20.08.2026 über 94 Erzeugungsziele: **1117 ms** für eine erste,
-vollständige Erzeugung und **260 ms** bei einer Anmeldung, bei der sich nichts
-geändert hat – Unverändertes wird übersprungen, der Rest läuft nebenläufig.
+Gemessen am 20.08.2026, als es 94 Erzeugungsziele gab (heute sind es 98):
+**1117 ms** für eine erste, vollständige Erzeugung und **260 ms** bei einer
+Anmeldung, bei der sich nichts geändert hat – Unverändertes wird übersprungen,
+der Rest läuft nebenläufig.
 
 ---
 
@@ -170,6 +262,70 @@ Anzeige. Daneben stehen die Überlagerungen, die die anderen Leistenmodule
 Kürzelübersicht, der Stil-Editor und die Einstellungen. Alle sind aus demselben
 Bausatz gebaut, damit eine Zeile, ein Knopf und eine Kopfzeile überall gleich
 aussehen.
+
+![Das Kontrollzentrum: eine Seitenleiste mit den sechs Seiten, daneben die Seite „Kontrolle"](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/kontrollzentrum.webp)
+
+### Die drei Orte, an denen ein Programm liegen kann
+
+**Das Home** ist eine Fläche hinter allen Fenstern, auf der die Programme als
+Symbole liegen – anklickbar, mit der Maus verschiebbar, auf jedem Bildschirm.
+Es speichert Gitter*plätze* und keine Bildpunkte, denn die nutzbare Fläche
+ändert sich im Betrieb: mit eingefahrenem Dock ist sie 40 Punkte höher, und mit
+gespeicherten Koordinaten wäre bei jedem `SUPER+B` jedes Symbol gewandert. Es
+liegt auf der Ebene `bottom` und nicht auf `background`, wo swaybg das
+Hintergrundbild malt und bei jedem Wechsel neu startet – gemessen wären die
+Symbole nach dem ersten Bildwechsel verschwunden. Leerlaufkosten, gemessen:
+0,00 % CPU, sichtbar wie verdeckt.
+
+**Das Dock** trägt die angehefteten Programme und rechts daneben, leicht
+abgeblendet, die *minimierten* Fenster. Minimieren schiebt ein Fenster auf den
+Sonderarbeitsbereich `minimized`; ein Klick holt es auf die Arbeitsfläche, die
+man gerade ansieht, **ohne** den Tastaturfokus mitzunehmen – von den drei
+Hyprland-Befehlen, die dafür infrage kamen, tut das genau
+`movetoworkspacesilent`, und von den anderen beiden ist gemessen, dass sie
+etwas anderes tun. Beide Eckknöpfe – links Abschalten, rechts Starter – fahren
+mit dem Dock auf `SUPER+B` ein.
+
+**Der Starter** auf `SUPER+SPACE`. Rechtsklick wirkt an allen drei Orten, und
+jedes Menü kann ein Programm an den *anderen* Ort schieben:
+
+| Rechtsklick im … | … auf ein Programm |
+|---|---|
+| **Home** | Zum Dock hinzufügen · Vom Home entfernen |
+| **Dock** | Zum Home hinzufügen · Vom Dock entfernen |
+| **Starter** | Zum Dock hinzufügen · Zum Home hinzufügen |
+
+Liegt das Programm am Zielort schon, schlägt der Punkt auf „entfernen" um,
+statt zu verschwinden – ein Rechtsklick, der mal wirkt und mal nicht, ist
+schlimmer als einer, der immer sagt, was er tun wird. Die Änderung kommt ohne
+Neuanmeldung überall an: jede Fläche überwacht die Einstellungsdatei, gemessen
+rund **40 ms**, in allen drei Richtungen.
+
+![Der Schreibtisch im Gebrauch: der Dateiverwalter offen, darüber die Leiste, darunter das Dock mit dem laufenden Fenster markiert](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/dateien.webp)
+
+<details>
+<summary><b>Vier weitere Bilder</b> – Sitzungsmenü, Kalender, Einstellungen und ein 1366×768-Notebookschirm</summary>
+
+Das Sitzungsmenü auf `SUPER+M`, und über den Abschaltknopf in der linken Ecke:
+
+![Das Sitzungsmenü: sperren, abmelden, neu starten, herunterfahren, Bereitschaft, Ruhezustand, jedes mit eigenem Buchstaben](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/sitzungsmenue.webp)
+
+Der Kalender, eine der Überlagerungen, die die Leistenmodule öffnen:
+
+![Das Kalenderfenster, geöffnet vom Datumsmodul am linken Ende der Leiste](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/kalender.webp)
+
+Das Einstellungsfenster, Seite „Farben" – hier ist jeder der 69 Farbschlüssel
+erreichbar:
+
+![Das Einstellungsfenster auf der Farbseite, mit den Status-, Akzent- und Überlagerungsfarben und ihren Farbfeldern](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/einstellungen.webp)
+
+Und derselbe Schreibtisch auf einem 1366×768-Notebookschirm. Die Leiste läuft
+nicht über; sie legt drei ihrer Statusmodule hinter den Einklapp-Knopf rechts,
+und genau dafür ist er da:
+
+![Der ZepOS-Schreibtisch in 1366×768, mit drei Statusmodulen hinter dem Einklapp-Knopf](https://raw.githubusercontent.com/ZeptronIT/ZepOS/bilder/schreibtisch-1366.webp)
+
+</details>
 
 ### Was installiert wird
 
@@ -354,6 +510,37 @@ und nichts, was beim Schreiben dieser Datei gefunden wurde, ist weggelassen.
   unsichtbar. Der weiße Ring, den das Systemthema um die Dock-Symbole malte, war
   der erste Fund dieser Art, und gefunden hat ihn ein Mensch vor einem
   Bildschirm.
+- **Die Suite lässt sich nicht in einem Aufruf sammeln.**
+  `tests/render/test_home.py` und `tests/src/test_home.py` tragen denselben
+  Basisnamen, und pytest importiert Testdateien über ihren Basisnamen – die
+  zweite, die es erreicht, ist ein Import-Konflikt. Zählen braucht zwei
+  Befehle, siehe [Tests](#tests). Offen seit 0.1.8.
+- **Ein vollständig geleertes Home behält sein letztes Bild**, bis etwas
+  anderes es neu zeichnet. Offen seit 0.1.8.
+- **Der Abstand zwischen Symbol und Text schwankt in den drei
+  Rechtsklick-Menüs sichtbar zwischen 9 und 12 px.** Die Sprosse stimmt; die
+  Tinte der Zeichen ist verschieden breit. Die saubere Lösung säße im
+  gemeinsamen Zeilen-Bauteil und beträfe jedes Fenster. Offen seit 0.1.6.
+- **Der Bluetooth-Kopplungsdialog ist Bluemans, nicht unserer.** 0.1.9 hat eine
+  Sicherheitslücke geschlossen – bis dahin hatte `bluetoothd` überhaupt keinen
+  Kopplungsagenten, und der Kernel bestätigte Kopplungen still selbst –, indem
+  es Bluemans Agenten mit `KeyboardDisplay` registriert und ihm eine
+  Fensterregel gibt. Sieben Blueman-Module und dessen eigene Benachrichtigungen
+  sind abgeschaltet, weil sie denselben Adapter anfassen wie die Leiste. Ein
+  eigener Kopplungsagent als AGS-Fenster ist in Arbeit; bis dahin gehört eine
+  Fläche auf diesem Schreibtisch jemand anderem.
+- **Der Stand der Suite am 24.08.2026**, damit ein grüner Lauf nicht
+  vorausgesetzt wird: 3254 bestanden, 13 übersprungen und acht, die nicht grün
+  sind. `test_no_program_opens_a_layer_shell_window_without_a_rule` fällt über
+  einen *Bauabfall* unter `iso/work/` und nicht über Quelltext – der Wächter
+  liest den ganzen Baum, und ein unaufgeräumtes `iso/work/` legt ihm eine
+  zweite Kopie von `zepos-menu` vor. `tests/src/test_home.py` ist der
+  Sammelfehler von oben. Die restlichen sechs sind
+  `tests/render/test_schale_stil.py`, dessen Modulvorrichtung bis zu 45 s auf
+  die Fläche des Kontrollzentrums wartet und sie manchmal nicht bekommt; die
+  Datei selbst hält die Messung fest und benennt den Verdächtigen (ein
+  bedingungsloses `grab_focus()` auf der VPN-Seite, das bei jedem Öffnen der
+  Schale feuert, welche Seite auch immer gerade sichtbar ist).
 
 ### Was kein Test abdeckt
 
@@ -365,6 +552,18 @@ zeichnet ein Fenster und beurteilt, wie es aussieht.** Ein Layout kann in jeder
 sichtbaren Hinsicht falsch sein, während die ganze Suite grün ist. Diese Lücke
 ist bekannt, sie wird Messung für Messung enger, und bis sie zu ist, schlägt
 eine menschliche Meldung einen grünen Lauf.
+
+Die Bilder in dieser Datei kommen aus genau diesem Aufbau – deshalb lassen sie
+sich aus jedem Checkout neu machen, und deshalb sind sie ein Beleg über
+*Geometrie und Farbe* und keiner über Geschmack. Beim Machen fielen zwei Dinge
+auf, die eine grüne Suite nicht gemeldet hatte: `tests/render/shoot.py`
+behauptet im eigenen Kopf, die Leiste stehe auf einem 1366×768-Schirm
+vollständig – sie tut es nicht, drei Statusmodule liegen hinter dem
+Einklapp-Knopf, und das ist auf dem Bild oben zu sehen. Und das Home führt
+`xdg-desktop-portal-gnome`, einen Diensteintrag mit `NoDisplay=true`, den
+`desktop_entries.installed()` für das Dock heraushält; das Home wendet
+denselben Filter nicht an. Beides steht hier, statt nebenbei geflickt zu
+werden.
 
 ### Signatur und Lizenzen
 
@@ -405,14 +604,15 @@ Maschine, deren Inhalt wichtig ist und nirgendwo sonst gesichert liegt.
 Zwei einzige Wahrheitsquellen – `src/icon_definition.py` für Zeichen und
 `src/style_definition.py` mit `src/brand.py` und `src/sizes.py` für Farben,
 Größen und Abstände – speisen einen Prozessor, der `{{ICON_*}}`- und
-`{{STYLE_*}}`-Platzhalter in **85 Vorlagen** unter `src/templates/` und **7
-Stilvorlagen** unter `src/styles/` ersetzt. Heraus kommt die Konfiguration, die
-Hyprland, AGS, kitty und der Rest wirklich lesen.
+`{{STYLE_*}}`-Platzhalter in **88 Vorlagen** unter `src/templates/` und **8
+Stilvorlagen** unter `src/styles/` ersetzt, aus denen `zepos-generate`
+**98 Ziele** macht. Heraus kommt die Konfiguration, die Hyprland, AGS, kitty
+und der Rest wirklich lesen.
 
 ```
 icon_definition.py ─┐
 brand.py ───────────┼─► template_processor.py ─► generate_config.sh ─► ~/.config/{hypr,ags,kitty,…}
-style_definition.py ┘        (85 + 7 Vorlagen)       (zepos-generate)
+style_definition.py ┘        (88 + 8 Vorlagen)       (zepos-generate, 98 Ziele)
 user-settings.json ─┘
 ```
 
@@ -618,10 +818,24 @@ python -m venv .venv
 .venv/bin/python -m pytest
 ```
 
-**3121 Tests in 121 Dateien** (gezählt am 20.08.2026 mit
-`pytest --collect-only`). Sie brauchen nichts außer Python und pytest; Tests,
-die QEMU, OVMF, ein gebautes Paketrepository oder ein echtes Hyprland bräuchten,
-überspringen sich selbst, wenn das fehlt.
+**3303 Tests in 132 Dateien**, gezählt am 24.08.2026. Sie brauchen nichts außer
+Python und pytest; Tests, die QEMU, OVMF, ein gebautes Paketrepository oder ein
+echtes Hyprland bräuchten, überspringen sich selbst, wenn das fehlt.
+
+Sie zu zählen braucht zwei Befehle statt einen, und das ist ein Fehler und
+keine Marotte: `tests/render/test_home.py` und `tests/src/test_home.py` tragen
+denselben Basisnamen, und ein einzelnes `pytest --collect-only` bricht deshalb
+nach 3274 davon mit einem Import-Konflikt ab. Bis eine der beiden umbenannt
+ist:
+
+```bash
+.venv/bin/python -m pytest --collect-only -q --continue-on-collection-errors  # 3274
+.venv/bin/python -m pytest --collect-only -q tests/src/test_home.py           # +29
+```
+
+Ein vollständiger Lauf am 24.08.2026 dauerte **11 min 55 s** und endete mit
+3254 bestanden, 13 übersprungen, 1 fehlgeschlagen, 7 Fehler – was diese acht
+sind, steht unter [Was heute nicht geht](#was-heute-nicht-geht).
 
 **Es gibt kein CI.** `.github/` enthält Vorlagen für Issues und Pull Requests
 und keine Workflows. Diese Tests laufen nur, wenn ein Mensch sie startet – und
@@ -651,7 +865,7 @@ plugins/        nur ZepOS' eigene Patches; die Upstream-Quelle wird beim Bau
                 von einem festgenagelten Commit geholt, nicht mitgeliefert
                 (siehe plugins/LICENSE)
 po/             gettext: die Domänen zepos-installer und zepos-desktop
-tests/          121 Testdateien und ein Isolationswächter
+tests/          132 Testdateien und ein Isolationswächter
 docs/specs/     das Designdokument und die Roadmap (deutsch)
 ```
 
@@ -743,20 +957,26 @@ darüber, wie es steht.
 
 ## Die Zahlen in dieser Datei
 
-Am 20.08.2026 in diesem Baum gezählt oder bei der veröffentlichten Gegenstelle
-erfragt, statt aus einem älteren Dokument abgeschrieben. Mehrere der Zahlen, die
-vorher hier standen, waren falsch – deshalb gibt es diese Tabelle.
+Am **24.08.2026** in diesem Baum neu gezählt oder bei der veröffentlichten
+Gegenstelle erfragt, statt aus der vorigen Fassung dieser Datei übernommen. Das
+ist keine Förmlichkeit: fünf der Zahlen, die am 20.08.2026 hier standen, waren
+vier Tage später überholt, und sie sind unten gekennzeichnet.
 
 | Zahl | Wie sie zustande kam |
 |---|---|
-| 3121 Tests, 121 Dateien | `pytest --collect-only -q`; `find tests -name 'test_*.py' \| wc -l` |
+| 3303 Tests, 132 Dateien ← *war 3121 / 121* | `pytest --collect-only -q --continue-on-collection-errors` (3274) **plus** derselbe Aufruf auf `tests/src/test_home.py` (29), weil die beiden sich nicht zusammen sammeln lassen; `find tests -name 'test_*.py' \| wc -l` |
 | 19 Rezepte, 24 Pakete | jede `pkgname=`-Zeile in `packaging/*/PKGBUILD`; die veröffentlichte `manifest.txt` listet 24 |
-| 85 Vorlagen, 7 Stilvorlagen | `ls src/templates`, `ls src/styles` |
+| 88 Vorlagen, 8 Stilvorlagen ← *war 85 / 7* | `ls src/templates \| wc -l`, `ls src/styles \| wc -l` |
+| 98 Erzeugungsziele ← *war 94* | `zepos-generate --help \| grep -c '^  -[a-z]'` |
+| 1117 ms / 260 ms | am 20.08.2026 gegen die eigene Testvorrichtung des Erzeugers gemessen, als es 94 Ziele gab. Nicht neu gemessen – die Zahl und ihr Datum gehören zusammen |
 | 77 Tastenbindungen | `grep -c '^bind' src/templates/hyprland-universal-config.template` |
 | 6 Markenfarben, 69 Farbschlüssel | `brand.BRAND`, `brand.COLORS`, ausgeführt |
-| 1 324 056 576 Byte ISO | `iso/out/manifest-release.txt` und das veröffentlichte Release-Anhängsel stimmen überein |
+| 1 324 056 576 Byte ISO | das veröffentlichte Anhängsel von `v2026.08.19`, erfragt mit `gh release view --json assets` |
 | 10 Startszenarien | `iso/test-boot.py --help` |
-| 7 Einstellungsseiten | `settings/zepos_settings_gui/model.py` |
-| 94 Erzeugungsziele; 1117 ms / 260 ms | gemessen am 20.08.2026 gegen die eigene Testvorrichtung des Erzeugers |
+| 7 Einstellungsseiten | `settings/zepos_settings_gui/model.py`; und auf dem Einstellungsbild oben zu sehen |
+| 6 Seiten im Kontrollzentrum | `src/templates/ags-control-center.template`; und auf dem Bild oben zu sehen |
 | 3,45:1 und 6,04:1 | `src/brand.py`, von den Tests bei jedem Lauf neu gerechnet |
-| Veröffentlichte Version, Paketzahl, Schlüssel | abgefragt bei `https://zeptronit.github.io/ZepOS/manifest.txt` |
+| rund 40 ms, bis eine Anheftung überall ankommt | für Freigabe 0.1.8 gemessen, in allen drei Richtungen |
+| Veröffentlicht 0.1.9, 24 Pakete, Schlüssel, Bauzeit ← *war 0.1.3* | abgefragt bei `https://zeptronit.github.io/ZepOS/manifest.txt` |
+| 3254 bestanden / 13 übersprungen / 1 fehlgeschlagen / 7 Fehler in 11 min 55 s | `.venv/bin/python -m pytest -q --continue-on-collection-errors`, 24.08.2026 |
+| Jedes Bild 1920×1080 (das Notebookbild 1366×768) | `magick identify` auf den veröffentlichten Dateien, nicht auf der Einstellung, die sie erzeugt hat |

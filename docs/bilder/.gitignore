@@ -1,0 +1,13 @@
+# The pictures themselves are NOT part of this branch's history.
+#
+# They are staged here and published on the orphan branch `bilder`; see
+# README.md next to this file for why, and for the two commands that do
+# it. Everything in CONTRIBUTING.md's "What must never be committed"
+# applies: `out/` is gitignored for the same reason this directory is.
+*.webp
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.webm
