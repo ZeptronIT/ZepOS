@@ -357,6 +357,23 @@ depends=(
     'xdg-desktop-portal-hyprland'   # screen sharing, screencopy
     'xdg-desktop-portal-gtk'        # file chooser for GTK applications
     'networkmanager'                # nmcli, in the status scripts and the VPN helpers
+    # WireGuard, seit dem 21.08.2026 die zweite VPN-Bauart des
+    # Einstellungsfensters. Unter derselben Regel wie alles hier: die
+    # erzeugte Konfiguration ruft es selbst - `wg genkey` und
+    # `wg pubkey` hinter dem Knopf "Schluesselpaar erzeugen"
+    # (src/vpn.py, --wg-genkey).
+    #
+    # ZUM VERBINDEN wird es NICHT gebraucht: das erledigt
+    # NetworkManager, der WireGuard seit 1.16 als eigenen
+    # Verbindungstyp fuehrt und seit libnm 1.40 einen eigenen Einleser
+    # fuer wg-quick-Dateien mitbringt (`nm_conn_wireguard_import`,
+    # GEPRUEFT an den Symbolen von /usr/lib/libnm.so.0 und an denen von
+    # /usr/bin/nmcli, 1.58.0-1). Das Kernelmodul ist seit 5.6 im Kern.
+    #
+    # GEMESSEN am 21.08.2026: 266,66 KiB installiert, haengt nur an
+    # `bash`. `openresolv` ist ein optdepend und bleibt draussen -
+    # NetworkManager setzt DNS selbst, wg-quick benutzen wir nicht.
+    'wireguard-tools'               # wg genkey/pubkey, hinter dem Knopf im VPN-Fenster
     'pipewire' 'pipewire-pulse' 'wireplumber'   # pamixer talks to the PulseAudio API
     # bluez und bluez-utils: die Leiste fragt `bluetoothctl show` und
     # `bluetoothctl devices Connected` - siehe bar-status-config.template.

@@ -600,10 +600,35 @@ export function createOverlayWindow(config: OverlayConfig): OverlayWidget {
   // tatsaechlich nicht passt, ist ein Befund.
   const hadj = scroller.get_hadjustment()
   hadj.connect("notify::upper", () => {
-    const ueberschuss = hadj.get_upper() - hadj.get_page_size()
+    const inhalt = hadj.get_upper()
+    const sichtfenster = hadj.get_page_size()
+    const ueberschuss = inhalt - sichtfenster
     if (ueberschuss > 0) {
-      console.log(`Ueberlagerung "${config.name}": Inhalt ${Math.round(ueberschuss)}px `
-        + `breiter als das Fenster erlaubt - waagerechte Bildlaufleiste noetig.`)
+      // BEIDE ZAHLEN UND NICHT NUR IHRE DIFFERENZ - NACHGETRAGEN am
+      // 21.08.2026
+      //
+      //     Hier stand nur der Fehlbetrag. GEMESSEN an vpn-settings, im
+      //     verschachtelten Compositor: die Zeile meldete "237px
+      //     breiter", und die beiden Zahlen dahinter waren
+      //     `Inhalt 676 / Sichtfenster 439`. Das Sichtfenster war also
+      //     439 und nicht die 854, die Sprosse L uebriglaesst - die
+      //     Meldung stammte aus der ERSTEN Zuteilung, bevor die
+      //     Layer-Shell-Flaeche ihre Groesse hatte, und beschrieb einen
+      //     Zustand, den niemand je zu sehen bekommt.
+      //
+      //     Mit dem blossen Fehlbetrag ist dieser Fall von einem echten
+      //     Ueberhang NICHT ZU UNTERSCHEIDEN: 237 sieht aus wie ein
+      //     Befund. Mit beiden Zahlen ist er es nicht mehr - ein
+      //     Sichtfenster, das kleiner ist als die Sprosse des Fensters,
+      //     ist eine Momentaufnahme und kein Fehler.
+      //
+      //     `Inhalt` ist ausserdem die Zahl, die man BRAUCHT, um zu
+      //     entscheiden, auf welche Sprosse ein Fenster gehoert. Der
+      //     Fehlbetrag allein sagt nur, dass es nicht passt.
+      //     tests/render/test_vpn_breite.py misst genau daran.
+      console.log(`Ueberlagerung "${config.name}": Inhalt ${Math.round(inhalt)}px, `
+        + `Sichtfenster ${Math.round(sichtfenster)}px - `
+        + `${Math.round(ueberschuss)}px breiter als das Fenster erlaubt.`)
     }
   })
 

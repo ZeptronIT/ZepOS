@@ -201,7 +201,33 @@ const SCRIPTS = {
 // Der Pfad wird beim Erzeugen eingesetzt: ein Widget kann nicht wissen,
 // wohin das Paket installiert wurde. Als fertige Argumentliste, damit
 // genau das, was hier steht, auch ausgefuehrt und geprueft werden kann.
+const VPN_TOOL = ["python3", "{{ZEPOS_SYSTEM_ROOT}}/vpn.py"]
+
+// AUSGESCHRIEBEN UND NICHT `[...VPN_TOOL, "--status"]` - ABSICHT
+//     tests/src/test_vpn_config.py::test_the_vpn_widget_asks_the_same_
+//     question_and_gets_the_same_answer liest diese Zeile aus der
+//     ERZEUGTEN Datei, wandelt sie mit json.loads() in eine Liste und
+//     FUEHRT SIE AUS - gegen einen Sandkasten mit einem stehenden
+//     Tunnel. Das ist der einzige Test dieses Baumes, der die Frage,
+//     die dieses Widget wirklich stellt, auch wirklich stellt.
+//
+//     Eine Ausbreitung waere kein JSON mehr, und der Test wuerde nicht
+//     etwa schaerfer scheitern, sondern gar nichts mehr ausfuehren.
+//     Zwei Schreibweisen desselben Pfades sind hier billiger als ein
+//     Test, der auf einer Zeile stehenbleibt, die er nicht mehr lesen
+//     kann - und driften koennen sie nicht: beide Male setzt derselbe
+//     Platzhalter denselben Wert ein. 21.08.2026
 const VPN_STATUS_QUERY = ["python3", "{{ZEPOS_SYSTEM_ROOT}}/vpn.py", "--status"]
+
+// SEIT DEM 21.08.2026 ANTWORTET vpn.py FUER BEIDE BAUARTEN, UND DIESE
+// SEITE MERKT DAVON NICHTS
+//     `--status` entscheidet dort selbst anhand von `vpn.kind`, ob es
+//     strongSwan oder NetworkManager fragt, und antwortet in BEIDEN
+//     Faellen mit denselben drei Woertern und derselben Adresse
+//     dahinter. Diese Seite, die Leiste, vpn-control.sh und
+//     vpn-watcher.sh teilen sich damit weiterhin EINE Auskunft - vier
+//     Leser, die sich ueber denselben Tunnel nicht widersprechen
+//     koennen, war der ganze Sinn dieser Zeile.
 
 // Settings file path
 const SETTINGS_FILE = `${ZEPOS_USER_ROOT}/user-settings.json`
@@ -213,8 +239,17 @@ function loadVpnSettings() {
     if (ok && contents) {
       const data = JSON.parse(new TextDecoder().decode(contents))
       if (data.vpn) {
+        const peers = data.vpn.wireguard?.peers ?? []
         return {
+          // Ein unbekannter Wert wird zu "ipsec" und nicht
+          // durchgereicht - dieselbe Zurueckhaltung wie
+          // src/vpn.py::vpn_kind(). Eine vertippte Bauart darf nicht in
+          // eine Verbindung fuehren, die niemand gemeint hat.
+          kind: data.vpn.kind === "wireguard" ? "wireguard" : "ipsec",
           server: data.vpn.server || "{{STYLE_VPN_SERVER}}",
+          // Was in der verbundenen Ansicht als Gegenstelle steht, wenn
+          // es kein IPsec-Gateway gibt.
+          endpoint: peers.length ? (peers[0].endpoint || "") : "",
           username: data.vpn.username || "{{STYLE_VPN_USERNAME}}",
           connection_name: data.vpn.connection_name || "{{STYLE_VPN_CONNECTION_NAME}}",
           debug: data.vpn.debug === true
@@ -226,7 +261,9 @@ function loadVpnSettings() {
   }
   // Fallback to defaults
   return {
+    kind: "{{STYLE_VPN_KIND}}" === "wireguard" ? "wireguard" : "ipsec",
     server: "{{STYLE_VPN_SERVER}}",
+    endpoint: "",
     username: "{{STYLE_VPN_USERNAME}}",
     connection_name: "{{STYLE_VPN_CONNECTION_NAME}}",
     debug: false
@@ -289,6 +326,11 @@ let tokenEntry: Gtk.Entry
 let rememberCheckbox: Gtk.CheckButton
 let errorLabel: Gtk.Label
 let connectBtn: Gtk.Button
+// Die zwei Formularhaelften. Nie beide gleichzeitig sichtbar - siehe
+// applyVpnKind() weiter unten.
+let credentialsBox: Gtk.Box
+let wgNoteBox: Gtk.Box
+let wgPeerLabel: Gtk.Label
 
 // State
 let rememberUsername = true
@@ -396,7 +438,12 @@ async function updateStatusDisplay() {
     // Platzhalter erlauben der Uebersetzung ausserdem eine andere
     // Reihenfolge. 17.08.2026
     connectedIpLabel.set_text(format(_("IP: {ip}"), { ip: String(currentStatus.ip) }))
-    connectedServerLabel.set_text(format(_("Server: {server}"), { server: vpnSettings.server }))
+    // Ein WireGuard-Tunnel hat kein Gateway, er hat eine Gegenstelle.
+    // Dieselbe Zeile, ein anderer Begriff - und NICHT eine zweite Zeile
+    // darunter, die bei IPsec leer bliebe.
+    connectedServerLabel.set_text(vpnSettings.kind === "wireguard"
+      ? format(_("Peer: {endpoint}"), { endpoint: vpnSettings.endpoint || "--" })
+      : format(_("Server: {server}"), { server: vpnSettings.server }))
     connectedNameLabel.set_text(format(_("Connection: {connection}"), { connection: currentStatus.connectionName ?? vpnSettings.connection_name }))
     if (!isDisconnecting) {
       disconnectBtn.set_child(new Gtk.Label({ label: _("Disconnect") }))
@@ -457,7 +504,52 @@ export const vpnSeite: ShellSeite = {
 
   bauen: (win, schliessen, istAktiv) => {
     // Connect to VPN
+    // WIREGUARD VERBINDEN - EIN BEFEHL, KEIN FORMULAR
+    //
+    //     Kein Nutzername, kein Passwort, kein Einmal-Token: WireGuard
+    //     weist sich mit Schluesseln aus. Das Profil steht schon im
+    //     NetworkManager (das Einstellungsfenster hat es beim Speichern
+    //     ueber `vpn.py --wg-apply` hingelegt), hier wird es nur noch
+    //     hochgefahren.
+    //
+    //     `nmcli connection up` faellt unter die polkit-Aktion
+    //     network-control, und die steht in der ausgelieferten
+    //     Regeldatei auf `allow_active=yes` - GEMESSEN am 21.08.2026
+    //     mit pkcheck, siehe den Kopf des WireGuard-Teils in
+    //     src/vpn.py. Kein sudo, kein Passwortdialog, keine neue Zeile
+    //     in /etc/sudoers.d/zepos.
+    async function connectWireguard() {
+      errorLabel.set_text("")
+      disconnectedIcon.set_text(ICONS.vpn)
+      disconnectedIcon.remove_css_class("connected")
+      disconnectedIcon.remove_css_class("disconnected")
+      disconnectedIcon.remove_css_class("error")
+      disconnectedIcon.add_css_class("connecting")
+      disconnectedLabel.set_text(_("Connecting ..."))
+      connectBtn.set_sensitive(false)
+
+      try {
+        await execAsync([...VPN_TOOL, "--wg-up"])
+        schliessen()
+        // Kuerzer als die fuenf Sekunden der IPsec-Seite: dort wartet
+        // ein ganzer IKE-Austausch mit zwei Phasen, hier bringt der
+        // NetworkManager eine Schnittstelle hoch.
+        setTimeout(async () => { await updateStatusDisplay() }, 2000)
+      } catch (e) {
+        console.error("Failed to bring up the WireGuard connection:", e)
+        errorLabel.set_text(_("Connection failed"))
+        disconnectedIcon.add_css_class("error")
+        disconnectedIcon.remove_css_class("connecting")
+        connectBtn.set_sensitive(true)
+      }
+    }
+
     async function connectVpn() {
+      if (vpnSettings.kind === "wireguard") {
+        await connectWireguard()
+        return
+      }
+
       const username = usernameEntry.get_text()
       const password = passwordEntry.get_text()
       const token = tokenEntry.get_text()
@@ -601,7 +693,15 @@ export const vpnSeite: ShellSeite = {
         // As an argument list: execAsync(string) splits with
         // GLib.shell_parse_argv, so a home directory whose path contains a
         // space would arrive as two arguments.
-        await execAsync([SCRIPTS.vpnControl, "disconnect"])
+        // Dieselbe Weiche wie beim Verbinden. vpn-control.sh ist die
+        // IPsec-Seite - es raeumt swanctl-Kinder, Routen, xfrm-Policies
+        // und resolv.conf ab; nichts davon gibt es bei einem
+        // NetworkManager-Profil, das eine Schnittstelle wieder abbaut.
+        if (vpnSettings.kind === "wireguard") {
+          await execAsync([...VPN_TOOL, "--wg-down"])
+        } else {
+          await execAsync([SCRIPTS.vpnControl, "disconnect"])
+        }
         await updateStatusDisplay()
       } catch (e) {
         console.error("Failed to disconnect:", e)
@@ -815,10 +915,44 @@ export const vpnSeite: ShellSeite = {
     errorLabel = new Gtk.Label({ label: "", xalign: 0 })
     errorLabel.add_css_class("vpn-error-message")
 
-    formBox.append(usernameField)
-    formBox.append(passwordField)
-    formBox.append(tokenField)
-    formBox.append(rememberRow)
+    // ZWEI FORMULARHAELFTEN IN EINER ANSICHT, NIE BEIDE SICHTBAR
+    //
+    //     Die drei Felder oben (Nutzername, Passwort, Einmal-Token)
+    //     sind IPsec mit XAuth. WireGuard hat nichts davon - es weist
+    //     sich mit Schluesseln aus, und ein Passwortfeld, in das nichts
+    //     gehoert, ist schlimmer als keins: es fragt nach etwas, das es
+    //     nicht gibt.
+    //
+    //     KEINE DRITTE ANSICHT, sondern eine Haelfte innerhalb der
+    //     bestehenden Formularansicht. `connectedView` (Symbol, drei
+    //     Zeilen, Trennen-Knopf) ist transportneutral und bleibt
+    //     unveraendert; Statuszeile, Fehlerzeile und der
+    //     Verbinden-Knopf gelten fuer beide Bauarten. Getauscht wird
+    //     genau das, was sich unterscheidet.
+    credentialsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
+    credentialsBox.append(usernameField)
+    credentialsBox.append(passwordField)
+    credentialsBox.append(tokenField)
+    credentialsBox.append(rememberRow)
+
+    wgNoteBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+    wgNoteBox.add_css_class("vpn-field")
+    const wgNote = new Gtk.Label({
+      label: _("WireGuard identifies itself with keys - there is nothing to type here."),
+      xalign: 0, wrap: true,
+    })
+    wgNote.add_css_class("vpn-field-label")
+    // Damit auf der Seite steht, WOHIN verbunden wird. Ohne das waere
+    // die WireGuard-Ansicht ein Knopf ueber einer leeren Flaeche, und
+    // niemand koennte sehen, ob die richtige Gegenstelle eingestellt
+    // ist.
+    wgPeerLabel = new Gtk.Label({ label: "", xalign: 0, wrap: true })
+    wgPeerLabel.add_css_class("vpn-psk-status")
+    wgNoteBox.append(wgNote)
+    wgNoteBox.append(wgPeerLabel)
+
+    formBox.append(credentialsBox)
+    formBox.append(wgNoteBox)
     formBox.append(errorLabel)
 
     // Connect button. Rolle voll: die Hauptsache der Formularansicht,
@@ -829,6 +963,22 @@ export const vpnSeite: ShellSeite = {
     const connectActions = new Gtk.Box({ spacing: 12, halign: Gtk.Align.END })
     connectActions.add_css_class("vpn-actions")
     connectActions.append(connectBtn)
+
+    // Welche Haelfte zu sehen ist. Gerufen beim Bau und bei jedem
+    // Sichtbarwerden der Schale, weil die Bauart im
+    // Einstellungsfenster geaendert werden kann, waehrend diese Seite
+    // schon gebaut ist.
+    function applyVpnKind() {
+      const wireguard = vpnSettings.kind === "wireguard"
+      credentialsBox.set_visible(!wireguard)
+      wgNoteBox.set_visible(wireguard)
+      if (wireguard) {
+        wgPeerLabel.set_text(vpnSettings.endpoint
+          ? format(_("Peer: {endpoint}"), { endpoint: vpnSettings.endpoint })
+          : _("No peer configured yet - open the settings."))
+      }
+    }
+    applyVpnKind()
 
     formView.append(statusBox)
     formView.append(formBox)
@@ -909,13 +1059,20 @@ export const vpnSeite: ShellSeite = {
       connectBtn.set_sensitive(true)
       disconnectBtn.set_sensitive(true)
       vpnSettings = loadVpnSettings()
+      applyVpnKind()
       updateStatusDisplay()
-      const lastUser = loadLastUsername()
-      usernameEntry.set_text(lastUser || vpnSettings.username)
-      if (lastUser) {
-        passwordEntry.grab_focus()
-      } else {
-        usernameEntry.grab_focus()
+      // NUR BEI IPsec: die drei Felder gibt es unter WireGuard nicht zu
+      // sehen, und nach der Tastatur zu greifen, wo kein Feld steht,
+      // ist genau der Fehler, den der Absatz darueber am 19.08.2026
+      // fuer die falsche Seite behoben hat - nur eine Ebene tiefer.
+      if (vpnSettings.kind !== "wireguard") {
+        const lastUser = loadLastUsername()
+        usernameEntry.set_text(lastUser || vpnSettings.username)
+        if (lastUser) {
+          passwordEntry.grab_focus()
+        } else {
+          usernameEntry.grab_focus()
+        }
       }
     })
 

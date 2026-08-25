@@ -54,11 +54,48 @@ const WINDOW_NAME = "vpn-settings"
 //     als dem Deutschen bekaeme 642 und rollte den Rest.
 //
 //     SEIT DEM 18.08.2026 nennt dieses Fenster nicht mehr seine eigene
-//     Rechnung, sondern die Sprosse darueber: die gemessenen 642
-//     passen in M (siehe MODAL_WIDTHS in sizes.py). Die Rechnung
-//     bleibt hier stehen, weil sie begruendet, WARUM diese Sprosse und
-//     nicht die kleinere.
-const WIN_WIDTH = {{STYLE_MODAL_WIDTH_M}}
+//     Rechnung, sondern die Sprosse darueber. Die Rechnung bleibt hier
+//     stehen, weil sie begruendet, WARUM diese Sprosse und nicht die
+//     kleinere.
+//
+//     UND SEIT DEM 21.08.2026 IST ES SPROSSE L UND NICHT MEHR M - DIE
+//     42 PUNKTE UEBERHANG FALLEN
+//         aufgabe-34-report.md 2.6 und aufgabe-43-report.md Punkt 2
+//         fuehren diesen Ueberhang seit dem 18.08.2026 als offenen
+//         Befund. GEMESSEN dort:
+//
+//             .vpn-settings-actions, gemessen              626
+//             Container-Polster {{STYLE_SPACE_16}}, 2x     +50
+//                                                         ----
+//             .vpn-settings-container verlangt             676
+//             .overlay-outer, Rahmen 1px, zweimal           +2
+//             senkrechte Bildlaufleiste                    +24
+//                                                         ----
+//             Inhalt braucht                               702
+//             Sprosse M                                     660
+//             UEBERHANG                                      42
+//
+//         Unbehoben blieb es mit der Begruendung, beide Auswege
+//         wuerden "ein Fenster sichtbar veraendern, ueber das niemand
+//         geklagt hat". DIESE BEGRUENDUNG LAEUFT MIT DER ZWEITEN
+//         BAUART AB: das Fenster bekommt heute eine Auswahl obenauf und
+//         zwei zusaetzliche Reiter, es veraendert sich ohnehin
+//         sichtbar, und es bringt Inhalt mit.
+//
+//         702 < 880, der Ueberhang ist damit NULL - und 880 bleibt
+//         unter dem Deckel MEASURE_MODAL_SHARE (0,5), der auf 1920
+//         genau 960 erlaubt, also 80 Punkte Luft. Nachgemessen am
+//         gezeichneten Fenster in tests/render/test_vpn_breite.py,
+//         nicht nur hier gerechnet.
+//
+//         KEIN FUENFTER REITER, und das gehoert zu dieser Rechnung: die
+//         Bauart-Auswahl sitzt OBEN IM REITER "Allgemein" und TAUSCHT
+//         aus, welche Reiter es gibt (IPsec: Phase 1/Phase 2/DNS,
+//         WireGuard: Schnittstelle/Gegenstellen/DNS). Die Reiterleiste
+//         bleibt bei vier Knoepfen; ein fuenfter waere eine zweite
+//         Breitenrechnung an einer Leiste, die heute nicht die
+//         massgebliche ist.
+const WIN_WIDTH = {{STYLE_MODAL_WIDTH_L}}
 
 const HOME = GLib.get_home_dir()
 // The widgets run standalone under AGS and cannot import paths.py, so
@@ -91,9 +128,55 @@ const ICONS = {
   eyeSlash: "{{ICON_EYE_SLASH}}",
   network: "{{ICON_WIFI}}",
   dns: "{{ICON_DNS}}",
+  folder: "{{ICON_FOLDER}}",
+  copy: "{{ICON_COPY}}",
+}
+
+// Die zwei Bauarten. Als Zeichenketten-Vereinigung und nicht als
+// `string`, damit ein Tippfehler beim Uebersetzen auffaellt und nicht
+// erst an einem Fenster, das leere Reiter zeigt.
+type VpnKind = "ipsec" | "wireguard"
+
+interface WgPeer {
+  public_key: string
+  endpoint: string
+  // Dieselbe Sache wie `routed_networks` auf der IPsec-Seite, nur wie
+  // WireGuard sie nennt - und deshalb mit DEMSELBEN Bauteil bedient
+  // (siehe buildWgPeersTab unten), nicht mit einem zweiten.
+  allowed_ips: string[]
+  keepalive: number
+  // Ein DATEINAME, nie der Schluessel. Siehe den Kommentar bei
+  // WgSettings.private_key_file.
+  preshared_key_file: string
+}
+
+interface WgSettings {
+  addresses: string[]
+  listen_port: number
+  mtu: number
+  // DER DATEINAME UNTER ~/.config/wireguard, NICHT DER SCHLUESSEL.
+  //
+  // Dieses Fenster schreibt seinen Abschnitt nach user-settings.json,
+  // und diese Datei liest der Stil-Erzeuger, gibt `zepos-settings` aus
+  // und fasst der Doktor an. Ein privater Schluessel darin waere ein
+  // Geheimnis in vier Programmen. Er liegt stattdessen einzeln unter
+  // ~/.config/wireguard, 0600 vom ersten Byte, Verzeichnis 0700 -
+  // geschrieben von src/vpn.py::write_wireguard_secret(), aus demselben
+  // Grund, aus dem savePsk() weiter unten Gio.FileCreateFlags.PRIVATE
+  // benutzt statt open()+chmod.
+  private_key_file: string
+  // Der EIGENE oeffentliche Schluessel. Er ist kein Geheimnis - er ist
+  // genau das, was der Nutzer der Gegenstelle schicken muss - und steht
+  // deshalb als einziger Schluesselwert in der Einstellungsdatei.
+  public_key: string
+  peers: WgPeer[]
 }
 
 interface VpnSettings {
+  // Welche Bauart. Vorgabe "ipsec", und das darf nie geraten werden:
+  // jede Installation von vor dem 21.08.2026 hat diesen Schluessel
+  // nicht.
+  kind: VpnKind
   server: string
   username: string
   connection_name: string
@@ -134,6 +217,7 @@ interface VpnSettings {
   // checked it.
   xauth_enabled: boolean
   debug: boolean
+  wireguard: WgSettings
 }
 
 // The SSOT stores the booleans below as the strings strongSwan expects,
@@ -161,6 +245,7 @@ const isYes = (value: string): boolean => value === "yes"
 // the dialog itself did not show, because it was displaying the values
 // it was about to write, not the ones in force.
 const DEFAULT_VPN_SETTINGS: VpnSettings = {
+  kind: "{{STYLE_VPN_KIND}}" as VpnKind,
   server: "{{STYLE_VPN_SERVER}}",
   username: "{{STYLE_VPN_USERNAME}}",
   connection_name: "{{STYLE_VPN_CONNECTION_NAME}}",
@@ -189,7 +274,16 @@ const DEFAULT_VPN_SETTINGS: VpnSettings = {
     search_domain: ""
   },
   xauth_enabled: false,
-  debug: false
+  debug: false,
+  // EIN Platzhalter und nicht sechs - der Erzeuger setzt hier den
+  // ganzen Abschnitt als JSON ein (vpn_wireguard_block() in
+  // src/style_definition.py). Der Grund steht dort: Dialog und Erzeuger
+  // duerfen keine zwei Mengen von Schluesseln fuehren, sonst faellt
+  // beim naechsten hinzugefuegten Feld genau eine davon hinten runter -
+  // und ein Speichern ohne Bearbeitung schreibt die luecken- hafte
+  // zurueck. Bei Phase 1 ist genau das schon einmal passiert, siehe
+  // den Absatz ueber dieser Tabelle.
+  wireguard: {{STYLE_VPN_WIREGUARD}}
 }
 
 // A fresh copy every time, nested values included. A shallow spread of
@@ -205,44 +299,118 @@ function defaultSettings(): VpnSettings {
 let currentSettings: VpnSettings = defaultSettings()
 let currentTab = "general"
 
-// Tab content boxes
-let generalBox: Gtk.Box
-let phase1Box: Gtk.Box
-let phase2Box: Gtk.Box
-let dnsBox: Gtk.Box
 let scrollContent: Gtk.Box
+let tabBar: Gtk.Box
 
-// Tab buttons
+// REITER-KNOEPFE UND REITER-INHALTE, BEIDE NACH KENNUNG - GEAENDERT am
+// 21.08.2026 (zweite Bauart)
+//
+//     Hier standen vier einzelne `let generalBox / phase1Box /
+//     phase2Box / dnsBox` und, weiter unten in switchTab(), vier
+//     abgeschriebene `...Box.set_visible(tabName === "...")`-Zeilen.
+//
+//     Mit einer zweiten Bauart waeren daraus sechs Kaesten und sechs
+//     Zeilen geworden, von denen je zwei NIE GLEICHZEITIG EXISTIEREN -
+//     und `phase1Box.set_visible(false)` auf einem Kasten, den es im
+//     WireGuard-Fall gar nicht gibt, ist kein Schoenheitsfehler,
+//     sondern ein Aufruf auf `undefined`. Zwei Verzeichnisse statt
+//     sechs Namen: dieselbe Zahl Zeilen fuer beliebig viele Reiter, und
+//     es kann keinen Kasten geben, den switchTab() nicht kennt.
 const tabButtons = new Map<string, Gtk.Button>()
+const tabBoxes = new Map<string, Gtk.Box>()
 
-// Function to rebuild tabs (called when settings are loaded)
-function rebuildTabs() {
-  if (!scrollContent) return
+interface TabSpec { id: string; label: string; build: () => Gtk.Box }
 
-  // Remove old tabs
-  let child = scrollContent.get_first_child()
+// WELCHE REITER ES GIBT, HAENGT AN DER BAUART - UND DIE LEISTE BLEIBT
+// BEI VIER KNOEPFEN
+//     Das ist keine Sparsamkeit, sondern die Bedingung der
+//     Breitenrechnung im Dateikopf: ein fuenfter Reiter waere eine
+//     zweite Rechnung an einer Leiste, die heute nicht die
+//     massgebliche ist (massgeblich ist die Fusszeile mit ihren vier
+//     Knoepfen). Statt anzuhaengen wird getauscht.
+//
+//     "Allgemein" und "DNS" tragen beide Bauarten: der Verbindungsname
+//     und der Testrechner gelten fuer beide, und WireGuards
+//     `DNS = ...` landet in DEMSELBEN DNS-Reiter wie die IPsec-Server -
+//     ein zweiter waere derselbe Reiter zweimal.
+function tabsForKind(): TabSpec[] {
+  if (currentSettings.kind === "wireguard") {
+    return [
+      { id: "general", label: _("General"), build: buildGeneralTab },
+      { id: "wgiface", label: _("Interface"), build: buildWgInterfaceTab },
+      { id: "wgpeers", label: _("Peers"), build: buildWgPeersTab },
+      { id: "dns", label: _("DNS"), build: buildDnsTab },
+    ]
+  }
+  return [
+    { id: "general", label: _("General"), build: buildGeneralTab },
+    { id: "phase1", label: _("Phase 1"), build: buildPhase1Tab },
+    { id: "phase2", label: _("Phase 2"), build: buildPhase2Tab },
+    { id: "dns", label: _("DNS"), build: buildDnsTab },
+  ]
+}
+
+// Ein Kasten leeren. GTK4 hat kein remove_all(), und die Schleife stand
+// vorher zweimal gleich in dieser Datei.
+function clearBox(box: Gtk.Box) {
+  let child = box.get_first_child()
   while (child) {
     const next = child.get_next_sibling()
-    scrollContent.remove(child)
+    box.remove(child)
     child = next
   }
+}
 
-  // Rebuild tabs with current settings
-  generalBox = buildGeneralTab()
-  phase1Box = buildPhase1Tab()
-  phase1Box.set_visible(false)
-  phase2Box = buildPhase2Tab()
-  phase2Box.set_visible(false)
-  dnsBox = buildDnsTab()
-  dnsBox.set_visible(false)
+// Function to rebuild tabs (called when settings are loaded and when the
+// connection kind changes)
+function rebuildTabs() {
+  if (!scrollContent || !tabBar) return
 
-  scrollContent.append(generalBox)
-  scrollContent.append(phase1Box)
-  scrollContent.append(phase2Box)
-  scrollContent.append(dnsBox)
+  clearBox(scrollContent)
+  clearBox(tabBar)
+  tabButtons.clear()
+  tabBoxes.clear()
 
-  // Reset to general tab
-  switchTab("general")
+  for (const tab of tabsForKind()) {
+    // Rolle umrandet je Reiter, siehe Task B (se-tab-btn). ANDERS als
+    // dort: der waagerechte Innenabstand von vpn-tab-btn und zep-btn ist
+    // NICHT nur rechnerisch gleich, sondern derselbe Platzhalter
+    // (STYLE_SPACE_16 auf beiden Seiten in beiden Regeln) - und
+    // WIN_WIDTH dieses Fensters haengt (siehe Dateikopf) an der
+    // Knopfreihe der Fusszeile, nicht an dieser Leiste. Die Kopplung,
+    // die se-tab-btn stehen liess, gilt hier nicht - GEPRUEFT am
+    // 18.08.2026, siehe Gruppe-E-Bericht.
+    const btn = zepButton(tab.label, "umrandet", () => switchTab(tab.id))
+    tabButtons.set(tab.id, btn)
+    tabBar.append(btn)
+
+    // ZUERST VERSTECKEN, DANN ANHAENGEN - und das ist keine Kosmetik.
+    //
+    //     Ein Kasten, der sichtbar in scrollContent haengt, geht in die
+    //     Breitenanforderung ein. Wuerden hier alle vier nacheinander
+    //     SICHTBAR angehaengt und erst am Ende von switchTab() bis auf
+    //     einen versteckt, verlangte die Flaeche zwischendurch die
+    //     Breite des BREITESTEN Reiters - und der Waechter der Fabrik
+    //     (`notify::upper` in ags-overlay-utils.template) meldete einen
+    //     Ueberhang, den es im Ruhezustand gar nicht gibt.
+    //
+    //     GEMESSEN am 21.08.2026 im verschachtelten Compositor: in
+    //     dieser Reihenfolge geschrieben, meldete das Fenster beim
+    //     Oeffnen "Inhalt 237px breiter als das Fenster erlaubt";
+    //     danach keine Zeile mehr. Die alte Fassung dieser Datei hat
+    //     jeden Kasten vor dem Anhaengen versteckt - aus genau diesem
+    //     Grund, auch wenn dort nichts dazu stand.
+    const box = tab.build()
+    box.set_visible(false)
+    tabBoxes.set(tab.id, box)
+    scrollContent.append(box)
+  }
+
+  // Der zuletzt gewaehlte Reiter, WENN ES IHN IN DIESER BAUART NOCH
+  // GIBT - sonst zurueck auf "Allgemein". Wer beim Umschalten auf
+  // WireGuard gerade auf "Phase 2" stand, laendete sonst auf einem
+  // Fenster, dessen Inhalt es nicht mehr gibt.
+  switchTab(tabBoxes.has(currentTab) ? currentTab : "general")
 }
 
 // Deep merge helper
@@ -339,6 +507,35 @@ async function saveSettings() {
       }
     }
 
+    // UND FUER WIREGUARD: DIE VERBINDUNG BEI NETWORKMANAGER NACHZIEHEN
+    //
+    //     Die drei Skripte darueber sind Abzuege der IPsec-Seite. Die
+    //     WireGuard-Seite hat kein Skript - ihr Gegenstueck ist das
+    //     Verbindungsprofil im NetworkManager, und das ist genauso ein
+    //     Abzug: gespeicherte Einstellungen, die niemand nachzieht,
+    //     sind ein Zwischenspeicher ohne Verfall. Genau dieser Fehler
+    //     hat auf der IPsec-Seite dazu gefuehrt, dass ein umbenannter
+    //     Tunnel beim Trennen Erfolg meldete und stehen blieb.
+    //
+    //     `--wg-apply` schreibt den privaten Schluessel NICHT in eine
+    //     Befehlszeile: es legt eine 0600-Datei im Laufzeitverzeichnis
+    //     ab, laesst NetworkManager sie lesen und loescht sie wieder.
+    //     Die Begruendung steht im Kopf des WireGuard-Teils von
+    //     src/vpn.py.
+    if (currentSettings.kind === "wireguard") {
+      try {
+        await execAsync([...VPN_TOOL, "--wg-apply"])
+      } catch (e) {
+        console.error("Failed to apply the WireGuard connection:", e)
+        try {
+          await execAsync(['notify-send', '-u', 'critical', '-i', 'dialog-error',
+                           _("WireGuard"),
+                           format(_("The connection was not set up: {error}"),
+                                  { error: String(e) })])
+        } catch { }
+      }
+    }
+
     // Send notification
     try {
       await execAsync(['notify-send', '-i', 'network-vpn', _("VPN settings"), _("Settings saved")])
@@ -432,11 +629,11 @@ function switchTab(tabName: string) {
     }
   }
 
-  // Show/hide content
-  generalBox.set_visible(tabName === "general")
-  phase1Box.set_visible(tabName === "phase1")
-  phase2Box.set_visible(tabName === "phase2")
-  dnsBox.set_visible(tabName === "dns")
+  // Show/hide content. Ueber das Verzeichnis und nicht ueber vier
+  // benannte Kaesten - siehe die Begruendung bei tabBoxes oben.
+  for (const [name, box] of tabBoxes) {
+    box.set_visible(name === tabName)
+  }
 }
 
 // Update all tabs with current settings
@@ -525,6 +722,84 @@ function createToggleGroup(label: string, options: { label: string; value: any }
   return box
 }
 
+// EINE LISTE VON ZEICHENKETTEN MIT HINZUFUEGEN UND LOESCHEN
+//
+//     EINGEFUEHRT am 21.08.2026, und zwar durch ZUSAMMENFASSEN und
+//     nicht durch Hinzufuegen: derselbe Aufbau (Kopf mit Plus-Knopf,
+//     Liste aus Eingabezeile plus Loeschknopf, rebuild-Schleife) stand
+//     in dieser Datei schon ZWEIMAL - einmal fuer die gerouteten Netze
+//     in buildPhase2Tab, einmal fuer die DNS-Server in buildDnsTab. Die
+//     zweite Bauart braucht ihn ein DRITTES Mal (die eigenen Adressen)
+//     und ein VIERTES (die erlaubten Netze je Gegenstelle).
+//
+//     Vier Abschriften desselben Bauteils sind vier Stellen, an denen
+//     der naechste Fehler nur an dreien behoben wird. Also einmal, hier.
+//
+//     `read`/`write` statt eines Feldnamens, weil die vier Listen an
+//     vier verschiedenen Stellen haengen - zwei direkt an
+//     currentSettings, eine an wireguard, eine an EINER Gegenstelle
+//     darin.
+function buildStringList(title: string, addTooltip: string, placeholder: string,
+                         read: () => string[], write: (values: string[]) => void,
+                         titleClass: string = "vpn-field-label"): Gtk.Box {
+  const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
+
+  const header = new Gtk.Box({ spacing: 8 })
+  const label = new Gtk.Label({ label: title, xalign: 0, hexpand: true })
+  label.add_css_class(titleClass)
+
+  // Rolle umrandet: eine wirkliche Handlung (Eintrag hinzufuegen),
+  // keine Navigation. `rebuild` ist eine Funktionsdeklaration und damit
+  // gehoben - der Aufruf hier loest erst beim Klick auf.
+  const addBtn = zepButton(ICONS.add, "umrandet", () => {
+    write([...read(), ""])
+    rebuild()
+  })
+  addBtn.set_tooltip_text(addTooltip)
+
+  header.append(label)
+  header.append(addBtn)
+
+  const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
+  list.add_css_class("vpn-list-container")
+
+  function rebuild() {
+    clearBox(list)
+    const values = read()
+    for (let i = 0; i < values.length; i++) {
+      const idx = i
+      const item = new Gtk.Box({ spacing: 8 })
+      item.add_css_class("vpn-list-item")
+
+      const entry = new Gtk.Entry({ text: values[idx], hexpand: true,
+                                    placeholder_text: placeholder })
+      entry.add_css_class("vpn-entry")
+      entry.connect("changed", () => {
+        const current = read()
+        current[idx] = entry.get_text()
+        write(current)
+      })
+
+      // Rolle kritisch, wie vom Auftrag verlangt (loeschen ist zerstoerend).
+      const deleteBtn = zepButton(ICONS.delete, "kritisch", () => {
+        const current = read()
+        current.splice(idx, 1)
+        write(current)
+        rebuild()
+      })
+
+      item.append(entry)
+      item.append(deleteBtn)
+      list.append(item)
+    }
+  }
+
+  rebuild()
+  box.append(header)
+  box.append(list)
+  return box
+}
+
 // Create a checkbox
 function createCheckbox(label: string, checked: boolean, onChange: (checked: boolean) => void): Gtk.Button {
   const btn = new Gtk.Button({ can_focus: false })
@@ -547,6 +822,76 @@ function createCheckbox(label: string, checked: boolean, onChange: (checked: boo
   return btn
 }
 
+// ============================================================================
+// DIE BAUART - EINE AUSWAHL MIT DREI EINTRAEGEN
+// ============================================================================
+//
+// BESTELLT am 21.08.2026: "ich will, dass das vpn fenster auch wireguard
+// unterstützt - wireguard dateien oder eigene konfigurationen. also
+// auswahl: ipsec oder ipsecv2 oder wireguard"
+//
+// GEMESSEN am selben Tag, BEVOR hier etwas gebaut wurde: das Fenster
+// konnte IKEv1 und IKEv2 laengst. Der Umschalter stand im Reiter
+// "Phase 1", hiess "IKE version" und lag zwischen
+// Schluessellebensdauer und den beiden DPD-Fristen. Er war also da -
+// und unauffindbar. Der Nutzer kannte ihn nicht, weil er ihn nie
+// gesehen hat.
+//
+// DIESE AUSWAHL ERFINDET DARUM NICHTS. Sie zeigt eine Unterscheidung,
+// die es gibt, an der Stelle, an der man sie sucht, und bildet auf zwei
+// bestehende Werte ab:
+//
+//     IPsec (IKEv1)   kind=ipsec       phase1.version=1
+//     IPsec (IKEv2)   kind=ipsec       phase1.version=2
+//     WireGuard       kind=wireguard   phase1 bleibt unberuehrt
+//
+// DER ALTE UMSCHALTER IM DRITTEN REITER FAELLT (Regel 14): zwei
+// Bedienelemente fuer denselben Wert sind zwei Stellen, an denen etwas
+// Verschiedenes stehen kann - und die eine, die niemand findet,
+// gewinnt am Ende. Der Aggressive/Main-Umschalter BLEIBT dort, weil er
+// einen ANDEREN Wert traegt (phase1.aggressive); er haengt weiterhin an
+// der Version und wird jetzt von hier aus sichtbar geschaltet.
+//
+// UND phase1.version BLEIBT BEI "WireGuard" UNBERUEHRT, absichtlich:
+// wer von IPsec kommt und zurueckschaltet, findet seine IKE-Version
+// vor, wie er sie verlassen hat.
+const KIND_IPSEC_V1 = "ipsec1"
+const KIND_IPSEC_V2 = "ipsec2"
+const KIND_WIREGUARD = "wireguard"
+
+function currentKindChoice(): string {
+  if (currentSettings.kind === "wireguard") return KIND_WIREGUARD
+  return currentSettings.phase1.version === 1 ? KIND_IPSEC_V1 : KIND_IPSEC_V2
+}
+
+function applyKindChoice(choice: string) {
+  if (choice === KIND_WIREGUARD) {
+    currentSettings.kind = "wireguard"
+  } else {
+    currentSettings.kind = "ipsec"
+    currentSettings.phase1.version = choice === KIND_IPSEC_V1 ? 1 : 2
+  }
+  // Baut die Reiterleiste UND die Inhalte neu - also auch den Kasten,
+  // in dem der gerade gedrueckte Knopf sitzt. Das ist in dieser Datei
+  // schon der Normalfall (die rebuild-Schleife in buildStringList tut
+  // dasselbe aus dem Loeschknopf ihrer eigenen Zeile heraus): die
+  // Signalauslieferung haelt eine Referenz auf das Widget, solange der
+  // Rueckruf laeuft.
+  rebuildTabs()
+}
+
+// Der Weg zu vpn.py. Als fertige Argumentliste und nicht als
+// Befehlstext: execAsync(string) zerlegt mit GLib.shell_parse_argv und
+// startet keine Shell, ein Systemwurzelpfad mit einem Leerzeichen
+// waere also zwei Argumente. Dieselbe Begruendung wie bei
+// SETTINGS_WRITER oben.
+const VPN_TOOL = ["python3", `${ZEPOS_SYSTEM_ROOT}/vpn.py`]
+
+// Das Fenster, an dem der Dateiwaehler haengt. GTK4 will fuer
+// Gtk.FileDialog.open() ein Elternfenster; buildContent() bekommt es
+// und legt es hier ab.
+let parentWindow: any = null
+
 // Build General Tab
 function buildGeneralTab(): Gtk.Box {
   const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
@@ -555,24 +900,48 @@ function buildGeneralTab(): Gtk.Box {
   sectionTitle.add_css_class("vpn-section-title")
   box.append(sectionTitle)
 
-  box.append(createEntryField(_("VPN server"), currentSettings.server, (val) => { currentSettings.server = val }))
+  // Die Bauart zuerst, weil sie bestimmt, was darunter ueberhaupt
+  // sinnvoll ist.
+  box.append(createToggleGroup(_("Connection kind"), [
+    { label: _("IPsec (IKEv1)"), value: KIND_IPSEC_V1 },
+    { label: _("IPsec (IKEv2)"), value: KIND_IPSEC_V2 },
+    { label: _("WireGuard"), value: KIND_WIREGUARD }
+  ], currentKindChoice(), applyKindChoice))
+
+  // Beide Bauarten. Der Name benennt die swanctl-Verbindung bzw. das
+  // NetworkManager-Profil - EIN Name, damit vpn-control.sh und die
+  // Leiste dieselbe Sache meinen.
   box.append(createEntryField(_("Connection name"), currentSettings.connection_name, (val) => { currentSettings.connection_name = val }))
-  box.append(createEntryField(_("Default username"), currentSettings.username, (val) => { currentSettings.username = val }))
+
+  if (currentSettings.kind !== "wireguard") {
+    box.append(createEntryField(_("VPN server"), currentSettings.server, (val) => { currentSettings.server = val }))
+    box.append(createEntryField(_("Default username"), currentSettings.username, (val) => { currentSettings.username = val }))
+  }
+
   // Optional. Without it an established tunnel that routes nothing looks
   // exactly like a working one, from the bar and from this dialog alike.
+  // Gilt fuer beide Bauarten: ein WireGuard-Tunnel, der steht und
+  // nichts traegt, sieht von aussen genauso aus.
   box.append(createEntryField(_("Test host (optional)"), currentSettings.test_host ?? "", (val) => { currentSettings.test_host = val }))
 
-  // XAuth Toggle
-  const xauthRow = new Gtk.Box({ spacing: 12 })
-  xauthRow.add_css_class("vpn-field")
-  xauthRow.append(createCheckbox(_("Enable XAuth"), currentSettings.xauth_enabled ?? false, (val) => { currentSettings.xauth_enabled = val }))
-  box.append(xauthRow)
+  if (currentSettings.kind !== "wireguard") {
+    // XAuth Toggle
+    const xauthRow = new Gtk.Box({ spacing: 12 })
+    xauthRow.add_css_class("vpn-field")
+    xauthRow.append(createCheckbox(_("Enable XAuth"), currentSettings.xauth_enabled ?? false, (val) => { currentSettings.xauth_enabled = val }))
+    box.append(xauthRow)
+  }
 
   // Debug Toggle
   const debugRow = new Gtk.Box({ spacing: 12 })
   debugRow.add_css_class("vpn-field")
   debugRow.append(createCheckbox(_("Show debug terminal"), currentSettings.debug ?? false, (val) => { currentSettings.debug = val }))
   box.append(debugRow)
+
+  if (currentSettings.kind === "wireguard") {
+    box.append(buildWgImportSection())
+    return box
+  }
 
   // PSK Section (sudo-protected)
   const pskSection = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
@@ -682,21 +1051,38 @@ function buildPhase1Tab(): Gtk.Box {
   sectionTitle.add_css_class("vpn-section-title")
   box.append(sectionTitle)
 
-  // Aggressive/Main mode toggle (only visible for IKEv1)
+  // DER IKE-VERSIONSUMSCHALTER STAND HIER UND IST WEG - 21.08.2026
+  //
+  //     Eine Umschaltgruppe mit den zwei Eintraegen IKEv1 und IKEv2 lag
+  //     genau an dieser Stelle, zwischen den DPD-Fristen und den
+  //     Vorschlaegen. Ihre Zeichenform steht hier ABSICHTLICH nicht:
+  //     tests/src/test_ags_i18n.py liest Kommentare nicht aus und
+  //     hielte einen zitierten Uebersetzungsaufruf fuer einen echten,
+  //     dessen Katalogeintrag dann fehlt - dieselbe Falle, in die der
+  //     zitierte Fabrikaufruf im Kopf von ags-vpn.template schon einmal
+  //     getappt ist.
+  //     Er tat, was er sollte, und niemand hat ihn gefunden: der Nutzer
+  //     hat am 21.08.2026 "auswahl: ipsec oder ipsecv2 oder wireguard"
+  //     bestellt und damit nach einem Schalter gefragt, den dieses
+  //     Fenster seit langem hatte.
+  //
+  //     Er steht jetzt im Reiter "Allgemein", als einer von drei
+  //     Eintraegen der Bauart-Auswahl (siehe den Abschnitt DIE BAUART
+  //     weiter oben). ZWEI Bedienelemente fuer phase1.version waeren
+  //     zwei Stellen, an denen etwas Verschiedenes stehen kann - und
+  //     die, die niemand findet, gewinnt am Ende. Regel 14: geloescht,
+  //     nicht als veraltet markiert.
+  //
+  //     DER AGGRESSIVE/MAIN-UMSCHALTER BLEIBT, weil er einen anderen
+  //     Wert traegt (phase1.aggressive). Er haengt weiterhin an der
+  //     Version - nur wird der Reiter jetzt neu gebaut, wenn sich die
+  //     Bauart aendert (rebuildTabs), statt seine Sichtbarkeit von Hand
+  //     nachzufuehren.
   const aggressiveToggle = createToggleGroup(_("Mode"), [
     { label: _("Aggressive"), value: true },
     { label: _("Main"), value: false }
   ], currentSettings.phase1.aggressive, (val) => { currentSettings.phase1.aggressive = val })
   aggressiveToggle.set_visible(currentSettings.phase1.version === 1)
-
-  box.append(createToggleGroup(_("IKE version"), [
-    { label: _("IKEv1"), value: 1 },
-    { label: _("IKEv2"), value: 2 }
-  ], currentSettings.phase1.version, (val) => {
-    currentSettings.phase1.version = val
-    aggressiveToggle.set_visible(val === 1)
-  }))
-
   box.append(aggressiveToggle)
 
   box.append(createEntryField(_("IKE proposals"), currentSettings.phase1.proposals, (val) => { currentSettings.phase1.proposals = val }))
@@ -738,24 +1124,6 @@ function buildPhase2Tab(): Gtk.Box {
   // asked for a name alongside every CIDR, which meant a name could
   // disagree with the connection it belonged to and a network could be
   // tunnelled under a child nothing ever initiated.
-  const netHeader = new Gtk.Box({ spacing: 8 })
-  const netTitle = new Gtk.Label({ label: _("Routed networks"), xalign: 0, hexpand: true })
-  netTitle.add_css_class("vpn-section-title")
-
-  // Rolle umrandet: eine wirkliche Handlung (Eintrag hinzufuegen), keine
-  // Navigation. rebuildNetList ist eine Funktionsdeklaration und darum
-  // gehoben (hoisted) - der Aufruf hier loest erst beim Klick auf, lange
-  // nachdem sie weiter unten definiert ist.
-  const addNetBtn = zepButton(ICONS.add, "umrandet", () => {
-    currentSettings.routed_networks.push("")
-    rebuildNetList()
-  })
-  addNetBtn.set_tooltip_text(_("Add network"))
-
-  netHeader.append(netTitle)
-  netHeader.append(addNetBtn)
-  box.append(netHeader)
-
   const netHint = new Gtk.Label({
     label: _("Without at least one network the tunnel comes up and carries no traffic."),
     xalign: 0,
@@ -764,46 +1132,345 @@ function buildPhase2Tab(): Gtk.Box {
   netHint.add_css_class("vpn-psk-status")
   box.append(netHint)
 
-  const netList = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
-  netList.add_css_class("vpn-list-container")
+  // Ueber buildStringList und nicht mehr als eigene rebuild-Schleife -
+  // dieselbe Liste stand in dieser Datei zweimal und braucht sie die
+  // zweite Bauart noch zweimal. Siehe die Begruendung dort.
+  box.append(buildStringList(
+    _("Routed networks"), _("Add network"), _("e.g. 10.0.0.0/8"),
+    () => currentSettings.routed_networks,
+    (values) => { currentSettings.routed_networks = values },
+    "vpn-section-title"))
 
-  function rebuildNetList() {
-    // Clear existing items
-    let child = netList.get_first_child()
-    while (child) {
-      const next = child.get_next_sibling()
-      netList.remove(child)
-      child = next
-    }
+  return box
+}
 
-    // Rebuild list
-    for (let i = 0; i < currentSettings.routed_networks.length; i++) {
-      const idx = i
-      const network = currentSettings.routed_networks[i]
-      const netItem = new Gtk.Box({ spacing: 8 })
-      netItem.add_css_class("vpn-list-item")
+// ============================================================================
+// WIREGUARD
+// ============================================================================
 
-      const netEntry = new Gtk.Entry({ text: network, hexpand: true, placeholder_text: _("e.g. 10.0.0.0/8") })
-      netEntry.add_css_class("vpn-entry")
-      netEntry.connect("changed", () => {
-        currentSettings.routed_networks[idx] = netEntry.get_text()
+// Eine .conf einlesen - und was dabei NICHT still verschwindet.
+//
+// Der Einleser sitzt in src/vpn.py und nicht hier, aus demselben Grund,
+// aus dem saveSettings() das Schreiben an settings.py abgibt: eine
+// zweite Umsetzung in GJS ist die Doppelung, die dieses Fenster schon
+// einmal teuer bezahlt hat (siehe den Kommentarkopf von saveSettings).
+// Sie hat dort ausserdem Tests, die eine Vorlage nicht haben kann.
+//
+// DIE BASH-HUELLE, UND WARUM SIE HIER STEHT
+//     `vpn.py --wg-import` endet mit 3, wenn die Datei zwar eingelesen
+//     wurde, aber Haken-Zeilen (PostUp und Verwandte) abgelehnt worden
+//     sind. Dieser Rueckgabewert ist Absicht: ein Aufrufer, der die
+//     Ablehnung uebergehen will, soll das AKTIV tun muessen.
+//
+//     Astals execAsync verwirft bei jedem Wert ungleich 0 und reicht
+//     dann nur die Fehlerausgabe durch - die eingelesenen Werte auf der
+//     Standardausgabe waeren verloren. Die Huelle laesst genau die 3
+//     durch und nichts sonst. Ihr Programmtext ist eine KONSTANTE,
+//     alles Veraenderliche steht als Argument dahinter - dieselbe Regel
+//     wie bei der einen Shell in ags-vpn.template.
+// Der Pfad, den die Statuszeilen ZEIGEN - mit `~` statt dem
+// aufgeloesten Heimatverzeichnis, und als WERT neben der Meldung statt
+// in ihr: ein Uebersetzer darf den Satz aendern, den Pfad nicht.
+// Dieselbe Trennung wie bei PSK_DISPLAY_PATH weiter oben.
+//
+// Ueber eine Funktion und nicht ueber ein Template-Literal an der
+// Einsetzstelle: tests/src/test_ags_i18n.py verfolgt Ausdruecke bis in
+// den Setzer und haelt ein Literal dort fuer eine sichtbare,
+// unuebersetzte Zeichenkette - was es formal auch ist. GEMESSEN am
+// 21.08.2026, zwei Fundstellen.
+const WG_KEY_DISPLAY_DIR = "~/.config/wireguard"
+
+function wgKeyDisplayPath(name: string): string {
+  return `${WG_KEY_DISPLAY_DIR}/${name}`
+}
+
+const WG_IMPORT_SHELL =
+  'out=$("$@"); rc=$?; if [ "$rc" = 0 ] || [ "$rc" = 3 ]; then printf %s "$out"; exit 0; fi; exit "$rc"'
+
+function buildWgImportSection(): Gtk.Box {
+  const section = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+  section.add_css_class("vpn-field")
+
+  const title = new Gtk.Label({ label: _("WireGuard configuration"), xalign: 0 })
+  title.add_css_class("vpn-field-label")
+
+  const row = new Gtk.Box({ spacing: 8 })
+  row.add_css_class("vpn-entry-row")
+
+  const pathEntry = new Gtk.Entry({ hexpand: true, placeholder_text: _("Path to a .conf file ...") })
+  pathEntry.add_css_class("vpn-entry")
+
+  const status = new Gtk.Label({ label: "", xalign: 0, wrap: true })
+  status.add_css_class("vpn-psk-status")
+
+  // Rolle still: ein Zeichen-Knopf am Rand der Eingabezeile, wie
+  // pskVisibilityBtn - er fuellt das Feld daneben, er ist nicht der Weg.
+  //
+  // Gtk.FileDialog und nicht zenity/yad: GTK4 bringt ihn selbst mit, der
+  // Dateiwaehler-Portal-Dienst steht schon in den depends
+  // ("xdg-desktop-portal-gtk # file chooser for GTK applications"), und
+  // ein neues Paket fuer einen Dateiwaehler waere ein neues Paket fuer
+  // einen Dateiwaehler.
+  //
+  // DAS EINGABEFELD BLEIBT TROTZDEM, und das ist kein zweiter Weg zum
+  // selben Ziel: der Waehler FUELLT es, eingelesen wird immer daraus.
+  // Faellt der Waehler aus (kein Portal, kein Elternfenster), kann der
+  // Nutzer den Pfad hineinschreiben, statt vor einem Knopf zu stehen,
+  // der nichts tut.
+  const browseBtn = zepButton(ICONS.folder, "still", () => {
+    try {
+      const chooser = new (Gtk as any).FileDialog({
+        title: _("Choose a WireGuard configuration"),
       })
+      chooser.open(parentWindow, null, (_source: any, result: any) => {
+        try {
+          const file = chooser.open_finish(result)
+          if (file) pathEntry.set_text(file.get_path() ?? "")
+        } catch (e) {
+          // Abgebrochen ist kein Fehler und bekommt keine Meldung.
+        }
+      })
+    } catch (e) {
+      status.set_text(_("No file chooser available - please type the path."))
+      status.add_css_class("warning")
+    }
+  })
+  browseBtn.set_tooltip_text(_("Choose a WireGuard configuration"))
 
+  row.append(pathEntry)
+  row.append(browseBtn)
+
+  // Rolle umrandet: eine wirkliche, sofort wirksame Handlung, aber
+  // nicht die Hauptsache des Fensters - dieselbe Einordnung wie
+  // pskSaveBtn.
+  const importBtn = zepButton(_("Import"), "umrandet", async () => {
+    const path = pathEntry.get_text().trim()
+    if (!path) return
+    try {
+      const answer = await execAsync(["bash", "-c", WG_IMPORT_SHELL,
+                                      "zepos-wg-import", ...VPN_TOOL,
+                                      "--wg-import", path])
+      const payload = JSON.parse(answer)
+      currentSettings.wireguard = payload.wireguard
+      // Der DNS-Reiter ist derselbe wie bei IPsec, und `DNS =` aus der
+      // Datei gehoert dorthin - nicht in einen zweiten.
+      if (payload.dns) currentSettings.dns = payload.dns
+
+      const refused: [number, string][] = payload.refused ?? []
+      if (refused.length) {
+        // BENANNT UND ABGELEHNT, NICHT STILL VERWORFEN. Eine Datei, von
+        // der die Haelfte ankommt und deren Rest verschwindet, ist in
+        // einem Netzwerkzeug gefaehrlicher als eine Fehlermeldung: was
+        // fehlt, ist genau die Zeile, die den Verkehr eingegrenzt haette.
+        status.set_text(format(
+          _("Imported. These lines were NOT taken over, because they run commands: {lines}"),
+          { lines: refused.map(([line, key]) => `${key} (${line})`).join(", ") }))
+        status.remove_css_class("success")
+        status.add_css_class("warning")
+      } else {
+        status.set_text(_("Imported"))
+        status.remove_css_class("warning")
+        status.add_css_class("success")
+      }
+      // Der Hinweis auf die Fremddatei: ANGEBOTEN, nicht getan. Sie
+      // gehoert dem Nutzer, sie traegt seinen privaten Schluessel im
+      // Klartext, und sie liegt mit ziemlicher Sicherheit mit 0644 im
+      // Downloadordner.
+      try {
+        await execAsync(['notify-send', '-i', 'network-vpn', _("WireGuard"),
+                         format(_("The key was stored privately. The original {path} still contains it in clear text - you may want to delete it."),
+                                { path })])
+      } catch { }
+      rebuildTabs()
+    } catch (e) {
+      status.set_text(format(_("Not imported: {error}"), { error: String(e) }))
+      status.remove_css_class("success")
+      status.add_css_class("warning")
+    }
+  })
+
+  const actions = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
+  actions.append(importBtn)
+
+  section.append(title)
+  section.append(row)
+  section.append(actions)
+  section.append(status)
+  return section
+}
+
+// Build WireGuard Interface Tab
+function buildWgInterfaceTab(): Gtk.Box {
+  const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
+  const wg = currentSettings.wireguard
+
+  const sectionTitle = new Gtk.Label({ label: _("Interface settings"), xalign: 0 })
+  sectionTitle.add_css_class("vpn-section-title")
+  box.append(sectionTitle)
+
+  // Die eigenen Adressen. Dieselbe Listenform wie die gerouteten Netze
+  // auf der IPsec-Seite - ein zweites Bauteil fuer dieselbe Sache waere
+  // ein zweites Bauteil fuer dieselbe Sache.
+  box.append(buildStringList(
+    _("Addresses"), _("Add address"), _("e.g. 10.9.0.2/24"),
+    () => wg.addresses, (list) => { wg.addresses = list }))
+
+  box.append(createNumericField(_("Listen port (0 = automatic)"), wg.listen_port ?? 0,
+                                (val) => { wg.listen_port = val }))
+  box.append(createNumericField(_("MTU (0 = automatic)"), wg.mtu ?? 0,
+                                (val) => { wg.mtu = val }))
+
+  // ---- Der Schluessel ------------------------------------------------
+  //
+  // WAS HIER ANDERS IST ALS BEIM PSK DARUEBER: der PSK wird EINGEGEBEN,
+  // ein WireGuard-Schluesselpaar wird ERZEUGT. Deshalb gibt es hier kein
+  // Eingabefeld fuer den privaten Schluessel, sondern einen Knopf - der
+  // Schluessel geht dann gar nicht erst durch eine fremde Hand, durch
+  // eine Zwischenablage oder durch ein Feld, das jemand offen stehen
+  // laesst. Wer einen mitgebrachten Schluessel hat, bringt ihn als
+  // .conf mit; das ist der Weg darueber im Reiter "Allgemein".
+  const keySection = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+  keySection.add_css_class("vpn-field")
+
+  const keyLabel = new Gtk.Label({ label: _("Private key"), xalign: 0 })
+  keyLabel.add_css_class("vpn-field-label")
+
+  const keyStatus = new Gtk.Label({ label: "", xalign: 0, wrap: true })
+  keyStatus.add_css_class("vpn-psk-status")
+  if (wg.private_key_file) {
+    keyStatus.set_text(format(_("Key present in {path}"),
+                              { path: wgKeyDisplayPath(wg.private_key_file) }))
+    keyStatus.add_css_class("success")
+  } else {
+    keyStatus.set_text(_("No key yet - create one, or import a .conf file"))
+    keyStatus.add_css_class("warning")
+  }
+
+  // Der EIGENE oeffentliche Schluessel ist kein Geheimnis - er ist
+  // genau das, was der Gegenstelle geschickt werden muss. Er steht
+  // deshalb offen da und laesst sich kopieren.
+  const publicRow = new Gtk.Box({ spacing: 8 })
+  publicRow.add_css_class("vpn-entry-row")
+  const publicEntry = new Gtk.Entry({ hexpand: true, editable: false,
+                                      text: wg.public_key ?? "",
+                                      placeholder_text: _("Own public key ...") })
+  publicEntry.add_css_class("vpn-entry")
+  const copyBtn = zepButton(ICONS.copy, "still", () => {
+    // wl-copy mit dem Wert als Argument ist hier zulaessig und nur
+    // hier: ein OEFFENTLICHER Schluessel ist kein Geheimnis. Der
+    // private geht nie durch eine Befehlszeile - siehe den Kopf des
+    // WireGuard-Teils in src/vpn.py.
+    if (wg.public_key) execAsync(["wl-copy", "--", wg.public_key]).catch(() => { })
+  })
+  copyBtn.set_tooltip_text(_("Copy the public key"))
+  publicRow.append(publicEntry)
+  publicRow.append(copyBtn)
+
+  // Rolle umrandet: eine wirkliche Handlung, nicht die Hauptsache.
+  const genBtn = zepButton(_("Create a key pair"), "umrandet", async () => {
+    const name = `${currentSettings.connection_name || "work"}.key`
+    try {
+      const publicKey = (await execAsync([...VPN_TOOL, "--wg-genkey", name])).trim()
+      wg.private_key_file = name
+      wg.public_key = publicKey
+      publicEntry.set_text(publicKey)
+      keyStatus.set_text(format(_("Key present in {path}"),
+                                { path: wgKeyDisplayPath(name) }))
+      keyStatus.remove_css_class("warning")
+      keyStatus.add_css_class("success")
+    } catch (e) {
+      keyStatus.set_text(format(_("No key was created: {error}"), { error: String(e) }))
+      keyStatus.remove_css_class("success")
+      keyStatus.add_css_class("warning")
+    }
+  })
+
+  const keyActions = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
+  keyActions.append(genBtn)
+
+  keySection.append(keyLabel)
+  keySection.append(keyStatus)
+  keySection.append(publicRow)
+  keySection.append(keyActions)
+  box.append(keySection)
+
+  return box
+}
+
+// Build WireGuard Peers Tab
+function buildWgPeersTab(): Gtk.Box {
+  const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
+  const wg = currentSettings.wireguard
+
+  const header = new Gtk.Box({ spacing: 8 })
+  const title = new Gtk.Label({ label: _("Peers"), xalign: 0, hexpand: true })
+  title.add_css_class("vpn-section-title")
+
+  // Rolle umrandet, wie addNetBtn. rebuildPeerList ist eine
+  // Funktionsdeklaration und damit gehoben.
+  const addBtn = zepButton(ICONS.add, "umrandet", () => {
+    wg.peers.push({ public_key: "", endpoint: "", allowed_ips: [],
+                    keepalive: 0, preshared_key_file: "" })
+    rebuildPeerList()
+  })
+  addBtn.set_tooltip_text(_("Add peer"))
+
+  header.append(title)
+  header.append(addBtn)
+  box.append(header)
+
+  const hint = new Gtk.Label({
+    label: _("Without at least one peer with allowed networks the tunnel comes up and carries no traffic."),
+    xalign: 0, wrap: true,
+  })
+  hint.add_css_class("vpn-psk-status")
+  box.append(hint)
+
+  const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
+  list.add_css_class("vpn-list-container")
+
+  function rebuildPeerList() {
+    clearBox(list)
+    for (let i = 0; i < wg.peers.length; i++) {
+      const idx = i
+      const peer = wg.peers[i]
+      const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
+      card.add_css_class("vpn-list-item")
+
+      const cardHead = new Gtk.Box({ spacing: 8 })
+      const cardTitle = new Gtk.Label({
+        label: format(_("Peer {number}"), { number: String(idx + 1) }),
+        xalign: 0, hexpand: true,
+      })
+      cardTitle.add_css_class("vpn-field-label")
       // Rolle kritisch, wie vom Auftrag verlangt (loeschen ist zerstoerend).
       const deleteBtn = zepButton(ICONS.delete, "kritisch", () => {
-        currentSettings.routed_networks.splice(idx, 1)
-        rebuildNetList()
+        wg.peers.splice(idx, 1)
+        rebuildPeerList()
       })
+      deleteBtn.set_tooltip_text(_("Delete peer"))
+      cardHead.append(cardTitle)
+      cardHead.append(deleteBtn)
+      card.append(cardHead)
 
-      netItem.append(netEntry)
-      netItem.append(deleteBtn)
-      netList.append(netItem)
+      card.append(createEntryField(_("Public key of the peer"), peer.public_key ?? "",
+                                   (val) => { peer.public_key = val }))
+      card.append(createEntryField(_("Endpoint"), peer.endpoint ?? "",
+                                   (val) => { peer.endpoint = val }))
+      card.append(createNumericField(_("Keepalive (seconds, 0 = off)"), peer.keepalive ?? 0,
+                                     (val) => { peer.keepalive = val }))
+      // AllowedIPs. Begrifflich dasselbe wie `routed_networks` auf der
+      // IPsec-Seite, und deshalb dieselbe Listenform.
+      card.append(buildStringList(
+        _("Allowed networks"), _("Add network"), _("e.g. 10.0.0.0/8"),
+        () => peer.allowed_ips ?? [], (values) => { peer.allowed_ips = values }))
+
+      list.append(card)
     }
   }
 
-  rebuildNetList()
-  box.append(netList)
-
+  rebuildPeerList()
+  box.append(list)
   return box
 }
 
@@ -817,61 +1484,12 @@ function buildDnsTab(): Gtk.Box {
 
   box.append(createEntryField(_("Search domain"), currentSettings.dns.search_domain, (val) => { currentSettings.dns.search_domain = val }))
 
-  // DNS Server Header with Add button
-  const dnsHeader = new Gtk.Box({ spacing: 8 })
-  const dnsTitle = new Gtk.Label({ label: _("DNS servers"), xalign: 0, hexpand: true })
-  dnsTitle.add_css_class("vpn-field-label")
-
-  // Rolle umrandet, wie addNetBtn oben. rebuildDnsList ist gehoben.
-  const addDnsBtn = zepButton(ICONS.add, "umrandet", () => {
-    currentSettings.dns.servers.push("")
-    rebuildDnsList()
-  })
-  addDnsBtn.set_tooltip_text(_("Add DNS server"))
-
-  dnsHeader.append(dnsTitle)
-  dnsHeader.append(addDnsBtn)
-  box.append(dnsHeader)
-
-  const dnsList = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
-  dnsList.add_css_class("vpn-list-container")
-
-  function rebuildDnsList() {
-    // Clear existing items
-    let child = dnsList.get_first_child()
-    while (child) {
-      const next = child.get_next_sibling()
-      dnsList.remove(child)
-      child = next
-    }
-
-    // Rebuild list
-    for (let i = 0; i < currentSettings.dns.servers.length; i++) {
-      const idx = i
-      const server = currentSettings.dns.servers[i]
-      const dnsItem = new Gtk.Box({ spacing: 8 })
-      dnsItem.add_css_class("vpn-list-item")
-
-      const dnsEntry = new Gtk.Entry({ text: server, hexpand: true, placeholder_text: _("IP address ...") })
-      dnsEntry.add_css_class("vpn-entry")
-      dnsEntry.connect("changed", () => {
-        currentSettings.dns.servers[idx] = dnsEntry.get_text()
-      })
-
-      // Rolle kritisch, wie vom Auftrag verlangt (loeschen ist zerstoerend).
-      const deleteBtn = zepButton(ICONS.delete, "kritisch", () => {
-        currentSettings.dns.servers.splice(idx, 1)
-        rebuildDnsList()
-      })
-
-      dnsItem.append(dnsEntry)
-      dnsItem.append(deleteBtn)
-      dnsList.append(dnsItem)
-    }
-  }
-
-  rebuildDnsList()
-  box.append(dnsList)
+  // Dieselbe Liste wie die gerouteten Netze und die WireGuard-Adressen -
+  // ein Bauteil, vier Verwendungen. Siehe buildStringList.
+  box.append(buildStringList(
+    _("DNS servers"), _("Add DNS server"), _("IP address ..."),
+    () => currentSettings.dns.servers,
+    (values) => { currentSettings.dns.servers = values }))
 
   return box
 }
@@ -899,39 +1517,24 @@ export default function VpnSettings(): OverlayWidget {
       // Rebuild tabs with loaded settings
       rebuildTabs()
     },
-    buildContent: (_win, closeWindow) => {
+    buildContent: (win, closeWindow) => {
       closeFn = closeWindow
       closeFnModule = closeWindow
+      // Fuer Gtk.FileDialog.open() im WireGuard-Einleser. Der Parameter
+      // hiess bis zum 21.08.2026 `_win` und war unbenutzt; ein
+      // Dateiwaehler braucht ein Elternfenster.
+      parentWindow = win
 
       // Main container
       const mainBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
       mainBox.add_css_class("vpn-settings-container")
 
-      // Tab bar
-      const tabBar = new Gtk.Box({ spacing: 4 })
+      // Tab bar. Die Knoepfe kommen aus rebuildTabs() weiter unten -
+      // welche es sind, haengt an der Bauart, und sie werden beim
+      // Umschalten getauscht statt einmal gebaut. Deshalb steht hier
+      // nur noch die Huelle.
+      tabBar = new Gtk.Box({ spacing: 4 })
       tabBar.add_css_class("vpn-tab-bar")
-
-      const tabs = [
-        { id: "general", label: _("General") },
-        { id: "phase1", label: _("Phase 1") },
-        { id: "phase2", label: _("Phase 2") },
-        { id: "dns", label: _("DNS") }
-      ]
-
-      // Rolle umrandet je Reiter, siehe Task B (se-tab-btn). ANDERS als
-      // dort: die waagerechte Innenabstand von vpn-tab-btn und zep-btn ist
-      // NICHT nur rechnerisch gleich, sondern derselbe Platzhalter
-      // (STYLE_SPACE_16 auf beiden Seiten in beiden Regeln) - und
-      // WIN_WIDTH dieses Fensters haengt (siehe Dateikopf) ausschliesslich
-      // an den vier Knoepfen der Fusszeile, nicht an dieser Leiste. Die
-      // Kopplung, die se-tab-btn stehen liess, gilt hier nicht - GEPRUEFT
-      // am 18.08.2026, siehe Gruppe-E-Bericht.
-      for (const tab of tabs) {
-        const btn = zepButton(tab.label, "umrandet", () => switchTab(tab.id))
-        if (tab.id === "general") btn.add_css_class("active")
-        tabButtons.set(tab.id, btn)
-        tabBar.append(btn)
-      }
 
       // Tab content
       const contentBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
@@ -945,22 +1548,12 @@ export default function VpnSettings(): OverlayWidget {
       })
 
       scrollContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-
-      generalBox = buildGeneralTab()
-      phase1Box = buildPhase1Tab()
-      phase1Box.set_visible(false)
-      phase2Box = buildPhase2Tab()
-      phase2Box.set_visible(false)
-      dnsBox = buildDnsTab()
-      dnsBox.set_visible(false)
-
-      scrollContent.append(generalBox)
-      scrollContent.append(phase1Box)
-      scrollContent.append(phase2Box)
-      scrollContent.append(dnsBox)
-
       scroll.set_child(scrollContent)
       contentBox.append(scroll)
+
+      // NACH scrollContent und NACH tabBar: rebuildTabs() fuellt beide
+      // und steigt aus, solange eines von beiden noch fehlt.
+      rebuildTabs()
 
       // Actions
       const actionsBox = new Gtk.Box({ spacing: 12, halign: Gtk.Align.END })

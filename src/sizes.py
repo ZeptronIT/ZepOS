@@ -734,9 +734,30 @@ MEASURE_MODAL_SHARE = 0.5
 #
 #         S   500   Meldungen 420, Akku 436, Stil-Editor 474,
 #                   Kalender 496
-#         M   660   Datentraeger 556, Hintergruende 616,
-#                   VPN-Einstellungen 642
-#         L   880   Kuerzel (heute 1076, zweispaltig), die Schale
+#         M   660   Datentraeger 556, Hintergruende 616
+#         L   880   Kuerzel (heute 1076, zweispaltig), die Schale,
+#                   VPN-Einstellungen 702
+#
+#     BERICHTIGT am 21.08.2026: hier stand "VPN-Einstellungen 642" bei M.
+#     Die 642 waren am 18.08.2026 richtig gerechnet und schon am selben
+#     Tag ueberholt - aufgabe-34-report.md 2.6 hat das Fenster GEMESSEN
+#     und kam auf 702 (Fusszeile 626 + zweimal 25 Polster = 676, dazu
+#     2 Rahmen und 24 Bildlaufleiste). Es stand damit auf einer Sprosse,
+#     die 42 Punkte zu schmal war, und aufgabe-43-report.md fuehrt genau
+#     das als offenen Befund.
+#
+#     Behoben mit der zweiten VPN-Bauart (21.08.2026): das Fenster
+#     bekommt eine Bauart-Auswahl und zwei zusaetzliche Reiter,
+#     veraendert sich also ohnehin sichtbar - womit der Grund entfaellt,
+#     aus dem der Umzug bis dahin unterblieben ist ("wuerde ein Fenster
+#     veraendern, ueber das niemand geklagt hat"). 702 < 880, der
+#     Ueberhang ist null, und 880 bleibt unter dem Deckel von 960 auf
+#     einem 1920er Schirm. Nachgemessen am gezeichneten Fenster in
+#     tests/render/test_vpn_breite.py.
+#
+#     M bleibt bei 660: sein groesster Bewohner ist jetzt
+#     "Hintergruende 616", und die naechste runde Zahl darueber ist
+#     weiterhin 660.
 #
 #     DREI und nicht vier: die Spezifikation trennt L=720 und XL=880.
 #     Nachdem Netzwerk, Bluetooth und VPN in die Schale gezogen sind,

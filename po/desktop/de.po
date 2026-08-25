@@ -1383,6 +1383,166 @@ msgstr "Nein"
 msgid "Yes"
 msgstr "Ja"
 
+#: src/templates/ags-vpn-settings.template
+msgid "Connection kind"
+msgstr "Art der Verbindung"
+
+#: src/templates/ags-vpn-settings.template
+msgid "IPsec (IKEv1)"
+msgstr "IPsec (IKEv1)"
+
+#: src/templates/ags-vpn-settings.template
+msgid "IPsec (IKEv2)"
+msgstr "IPsec (IKEv2)"
+
+#: src/templates/ags-vpn-settings.template
+msgid "WireGuard"
+msgstr "WireGuard"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Interface"
+msgstr "Schnittstelle"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Peers"
+msgstr "Gegenstellen"
+
+#: src/templates/ags-vpn-settings.template
+msgid "WireGuard configuration"
+msgstr "WireGuard-Konfiguration"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Path to a .conf file ..."
+msgstr "Pfad zu einer .conf-Datei …"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Choose a WireGuard configuration"
+msgstr "Eine WireGuard-Konfiguration auswählen"
+
+#: src/templates/ags-vpn-settings.template
+msgid "No file chooser available - please type the path."
+msgstr "Kein Dateiwähler verfügbar – bitte den Pfad eintippen."
+
+#: src/templates/ags-vpn-settings.template
+msgid "Import"
+msgstr "Einlesen"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Imported. These lines were NOT taken over, because they run commands: {lines}"
+msgstr "Eingelesen. Diese Zeilen wurden NICHT übernommen, weil sie Befehle ausführen: {lines}"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Imported"
+msgstr "Eingelesen"
+
+#: src/templates/ags-vpn-settings.template
+msgid "The key was stored privately. The original {path} still contains it in clear text - you may want to delete it."
+msgstr "Der Schlüssel liegt jetzt geschützt. Die Ursprungsdatei {path} enthält ihn weiterhin im Klartext – Sie sollten sie löschen."
+
+#: src/templates/ags-vpn-settings.template
+msgid "Not imported: {error}"
+msgstr "Nicht eingelesen: {error}"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Interface settings"
+msgstr "Einstellungen der Schnittstelle"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Addresses"
+msgstr "Adressen"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Add address"
+msgstr "Adresse hinzufügen"
+
+#: src/templates/ags-vpn-settings.template
+msgid "e.g. 10.9.0.2/24"
+msgstr "z. B. 10.9.0.2/24"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Listen port (0 = automatic)"
+msgstr "Abhörport (0 = automatisch)"
+
+#: src/templates/ags-vpn-settings.template
+msgid "MTU (0 = automatic)"
+msgstr "MTU (0 = automatisch)"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Private key"
+msgstr "Privater Schlüssel"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Key present in {path}"
+msgstr "✓ Schlüssel vorhanden in {path}"
+
+#: src/templates/ags-vpn-settings.template
+msgid "No key yet - create one, or import a .conf file"
+msgstr "⚠ Noch kein Schlüssel – erzeugen Sie einen oder lesen Sie eine .conf-Datei ein"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Own public key ..."
+msgstr "Eigener öffentlicher Schlüssel …"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Copy the public key"
+msgstr "Öffentlichen Schlüssel kopieren"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Create a key pair"
+msgstr "Schlüsselpaar erzeugen"
+
+#: src/templates/ags-vpn-settings.template
+msgid "No key was created: {error}"
+msgstr "Es wurde kein Schlüssel erzeugt: {error}"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Add peer"
+msgstr "Gegenstelle hinzufügen"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Without at least one peer with allowed networks the tunnel comes up and carries no traffic."
+msgstr "Ohne mindestens eine Gegenstelle mit erlaubten Netzen kommt der Tunnel zustande und trägt nichts."
+
+#: src/templates/ags-vpn-settings.template
+msgid "Peer {number}"
+msgstr "Gegenstelle {number}"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Delete peer"
+msgstr "Gegenstelle löschen"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Public key of the peer"
+msgstr "Öffentlicher Schlüssel der Gegenstelle"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Endpoint"
+msgstr "Endpunkt"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Keepalive (seconds, 0 = off)"
+msgstr "Keepalive (Sekunden, 0 = aus)"
+
+#: src/templates/ags-vpn-settings.template
+msgid "Allowed networks"
+msgstr "Erlaubte Netze"
+
+#: src/templates/ags-vpn-settings.template
+msgid "The connection was not set up: {error}"
+msgstr "Die Verbindung wurde nicht eingerichtet: {error}"
+
+#: src/templates/ags-vpn.template
+msgid "Peer: {endpoint}"
+msgstr "Gegenstelle: {endpoint}"
+
+#: src/templates/ags-vpn.template
+msgid "WireGuard identifies itself with keys - there is nothing to type here."
+msgstr "WireGuard weist sich mit Schlüsseln aus – hier ist nichts einzutippen."
+
+#: src/templates/ags-vpn.template
+msgid "No peer configured yet - open the settings."
+msgstr "Noch keine Gegenstelle eingestellt – bitte die Einstellungen öffnen."
+
 #~ msgid "This page is moving."
 #~ msgstr "Diese Seite zieht gerade um."
 

@@ -88,6 +88,10 @@ def defaults() -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "vpn": {
+            # Welche Bauart. "ipsec" (strongSwan) oder "wireguard"
+            # (NetworkManager). Die Vorgabe ist "ipsec" und darf nie
+            # geraten werden - siehe src/vpn.py::vpn_kind().
+            "kind": "ipsec",
             "server": "",
             "connection_name": "work",
             "dns": {"servers": [], "search_domain": ""},
@@ -100,6 +104,29 @@ def defaults() -> dict[str, Any]:
             # goes dark. The origin had its own home subnet, and the
             # German interface name it used, written into the script.
             "bypass_networks": [],
+            # WireGuard, seit dem 21.08.2026 die zweite Bauart. Rein
+            # ADDITIV, und `schema_version` bleibt darum 1: load()
+            # weist jede andere Version ab, eine Wanderung gibt es
+            # nicht, und get_user_vpn_setting() faellt je Schluessel auf
+            # seine Vorgabe zurueck. Eine Installation von vorher hat
+            # kein `kind`, bekommt "ipsec" und laeuft Zeile fuer Zeile
+            # weiter wie bisher.
+            #
+            # KEIN GEHEIMNIS STEHT HIER. `private_key_file` und
+            # `preshared_key_file` tragen DATEINAMEN, nicht Schluessel:
+            # dieses Dokument liest der Stil-Erzeuger, gibt
+            # `zepos-settings` aus und fasst der Doktor an. Die
+            # Schluessel liegen unter ~/.config/wireguard, 0600 vom
+            # ersten Byte, Verzeichnis 0700 - siehe
+            # src/vpn.py::write_wireguard_secret().
+            "wireguard": {
+                "addresses": [],
+                "listen_port": 0,
+                "mtu": 0,
+                "private_key_file": "",
+                "public_key": "",
+                "peers": [],
+            },
         },
         "weather": {"location": ""},
         # Extra clocks beside the local time, by IANA timezone name. The

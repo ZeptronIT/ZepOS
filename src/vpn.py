@@ -613,11 +613,532 @@ def tunnel_status(path: Path | None = None,
 
 
 # --------------------------------------------------------------------
+# WireGuard - die zweite Bauart
+# --------------------------------------------------------------------
+#
+# WARUM NETWORKMANAGER UND NICHT `wg-quick` - GEMESSEN am 21.08.2026
+#     `wg-quick` liest die .conf ALS SHELL-SKRIPT ein. `PreUp`,
+#     `PostUp`, `PreDown` und `PostDown` sind darin Befehlszeilen, und
+#     sie laufen als Root. Eine sudoers-Regel `wg-quick up *` waere
+#     damit "beliebiger Root-Befehl aus einer Datei, die der Nutzer
+#     irgendwo herbekommen hat" - genau das, was der Kopf von
+#     src/system/zepos-privileges-config.template unter "Was hier
+#     bewusst NICHT steht" verbietet: "kein Werkzeug, das beliebige
+#     Dateien schreiben kann ... eine solche Regel waere Root mit
+#     Umweg."
+#
+#     NetworkManagers eigener Einleser fuehrt diese Zeilen NICHT aus.
+#     GEMESSEN an der Zeichenkettentabelle von /usr/lib/libnm.so.0
+#     (networkmanager 1.58.0-1): der Parser fuehrt PreUp, PreDown,
+#     PostUp, PostDown und SaveConfig als BENANNTE Schluessel - damit
+#     sie nicht in seine Meldung "unrecognized line at %s:%zu" laufen -
+#     und tut nichts damit. Der Unterschied zwischen "ausfuehren" und
+#     "erkennen und liegenlassen" ist der ganze Sicherheitsgewinn.
+#
+# WAS DAS AN RECHTEN KOSTET - GEMESSEN am 21.08.2026 mit `pkcheck`
+#     (`pkcheck` fragt polkitd und fasst NetworkManager nicht an):
+#
+#         settings.modify.own        rc=0
+#         settings.modify.system     rc=0, polkit.result=yes
+#         settings.modify.hostname   rc=2, "requires authentication"
+#
+#     Die dritte Zeile ist die Gegenprobe und der Grund, dem Ergebnis zu
+#     trauen: sie traegt in der Regeldatei dasselbe `auth_admin_keep`
+#     wie modify.system und verlangt tatsaechlich eine Anmeldung.
+#     modify.system verlangt sie nicht - weil das Paket networkmanager
+#     SELBST /usr/share/polkit-1/rules.d/org.freedesktop.NetworkManager.rules
+#     mitbringt und darin der Gruppe `wheel` an einer oertlichen Konsole
+#     ein pauschales YES gibt. ZepOS legt das Konto des Nutzers in genau
+#     dieser Gruppe an (archinstall, users[].sudo = true - dieselbe
+#     Gruppe, auf die die letzte Zeile von
+#     zepos-privileges-config.template zeigt).
+#
+#     ES KOMMT ALSO KEIN PASSWORTDIALOG. Trotzdem bekommt jede erzeugte
+#     Verbindung `connection.permissions user:<Konto>`, aus zwei
+#     Gruenden, die von dieser Messung unabhaengig sind: ein Konto OHNE
+#     wheel faellt damit auf modify.own (allow_active=yes) statt auf
+#     einen Dialog, und die Verbindung gehoert dann diesem Konto statt
+#     allen Konten der Maschine.
+#
+#     UND: KEINE EINZIGE NEUE ZEILE IN /etc/sudoers.d/zepos. IPsec
+#     braucht dort heute sieben Cmnd_Alias-Bloecke; WireGuard braucht
+#     keinen.
+#
+# WARUM DER SCHLUESSEL UEBER EINE DATEI UND NICHT UEBER DIE BEFEHLSZEILE
+#     `nmcli connection modify <c> wireguard.private-key <schluessel>`
+#     waere der kuerzere Weg und ist versperrt: /proc/<pid>/cmdline ist
+#     fuer jedes Konto der Maschine lesbar, solange der Prozess laeuft.
+#     Aus genau diesem Grund traegt ags-vpn.template seit laengerem
+#     einen LEEREN dritten Platz in `connectArgv` - dort stand das
+#     Sudo-Passwort.
+#
+#     `nmcli connection import type wireguard file <datei>` reicht
+#     stattdessen einen PFAD, und NetworkManager liest den Schluessel
+#     selbst. Die Datei, die wir dafuer hinlegen, ist unsere eigene,
+#     aus den Einstellungen zurueckgeschriebene .conf - ohne die
+#     Haken-Zeilen, im Laufzeitverzeichnis des Nutzers, 0600, und sie
+#     wird danach geloescht.
+#
+#     Der Preis, ausgesprochen: `import` legt die Verbindung an, BEVOR
+#     `connection.permissions` gesetzt werden kann, faellt also fuer
+#     diesen einen Schritt unter modify.system. Auf einem ZepOS-Konto
+#     (wheel, oertliche Sitzung) ist das nach der Messung oben
+#     folgenlos. Auf einem Konto ohne wheel kaeme dort ein
+#     polkit-Dialog. Das ist der Tausch: ein moeglicher Dialog fuer ein
+#     Konto, das ZepOS so nicht anlegt, gegen einen privaten Schluessel,
+#     der NIE in einer Befehlszeile steht. Der Schluessel gewinnt.
+
+WG_KIND = "wireguard"
+IPSEC_KIND = "ipsec"
+VPN_KINDS = (IPSEC_KIND, WG_KIND)
+
+# Die Zeilen, die `wg-quick` als Shell ausfuehren wuerde. Sie werden
+# NICHT still verworfen: parse_wg_conf() sammelt sie mit ihrer
+# Zeilennummer ein, der Aufrufer zeigt sie, und der Befehl endet mit
+# einem eigenen Rueckgabewert (WG_IMPORT_REFUSED), damit ein Aufrufer,
+# der sie uebergeht, das aktiv tun muss.
+WG_HOOK_KEYS = ("PreUp", "PostUp", "PreDown", "PostDown", "SaveConfig")
+
+# [Interface]. `Address`, `DNS`, `MTU` und `Table` kennt nur wg-quick,
+# nicht das Kernelmodul - NetworkManager kann sie trotzdem alle, ueber
+# ipv4./ipv6.- bzw. wireguard.-Eigenschaften.
+WG_INTERFACE_KEYS = ("PrivateKey", "Address", "ListenPort", "DNS", "MTU",
+                     "Table", "FwMark")
+
+# [Peer].
+WG_PEER_KEYS = ("PublicKey", "PresharedKey", "AllowedIPs", "Endpoint",
+                "PersistentKeepalive")
+
+_WG_CANONICAL = {name.lower(): name
+                 for name in WG_INTERFACE_KEYS + WG_PEER_KEYS + WG_HOOK_KEYS}
+
+
+class UnreadableWireGuardConfig(ValueError):
+    """Diese .conf wird nicht halb eingelesen.
+
+    Eine Datei, von der die Haelfte ankommt und der Rest still
+    verschwindet, ist in einem Netzwerkzeug schlimmer als eine
+    Fehlermeldung: was verworfen wurde, ist genau die Zeile, die den
+    Verkehr eingegrenzt haette. Dieselbe Haltung, die
+    nonblank_entries() weiter oben schon traegt ("refuse rather than
+    guess"), nur mit Datei und Zeilennummer, weil der Nutzer die Datei
+    vor sich hat und sie reparieren koennen soll.
+    """
+
+
+@dataclass
+class WireGuardConf:
+    """Was in einer .conf stand - und was davon abgelehnt wurde."""
+
+    interface: dict[str, str]
+    peers: list[dict[str, str]]
+    # (Zeilennummer, Schluesselname) je Haken-Zeile, in der Reihenfolge
+    # der Datei. Leer ist der Normalfall.
+    refused: list[tuple[int, str]]
+
+
+def _wg_strip_comment(line: str) -> str:
+    """Alles ab dem ersten `#`, wie wg-quick es liest.
+
+    Ein Base64-Schluessel enthaelt `#` nicht (das Alphabet ist
+    A-Z a-z 0-9 + / =), eine Endpunkt-Adresse auch nicht - das
+    Abschneiden kann also keinen Wert zerteilen.
+    """
+    return line.split("#", 1)[0]
+
+
+def parse_wg_conf(text: str, source: str = "<eingabe>") -> WireGuardConf:
+    """Eine wg-quick-.conf, Zeile fuer Zeile, ohne zu raten.
+
+    Der Wert wird am ERSTEN `=` abgetrennt und nicht am letzten: ein
+    Base64-Schluessel endet auf `=` oder `==`, und ein `split("=")`
+    ueber alle Vorkommen haette aus `PrivateKey = aGVsbG8=` einen
+    leeren Schluessel gemacht - eine Verbindung, die sich anlegen laesst
+    und nie zustande kommt.
+
+    Gross- und Kleinschreibung ist gleichgueltig (wg-quick liest so),
+    gemeldet wird aber immer die kanonische Schreibweise, damit die
+    Meldung zu dem passt, was in der Datei stehen sollte.
+    """
+    conf = WireGuardConf(interface={}, peers=[], refused=[])
+    section: str | None = None
+    seen_interface = False
+
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = _wg_strip_comment(raw).strip()
+        if not line:
+            continue
+
+        if line.startswith("[") and line.endswith("]"):
+            head = line[1:-1].strip().lower()
+            if head == "interface":
+                if seen_interface:
+                    raise UnreadableWireGuardConfig(
+                        f"{source}:{number}: a second [Interface] section - "
+                        f"a WireGuard configuration has exactly one")
+                seen_interface = True
+                section = "interface"
+            elif head == "peer":
+                conf.peers.append({})
+                section = "peer"
+            else:
+                raise UnreadableWireGuardConfig(
+                    f"{source}:{number}: unknown section [{line[1:-1].strip()}]"
+                    f" - only [Interface] and [Peer] exist")
+            continue
+
+        if "=" not in line:
+            raise UnreadableWireGuardConfig(
+                f"{source}:{number}: not a `key = value` line: {line!r}")
+
+        name, _, value = line.partition("=")
+        name = name.strip()
+        value = value.strip()
+        canonical = _WG_CANONICAL.get(name.lower())
+
+        if canonical is None:
+            raise UnreadableWireGuardConfig(
+                f"{source}:{number}: unknown key {name!r}. Nothing was "
+                f"imported - a configuration that is read by halves is "
+                f"worse than one that is refused")
+
+        if section is None:
+            raise UnreadableWireGuardConfig(
+                f"{source}:{number}: {canonical} stands before any "
+                f"[Interface] or [Peer] section")
+
+        if canonical in WG_HOOK_KEYS:
+            # Aufgehoben, nicht angewandt und nicht verschwiegen.
+            conf.refused.append((number, canonical))
+            continue
+
+        allowed = WG_INTERFACE_KEYS if section == "interface" else WG_PEER_KEYS
+        if canonical not in allowed:
+            raise UnreadableWireGuardConfig(
+                f"{source}:{number}: {canonical} does not belong in a "
+                f"[{section.capitalize()}] section")
+
+        target = conf.interface if section == "interface" else conf.peers[-1]
+        if canonical == "AllowedIPs" and canonical in target:
+            # wg-quick erlaubt mehrere AllowedIPs-Zeilen je Gegenstelle
+            # und haengt sie aneinander. Die einzige Wiederholung, die
+            # kein Fehler ist.
+            target[canonical] = f"{target[canonical]},{value}"
+            continue
+        if canonical in target:
+            raise UnreadableWireGuardConfig(
+                f"{source}:{number}: {canonical} appears twice in the same "
+                f"section")
+        target[canonical] = value
+
+    if not seen_interface:
+        raise UnreadableWireGuardConfig(
+            f"{source}: no [Interface] section - this is not a WireGuard "
+            f"configuration")
+    return conf
+
+
+def _wg_list(value: str) -> list[str]:
+    """`10.0.0.0/8, 192.168.0.0/16` als Liste, Leeres entfernt."""
+    return [piece.strip() for piece in value.replace(" ", ",").split(",")
+            if piece.strip()]
+
+
+def _wg_number(value: str, *, field: str) -> int:
+    try:
+        return int(value)
+    except ValueError:
+        raise UnreadableWireGuardConfig(
+            f"{field} is not a number: {value!r}") from None
+
+
+def wireguard_document(conf: WireGuardConf, *, private_key_file: str = "",
+                       public_key: str = "",
+                       preshared_key_files: Sequence[str] | None = None,
+                       ) -> dict[str, Any]:
+    """Der Abschnitt, der in user-settings.json darf - OHNE Geheimnisse.
+
+    Der private Schluessel und die Gegenstellen-PSKs stehen hier
+    ABSICHTLICH nicht. Dieses Dokument wird vom Stil-Erzeuger gelesen,
+    von `zepos-settings` ausgegeben und vom Doktor angefasst; ein
+    Geheimnis darin waere ein Geheimnis in vier Programmen. Getragen
+    wird nur der DATEINAME, unter dem der Schluessel liegt - siehe
+    write_wireguard_secret().
+    """
+    files = list(preshared_key_files or [])
+    peers = []
+    for index, peer in enumerate(conf.peers):
+        peers.append({
+            "public_key": peer.get("PublicKey", ""),
+            "endpoint": peer.get("Endpoint", ""),
+            "allowed_ips": _wg_list(peer.get("AllowedIPs", "")),
+            "keepalive": (_wg_number(peer["PersistentKeepalive"],
+                                     field="PersistentKeepalive")
+                          if peer.get("PersistentKeepalive") else 0),
+            "preshared_key_file": files[index] if index < len(files) else "",
+        })
+
+    interface = conf.interface
+    return {
+        "addresses": _wg_list(interface.get("Address", "")),
+        "listen_port": (_wg_number(interface["ListenPort"], field="ListenPort")
+                        if interface.get("ListenPort") else 0),
+        "mtu": (_wg_number(interface["MTU"], field="MTU")
+                if interface.get("MTU") else 0),
+        "private_key_file": private_key_file,
+        "public_key": public_key,
+        "peers": peers,
+    }
+
+
+def wireguard_dns(conf: WireGuardConf) -> dict[str, Any]:
+    """Was `DNS =` aus der Datei in den bestehenden DNS-Reiter bringt.
+
+    Ein Eintrag, der keine Adresse ist, ist bei wg-quick eine
+    Suchdomaene. Beides landet dort, wo ZepOS es fuer IPsec schon fuehrt
+    (vpn.dns), damit es EINEN DNS-Reiter gibt und nicht zwei.
+    """
+    servers, domains = [], []
+    for entry in _wg_list(conf.interface.get("DNS", "")):
+        (servers if re.fullmatch(r"[0-9a-fA-F:.]+", entry)
+         else domains).append(entry)
+    return {"servers": servers, "search_domain": " ".join(domains)}
+
+
+def wireguard_conf_text(document: dict[str, Any], private_key: str,
+                        dns: dict[str, Any] | None = None,
+                        preshared_keys: Sequence[str] | None = None) -> str:
+    """Unsere Einstellungen zurueck in wg-quick-Syntax.
+
+    Das ist die Datei, die `nmcli connection import` bekommt - der
+    einzige Weg, auf dem der private Schluessel NetworkManager erreicht,
+    ohne durch eine Befehlszeile zu gehen (siehe den Abschnitt oben).
+
+    Sie traegt KEINE Haken-Zeile. Was aus einer fremden Datei an
+    PreUp/PostUp kam, ist beim Einlesen abgelehnt worden und kommt hier
+    nicht wieder heraus - der Text, den NetworkManager zu sehen bekommt,
+    ist unserer und nicht der fremde.
+    """
+    secrets = list(preshared_keys or [])
+    lines = ["[Interface]", f"PrivateKey = {private_key}"]
+    if document.get("addresses"):
+        lines.append("Address = " + ", ".join(document["addresses"]))
+    if document.get("listen_port"):
+        lines.append(f"ListenPort = {document['listen_port']}")
+    if document.get("mtu"):
+        lines.append(f"MTU = {document['mtu']}")
+    entries = list((dns or {}).get("servers") or [])
+    domain = str((dns or {}).get("search_domain") or "").strip()
+    if domain:
+        entries.extend(domain.split())
+    if entries:
+        lines.append("DNS = " + ", ".join(entries))
+
+    for index, peer in enumerate(document.get("peers") or []):
+        lines.extend(["", "[Peer]", f"PublicKey = {peer.get('public_key', '')}"])
+        if index < len(secrets) and secrets[index]:
+            lines.append(f"PresharedKey = {secrets[index]}")
+        if peer.get("allowed_ips"):
+            lines.append("AllowedIPs = " + ", ".join(peer["allowed_ips"]))
+        if peer.get("endpoint"):
+            lines.append(f"Endpoint = {peer['endpoint']}")
+        if peer.get("keepalive"):
+            lines.append(f"PersistentKeepalive = {peer['keepalive']}")
+    return "\n".join(lines) + "\n"
+
+
+# --------------------------------------------------------------------
+# Geheimnisse: 0600 vom ersten Byte, nie in einer Befehlszeile
+# --------------------------------------------------------------------
+
+def wireguard_key_dir(config_home: str | None = None) -> Path:
+    root = (config_home or os.environ.get("XDG_CONFIG_HOME")
+            or f"{os.path.expanduser('~')}/.config")
+    return Path(root) / "wireguard"
+
+
+def write_wireguard_secret(name: str, secret: str,
+                           config_home: str | None = None) -> Path:
+    """Einen Schluessel ablegen - 0600 vom ersten Byte an.
+
+    `os.open` mit O_CREAT|O_EXCL|O_WRONLY und mode=0o600 statt
+    open()+chmod: `echo > f; chmod 600 f` endet bei 0600 und war
+    dazwischen fuer alle lesbar, und genau diesen Zwischenzustand misst
+    tests/src/test_vpn_secrets.py - von innerhalb der Stubs, mit
+    `umask 000` im Kind. O_EXCL heisst ausserdem, dass uns die Datei
+    gehoert, die wir anlegen: eine vorhandene Datei oder ein Symlink an
+    dieser Stelle laesst das Oeffnen scheitern, statt durch ihn hindurch
+    zu schreiben. Dieselbe Begruendung wie settings.save().
+
+    Das Verzeichnis bekommt 0700 - anders als
+    ~/.config/strongswan, das 0755 traegt und dessen einzelne Datei
+    allein den Schutz leistet (GEMESSEN am 21.08.2026 per `stat`:
+    `drwxr-xr-x` fuer das Verzeichnis, `-rw-------` fuer psk). Hier
+    liegen mehrere Schluessel, und ihre blossen NAMEN verraten schon,
+    welche Gegenstellen es gibt.
+    """
+    directory = wireguard_key_dir(config_home)
+    directory.mkdir(parents=True, exist_ok=True)
+    os.chmod(directory, 0o700)
+    target = directory / name
+    # Neu anlegen statt ueberschreiben, damit ein einmal zu weit
+    # geoeffneter Speicher nicht zu weit geoeffnet bleibt - dasselbe,
+    # was Gio.FileCreateFlags.REPLACE_DESTINATION im Einstellungsfenster
+    # tut.
+    target.unlink(missing_ok=True)
+    handle = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        os.write(handle, (secret.strip() + "\n").encode("utf-8"))
+    finally:
+        os.close(handle)
+    return target
+
+
+def read_wireguard_secret(path: Path) -> str:
+    return path.read_text(encoding="utf-8").strip()
+
+
+def generate_wireguard_key(runner: Runner = subprocess.run) -> str:
+    """`wg genkey`. Der Schluessel kommt ueber die AUSGABE, nie als Argument."""
+    completed = runner(["wg", "genkey"], capture_output=True, text=True,
+                       timeout=5)
+    if completed.returncode != 0:
+        raise UnreadableWireGuardConfig(
+            "wg genkey failed - is wireguard-tools installed? "
+            f"{(completed.stderr or '').strip()}")
+    return (completed.stdout or "").strip()
+
+
+def public_wireguard_key(private_key: str,
+                         runner: Runner = subprocess.run) -> str:
+    """`wg pubkey`, mit dem Schluessel auf der EINGABE.
+
+    Nicht als Argument: /proc/<pid>/cmdline ist fuer jedes Konto der
+    Maschine lesbar, solange der Prozess laeuft, und dieser hier laeuft
+    nur Millisekunden - aber ein Geheimnis, das nur kurz sichtbar ist,
+    ist ein sichtbares Geheimnis. Dieselbe Regel, aus der das
+    Sudo-Passwort aus vpn-connect.sh verschwunden ist.
+    """
+    try:
+        completed = runner(["wg", "pubkey"], input=private_key.strip() + "\n",
+                           capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        # Ohne wireguard-tools gibt es keinen oeffentlichen Schluessel zu
+        # zeigen - aber die eingelesene Datei ist deswegen nicht
+        # unbrauchbar, und ein Absturz beim Einlesen waere eine harte
+        # Antwort auf ein weiches Problem. Das Feld bleibt leer, das
+        # Fenster zeigt es leer, und der Schluessel ist trotzdem
+        # gespeichert.
+        return ""
+    if completed.returncode != 0:
+        return ""
+    return (completed.stdout or "").strip()
+
+
+# --------------------------------------------------------------------
+# NetworkManager: anlegen und abfragen
+# --------------------------------------------------------------------
+
+def nm_import_argv(conf_file: str) -> list[str]:
+    """Der Einlesebefehl. Ein PFAD, kein Schluessel."""
+    return ["nmcli", "connection", "import", "type", WG_KIND, "file", conf_file]
+
+
+def nm_own_argv(connection: str, user: str, *,
+                autoconnect: bool = False) -> list[str]:
+    """Die Verbindung dem Konto zuschreiben - ohne jedes Geheimnis.
+
+    `connection.permissions user:<konto>` ist der Grund, aus dem ein
+    ZepOS-Konto OHNE wheel keinen polkit-Dialog sieht: NetworkManager
+    prueft dann modify.own (allow_active=yes) statt modify.system.
+    GEMESSEN am 21.08.2026, siehe der Abschnitt am Kopf dieses Teils.
+
+    `autoconnect no`, weil ein VPN eine Handlung ist und kein Zustand -
+    dieselbe Haltung, aus der die IPsec-Seite `start_action = trap`
+    fuehrt und nicht `start`.
+    """
+    return ["nmcli", "connection", "modify", connection,
+            "connection.permissions", f"user:{user}",
+            "connection.autoconnect", "yes" if autoconnect else "no"]
+
+
+def nm_state_argv(connection: str) -> list[str]:
+    return ["nmcli", "-t", "-f", "GENERAL.STATE,IP4.ADDRESS",
+            "connection", "show", connection]
+
+
+def parse_nm_state(report: str) -> tuple[str, str]:
+    """(Zustand, Adresse) aus `nmcli -t -f GENERAL.STATE,IP4.ADDRESS`.
+
+    Das Feld heisst `IP4.ADDRESS[1]`, nicht `IP4.ADDRESS` - die eckige
+    Klammer ist eine Nummer und keine Zierde, und ein Vergleich auf den
+    blossen Namen findet sie nie. Der Wert kommt mit Praefix
+    (`10.9.0.2/24`); zurueck geht die blosse Adresse, weil das der
+    Wert ist, den `--status` seit jeher nennt.
+    """
+    state, address = "", ""
+    for line in report.splitlines():
+        field, _, value = line.partition(":")
+        field, value = field.strip(), value.strip()
+        if field == "GENERAL.STATE":
+            state = value
+        elif field.startswith("IP4.ADDRESS") and not address:
+            address = value.split("/")[0]
+    return state, address
+
+
+def wireguard_status(connection: str,
+                     runner: Runner = subprocess.run) -> tuple[str, str]:
+    """connected | stale | disconnected, in genau dem Vertrag von tunnel_status().
+
+    Vier Leser teilen sich diese eine Zeile Text - ags-vpn.template,
+    ags-network-scripts.template, vpn-control.sh und vpn-watcher.sh -
+    und keiner von ihnen darf wissen muessen, welche Bauart gerade
+    eingestellt ist. Deshalb hat die WireGuard-Antwort dieselben drei
+    Woerter und dieselbe Bedeutung:
+
+      connected      NetworkManager fuehrt die Verbindung als aktiviert
+                     UND nennt eine Adresse.
+      stale          aktiviert, aber ohne Adresse: die Schnittstelle
+                     steht und traegt nichts. Genau die halbe Verbindung,
+                     fuer die es bei IPsec `stale` gibt.
+      disconnected   alles andere, die fehlende Auskunft eingeschlossen.
+                     Ohne Antwort wird nichts behauptet - dieselbe
+                     Zurueckhaltung wie bei tunnel_status().
+    """
+    if not connection:
+        return DISCONNECTED, ""
+    state, address = parse_nm_state(_run(runner, nm_state_argv(connection)))
+    if state != "activated":
+        return DISCONNECTED, ""
+    if not address:
+        return STALE, ""
+    return CONNECTED, address
+
+
+def vpn_kind(settings: dict[str, Any]) -> str:
+    """Welche Bauart eingestellt ist - und im Zweifel IPsec.
+
+    Die Vorgabe ist NICHT geraten und darf es nie werden: jede
+    Installation, die es vor dem 21.08.2026 gab, hat keinen Schluessel
+    `kind`, und fuer sie muss jeder Pfad Zeile fuer Zeile der heutige
+    bleiben. Ein unbekannter Wert antwortet ebenfalls "ipsec" - eine
+    vertippte Bauart darf nicht in eine Verbindung fuehren, die der
+    Nutzer nicht gemeint hat.
+    """
+    section = settings.get("vpn") if isinstance(settings, dict) else None
+    value = (section or {}).get("kind") if isinstance(section, dict) else None
+    return value if value in VPN_KINDS else IPSEC_KIND
+
+
+# --------------------------------------------------------------------
 # the command line the artifacts ask through
 # --------------------------------------------------------------------
 
 USAGE = """usage: vpn.py --virtual-address | --tunnel-health
                  | --status | --address-present ADDRESS
+                 | --wg-import FILE | --wg-genkey NAME
+                 | --wg-apply | --wg-up | --wg-down
 
   --virtual-address    read `swanctl --list-sas` output on standard input
                        and print the virtual address it reports.
@@ -625,10 +1146,127 @@ USAGE = """usage: vpn.py --virtual-address | --tunnel-health
   --tunnel-health      same input; prints the number of installed
                        CHILD_SAs. exit 0 healthy, 1 half-up, 2 no tunnel.
   --status             print `connected|stale|disconnected` and, when one
-                       was recorded, the tunnel's address.
+                       was recorded, the tunnel's address. Which half
+                       answers is decided by `vpn.kind` in the settings.
   --address-present A  print A's address/prefix if it is configured on an
                        interface; exit 1 if it is not.
+  --wg-import FILE     read a wg-quick configuration, store its secrets
+                       at 0600 and print the settings section as JSON.
+                       exit 0 taken over whole, 3 taken over with lines
+                       refused (they are named in `refused`), 65 refused
+                       outright with file and line on stderr.
+  --wg-genkey NAME     create a WireGuard key pair, store the private
+                       half as NAME at 0600, print the public half.
+  --wg-apply           build the NetworkManager connection from the
+                       settings. The private key travels as a FILE.
+  --wg-up / --wg-down  activate / deactivate that connection.
 """
+
+# Der eigene Rueckgabewert fuer "eingelesen, aber Zeilen abgelehnt". Ein
+# Aufrufer, der die abgelehnten Haken-Zeilen uebergehen will, muss das
+# damit AKTIV tun - `exit 0` haette ihm erlaubt, sie nicht zu bemerken.
+WG_IMPORT_REFUSED = 3
+
+
+def _settings_document() -> dict[str, Any]:
+    """Die Einstellungen, oder {} - fuer einen Leser, der nur fragt.
+
+    `--status` laeuft mehrmals je Minute aus der Leiste und aus zwei
+    Widgets. Ein Traceback ueber eine unlesbare Einstellungsdatei waere
+    dort kein Fehlerbericht, sondern eine Leiste, die stehenbleibt - und
+    die Antwort auf "welche Bauart?" ist ohne lesbare Datei ohnehin
+    "die, die es vorher schon gab", also IPsec.
+    """
+    try:
+        try:
+            from .settings import load as _load
+        except ImportError:
+            from settings import load as _load
+        return _load()
+    except (ValueError, OSError):
+        return {}
+
+
+def _wg_connection_name(document: dict[str, Any]) -> str:
+    section = document.get("vpn") if isinstance(document, dict) else None
+    name = (section or {}).get("connection_name") if isinstance(section, dict) else None
+    return str(name or "work")
+
+
+def _wg_section(document: dict[str, Any]) -> dict[str, Any]:
+    section = document.get("vpn") if isinstance(document, dict) else None
+    block = (section or {}).get(WG_KIND) if isinstance(section, dict) else None
+    return block if isinstance(block, dict) else {}
+
+
+def _wg_dns(document: dict[str, Any]) -> dict[str, Any]:
+    section = document.get("vpn") if isinstance(document, dict) else None
+    block = (section or {}).get("dns") if isinstance(section, dict) else None
+    return block if isinstance(block, dict) else {}
+
+
+def _wg_apply(document: dict[str, Any],
+              runner: Runner = subprocess.run) -> int:
+    """Die Verbindung aus den Einstellungen bauen.
+
+    Die .conf wird in das Laufzeitverzeichnis des Nutzers geschrieben
+    (ein tmpfs, das nur ihm gehoert und beim Abmelden geleert wird),
+    0600, und danach GELOESCHT - auch wenn `nmcli` scheitert. Sie traegt
+    den privaten Schluessel, und sie ist der einzige Grund, aus dem er
+    NICHT in einer Befehlszeile steht.
+    """
+    block = _wg_section(document)
+    name = _wg_connection_name(document)
+    key_file = str(block.get("private_key_file") or "")
+    if not key_file:
+        sys.stderr.write("no WireGuard private key is configured\n")
+        return 1
+    key_path = wireguard_key_dir() / key_file
+    try:
+        private_key = read_wireguard_secret(key_path)
+    except OSError as exc:
+        sys.stderr.write(f"{key_path}: {exc}\n")
+        return 1
+
+    secrets = []
+    for peer in block.get("peers") or []:
+        stored = str(peer.get("preshared_key_file") or "")
+        try:
+            secrets.append(read_wireguard_secret(wireguard_key_dir() / stored)
+                           if stored else "")
+        except OSError:
+            secrets.append("")
+
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR")
+                   or f"/run/user/{os.getuid()}") / "zepos-vpn"
+    runtime.mkdir(parents=True, exist_ok=True)
+    os.chmod(runtime, 0o700)
+    # `nmcli connection import` benennt die Verbindung nach dem
+    # DATEINAMEN - deshalb heisst sie hier wie die Verbindung heissen
+    # soll, statt einen Zufallsnamen zu tragen, den wir danach
+    # umbenennen muessten.
+    conf_file = runtime / f"{name}.conf"
+    conf_file.unlink(missing_ok=True)
+    handle = os.open(conf_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        os.write(handle, wireguard_conf_text(
+            block, private_key, _wg_dns(document), secrets).encode("utf-8"))
+    finally:
+        os.close(handle)
+
+    try:
+        for argv in (nm_import_argv(str(conf_file)),
+                     nm_own_argv(name, os.environ.get("USER")
+                                 or str(os.getuid()))):
+            completed = runner(argv, capture_output=True, text=True,
+                               timeout=30)
+            if completed.returncode != 0:
+                sys.stderr.write((completed.stderr or "").strip() + "\n")
+                return 1
+    finally:
+        conf_file.unlink(missing_ok=True)
+    print(name)
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -657,9 +1295,93 @@ def main(argv: Sequence[str] | None = None) -> int:
         return HEALTH_EXIT[tunnel_health(report)]
 
     if query == "--status":
-        state, address = tunnel_status()
+        # Welche Haelfte antwortet, entscheidet `vpn.kind` - und im
+        # Zweifel IPsec, siehe vpn_kind(). Der Vertrag nach aussen ist
+        # in beiden Faellen derselbe: ein Wort, und dahinter, wenn es
+        # eine gibt, die Adresse.
+        document = _settings_document()
+        if vpn_kind(document) == WG_KIND:
+            state, address = wireguard_status(_wg_connection_name(document))
+        else:
+            state, address = tunnel_status()
         print(state if not address else f"{state} {address}")
         return 0
+
+    if query == "--wg-import":
+        if len(arguments) < 2:
+            sys.stderr.write(USAGE)
+            return 64
+        source = arguments[1]
+        try:
+            conf = parse_wg_conf(Path(source).read_text(encoding="utf-8"),
+                                 source)
+        except OSError as exc:
+            sys.stderr.write(f"{source}: {exc}\n")
+            return 65
+        except UnreadableWireGuardConfig as exc:
+            sys.stderr.write(f"{exc}\n")
+            return 65
+
+        document = _settings_document()
+        name = _wg_connection_name(document)
+        private_key = conf.interface.get("PrivateKey", "")
+        key_file = ""
+        if private_key:
+            key_file = write_wireguard_secret(f"{name}.key", private_key).name
+        stored = []
+        for index, peer in enumerate(conf.peers, start=1):
+            secret = peer.get("PresharedKey", "")
+            stored.append(write_wireguard_secret(f"{name}-peer{index}.psk",
+                                                 secret).name
+                          if secret else "")
+        payload = {
+            "wireguard": wireguard_document(
+                conf, private_key_file=key_file,
+                public_key=public_wireguard_key(private_key) if private_key
+                else "",
+                preshared_key_files=stored),
+            "dns": wireguard_dns(conf),
+            # Die abgelehnten Zeilen fahren MIT. Sie sind der Grund fuer
+            # den eigenen Rueckgabewert unten, und der Aufrufer zeigt
+            # sie - eine Datei, die halb ankommt und deren Rest still
+            # verschwindet, ist schlimmer als eine Fehlermeldung.
+            "refused": [[number, key] for number, key in conf.refused],
+        }
+        print(json.dumps(payload, indent=2))
+        if conf.refused:
+            for number, key in conf.refused:
+                sys.stderr.write(
+                    f"{source}:{number}: {key} was NOT taken over - it runs "
+                    f"commands, and ZepOS connects through NetworkManager, "
+                    f"which does not.\n")
+            return WG_IMPORT_REFUSED
+        return 0
+
+    if query == "--wg-genkey":
+        if len(arguments) < 2:
+            sys.stderr.write(USAGE)
+            return 64
+        try:
+            private_key = generate_wireguard_key()
+        except (UnreadableWireGuardConfig, OSError,
+                subprocess.SubprocessError) as exc:
+            sys.stderr.write(f"{exc}\n")
+            return 1
+        write_wireguard_secret(arguments[1], private_key)
+        print(public_wireguard_key(private_key))
+        return 0
+
+    if query == "--wg-apply":
+        return _wg_apply(_settings_document())
+
+    if query in ("--wg-up", "--wg-down"):
+        name = _wg_connection_name(_settings_document())
+        verb = "up" if query == "--wg-up" else "down"
+        completed = subprocess.run(["nmcli", "connection", verb, name],
+                                   capture_output=True, text=True, timeout=60)
+        if completed.returncode != 0:
+            sys.stderr.write((completed.stderr or "").strip() + "\n")
+        return completed.returncode
 
     if query == "--address-present":
         if len(arguments) < 2:

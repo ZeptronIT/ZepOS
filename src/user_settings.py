@@ -149,6 +149,11 @@ DEFAULT_SETTINGS = {
     # The tuning values below are not identifying and stay, so a user who
     # fills in a server and a network gets a tunnel that works.
     "vpn": {
+        # Welche Bauart: "ipsec" (strongSwan) oder "wireguard"
+        # (NetworkManager). Vorgabe "ipsec", nie geraten - jede
+        # Installation von vor dem 21.08.2026 hat diesen Schluessel
+        # nicht und muss auf ihrem bisherigen Pfad bleiben.
+        "kind": "ipsec",
         "server": "",
         "username": "",
         "connection_name": "work",
@@ -188,6 +193,29 @@ DEFAULT_SETTINGS = {
         "dns": {
             "servers": [],
             "search_domain": ""
+        },
+        # WireGuard, seit dem 21.08.2026 die zweite Bauart. Rein
+        # ADDITIV, und `schema_version` bleibt darum 1: load()
+        # weist jede andere Version ab, eine Wanderung gibt es
+        # nicht, und get_user_vpn_setting() faellt je Schluessel auf
+        # seine Vorgabe zurueck. Eine Installation von vorher hat
+        # kein `kind`, bekommt "ipsec" und laeuft Zeile fuer Zeile
+        # weiter wie bisher.
+        #
+        # KEIN GEHEIMNIS STEHT HIER. `private_key_file` und
+        # `preshared_key_file` tragen DATEINAMEN, nicht Schluessel:
+        # dieses Dokument liest der Stil-Erzeuger, gibt
+        # `zepos-settings` aus und fasst der Doktor an. Die
+        # Schluessel liegen unter ~/.config/wireguard, 0600 vom
+        # ersten Byte, Verzeichnis 0700 - siehe
+        # src/vpn.py::write_wireguard_secret().
+        "wireguard": {
+            "addresses": [],
+            "listen_port": 0,
+            "mtu": 0,
+            "private_key_file": "",
+            "public_key": "",
+            "peers": [],
         },
         "xauth_enabled": False,
         "debug": False

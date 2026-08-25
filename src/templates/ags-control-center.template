@@ -84,7 +84,23 @@ const SCRIPTS = {
   // Skriptpfad ("ich sehe bei kontrollzentrum immernoch die pfade bei
   // netzwerk und verbindungen ... auch bei bluetooth").
   status: `${CONFIG_HOME}/ags/scripts/status.sh`,
-  vpnControl: `${HOME}/.config/ags/scripts/vpn-control.sh`,
+  // `vpnControl` STAND HIER UND IST WEG - 21.08.2026, eigener Fund
+  //
+  //     Genau derselbe Befund wie bei `network` weiter unten in der
+  //     Zeichentabelle: die Tabelle nannte es, und KEINE Zeile dieser
+  //     Datei hat es je gelesen. GEZAEHLT vor dem Loeschen,
+  //     `grep -c "SCRIPTS\.vpnControl"` ueber diese Datei gab 0; der
+  //     einzige Leser von vpn-control.sh im ganzen Baum ist
+  //     ags-vpn.template.
+  //
+  //     Aufgefallen ist es beim Einbau der zweiten VPN-Bauart, und dort
+  //     war es mehr als Unordnung: seit dem 21.08.2026 entscheidet die
+  //     VPN-Seite anhand von `vpn.kind`, OB vpn-control.sh (IPsec) oder
+  //     `vpn.py --wg-down` (WireGuard) trennt. Ein zweiter Ort, der das
+  //     Skript kennt, ist ein zweiter Ort, an dem diese Weiche fehlen
+  //     kann - und eine tote Zeile ist genau der Ort, an dem sie
+  //     niemand nachtraegt. Regel 14: geloescht, nicht als veraltet
+  //     markiert.
   helpersLauncher: `hyprctl hyprlaunch:helpers`,
   privacy: `${CONFIG_HOME}/ags/scripts/privacy.sh`,
   media: `${CONFIG_HOME}/ags/scripts/media.sh`,

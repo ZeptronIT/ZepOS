@@ -46,6 +46,7 @@ from vpn import (
     nonblank_entries,
     routed_networks_line,
     swanctl_children,
+    vpn_kind,
 )
 
 # =============================================================================
@@ -319,6 +320,37 @@ def vpn_list_setting(key):
 def vpn_routed_networks():
     """Get the configured routed networks, blanks removed."""
     return vpn_list_setting("routed_networks")
+
+def vpn_kind_setting():
+    """Welche Bauart eingestellt ist - "ipsec" oder "wireguard".
+
+    Ueber vpn.vpn_kind() und nicht ueber ein eigenes get_user_vpn_setting
+    hier: die Vorgabe "ipsec" und die Ablehnung eines vertippten Wertes
+    sollen an EINER Stelle stehen. Dieses Projekt hat dieselbe Kopie bei
+    den Vorgabefarben dreimal bezahlt (siehe der Kopf von src/brand.py).
+    """
+    return vpn_kind(USER_SETTINGS)
+
+def vpn_wireguard_block():
+    """Der WireGuard-Abschnitt, als JSON-Text fuer die Vorlage.
+
+    EIN Platzhalter statt sechs, und das ist kein Sparen an Zeichen: das
+    Einstellungsfenster baut seine Vorgaben aus Platzhaltern
+    (DEFAULT_VPN_SETTINGS in ags-vpn-settings.template), und ein
+    Speichern ohne Bearbeitung schreibt genau diese Vorgaben zurueck.
+    Wenn Erzeuger und Dialog zwei Mengen von Schluesseln fuehren, faellt
+    beim naechsten hinzugefuegten Feld genau eine davon hinten runter -
+    und der Nutzer merkt es an einem Tunnel, der etwas anderes aushandelt
+    als der Dialog anzeigt. Das ist bei Phase 1 schon einmal passiert;
+    der Kommentar ueber DEFAULT_VPN_SETTINGS erzaehlt es.
+
+    Ein JSON-Text ist ausserdem das einzige, was eine Liste von
+    Gegenstellen ueberhaupt durch einen {{STYLE_*}}-Platzhalter bringt.
+    """
+    block = get_user_vpn_setting("wireguard", None)
+    if not isinstance(block, dict):
+        block = settings_module.defaults()["vpn"]["wireguard"]
+    return json.dumps(block)
 
 def vpn_children_block():
     """
@@ -1694,6 +1726,16 @@ _FIXED_STYLE_VARIABLES = {
     # a stranger's installation came pre-aimed at a company they had
     # never heard of. An empty value reaches the generated connect
     # script, which refuses to dial and says which setting is missing.
+    # Welche Bauart das Fenster zeigt und welche Haelfte von vpn.py
+    # antwortet. "ipsec" ist die Vorgabe und bleibt es fuer jede
+    # Installation, die es vor dem 21.08.2026 gab - siehe
+    # src/vpn.py::vpn_kind().
+    "STYLE_VPN_KIND": vpn_kind_setting(),
+    # Der ganze WireGuard-Abschnitt als JSON-Text, siehe
+    # vpn_wireguard_block() oben. Traegt KEIN Geheimnis - nur
+    # Dateinamen, den eigenen oeffentlichen Schluessel, Endpunkte und
+    # erlaubte Netze.
+    "STYLE_VPN_WIREGUARD": vpn_wireguard_block(),
     "STYLE_VPN_SERVER": get_user_vpn_setting("server", ""),
     "STYLE_VPN_USERNAME": get_user_vpn_setting("username", ""),
     "STYLE_VPN_CONNECTION_NAME": get_user_vpn_setting("connection_name", "work"),
