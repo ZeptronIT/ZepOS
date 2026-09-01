@@ -578,6 +578,54 @@ LAYER_SHELL_CALLS = ("gtk_layer_init_for_window", "LayerShell.init_for_window")
 FULL_SCREEN_MASKS: dict[str, str] = {}
 
 
+# Verzeichnisse, in denen ein Treffer KEIN eigenes Programm dieses
+# Baums ist. Jeder Eintrag steht aus einem eigenen Grund da:
+#
+#   tests/      baut Attrappen, um genau diese Programme zu messen.
+#   .venv/      fremder Code, mit pip hereingekommen.
+#   out/        das Erzeugte eines Laufs, nicht seine Quelle.
+#   iso/work/   NACHGETRAGEN am 22.08.2026. mkarchiso legt dort das
+#               Wurzeldateisystem des Mediums an, und darin liegen die
+#               INSTALLIERTEN Dateien der eigenen Pakete - beim Fund
+#               iso/work/mkarchiso-smoke/x86_64/airootfs/usr/share/
+#               zepos-menu/zepos_menu/window.py eine BYTEWEISE Kopie von
+#               menu/zepos_menu/window.py (sha256 4a75ca46... auf beiden
+#               Seiten, gemessen). Das Verzeichnis ist gitignored
+#               (.gitignore:33) und kommt in keinen Klon.
+#
+#               Der Waechter meldete diese Kopie als "Programm ohne
+#               Regel". Das war ein Fehler IM WAECHTER und kein Fund: die
+#               Regel fuer dieses Programm steht, das Original ist in
+#               `known` genannt, und der Baum enthaelt an dieser Stelle
+#               kein zweites Programm - nur dieselbe Datei ein zweites
+#               Mal. Waere es ein Fund, waere er nicht abzustellen: die
+#               Kopie entsteht bei jedem ISO-Bau neu.
+UEBERGANGENE_VERZEICHNISSE = ("tests/", ".venv/", "out/", "iso/work/")
+
+
+def _layer_shell_programme_unter(wurzel: Path) -> set[str]:
+    """Jede Datei unter `wurzel`, die eine Layer-Shell-Flaeche aufzieht.
+
+    Als eigene Funktion mit einer WURZEL als Parameter, damit die
+    Gegenprobe weiter unten sie an einem gebauten Baum ausfuehren kann.
+    Ein Test, der einen Verstoss in DIESEN Baum schriebe, um zu sehen ob
+    der Waechter ihn faengt, koennte das nicht: tests/conftest.py laesst
+    keinen Schreibzugriff ausserhalb von tmp_path zu, und das ist
+    richtig so.
+    """
+    programme: set[str] = set()
+    for path in wurzel.rglob("*"):
+        if not path.is_file() or path.suffix not in (".c", ".cpp", ".py"):
+            continue
+        relative = path.relative_to(wurzel).as_posix()
+        if relative.startswith(UEBERGANGENE_VERZEICHNISSE):
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if any(call in text for call in LAYER_SHELL_CALLS):
+            programme.add(relative)
+    return programme
+
+
 def _own_layer_shell_programs() -> set[str]:
     """Jedes eigene Programm, das eine Layer-Shell-Flaeche aufzieht - im
     Arbeitsbaum UND in den beiden rekonstruierten Plugin-Baeumen, als
@@ -590,17 +638,7 @@ def _own_layer_shell_programs() -> set[str]:
     darum nicht mehr, und `known` unten wuerde zwei Eintraege nennen, die
     programs nie erreicht. Deshalb der zweite Durchgang.
     """
-    programs: set[str] = set()
-    for path in ROOT.rglob("*"):
-        if not path.is_file() or path.suffix not in (".c", ".cpp", ".py"):
-            continue
-        relative = path.relative_to(ROOT).as_posix()
-        # tests/ baut Attrappen, um genau diese Programme zu messen.
-        if relative.startswith(("tests/", ".venv/", "out/")):
-            continue
-        text = path.read_text(encoding="utf-8", errors="replace")
-        if any(call in text for call in LAYER_SHELL_CALLS):
-            programs.add(relative)
+    programs = _layer_shell_programme_unter(ROOT)
 
     for name in ("hyprlaunch", "hyprclipx"):
         plugin_root = plugin_source(name)
@@ -641,6 +679,63 @@ def test_no_program_opens_a_layer_shell_window_without_a_rule():
         f"MEASURE_MODAL_SHARE, oder sie sind eine Maske ueber den ganzen "
         f"Schirm und verankern sich an allen vier Kanten. "
         f"Fehlend: {sorted(known - programs)}")
+
+
+# --------------------------------------------------------------------
+# die Gegenprobe zur Uebergehungsliste (22.08.2026)
+# --------------------------------------------------------------------
+#
+# Eine Liste uebergangener Verzeichnisse ist ein Waechter, der
+# WEGSCHAUT. Die beiden Zusicherungen hier sind der Nachweis, dass er
+# nur dorthin wegschaut, wo nichts ist - die erste, dass er ueberhaupt
+# noch hinsieht, die zweite, dass die neue Zeile den Bauabfall trifft
+# und nicht mehr.
+#
+# Sie laufen an einem GEBAUTEN Baum unter tmp_path und nicht an diesem:
+# tests/conftest.py laesst keinen Schreibzugriff ausserhalb von tmp_path
+# zu, und ein Verstoss, den man in den eigenen Baum schreibt, um ihn
+# gleich wieder zu loeschen, ist genau die Art Test, die eines Tages
+# nicht wieder aufraeumt.
+
+def _verstoss(pfad: Path) -> None:
+    """Eine Datei, die eine Layer-Shell-Flaeche aufzieht."""
+    pfad.parent.mkdir(parents=True, exist_ok=True)
+    pfad.write_text(
+        "# SPDX-License-Identifier: GPL-3.0-or-later\n"
+        f"def zeige(fenster):\n"
+        f"    {LAYER_SHELL_CALLS[1]}(fenster)\n",
+        encoding="utf-8")
+
+
+def test_der_waechter_faengt_ein_neues_programm(tmp_path):
+    """Er sieht noch hin. Ohne diese Zusicherung waere eine
+    Uebergehungsliste, die versehentlich alles trifft, nicht von einem
+    sauberen Baum zu unterscheiden - beide Male stuende dort eine leere
+    Menge."""
+    _verstoss(tmp_path / "src" / "bin" / "neues_fenster.py")
+
+    assert _layer_shell_programme_unter(tmp_path) == {
+        "src/bin/neues_fenster.py"}
+
+
+@pytest.mark.parametrize("verzeichnis", sorted(UEBERGANGENE_VERZEICHNISSE))
+def test_der_waechter_uebergeht_den_bauabfall(tmp_path, verzeichnis):
+    """Und er sieht an den vier Stellen weg, an denen kein eigenes
+    Programm liegen kann.
+
+    DIESELBE DATEI, zweimal abgelegt: einmal dort, wo sie hingehoert,
+    einmal unter dem uebergangenen Verzeichnis. Herauskommen darf nur
+    die erste - genau die Lage, die am 22.08.2026 gemessen wurde, als
+    mkarchiso menu/zepos_menu/window.py byteweise nach
+    iso/work/.../usr/share/zepos-menu/ kopiert hatte und der Waechter
+    daran rot wurde.
+    """
+    _verstoss(tmp_path / "menu" / "zepos_menu" / "window.py")
+    _verstoss(tmp_path / verzeichnis / "airootfs" / "usr" / "share"
+              / "zepos-menu" / "zepos_menu" / "window.py")
+
+    assert _layer_shell_programme_unter(tmp_path) == {
+        "menu/zepos_menu/window.py"}
 
 
 @pytest.mark.parametrize("path,proof", sorted(FULL_SCREEN_MASKS.items()))
