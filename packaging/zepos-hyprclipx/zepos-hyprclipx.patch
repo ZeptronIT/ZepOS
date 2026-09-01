@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# ZepOS-eigene Aenderungen an plugins/hyprclipx (Stand 19.08.2026).
+# ZepOS-eigene Aenderungen an plugins/hyprclipx (Stand 01.09.2026).
 #
 # Dieser Patch ist ZepOS-eigene Arbeit: ein Diff, keine fremde Quelle.
 # Er wird beim Bauen gegen den unveraenderten Baum von
@@ -21,9 +21,17 @@
 # und angepasst. Alle Einzelheiten stehen in den Dateikoepfen selbst
 # (SPDX-License-Identifier: GPL-3.0-or-later fuer die ZepOS-Anteile).
 #
+# Seit dem 01.09.2026 ausserdem: das Einfuegen traf in Firefox die
+# falsche Taste. TERMINAL_IDENTIFIERS traegt "st", und isTerminal()
+# suchte jeden Eintrag als Teilzeichenkette AUCH IM FENSTERTITEL - der
+# bei einem Browser der Titel der SEITE ist. Jede Seite mit "st" im
+# Namen machte Firefox zum Terminal, und es kam Strg+Umschalt+V statt
+# Strg+V. Der Titel entscheidet jetzt nicht mehr mit, kurze Namen
+# werden ganz verglichen, und ein Browser wird zuerst gefragt.
+#
 diff -ruN a/CMakeLists.txt b/CMakeLists.txt
---- a/CMakeLists.txt	2026-08-03 21:09:42.000000000 +0200
-+++ b/CMakeLists.txt	2026-08-12 21:43:58.202848737 +0200
+--- a/CMakeLists.txt	2026-08-03 19:09:42.000000000 +0000
++++ b/CMakeLists.txt	2026-09-01 18:33:15.818663456 +0000
 @@ -1,7 +1,7 @@
  cmake_minimum_required(VERSION 3.19)
  project(hyprclipx
@@ -108,8 +116,8 @@ diff -ruN a/CMakeLists.txt b/CMakeLists.txt
 +    helpers/caret-position.py
 +    DESTINATION lib/hyprclipx)
 diff -ruN a/helpers/caret-position.py b/helpers/caret-position.py
---- a/helpers/caret-position.py	2026-08-03 21:09:42.000000000 +0200
-+++ b/helpers/caret-position.py	2026-08-12 21:48:00.183252041 +0200
+--- a/helpers/caret-position.py	2026-08-03 19:09:42.000000000 +0000
++++ b/helpers/caret-position.py	2026-09-01 18:33:15.818722578 +0000
 @@ -1,10 +1,45 @@
  #!/usr/bin/env python3
 -"""Get text caret position - tries AT-SPI first, then X11 for XWayland apps."""
@@ -189,8 +197,8 @@ diff -ruN a/helpers/caret-position.py b/helpers/caret-position.py
          pos = get_focused_window_position()
  
 diff -ruN a/helpers/collector.py b/helpers/collector.py
---- a/helpers/collector.py	2026-08-03 21:09:42.000000000 +0200
-+++ b/helpers/collector.py	2026-08-12 21:48:24.149388494 +0200
+--- a/helpers/collector.py	2026-08-03 19:09:42.000000000 +0000
++++ b/helpers/collector.py	2026-09-01 18:33:15.818799906 +0000
 @@ -1,7 +1,54 @@
  #!/usr/bin/env python3
 -"""
@@ -737,8 +745,8 @@ diff -ruN a/helpers/collector.py b/helpers/collector.py
          server.start()
      except KeyboardInterrupt:
 diff -ruN a/include/hyprclipx/ClipboardEntry.hpp b/include/hyprclipx/ClipboardEntry.hpp
---- a/include/hyprclipx/ClipboardEntry.hpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/include/hyprclipx/ClipboardEntry.hpp	2026-08-12 21:35:04.879467305 +0200
+--- a/include/hyprclipx/ClipboardEntry.hpp	2026-08-03 19:09:42.000000000 +0000
++++ b/include/hyprclipx/ClipboardEntry.hpp	2026-09-01 18:33:15.818920820 +0000
 @@ -1,5 +1,5 @@
  #pragma once
 -// Data structure matching clipman-daemon's JSON response
@@ -759,8 +767,8 @@ diff -ruN a/include/hyprclipx/ClipboardEntry.hpp b/include/hyprclipx/ClipboardEn
      std::string createdAt;
  };
 diff -ruN a/include/hyprclipx/ClipboardManager.hpp b/include/hyprclipx/ClipboardManager.hpp
---- a/include/hyprclipx/ClipboardManager.hpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/include/hyprclipx/ClipboardManager.hpp	2026-08-12 21:35:11.819515418 +0200
+--- a/include/hyprclipx/ClipboardManager.hpp	2026-08-03 19:09:42.000000000 +0000
++++ b/include/hyprclipx/ClipboardManager.hpp	2026-09-01 18:33:15.818951922 +0000
 @@ -1,6 +1,7 @@
  #pragma once
 -// IPC client for clipman-daemon (Unix socket on /tmp/clipman.sock)
@@ -794,8 +802,8 @@ diff -ruN a/include/hyprclipx/ClipboardManager.hpp b/include/hyprclipx/Clipboard
  };
  
 diff -ruN a/include/hyprclipx/ClipboardRenderer.hpp b/include/hyprclipx/ClipboardRenderer.hpp
---- a/include/hyprclipx/ClipboardRenderer.hpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/include/hyprclipx/ClipboardRenderer.hpp	2026-08-12 21:35:34.116669003 +0200
+--- a/include/hyprclipx/ClipboardRenderer.hpp	2026-08-03 19:09:42.000000000 +0000
++++ b/include/hyprclipx/ClipboardRenderer.hpp	2026-09-01 18:33:15.818993759 +0000
 @@ -1,6 +1,7 @@
  #pragma once
 -// HyprClipX UI — compact horizontal clipboard manager
@@ -893,8 +901,8 @@ diff -ruN a/include/hyprclipx/ClipboardRenderer.hpp b/include/hyprclipx/Clipboar
  };
  
 diff -ruN a/include/hyprclipx/Config.hpp b/include/hyprclipx/Config.hpp
---- a/include/hyprclipx/Config.hpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/include/hyprclipx/Config.hpp	2026-08-12 21:28:08.450215428 +0200
+--- a/include/hyprclipx/Config.hpp	2026-08-03 19:09:42.000000000 +0000
++++ b/include/hyprclipx/Config.hpp	2026-09-01 18:33:15.819044414 +0000
 @@ -1,28 +1,141 @@
 +// SPDX-License-Identifier: BSD-3-Clause
 +//
@@ -1045,8 +1053,8 @@ diff -ruN a/include/hyprclipx/Config.hpp b/include/hyprclipx/Config.hpp
  
  } // namespace hyprclipx
 diff -ruN a/include/hyprclipx/ConfigParser.hpp b/include/hyprclipx/ConfigParser.hpp
---- a/include/hyprclipx/ConfigParser.hpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/include/hyprclipx/ConfigParser.hpp	2026-08-11 23:10:39.932740739 +0200
+--- a/include/hyprclipx/ConfigParser.hpp	2026-08-03 19:09:42.000000000 +0000
++++ b/include/hyprclipx/ConfigParser.hpp	2026-09-01 18:33:15.819083668 +0000
 @@ -1,21 +1,31 @@
 +// SPDX-License-Identifier: BSD-3-Clause
 +//
@@ -1089,8 +1097,8 @@ diff -ruN a/include/hyprclipx/ConfigParser.hpp b/include/hyprclipx/ConfigParser.
  
  } // namespace hyprclipx
 diff -ruN a/include/hyprclipx/Globals.hpp b/include/hyprclipx/Globals.hpp
---- a/include/hyprclipx/Globals.hpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/include/hyprclipx/Globals.hpp	2026-08-12 21:35:16.635548718 +0200
+--- a/include/hyprclipx/Globals.hpp	2026-08-03 19:09:42.000000000 +0000
++++ b/include/hyprclipx/Globals.hpp	2026-09-01 18:33:15.819111056 +0000
 @@ -14,11 +14,15 @@
  void cleanupGlobals();
  void reloadConfig();
@@ -1111,8 +1119,8 @@ diff -ruN a/include/hyprclipx/Globals.hpp b/include/hyprclipx/Globals.hpp
  
  } // namespace hyprclipx
 diff -ruN a/src/ClipboardManager.cpp b/src/ClipboardManager.cpp
---- a/src/ClipboardManager.cpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/src/ClipboardManager.cpp	2026-08-12 21:40:30.775595023 +0200
+--- a/src/ClipboardManager.cpp	2026-08-03 19:09:42.000000000 +0000
++++ b/src/ClipboardManager.cpp	2026-09-01 18:33:15.819156364 +0000
 @@ -1,5 +1,6 @@
 -// IPC client for clipman-daemon via Unix socket
 -// Replaces AGS's execAsync("python3 clipman-client.py ...") calls
@@ -1229,8 +1237,8 @@ diff -ruN a/src/ClipboardManager.cpp b/src/ClipboardManager.cpp
      size_t objStart = 0;
      for (size_t i = arrayStart; i < json.size(); i++) {
 diff -ruN a/src/ClipboardRenderer.cpp b/src/ClipboardRenderer.cpp
---- a/src/ClipboardRenderer.cpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/src/ClipboardRenderer.cpp	2026-08-12 21:43:36.381719434 +0200
+--- a/src/ClipboardRenderer.cpp	2026-08-03 19:09:42.000000000 +0000
++++ b/src/ClipboardRenderer.cpp	2026-09-01 18:34:19.034995396 +0000
 @@ -1,5 +1,7 @@
 -// HyprClipX UI — compact horizontal clipboard manager
 -// GTK4 Layer-Shell window — standalone Wayland client (NOT in compositor!)
@@ -1877,7 +1885,49 @@ diff -ruN a/src/ClipboardRenderer.cpp b/src/ClipboardRenderer.cpp
  
  void ClipboardRenderer::pasteItem(const std::string& uuid, const std::string& itemType) {
      gtk_widget_set_visible(m_window, FALSE);
-@@ -787,7 +710,7 @@
+@@ -769,17 +692,37 @@
+ 
+         bool xw = win.xwayland;
+ 
++        // EIN BROWSER IST NIE EIN TERMINAL, UND ER WIRD ZUERST GEFRAGT
++        //
++        //     Bis zum 01.09.2026 stand die Terminal-Frage vorn. Damit
++        //     entschied sie AUCH UEBER BROWSER: fiel sie
++        //     faelschlich auf "ja", kam der Browser-Zweig nie dran.
++        //     Die Reihenfolge war die zweite Haelfte des Fehlers, den
++        //     isTerminal() oben beschreibt - und sie bleibt eine
++        //     Falle, selbst wenn dort nie wieder etwas verrutscht:
++        //     die beiden Listen koennen sich ueberschneiden ("zen"
++        //     steht bei den Browsern, "st" stand bei den Terminals),
++        //     und dann gewinnt, wer zuerst gefragt wird. Ein Browser
++        //     zuerst zu fragen ist die Antwort, die sich nicht auf die
++        //     Sauberkeit der Listen verlaesst.
++        if (isBrowser(win)) {
++            std::this_thread::sleep_for(std::chrono::milliseconds(100));
++            exec(xw ? "xdotool key --clearmodifiers ctrl+v"
++                     : "wtype -d 25 -M ctrl -k v");
++            return;
++        }
++
+         if (isKittyTerminal(win) && itemType == "text") {
+             if (system("kitty @ send-text --from-clipboard 2>/dev/null") == 0) return;
+         }
+ 
++        // Der Browser-Zweig, der hier stand, ist nach oben gewandert und
++        // KEHRT NICHT ALS ZWEITER ZURUECK: er ist von dort aus
++        // unerreichbar, und zwei Stellen, die dieselbe Taste druecken,
++        // waeren zwei Stellen, an denen sie sich unterscheiden koennen.
+         if (isTerminal(win) && itemType == "text") {
+             exec(xw ? "xdotool key --clearmodifiers ctrl+shift+v"
+                      : "wtype -d 20 -M ctrl -M shift -k v");
+-        } else if (isBrowser(win)) {
+-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+-            exec(xw ? "xdotool key --clearmodifiers ctrl+v"
+-                     : "wtype -d 25 -M ctrl -k v");
+         } else {
+             exec(xw ? "xdotool key --clearmodifiers ctrl+v"
+                      : "wtype -d 15 -M ctrl -k v");
+@@ -787,7 +730,7 @@
      }).detach();
  }
  
@@ -1886,7 +1936,68 @@ diff -ruN a/src/ClipboardRenderer.cpp b/src/ClipboardRenderer.cpp
  
  ClipboardRenderer::WindowInfo ClipboardRenderer::getActiveWindowInfo() {
      WindowInfo info;
-@@ -856,12 +779,12 @@
+@@ -831,20 +774,52 @@
+     return false;
+ }
+ 
++// DER TITEL ENTSCHEIDET NICHT MEHR MIT, UND "st" NICHT MEHR ALS STUECK
++//
++// GEMELDET am 01.09.2026: "bei hyprclipx hat das pasten nicht
++// funktioniert in firefox obwohl ich den eintrag ausgewaehlt hatte".
++//
++// GEFUNDEN: TERMINAL_IDENTIFIERS oben traegt "st" - zwei Buchstaben -,
++// und diese Funktion suchte jeden Eintrag als TEILZEICHENKETTE, auch im
++// FENSTERTITEL. Der Titel eines Browsers ist der Titel der SEITE. Damit
++// galt jedes Firefox-Fenster als Terminal, dessen Seite irgendwo "st"
++// im Namen hat - Test, News, Post, Install, Stack Overflow, "beste",
++// "erste". pasteItem() schickte dann Strg+UMSCHALT+V, und das fuegt in
++// Firefox nichts ein. Die Auswahl des Nutzers war richtig, der Eintrag
++// lag auch in der Zwischenablage; allein der Tastendruck war falsch.
++//
++// ZWEI AENDERUNGEN, UND JEDE HAT IHREN EIGENEN GRUND
++//
++//     DER TITEL FAELLT WEG. Er ist FREMDER INHALT: eine Webseite
++//     bestimmt ihn, und mit ihm bestimmte sie, welche Taste dieses
++//     Programm drueckt. Woran ein Terminal zu erkennen ist, steht in
++//     seiner Klasse und in /proc/<pid>/comm - beides gehoert dem
++//     Programm selbst.
++//
++//     "st" WIRD GANZ VERGLICHEN. Das Terminal heisst wirklich so, der
++//     Eintrag bleibt also - aber als ganzes Wort. Alle uebrigen Namen
++//     sind lang genug, dass ein Stueck-Vergleich sie nicht
++//     verwechselt ("gnome-terminal" steckt in
++//     "gnome-terminal-server"), deshalb bleibt es dort dabei.
++//     Entscheidend ist die Laenge: was kuerzer als vier Zeichen ist,
++//     wird ganz verglichen.
++static bool nenntSich(const std::string& feld, const std::string& name) {
++    if (name.size() < 4) return feld == name;
++    return feld.find(name) != std::string::npos;
++}
++
+ bool ClipboardRenderer::isTerminal(const WindowInfo& win) {
+     std::vector<std::string> fields = {
+-        toLower(win.windowClass), toLower(win.initialClass),
+-        toLower(win.title), toLower(win.initialTitle)
++        toLower(win.windowClass), toLower(win.initialClass)
+     };
++    if (win.pid > 0)
++        fields.push_back(
++            toLower(exec("cat /proc/" + std::to_string(win.pid) + "/comm 2>/dev/null")));
++
+     for (const auto& f : fields) {
+         if (f.empty()) continue;
+         for (const auto& t : TERMINAL_IDENTIFIERS)
+-            if (f.find(t) != std::string::npos) return true;
+-    }
+-    if (win.pid > 0) {
+-        std::string comm = toLower(exec("cat /proc/" + std::to_string(win.pid) + "/comm 2>/dev/null"));
+-        for (const auto& t : TERMINAL_IDENTIFIERS)
+-            if (comm.find(t) != std::string::npos) return true;
++            if (nenntSich(f, t)) return true;
+     }
+     return false;
+ }
+@@ -856,12 +831,12 @@
      return false;
  }
  
@@ -1901,7 +2012,7 @@ diff -ruN a/src/ClipboardRenderer.cpp b/src/ClipboardRenderer.cpp
      int cx = 400, cy = 400;
      int monX = 0, monY = 0, monW = 0, monH = 0;
      {
-@@ -875,7 +798,7 @@
+@@ -875,7 +850,7 @@
          }
      }
  
@@ -1910,7 +2021,7 @@ diff -ruN a/src/ClipboardRenderer.cpp b/src/ClipboardRenderer.cpp
      if (monW <= 0 || monH <= 0) {
          GdkDisplay* display = gdk_display_get_default();
          if (display) {
-@@ -885,7 +808,7 @@
+@@ -885,7 +860,7 @@
                  auto* mon = GDK_MONITOR(g_list_model_get_item(monitors, i));
                  GdkRectangle geo;
                  gdk_monitor_get_geometry(mon, &geo);
@@ -1919,7 +2030,7 @@ diff -ruN a/src/ClipboardRenderer.cpp b/src/ClipboardRenderer.cpp
                  if (cx >= geo.x && cx < geo.x + geo.width &&
                      cy >= geo.y && cy < geo.y + geo.height) {
                      monX = geo.x; monY = geo.y;
-@@ -893,7 +816,7 @@
+@@ -893,7 +868,7 @@
                      g_object_unref(mon);
                      break;
                  }
@@ -1928,7 +2039,7 @@ diff -ruN a/src/ClipboardRenderer.cpp b/src/ClipboardRenderer.cpp
                  if (i == 0) {
                      monX = geo.x; monY = geo.y;
                      monW = geo.width; monH = geo.height;
-@@ -903,7 +826,28 @@
+@@ -903,7 +878,28 @@
          }
      }
  
@@ -1958,7 +2069,7 @@ diff -ruN a/src/ClipboardRenderer.cpp b/src/ClipboardRenderer.cpp
      if (monW > 0 && monH > 0) {
          cx = std::max(cx, monX);
          cx = std::min(cx, monX + monW - 1);
-@@ -911,23 +855,24 @@
+@@ -911,23 +907,24 @@
          cy = std::min(cy, monY + monH - 1);
      }
  
@@ -1991,8 +2102,8 @@ diff -ruN a/src/ClipboardRenderer.cpp b/src/ClipboardRenderer.cpp
  void ClipboardRenderer::loadCaretOffset() {
      if (m_config.userSettingsFile.empty()) return;
 diff -ruN a/src/ConfigParser.cpp b/src/ConfigParser.cpp
---- a/src/ConfigParser.cpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/src/ConfigParser.cpp	2026-08-12 12:45:16.513201420 +0200
+--- a/src/ConfigParser.cpp	2026-08-03 19:09:42.000000000 +0000
++++ b/src/ConfigParser.cpp	2026-09-01 18:33:15.819456880 +0000
 @@ -1,43 +1,45 @@
 -// Configuration file parsing
 +// SPDX-License-Identifier: BSD-3-Clause
@@ -2195,8 +2306,8 @@ diff -ruN a/src/ConfigParser.cpp b/src/ConfigParser.cpp
  
  } // namespace hyprclipx
 diff -ruN a/src/Globals.cpp b/src/Globals.cpp
---- a/src/Globals.cpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/src/Globals.cpp	2026-08-12 21:41:42.740036696 +0200
+--- a/src/Globals.cpp	2026-08-03 19:09:42.000000000 +0000
++++ b/src/Globals.cpp	2026-09-01 18:33:15.819516360 +0000
 @@ -1,5 +1,59 @@
 -// Global instance management (plugin side - NO GTK!)
 -// Uses Hyprland internal APIs for window info, fork+exec for UI
@@ -2495,8 +2606,8 @@ diff -ruN a/src/Globals.cpp b/src/Globals.cpp
          }
  
 diff -ruN a/src/IPCHandler.cpp b/src/IPCHandler.cpp
---- a/src/IPCHandler.cpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/src/IPCHandler.cpp	2026-08-12 21:40:04.309430511 +0200
+--- a/src/IPCHandler.cpp	2026-08-03 19:09:42.000000000 +0000
++++ b/src/IPCHandler.cpp	2026-09-01 18:33:15.819581286 +0000
 @@ -1,5 +1,5 @@
 -// IPC command handling (plugin side - NO GTK!)
 -// Forwards UI commands to hyprclipx-ui via fork+exec
@@ -2506,8 +2617,8 @@ diff -ruN a/src/IPCHandler.cpp b/src/IPCHandler.cpp
  #include "hyprclipx/IPCHandler.hpp"
  #include "hyprclipx/Globals.hpp"
 diff -ruN a/src/main.cpp b/src/main.cpp
---- a/src/main.cpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/src/main.cpp	2026-08-12 21:40:54.270740097 +0200
+--- a/src/main.cpp	2026-08-03 19:09:42.000000000 +0000
++++ b/src/main.cpp	2026-09-01 18:33:15.819625960 +0000
 @@ -1,6 +1,7 @@
 -// HyprClipX - Layer-shell clipboard manager for Hyprland
 -// Plugin entry point - LIGHTWEIGHT (no GTK, no threads)
@@ -2621,8 +2732,8 @@ diff -ruN a/src/main.cpp b/src/main.cpp
 -        3000);
  }
 diff -ruN a/src/main_ui.cpp b/src/main_ui.cpp
---- a/src/main_ui.cpp	2026-08-03 21:09:42.000000000 +0200
-+++ b/src/main_ui.cpp	2026-08-12 21:36:03.457868888 +0200
+--- a/src/main_ui.cpp	2026-08-03 19:09:42.000000000 +0000
++++ b/src/main_ui.cpp	2026-09-01 18:33:15.819673885 +0000
 @@ -1,6 +1,8 @@
 -// HyprClipX UI - Standalone GTK4 process (NOT inside compositor!)
 -// Runs as a normal Wayland client. Receives commands via Unix socket.

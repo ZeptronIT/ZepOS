@@ -147,6 +147,19 @@ depends=('zepos-hyprland>=0.56.1' 'zepos-hyprland<0.57.0'
          'gtk4' 'gtk4-layer-shell' 'pango' 'cairo' 'glib2' 'glibc'
          'libgcc' 'libstdc++'
          'python' 'wl-clipboard'
+         # WER DEN TASTENDRUCK AUSFUEHRT, UND WARUM ER HIER STEHEN MUSS
+         #
+         #     ClipboardRenderer::pasteItem() legt den Eintrag mit
+         #     wl-copy in die Zwischenablage und drueckt DANACH Strg+V -
+         #     mit wtype unter Wayland, mit xdotool fuer XWayland-
+         #     Fenster. Bis zum 01.09.2026 nannte dieses Rezept nur
+         #     wl-clipboard. Auf einer frischen Installation ohne wtype
+         #     landete der Eintrag also in der Zwischenablage, und dann
+         #     geschah NICHTS: exec() hat keinen Rueckgabeweg, das
+         #     fehlende Programm meldet sich nirgends. Die Haelfte, die
+         #     das Fenster nach aussen bewirkt, hing an einem Paket, das
+         #     niemand angefordert hatte.
+         'wtype' 'xdotool'
          'ttf-fira-code' 'ttf-jetbrains-mono-nerd')
 makedepends=('cmake' 'ninja' 'zepos-hyprland')
 
