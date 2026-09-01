@@ -2059,6 +2059,38 @@ export function BarContent(monitorName: string,
         toggles: "network",
       })
 
+      // DAS VPN-SCHILD (Aufgabe 69, 22.08.2026)
+      //
+      //     BESTELLT, woertlich: "ein user hat vorgeschlagen, in die
+      //     waybar im header ein schild mit farbe und tooltip zu machen,
+      //     wo man sieht was der status der vpn ist - nicht verbunden,
+      //     verbunden, error - mit einer farbe verbunden. als icon
+      //     natuerlich auch."
+      //
+      //     Es ist zugleich der erste Weg von der Leiste zum VPN. Seit
+      //     Aufgabe 9 (18.08.2026) ist das VPN eine SEITE der Schale und
+      //     hatte damit weder Taste noch Modul noch Fenster - der Nutzer
+      //     hat selbst fragen muessen, wo die Verbindungsliste steht.
+      //     `toggles: "vpn"` fuehrt genau dorthin: toggleByName()
+      //     (ags-config.template) leitet "vpn" seit jener Aufgabe auf
+      //     `widgets.control.zeigeSeite("vpn", anker)` um. KEIN zweiter
+      //     Weg, kein eigenes Fenster - dieselbe Seite, die auch das
+      //     Kontrollzentrum zeigt.
+      //
+      //     DER TAKT IST FUENF SEKUNDEN UND NICHT ZWEI, und das ist
+      //     gerechnet. Ein Lauf kostet einen Interpreterstart: 42 ms,
+      //     gemessen am 22.08.2026 ueber fuenf Laeufe mit leeren
+      //     Einstellungen. Im Zweisekundentakt waeren das dauerhaft
+      //     2,1 % eines Kerns fuer eine Auskunft, die sich nur aendert,
+      //     wenn der Nutzer selbst schaltet oder ein Tunnel stirbt; bei
+      //     fuenf sind es 0,8 %. Wer gerade schaltet, sieht die
+      //     Aenderung ohnehin zuerst auf der VPN-Seite, die ihren
+      //     eigenen Takt hat (ags-vpn.template).
+      case "custom/vpn": return scriptModule({
+        name, exec: `${SCRIPTS}/vpn.py`, intervalMs: 5000,
+        toggles: "vpn",
+      }, toggle, refit, monitorName)
+
       // GEPRUEFT, NICHT VERGESSEN (Aufgabe 7, 18.08.2026, "Bluetooth wird
       // eine Seite"): `toggles: "bluetooth"` bleibt woertlich stehen und
       // braucht KEINEN Codewechsel hier. `open("bluetooth")` ruft

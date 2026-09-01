@@ -280,6 +280,10 @@ def module_payloads() -> tuple[dict[str, str], dict[str, str]]:
     floating-layouts ohne gespeicherte Anordnung - und die drei
     bedingten (media, updates, privacy), solange nichts spielt, nichts
     ansteht und niemand zuhoert.
+
+    SEIT DEM 22.08.2026 SIND ES SIEBEN: vpn.py kommt dazu, und zwar
+    ebenfalls stumm - eine frische Installation hat keine
+    VPN-Verbindung eingerichtet, und das Schild verschwindet dann.
     """
     modules = {
         "date.sh": f"{_icon('ICON_CALENDAR')}  Di 12.08.2026  14:07",
@@ -305,6 +309,18 @@ def module_payloads() -> tuple[dict[str, str], dict[str, str]]:
         "media.sh": "",
         "updates.sh": "",
         "privacy.sh": "",
+        # DAS VPN-SCHILD, seit dem 22.08.2026 (Aufgabe 69), und es
+        # schweigt hier aus demselben Grund wie die drei darueber: eine
+        # frische Installation hat KEINE VPN-Verbindung eingerichtet
+        # (`vpn: {"active": "", "connections": []}` in
+        # src/settings.py::defaults()), und das Modul verschwindet dann.
+        #
+        # Ein Schild in diesem Bild waere also eines, das auf einer
+        # frisch aufgesetzten Maschine gar nicht dasteht - dieselbe
+        # Falle, die der Absatz ueber hardware-monitor.py oben
+        # beschreibt. Ohne die Attrappe dagegen suchte die Leiste alle
+        # fuenf Sekunden ein Skript, das es im Bauplatz nicht gibt.
+        "vpn.py": "",
     }
     status = {
         "audio": _icon("ICON_VOLUME_HIGH"),

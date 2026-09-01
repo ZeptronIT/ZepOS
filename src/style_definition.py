@@ -3174,8 +3174,83 @@ _modules_right = ["custom/media"]
 # man anklickt, links von ihr stehen.
 _modules_right += ["tray"]
 _modules_right += ["custom/disk"]
+# custom/vpn STEHT AM AEUSSEREN ENDE DER ZUSTANDSGRUPPE, SEIT DEM
+# 22.08.2026 (Aufgabe 69)
+#
+#     BESTELLT: "ein user hat vorgeschlagen, in die waybar im header ein
+#     schild mit farbe und tooltip zu machen, wo man sieht was der status
+#     der vpn ist - nicht verbunden, verbunden, error - mit einer farbe
+#     verbunden. als icon natuerlich auch."
+#
+#     IN DER GRUPPE "ZUSTAND", weil es genau das ist: keine Aktion und
+#     kein Anlasshinweis, sondern eine dauerhafte Auskunft ueber diese
+#     Maschine - dieselbe Art Angabe wie Netz, Bluetooth und Akku. Die
+#     vier Gruppen sind die vom 20.08.2026 (Programme | Zustand |
+#     Hinweise | Aktionen), und der Nutzer hat sie selbst gewaehlt.
+#
+#     WARUM AM AEUSSEREN ENDE DER GRUPPE UND NICHT NEBEN DEM NETZ
+#         Neben dem Netz waere es die naheliegende Nachbarschaft - beide
+#         sagen, wie dieser Rechner am Netz haengt. GEMESSEN am
+#         22.08.2026 mit tests/src/test_bar_headless.py, Vorgabegroesse,
+#         zehn Arbeitsbereiche: an jenem Platz klappt das Schild auf
+#         einem 1366er Notebook als DRITTES ein - hinter custom-disk und
+#         network, vor bluetooth. Es waere dort also gerade auf den
+#         Geraeten unsichtbar, auf denen ein VPN benutzt wird: Notebooks
+#         in fremden Netzen.
+#
+#         Das ist dieselbe Ueberlegung, aus der custom/theme am
+#         17.08.2026 nach aussen gestellt wurde ("weiter vorn waere das
+#         Zeichen auf einem 1366er Schirm als eines der ersten hinter dem
+#         Knopf verschwunden - also genau dort, wo der Nutzer es viermal
+#         vermisst hat"), nur mit hoeherem Einsatz.
+#
+#     UND WARUM HINTER DEM AKKU, WO DIE GRUPPE NACH ENTBEHRLICHKEIT
+#     GEORDNET IST
+#         Weil das Schild die unentbehrlichste Angabe der Gruppe ist. Die
+#         Feldstaerke, der Ladestand und die Lautstaerke stehen alle
+#         ausserdem im Kontrollzentrum, und keine von ihnen kostet etwas,
+#         wenn man sie eine Minute spaeter liest. "Laeuft mein Verkehr
+#         durch den Tunnel?" steht sonst NIRGENDS auf dem Bildschirm, und
+#         wer es falsch beantwortet, hat schon gesendet - dieselbe
+#         Begruendung, die weiter unten fuer custom/privacy steht ("die
+#         einzige Auskunft der Leiste, die etwas kostet, das man nicht
+#         zurueckbekommt").
+#
+#     ES SCHIEBT NICHTS. Das Modul traegt genau ein Zeichen und keinen
+#     Wert - alle Einzelheiten stehen im Kurzhinweis -, seine Breite
+#     steht also im Baum und nicht in der Laufzeit. Die Regel "was
+#     waechst, steht innen" bleibt damit unberuehrt; der Waechter dazu
+#     ist test_kein_wachsendes_modul_steht_rechts_von_einem_festen_
+#     klickziel in tests/src/test_bar_headless.py.
+#
+#     WAS ES KOSTET, GEMESSEN am 22.08.2026 mit
+#     tests/src/test_bar_headless.py (Vorgabegroesse, zehn
+#     Arbeitsbereiche, echte Zeichen):
+#
+#         Schirm   vorher   nachher   eingeklappt (vorher -> nachher)
+#          1024     1020      1020      9 -> 10
+#          1280     1256      1213      5 ->  6
+#          1366     1341      1298      4 ->  5
+#          1600     1504      1546      0 ->  0
+#          1680     1504      1546      0 ->  0
+#          1920     1504      1546      0 ->  0
+#
+#         42 Punkte auf der vollen Leiste: 36 fuer die Zeichenzelle, 6
+#         fuer die Fuge. Die Luft bis COMPLETE_FROM (1600) faellt damit
+#         von 96 auf 54 Punkte.
+#
+#         Dass die Leiste auf 1366 und 1280 WENIGER fordert als vorher,
+#         ist kein Widerspruch: sie gibt dort ein Modul mehr ab, und das
+#         zusaetzliche ist pulseaudio#microphone mit 79 Punkten - mehr,
+#         als das Schild mit 42 kostet. Auf 1366 klappt also ein Modul
+#         mehr ein, und zwar nicht dieses hier: das Schild steht dort.
+#
+#         Auf 1024 steht es NICHT. Dort sind zehn von dreizehn Modulen
+#         hinter dem Knopf, das Schild als siebtes - fuer diese Breite
+#         gibt es keine Anordnung, die es rettet, und der Knopf haelt es
+#         erreichbar.
 _modules_right += ["network", "bluetooth", "pulseaudio",
-                   "pulseaudio#microphone", "battery"]
+                   "pulseaudio#microphone", "battery", "custom/vpn"]
 # custom/theme steht DIREKT VOR dem Kontrollzentrum, und beides ist eine
 # Entscheidung.
 #

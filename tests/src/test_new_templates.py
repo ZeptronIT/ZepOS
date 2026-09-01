@@ -1268,5 +1268,19 @@ def test_the_template_count_is_seventy_seven():
     ausgefuehrt und nicht gelesen; die vollstaendige Rechnung steht bei
     der Zwillingszusicherung in tests/src/test_inventory.py, und beide
     muessen zusammen wandern.
+
+    91 STATT 90, am 22.08.2026 (Aufgabe 69): bar-vpn-config. Sie erzeugt
+    ags/scripts/vpn.py - das VPN-Schild der Leiste, bestellt mit "ein
+    user hat vorgeschlagen, in die waybar im header ein schild mit farbe
+    und tooltip zu machen, wo man sieht was der status der vpn ist -
+    nicht verbunden, verbunden, error - mit einer farbe verbunden".
+    Wieder ein Skript NEBEN status.sh, und diesmal nicht wegen des
+    Taktes: die Antwort auf "steht der Tunnel?" steht in src/vpn.py, also
+    in Python, und haette in status.sh denselben einen Interpreterstart
+    gekostet - nur dass ein haengender Aufruf DORT fuenf Module leer
+    stehen laesst statt eines. Was es tut, wird in
+    tests/src/test_bar_vpn.py ausgefuehrt und nicht gelesen; die
+    vollstaendige Rechnung steht bei der Zwillingszusicherung in
+    tests/src/test_inventory.py, und beide muessen zusammen wandern.
     """
-    assert len(list(TEMPLATES.glob("*.template"))) == 90
+    assert len(list(TEMPLATES.glob("*.template"))) == 91

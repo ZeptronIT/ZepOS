@@ -857,6 +857,74 @@ tooltip label {
   color: {{STYLE_COLOR_OFFLINE}};
 }
 
+/* DAS VPN-SCHILD - drei Zustaende, drei Farben (Aufgabe 69, 22.08.2026)
+ *
+ * BESTELLT: "ein schild mit farbe und tooltip ... nicht verbunden,
+ * verbunden, error - mit einer farbe verbunden".
+ *
+ * Keine eigene Ruheregel und keine vierte Farbe: die drei Namen sind
+ * die allgemeinen Zustandsfarben dieser Datei, dieselben, die der Akku,
+ * das Netz und die Hardwareanzeige tragen. Ein eigenes
+ * STYLE_COLOR_VPN_* waere der Katalog, gegen den der Block bei
+ * #custom-hardware oben schon einmal argumentiert hat.
+ *
+ * WAS DIE DREI KOSTEN - GERECHNET am 22.08.2026, nicht geschaetzt
+ *     Dieselbe Rechnung, die tests/src/test_glass.py fuer den
+ *     Leistentext anstellt: die Schrift liegt auf der EINSCHICHTIGEN
+ *     Glasplatte der Leiste (#bar, STYLE_GLASS_SOLO - overlay_bg mit
+ *     brand.glass_solo_alpha(0.55, 0.70) = 0.86), und die liegt auf der
+ *     Tapete des Nutzers. Berechenbar ist nur der schlechteste Fall,
+ *     also beide Extreme, weiss und schwarz:
+ *
+ *         Thema ZeptronIT        weisse    schwarze   schlechtester
+ *         success  #57D9A3        5.83       9.48       5.83
+ *         critical #FF8A8A        4.55       7.40       4.55
+ *         inactive #8FB0BA        4.47       7.27       4.47
+ *         (bar_text #DCEEF4       8.64      14.06       8.64)
+ *
+ *     WCAG 2.1 SC 1.4.3 verlangt 4.5:1. Das ROTE Schild - das eine, das
+ *     im schlechtesten Moment gelesen werden muss - kommt mit 4.55:1
+ *     darueber, und das gruene mit 5.83:1 deutlich.
+ *
+ *     BEFUND, DER NICHT ZU DIESER AUFGABE GEHOERT UND TROTZDEM HIER
+ *     STEHT: inactive liegt mit 4.47:1 drei Hundertstel DARUNTER, und
+ *     im Thema "Tageslicht" liegen success (4.13) und inactive (3.93)
+ *     ebenfalls darunter. Das ist keine Eigenschaft dieses Moduls,
+ *     sondern der Zustandsfarben der ganzen Leiste: #network.network-
+ *     disconnected, #bluetooth.bluetooth-off und
+ *     #custom-hardware.hardware-offline tragen dieselbe Farbe seit dem
+ *     13.08.2026. Sie hier anders zu waehlen hiesse, vier gleiche
+ *     Zustaende in zwei Farben zu malen; sie zu heben ist eine
+ *     Entscheidung ueber die Palette in src/brand.py, und die gehoert
+ *     dem Nutzer.
+ *
+ * UND WARUM DIE FARBE NICHT ALLEIN TRAEGT: die drei Zustaende haben
+ * drei verschiedene ZEICHEN (nf-md-shield_lock, nf-md-shield_off,
+ * nf-md-shield_alert, siehe bar-vpn-config.template). Rot-Gruen ist die
+ * haeufigste Farbsehschwaeche, und "geschuetzt" mit "ungeschuetzt" zu
+ * verwechseln ist genau der Irrtum, den dieses Schild verhindern
+ * soll. */
+#custom-vpn {
+}
+
+#custom-vpn.vpn-connected {
+  color: {{STYLE_COLOR_SUCCESS}};
+}
+
+/* Der Tunnel steht und traegt nichts - der "error" der Bestellung. Das
+ * Kritischrot und nicht die Warnfarbe: der Nutzer haelt sich in genau
+ * diesem Zustand fuer geschuetzt, waehrend sein Verkehr offen laeuft. */
+#custom-vpn.vpn-stale {
+  color: {{STYLE_COLOR_CRITICAL}};
+}
+
+/* Getrennt ist kein Fehler, sondern ein Ruhezustand - dieselbe
+ * Abblendung wie beim Netz darueber und beim ausgeschalteten Bluetooth
+ * darunter. */
+#custom-vpn.vpn-disconnected {
+  color: {{STYLE_COLOR_INACTIVE}};
+}
+
 #bluetooth {
 }
 

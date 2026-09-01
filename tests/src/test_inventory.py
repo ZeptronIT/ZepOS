@@ -450,8 +450,39 @@ def test_template_count_is_seventy_seven():
     gegangen (Regel 14). Beide fragten `pamixer` nach dem VORGABEGERAET
     und konnten ueber kein anderes berichten - genau daran haette der
     Regler nach einem Wechsel gelogen.
+
+    91 STATT 90, am 22.08.2026 (Aufgabe 69): bar-vpn-config. Bestellt
+    wurde ein Schild in der Leiste - "ein user hat vorgeschlagen, in die
+    waybar im header ein schild mit farbe und tooltip zu machen, wo man
+    sieht was der status der vpn ist - nicht verbunden, verbunden, error
+    - mit einer farbe verbunden. als icon natuerlich auch."
+
+    Was die Vorlage schliesst, ist mehr als ein fehlendes Zeichen: seit
+    Aufgabe 9 (18.08.2026) ist das VPN eine SEITE der Schale und hatte
+    damit weder Taste noch Modul noch Fenster - der Nutzer musste selbst
+    fragen, wo die Verbindungsliste steht. Das Modul zeigt den Zustand
+    und fuehrt mit einem Klick dorthin (`toggles: "vpn"`, also
+    zeigeSeite("vpn") - kein zweiter Weg).
+
+    Die neue Vorlage erzeugt ags/scripts/vpn.py: ein Leistenmodul, das
+    den Vertrag `vpn.py --status` ruft (ein Wort, dahinter die Adresse,
+    wenn es eine gibt) und daraus {text, tooltip, class} schreibt. Fuenf
+    Bilder aus drei Worten - die zwei zusaetzlichen sind "gar keine
+    Verbindung eingerichtet" (leeres Modul) und "Einstellungen nicht
+    lesbar" (Warnzeichen mit Grund im Kurzhinweis).
+
+    Sie steht NEBEN status.sh und nicht darin, und diesmal NICHT wegen
+    des Taktes: die Antwort steht in src/vpn.py, also in Python, und
+    haette dort denselben einen Interpreterstart gekostet (42 ms,
+    gemessen am 22.08.2026). Der Unterschied ist der Preis des
+    Fehlschlags - ein haengender Aufruf in status.sh nimmt fuenf Module
+    mit (gemeldet am 17.08.2026), nebenan nur sein eigenes.
+
+    Netto plus eine Datei und minus nichts: geloescht wurde nichts, weil
+    es nichts gab. ICON_VPN_ERROR (nf-md-shield_alert) stand seit jeher
+    in src/icon_definition.py und hatte bis heute keinen Leser.
     """
-    assert len(list((SRC / "templates").glob("*.template"))) == 90
+    assert len(list((SRC / "templates").glob("*.template"))) == 91
 
 
 def test_nothing_refers_to_a_deleted_template():

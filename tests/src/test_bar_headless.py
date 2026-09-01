@@ -145,6 +145,11 @@ STUB_MODULES = {
     "privacy.sh": "LAUSCHT",
     "media.sh": "MUSIK",
     "updates.sh": "UPDATE",
+    # Das VPN-Schild (Aufgabe 69, 22.08.2026). Auch hier ein Wort statt
+    # eines Zeichens: gemessen wird in dieser Haelfte der Datei nicht die
+    # Breite, sondern DASS die Leiste baut, was ihr geantwortet wird -
+    # die echten Zeichen stehen in FIT_MODULES weiter unten.
+    "vpn.py": "VPN",
 }
 
 STATUS_KEYS = {
@@ -425,11 +430,18 @@ BAR_EVERYTHING = {"bar": {
                      "custom/weather", "custom/clocks",
                      "custom/notifications", "custom/hypr-shortcuts",
                      "custom/keyboard", "hyprland/window"],
+    #
+    #     UND AM 22.08.2026 IST EIN MODUL DAZUGEKOMMEN (Aufgabe 69):
+    #     custom/vpn, das VPN-Schild, am aeusseren Ende der
+    #     Zustandsgruppe - in derselben Nachbarschaft wie in der Vorgabe.
+    #     Warum hinter dem Akku und nicht neben dem Netz, steht bei
+    #     _modules_right in src/style_definition.py, mit der Messung.
     "modules_right": ["custom/media", "tray",
                       "custom/floating-layouts", "custom/helpers",
                       "custom/disk", "custom/wallpaper",
                       "network", "bluetooth",
                       "pulseaudio", "pulseaudio#microphone", "battery",
+                      "custom/vpn",
                       "custom/privacy", "custom/updates",
                       "custom/theme", "custom/system"],
 }}
@@ -1159,6 +1171,14 @@ def test_the_bar_builds_every_module_in_its_place(run):
         "custom-disk", "custom-wallpaper",
         "network", "bluetooth",
         "pulseaudio", "pulseaudio#microphone", "battery",
+        # custom-vpn steht seit dem 22.08.2026 am aeusseren Ende der
+        # Zustandsgruppe, also hinter dem Akku (Aufgabe 69). Neben dem
+        # Netz - der naheliegenden Nachbarschaft - waere das Schild auf
+        # einem 1366er Notebook als drittes eingeklappt und damit
+        # ausgerechnet dort unsichtbar, wo ein VPN benutzt wird. Die
+        # Messung dazu steht bei FOLDED_ON_COMMON_NOTEBOOK, die
+        # Begruendung bei _modules_right in src/style_definition.py.
+        "custom-vpn",
         "custom-privacy", "custom-updates",
         # custom-theme steht zwischen den beiden bedingten Modulen und
         # dem Kontrollzentrum, also GANZ AUSSEN und damit als vorletztes
@@ -1553,6 +1573,13 @@ FIT_MODULES = {
     "media.sh": "",
     "updates.sh": "",
     "privacy.sh": "",
+    # DAS VPN-SCHILD, seit dem 22.08.2026 (Aufgabe 69). Ein Zeichen und
+    # kein Wert - alles Weitere steht im Kurzhinweis (siehe
+    # bar-vpn-config.template) -, also ist das hier die volle Breite,
+    # die dieses Modul je haben kann. Genommen wird der VERBUNDENE
+    # Zustand: die drei Schilde sind drei verschiedene Zeichen, und
+    # dieses ist das, das ein Nutzer mit stehender Verbindung sieht.
+    "vpn.py": _glyph("VPN_CONNECTED"),
 }
 
 # DREI PROZENTZAHLEN, SEIT DEM 19.08.2026 - genau die, die
@@ -1970,6 +1997,39 @@ WIDTHS = (1024, 1280, 1366, 1600, 1680, 1920)
 #         deshalb nicht in dieser Tabelle, sondern in der Messung bei
 #         _modules_right: an ihrem alten Platz hat die Ablage sechs
 #         Klickziele geschoben, an ihrem neuen schiebt sie keines.
+#
+#     UND AM 22.08.2026 IST DIE LEISTE UM 42 PUNKTE BREITER GEWORDEN
+#     (Aufgabe 69): 1504 -> 1546.
+#
+#         BESTELLT: "ein user hat vorgeschlagen, in die waybar im header
+#         ein schild mit farbe und tooltip zu machen, wo man sieht was
+#         der status der vpn ist". Das VPN-Schild (custom/vpn) steht seit
+#         heute am aeusseren Ende der Zustandsgruppe.
+#
+#         GEMESSEN im selben Aufbau, vorher und nachher:
+#
+#             Schirm   vorher   nachher   eingeklappt (nachher)
+#              1024     1020      1020     10
+#              1280     1256      1213      6
+#              1366     1341      1298      5
+#              1600     1504      1546      0
+#              1680     1504      1546      0
+#              1920     1504      1546      0
+#
+#         42 Punkte sind die Zeichenzelle (36) und die Fuge (6) - das
+#         Modul traegt genau ein Zeichen und keinen Wert, alles Weitere
+#         steht im Kurzhinweis (bar-vpn-config.template).
+#
+#         DIE GRENZE BLEIBT BEI 1600, und sie bleibt es KNAPP: die Luft
+#         faellt von 96 auf 54 Punkte. Das naechste reine Zeichenmodul
+#         (42 Punkte) passt noch, das uebernaechste nicht mehr - dann
+#         gehoert diese Zahl neu abgeleitet.
+#
+#         Dass die Leiste auf 1366 und 1280 WENIGER fordert als vorher,
+#         ist kein Widerspruch, sondern die Koernung der Einklappregel:
+#         sie gibt dort ein Modul mehr ab, und das zusaetzliche ist
+#         pulseaudio#microphone mit 79 Punkten - mehr, als das Schild
+#         mit 42 kostet.
 COMPLETE_FROM = 1600
 
 # Der verbreitetste Notebookschirm, und auf ihm reicht es seit dem
@@ -2064,8 +2124,31 @@ COMMON_NOTEBOOK = 1366
 #     der Sinn des Umbaus: was der schmale Schirm zuerst abgibt, ist die
 #     Ablage und nicht der Akku. Der Akku steht in dieser Liste
 #     unveraendert NICHT.
+#
+# UND AM 22.08.2026 SIND ES FUENF: pulseaudio#microphone IST WIEDER DABEI
+# (Aufgabe 69).
+#
+#     Das VPN-Schild kostet 42 Punkte, und auf 1366 ist dafuer kein
+#     Platz - also gibt die Leiste ein Modul mehr ab. GEMESSEN am
+#     22.08.2026, in der Reihenfolge, in der die Regel sie abgibt: auf
+#     1366 px will sie 1298 px und gibt fuenf Module ab. Vorher waren es
+#     vier bei 1341 px.
+#
+#     WAS SIE NICHT ABGIBT, IST DAS SCHILD, und das ist der ganze Grund
+#     fuer seinen Platz. Neben dem Netz - der naheliegenden
+#     Nachbarschaft - waere es hier als DRITTES eingeklappt, gemessen am
+#     selben Tag im selben Aufbau: (custom-disk, network, custom-vpn,
+#     bluetooth, pulseaudio). Es waere damit gerade auf den Geraeten
+#     unsichtbar, auf denen ein VPN benutzt wird. Am aeusseren Ende der
+#     Zustandsgruppe steht es. Die ganze Begruendung steht bei
+#     _modules_right in src/style_definition.py.
+#
+#     DER PREIS DAFUER IST DIE MIKROFONZAHL, und er ist derselbe, den der
+#     19.08.2026 schon einmal bezahlt hat (siehe den Absatz darueber):
+#     fort ist sie nicht, sie liegt hinter dem Knopf. Auf dem Schirm des
+#     Nutzers (1920x1200, Faktor 1.00) steht unveraendert alles.
 FOLDED_ON_COMMON_NOTEBOOK = ("custom-disk", "network", "bluetooth",
-                             "pulseaudio")
+                             "pulseaudio", "pulseaudio#microphone")
 
 # Die Groessenfaktoren, ueber die die Dicke geprueft wird.
 #

@@ -1,0 +1,307 @@
+#!/usr/bin/env python3
+"""Das VPN-Schild der Leiste: ein Zeichen, eine Farbe, ein Kurzhinweis.
+
+Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+Zum Anpassen: Vorlage nach
+$XDG_CONFIG_HOME/zepos/templates/bar-vpn-config.template kopieren
+
+BESTELLT am 22.08.2026, woertlich: "ein user hat vorgeschlagen, in die
+waybar im header ein schild mit farbe und tooltip zu machen, wo man
+sieht was der status der vpn ist - nicht verbunden, verbunden, error -
+mit einer farbe verbunden. als icon natuerlich auch."
+
+WARUM DAS MEHR IST ALS ZIERDE
+    Das VPN hatte bis heute KEINE eigene Taste, KEIN eigenes Modul und
+    KEIN eigenes Fenster. Seit Aufgabe 9 (18.08.2026, "VPN wird eine
+    Seite, die drei Fenster fallen") ist es eine Seite des
+    Kontrollzentrums, und der Weg dorthin geht ueber das Zahnrad und
+    einen zweiten Klick - der Nutzer hat selbst fragen muessen, wo die
+    Verbindungsliste steht. Dieses Modul loest beides auf einmal: der
+    Zustand steht da, und ein Klick fuehrt hin (ags-bar.template, Zweig
+    "custom/vpn", `toggles: "vpn"` -> zeigeSeite("vpn")).
+
+WIE VIELE ZUSTAENDE ES WIRKLICH GIBT - GEZAEHLT, NICHT AUFGEZAEHLT
+    Bestellt waren drei. `vpn.py --status` kennt DREI WOERTER, und
+    dieses Modul zeigt FUENF Bilder. Die zwei zusaetzlichen liegen VOR
+    dem ersten Wort, und beide sind Faelle, die es auf echten Maschinen
+    gibt:
+
+      GAR KEINE VERBINDUNG EINGERICHTET
+          leeres "text", das Modul verschwindet. Dieselbe Regel, nach
+          der der Akku auf einem Standrechner verschwindet (siehe den
+          Kopf von bar-status-config.template): worueber es nichts zu
+          berichten gibt, bekommt kein Zeichen. Es ist ausdruecklich
+          NICHT "getrennt" - eine frische Installation truege sonst
+          dauerhaft ein graues Schild fuer eine Verbindung, die es gar
+          nicht gibt, und der Nutzer koennte aus ihm nichts schliessen.
+      EINSTELLUNGEN NICHT LESBAR
+          das Warnzeichen und die Klasse "broken", mit dem Grund im
+          Kurzhinweis. Das ist der DRITTE Zustand der Leiste ("vorhanden,
+          aber nicht lesbar") und nicht dasselbe wie der erste: eine
+          zerschossene user-settings.json weiss nicht, welche Verbindung
+          gewaehlt ist, und "kein VPN eingerichtet" waere darueber eine
+          Behauptung.
+      disconnected  ICON_VPN_DISCONNECTED, gedaempft (Klasse
+                    "vpn-disconnected")
+      connected     ICON_VPN_CONNECTED, gruen (Klasse "vpn-connected")
+      stale         ICON_VPN_ERROR, rot (Klasse "vpn-stale") - das ist
+                    der "error" aus der Bestellung, und er hat einen
+                    genauen Inhalt: die Verbindung steht und traegt
+                    nichts. Bei IPsec heisst das "charon ist weg,
+                    waehrend der Schreibtisch sich fuer verbunden haelt"
+                    oder "die virtuelle Adresse ist fort"; bei
+                    NetworkManager "aktiviert, aber ohne Adresse". Beide
+                    Wege stehen ausgeschrieben in src/vpn.py bei
+                    tunnel_status() und wireguard_status().
+
+    WAS ES NICHT GIBT, UND DAS IST WICHTIGER ALS DIE LISTE
+
+      "VERBINDET GERADE" ist KEIN eigener Zustand und bekommt deshalb
+      auch keine eigene Farbe. wireguard_status() liest den Zustand von
+      NetworkManager und nennt alles ausser `activated` "disconnected" -
+      die Sekunden waehrend `activating` sehen hier also aus wie
+      getrennt. Das ist die WAHRE Auskunft (es traegt noch nichts) und
+      vor allem keine falsche: ein vierter Zustand, der als Fehler
+      erscheint, obwohl keiner vorliegt, kostet mehr Vertrauen, als er
+      Auskunft bringt. Ihn hier zu erfinden hiesse ausserdem, ein
+      zweites Mal an NetworkManager zu fragen - genau die zweite Quelle,
+      gegen die der Kopf von bar-status-config.template argumentiert.
+
+      "DER DIENST ANTWORTET NICHT" ebenso wenig, und das ist eine
+      GRENZE DES VERTRAGS und keine Entscheidung dieser Datei: `_run()`
+      in src/vpn.py faengt ein fehlendes oder haengendes nmcli ab und
+      gibt eine leere Antwort zurueck, aus der "disconnected" wird. Ein
+      totes NetworkManager sieht damit aus wie ein nicht verbundenes
+      VPN. Wer das aufloesen will, loest es in src/vpn.py auf, wo die
+      vier anderen Leser derselben Zeile mitprofitieren - nicht hier,
+      mit einer sechsten Meinung ueber denselben Zustand.
+
+WARUM EIN EIGENES SKRIPT UND NICHT EIN SECHSTES MODUL IN status.sh
+    Der Kopf von bar-status-config.template nennt den guten Grund fuer
+    ein gemeinsames Skript: fuenf einzelne Skripte im Zweisekundentakt
+    waeren 150 Prozessstarts je Minute. Er gilt hier nicht, und zwar
+    aus zwei gemessenen Gruenden:
+
+      DER PREIS IST DERSELBE. status.sh ist bash; die Antwort auf "steht
+      der Tunnel?" kann nur Python geben, weil sie in src/vpn.py steht.
+      Ein `python3 vpn.py --status` IN status.sh kostet genau einen
+      Interpreterstart je Takt - GEMESSEN am 22.08.2026, fuenf Laeufe
+      mit leeren Einstellungen: 211 ms fuer fuenf, also 42 ms je Lauf.
+      Dieses Skript kostet denselben einen Start. Die Ersparnis waere
+      der bash-Start gewesen, und den hat status.sh ohnehin.
+
+      DER PREIS DES FEHLSCHLAGS IST NICHT DERSELBE. Am 17.08.2026 hat
+      ein einziger haengender Aufruf in status.sh FUENF Module leer
+      stehen lassen ("ich sehe in der waybar btop das drive und das
+      zahnrad icon mehr nicht"). Ein sechster Aufruf an ein fremdes
+      Werkzeug - hier nmcli oder pgrep - waere ein sechster Weg in genau
+      dieses Bild. Nebenan kann er nur sein eigenes Modul kosten.
+
+    WAS DER TOOLTIP BRAUCHT, GIBT `--status` NICHT HER: er soll sagen,
+    WELCHE Verbindung gemeint ist und welcher Bauart sie ist, und das
+    steht in den Einstellungen. Ein bash-Modul haette sie mit jq
+    nachlesen muessen - also eine dritte Abschrift der Regel "ein
+    Abschnitt ohne `connections` IST eine Verbindung" (src/vpn.py::
+    connection(), ags-vpn.template::vpnConnections()). Hier liest
+    dieselbe Funktion, die auch der Schalter und der Waechter lesen.
+
+WELCHE VERBINDUNG DAS SCHILD MEINT, WENN ZWEI EINGERICHTET SIND
+    Die GEWAEHLTE (`vpn.active`) - und die ist zugleich die stehende.
+    Der Grund steht nicht hier, sondern in src/settings.py bei
+    `vpn.active` und in ags-vpn.template: es kann nur EINE zur Zeit
+    stehen, weil die Zustandsdatei $XDG_RUNTIME_DIR/vpn-active EINE
+    Datei mit EINEM Verbindungsnamen ist, an der vier rechtelose Leser
+    haengen; Einschalten trennt die bisherige zuerst. Sagt der Bericht
+    "connected", ist die gewaehlte also genau die, die steht.
+
+    Deshalb EIN Aufruf je Takt und nicht einer je Verbindung - dieselbe
+    Rechnung, die ags-vpn.template fuer sein Fenster aufmacht. Und
+    deshalb nennt der Kurzhinweis die Verbindung BEIM NAMEN: ein Schild
+    ohne Namen waere auf einer Maschine mit drei Verbindungen eine
+    Auskunft, von der niemand weiss, worueber sie spricht.
+"""
+import contextlib
+import io
+import json
+import sys
+
+# Wo die Werkzeuge dieses Systems liegen. Der Erzeuger setzt den Wert
+# ein; ein ausgeschriebener Rueckfall auf den Paketpfad stuende hier
+# falsch, weil er fuer jede Installation falsch ist, die kein fertiges
+# Paket ist (siehe tests/src/test_naming.py::
+# test_no_artifact_defaults_the_system_root_to_a_guess - der Waechter
+# sucht die Zeichenkette und findet sie auch in einem Kommentar).
+SYSTEM_ROOT = "{{ZEPOS_SYSTEM_ROOT}}"
+
+# Die drei Schilde und das Warnzeichen. Sie stehen samt und sonders
+# schon in src/icon_definition.py - ICON_VPN_ERROR (nf-md-shield_alert)
+# hatte bis heute keinen Leser, die anderen beiden malen das VPN im
+# Kontrollzentrum und im VPN-Fenster.
+#
+# DREI VERSCHIEDENE FORMEN UND NICHT DREIMAL DIESELBE IN DREI FARBEN:
+# ein Schloss im Schild, ein durchgestrichenes Schild, ein Schild mit
+# Ausrufezeichen. Farbe allein unterscheidet fuer einen Teil der Nutzer
+# gar nichts - rot und gruen sind die haeufigste Farbsehschwaeche
+# ueberhaupt -, und das Schild ist genau die Anzeige, bei der ein
+# Irrtum teuer ist: "geschuetzt" mit "nicht geschuetzt" zu verwechseln
+# ist der ganze Fehler, den es verhindern soll.
+ICON_CONNECTED = "{{ICON_VPN_CONNECTED}}"
+ICON_DISCONNECTED = "{{ICON_VPN_DISCONNECTED}}"
+ICON_STALE = "{{ICON_VPN_ERROR}}"
+ICON_ALERT = "{{ICON_ALERT}}"
+
+# Wie die drei Bauarten geschrieben werden, wenn ein Mensch sie liest.
+# Dieselben drei Schreibweisen wie in der Nebenzeile der Verbindungsliste
+# (ags-vpn.template::eintragUnterzeile) - zwei verschiedene Schreibweisen
+# fuer dieselbe Bauart auf demselben Bildschirm waeren zwei Sachen.
+BAUART = {"ipsec": "IPsec", "wireguard": "WireGuard", "openvpn": "OpenVPN"}
+
+
+def modul(text, tooltip, klasse):
+    """Die Form, die jedes Leistenskript ausgibt.
+
+    Unveraendert die von waybar, und die Leiste liest sie in
+    applyPayload() (ags-bar.template): leeres "text" heisst "dieses
+    Modul hat nichts zu sagen" und blendet den Kasten aus.
+    """
+    return {"text": text, "tooltip": tooltip, "class": klasse}
+
+
+def status(vpn, kennung):
+    """(Wort, Adresse) - GENAU das, was `vpn.py --status` schreibt.
+
+    UEBER main() UND NICHT UEBER DIE DREI STATUSFUNKTIONEN, UND DAS IST
+    DER GANZE PUNKT DIESER FUNKTION
+        Welche der drei Haelften antwortet, entscheidet `vpn.kind`:
+        tunnel_status() fuer IPsec, wireguard_status() und
+        openvpn_status() fuer die beiden NetworkManager-Bauarten. Diese
+        Fallunterscheidung steht in src/vpn.py bei `--status`, und sie
+        hier abzuschreiben hiesse, sie zweimal zu haben - mit der
+        Aussicht, dass die naechste Bauart in der einen Fassung
+        auftaucht und in der anderen nicht. Ein Unterprozess waere der
+        andere Weg, sie nicht abzuschreiben, und er kostet einen
+        zweiten Interpreterstart je Takt.
+
+        Also wird der Vertrag selbst gerufen und sein stdout gelesen.
+        `--status` hat keine Nebenwirkung: es liest die Einstellungen,
+        fragt und schreibt eine Zeile.
+
+    DIE KENNUNG WIRD MITGEGEBEN, WENN ES EINE GIBT, und das ist keine
+    Zier: der Aufrufer hat das Dokument schon gelesen und Namen und
+    Bauart daraus genommen. Ohne Kennung entschiede `--status` ein
+    zweites Mal selbst, welche Verbindung gemeint ist - und zwischen
+    den beiden Lesevorgaengen kann die Datei sich geaendert haben. So
+    gehoert der Zustand beweisbar zu der Verbindung, die der
+    Kurzhinweis nennt.
+    """
+    argumente = ["--status"] + ([kennung] if kennung else [])
+    geschrieben = io.StringIO()
+    with contextlib.redirect_stdout(geschrieben):
+        vpn.main(argumente)
+    wort, _, adresse = geschrieben.getvalue().strip().partition(" ")
+    return wort, adresse.strip()
+
+
+def antwort():
+    """Das Modul, wie es diesen Augenblick beschreibt."""
+    sys.path.insert(0, SYSTEM_ROOT)
+    import settings
+    import vpn
+
+    dokument = settings.load()
+    eintrag = vpn.connection(dokument)
+    # Keine Verbindung eingerichtet: das Modul verschwindet. Siehe den
+    # Kopf dieser Datei - das ist der erste der fuenf Zustaende und der
+    # einzige, in dem Schweigen richtig ist.
+    if not eintrag:
+        return modul("", "", "")
+
+    kennung = str(eintrag.get("id") or "")
+    # Der Vorgabename kommt aus settings.default_connection() und steht
+    # nicht als "work" hier: die Vorgabe einer Einstellung gehoert der
+    # Datei, die sie festlegt, und eine zweite Abschrift waere die
+    # Stelle, an der ein Umbenennen unbemerkt vorbeigeht.
+    name = str(eintrag.get("connection_name")
+               or settings.default_connection()["connection_name"])
+    kind = vpn.vpn_kind(dokument, kennung)
+    # .get() und kein Zugriff: vpn_kind() gibt heute nur die drei
+    # bekannten Werte zurueck, und wenn eine vierte Bauart dazukommt,
+    # soll das Schild ihren Namen zeigen statt abzustuerzen.
+    kopf = f"{name} · {BAUART.get(kind, kind)}"
+
+    zustand, adresse = status(vpn, kennung)
+
+    if zustand == vpn.CONNECTED:
+        # Die Adresse steht NUR hier. Ein Gegenstellenverbund, der die
+        # eigene Adresse des Klienten routet, weist gar keine zu - das
+        # ist ein voellig gueltiger Tunnel (siehe die Erklaerung bei
+        # IkeSA in src/vpn.py), und "keine Adresse" ist dann die
+        # Wahrheit und kein Mangel.
+        letzte = f"Adresse {adresse}" if adresse else "Ohne zugewiesene Adresse"
+        return modul(ICON_CONNECTED, f"VPN verbunden\n{kopf}\n{letzte}",
+                     "vpn-connected")
+
+    if zustand == vpn.STALE:
+        # UND HIER STEHT SIE NICHT, OBWOHL `--status` SIE MITSCHICKT.
+        # tunnel_status() gibt die AUFGEZEICHNETE Adresse auch fuer
+        # `stale` zurueck, weil der Trennpfad sie genau dann braucht -
+        # um sie von einer Schnittstelle zu nehmen, die charon nicht
+        # mehr haelt. Auf dem Schild waere sie eine alte Adresse neben
+        # der Aussage, dass nichts steht: die eine Zeile, die der
+        # Kurzhinweis nicht sagen darf.
+        return modul(ICON_STALE,
+                     "VPN unvollständig\n" + kopf
+                     + "\nDie Verbindung steht und trägt keinen Verkehr",
+                     "vpn-stale")
+
+    if zustand == vpn.DISCONNECTED:
+        return modul(ICON_DISCONNECTED, f"VPN getrennt\n{kopf}",
+                     "vpn-disconnected")
+
+    # Ein Wort, das der Vertrag nicht kennt. Das kann nur passieren,
+    # wenn `--status` umgebaut wurde, ohne diese Datei mitzunehmen -
+    # und dann ist ein Warnzeichen mit dem fremden Wort darin die
+    # brauchbarste Meldung, die es gibt.
+    return modul(ICON_ALERT,
+                 "vpn.py --status hat ein unbekanntes Wort geantwortet: "
+                 + (zustand or "gar nichts"), "broken")
+
+
+def main():
+    """Eine Zeile JSON, immer.
+
+    JEDER Fehler wird zu einem sichtbaren Modul und nicht zu einem
+    leeren Kasten. Ein Skript, das gar nichts schreibt, faengt
+    scriptModule() in ags-bar.template zwar ab und zeigt das
+    Warnzeichen - aber ohne Grund im Kurzhinweis, weil es keinen kennt.
+    Der Grund steht hier, und zwar so, wie er entstanden ist: eine
+    unlesbare Einstellungsdatei nennt sich selbst, ein fehlendes
+    src/vpn.py auch.
+
+    Fangen tut das ALLES, absichtlich. Die Alternative ist eine Leiste,
+    die schweigt, weil dieses eine Modul eine Ausnahme geworfen hat -
+    und "ein Fehler, der sich versteckt, ist der teuerste Fehler dieses
+    Projekts" (Spec 7.4).
+    """
+    try:
+        nutzlast = antwort()
+    except Exception as fehler:  # noqa: BLE001 - siehe die Erklaerung oben
+        # MIT DEM NAMEN DER AUSNAHME, und das ist keine Bequemlichkeit
+        # fuer Entwickler: json.JSONDecodeError sagt von sich aus nur
+        # "Expecting value: line 1 column 1", und wer das im Kurzhinweis
+        # liest, weiss nicht einmal, dass seine Einstellungsdatei gemeint
+        # ist. Der Name der Ausnahme ist die kuerzeste Auskunft darueber,
+        # WAS schiefging.
+        nutzlast = modul(
+            ICON_ALERT,
+            f"VPN-Zustand nicht lesbar: {type(fehler).__name__}: {fehler}",
+            "broken")
+    # ensure_ascii=False, damit "unvollständig" im Kurzhinweis auch so
+    # dasteht: die Leiste setzt den Text als Text (kein Markup, siehe
+    # applyPayload), und ein ä waere dort genau das - vier Zeichen.
+    print(json.dumps(nutzlast, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

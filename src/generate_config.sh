@@ -1390,6 +1390,31 @@ case "$CONFIG_NAME" in
         CONFIG_FILE="updates.sh"
         MAKE_EXECUTABLE=true
         ;;
+    # Das VPN-Schild (22.08.2026, Aufgabe 69). Wieder ein eigenes Skript
+    # neben status.sh, und diesmal aus zwei anderen Gruenden als dem
+    # Takt - beide gemessen, beide im Kopf der Vorlage ausgeschrieben:
+    #
+    #   DER PREIS IST DERSELBE. Die Antwort auf "steht der Tunnel?"
+    #   steht in src/vpn.py, also in Python. In status.sh haette sie
+    #   `python3 vpn.py --status` gekostet, also genau einen
+    #   Interpreterstart je Takt (42 ms, gemessen am 22.08.2026) - und
+    #   genau den kostet dieses Skript auch. Gespart haette man den
+    #   bash-Start, und den hat status.sh ohnehin.
+    #
+    #   DER PREIS DES FEHLSCHLAGS IST ES NICHT. Ein haengender Aufruf in
+    #   status.sh nimmt FUENF Module mit (gemeldet am 17.08.2026: "ich
+    #   sehe in der waybar btop das drive und das zahnrad icon mehr
+    #   nicht"). Nebenan kostet er nur sein eigenes.
+    #
+    # Die erzeugte Datei heisst vpn.py wie die Route bar-vpn-config es
+    # vorgibt - sie ist NICHT src/vpn.py, sondern dessen Leser: sie
+    # liegt in ags/scripts, ruft den Vertrag `--status` und schreibt
+    # daraus ein Leistenmodul.
+    bar-vpn-config)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/scripts"
+        CONFIG_FILE="vpn.py"
+        MAKE_EXECUTABLE=true
+        ;;
     # Die Ton-Geraetewahl (22.08.2026, Aufgabe 64). Wieder ein eigenes
     # Skript neben status.sh und aus demselben Grund wie die drei
     # darueber: ein anderer TAKT. status.sh laeuft alle zwei Sekunden
