@@ -114,6 +114,12 @@ backup=(
     'etc/greetd/zepos-regreet.toml'
     'etc/greetd/zepos-greeter-zeptronit.css'
     'etc/greetd/zepos-greeter-tageslicht.css'
+    # Seit dem 01.09.2026: der Compositor der Anmeldung. Sie steht hier
+    # aus demselben Grund wie die vier darueber - sie liegt unter /etc,
+    # also ist sie die Datei, an der ein Administrator dreht. Wer hier
+    # eine Bildschirmanordnung fuer SEINE Maschine eintraegt, soll sie
+    # beim naechsten Aktualisieren behalten.
+    'etc/greetd/zepos-greeter-hyprland.conf'
     # Seit dem 20.08.2026. Sie steht hier aus genau dem Grund, aus dem es
     # diese Liste gibt: sie ist eine EINSTELLUNG, und wer seinen
     # npm-Praefix woanders hin legt, soll ihn beim naechsten Aktualisieren
@@ -287,12 +293,21 @@ assert "dock_pins" not in d, ("die Anheftungen gehoeren zepos-apps und "
     # zu src/displays.py gehoert - dort stehen die Entscheidungen, hier
     # steht der Vorschalter, und ein Waechter ohne sein Modul ist ein
     # ImportError an der Stelle, an der er gebraucht wird.
+    # zepos-greeter-maske und zepos-greeter-spiegel gehoeren zum
+    # Anmeldeweg und werden von NIEMANDEM getippt: sie stehen als
+    # exec-once in /etc/greetd/zepos-greeter-hyprland.conf und laufen als
+    # Kinder des Compositors, den zepos-greeter startet. Der Spiegel
+    # sorgt dafuer, dass die Maske auf JEDEM Schirm steht; die Maske
+    # startet regreet und nimmt den Compositor mit, wenn sie fertig ist.
+    # Beide Dateien tragen ihre Begruendung im Kopf.
     install -Dm755 -t "$pkgdir/usr/bin" \
         bin/zepos-generate \
         bin/zepos-settings \
         bin/zepos-doctor \
         bin/zepos-update \
         bin/zepos-greeter \
+        bin/zepos-greeter-maske \
+        bin/zepos-greeter-spiegel \
         bin/zepos-session \
         bin/zepos-displays-guard
 
@@ -369,6 +384,21 @@ assert "dock_pins" not in d, ("die Anheftungen gehoeren zepos-apps und "
 
     install -Dm644 login/greetd.toml "$pkgdir/etc/greetd/zepos.toml"
     install -Dm644 login/regreet.toml "$pkgdir/etc/greetd/zepos-regreet.toml"
+
+    # Der Compositor der Anmeldung, seit dem 01.09.2026.
+    #
+    # Bis dahin lief die Maske in cage, und cage baut aus allen
+    # Ausgaengen EINE Flaeche (`-m extend`, seine Vorgabe) und setzt sein
+    # einziges Fenster an deren Ursprung. Wer einen zweiten Monitor
+    # ansteckte, sah die Anmeldung nicht mehr - gemeldet an jenem Tag,
+    # samt schwarzem Schirm und Rueckkehr nur ueber das GRUB-Menue.
+    #
+    # 0644 und root:root, wie die beiden Dateien darueber: der Greeter
+    # laeuft als Benutzer "greeter" und muss sie LESEN, nicht schreiben.
+    # Sie steht auch in backup= - sie liegt unter /etc und ist damit die
+    # Datei, an der ein Administrator dreht.
+    install -Dm644 login/greeter-hyprland.conf \
+        "$pkgdir/etc/greetd/zepos-greeter-hyprland.conf"
     install -Dm644 login/greetd-service.conf \
         "$pkgdir/usr/lib/systemd/system/greetd.service.d/10-zepos.conf"
 

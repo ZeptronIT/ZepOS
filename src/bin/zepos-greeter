@@ -13,15 +13,43 @@
 #     und der naechste laeuft, wenn der vorige keine Anmeldemaske
 #     hervorgebracht hat:
 #
-#       1. cage mit dem gewoehnlichen Renderer, darin regreet. Auf einer
-#          Maschine mit funktionierendem Treiber ist das die ganze
-#          Geschichte, und es ist die GTK4/libadwaita-Oberflaeche, die
-#          aussieht wie der Installer.
-#       2. cage mit WLR_RENDERER=pixman. wlroots rendert per Vorgabe
-#          ueber EGL/GBM, und es gibt Maschinen, auf denen das scheitert,
-#          waehrend ein reiner Software-Renderer noch zeichnet.
+#       1. Hyprland mit /etc/greetd/zepos-greeter-hyprland.conf, darin
+#          regreet. Auf einer Maschine mit funktionierendem Treiber ist
+#          das die ganze Geschichte, und es ist die
+#          GTK4/libadwaita-Oberflaeche, die aussieht wie der Installer.
+#       2. cage mit WLR_RENDERER=pixman. Ein reiner Software-Renderer,
+#          fuer Maschinen, deren EGL/GBM-Weg nicht traegt. Die Anmeldung
+#          steht dann nur auf EINEM Schirm - besser als auf keinem.
 #       3. tuigreet auf der Konsole. Kein Compositor, kein GTK, keine
 #          GPU - der Rueckfall, fuer den die ganze Anordnung da ist.
+#
+# WARUM SCHRITT 1 SEIT DEM 01.09.2026 HYPRLAND IST UND NICHT MEHR cage
+#     GEMELDET an jenem Tag: der Anmeldebildschirm verschwindet, sobald
+#     ein zweiter Monitor angesteckt wird - schwarzer Schirm, zurueck ins
+#     System nur ueber das GRUB-Menue.
+#
+#     `cage -h` der Fassung 0.3.1-1 kennt genau zwei Betriebsarten,
+#     `-m extend` (Vorgabe) und `-m last`. Hier stand kein -m, also galt
+#     extend: cage baut aus allen Ausgaengen EINE Flaeche und setzt sein
+#     einziges Fenster an deren Ursprung. Kommt ein Schirm dazu, aendert
+#     sich die Anordnung, und die Maske liegt auf einem Schirm, auf den
+#     niemand schaut.
+#
+#     Die Rueckfaelle hier halfen nicht, und das ist der unangenehme
+#     Teil: cage ist nicht GESCHEITERT. Es hat getan, was seine Vorgabe
+#     sagt. Eine Kette, die am Rueckgabewert haengt, kann eine richtig
+#     ausgefuehrte falsche Entscheidung nicht bemerken.
+#
+#     Hyprland kann, was cage nicht kann: ALLE Ausgaenge auf einen
+#     spiegeln, sodass die Anmeldung auf jedem Schirm steht.
+#     src/bin/zepos-greeter-spiegel richtet das zur Laufzeit ein, weil
+#     die Namen der Ausgaenge zur Bauzeit niemand kennt.
+#
+# WAS ES AUSDRUECKLICH NICHT GIBT: EINEN ZEITABLAUF
+#     Der Nutzer am 01.09.2026, zur Frage nach einer Umschaltung auf
+#     tuigreet nach N Sekunden: "Kein Notausgang". Es gibt hier keine
+#     Uhr. Jeder Schritt weiter unten haengt allein daran, ob der vorige
+#     eine Anmeldemaske hervorgebracht hat.
 #
 #     Was NICHT hier entschieden wird: ob ueberhaupt jemand angemeldet
 #     wird. Das entscheidet greetd, und es fragt in allen drei Faellen.
@@ -355,21 +383,87 @@ fi
 # Grund nicht startet.
 RC_FILE="${XDG_RUNTIME_DIR:-/tmp}/zepos-greeter.rc"
 
-graphical_attempt() {
-    local renderer="$1"
-    rm -f "$RC_FILE"
+# Die Compositor-Konfiguration der Anmeldung. Sie gehoert root, liegt
+# neben den anderen zepos-Dateien in /etc/greetd und begruendet jede
+# ihrer Zeilen selbst - vor allem die zwei leeren, die die
+# Tastaturbelegung dieser Maschine ueberhaupt durchlassen.
+GREETER_HYPRLAND_CONFIG="$ZEPOS_GREETER_ROOT/etc/greetd/zepos-greeter-hyprland.conf"
 
-    if [[ -n "$renderer" ]]; then
-        export WLR_RENDERER="$renderer"
-        log "--- cage, WLR_RENDERER=$renderer"
-    else
-        unset WLR_RENDERER
-        log "--- cage, Standard-Renderer"
+# --------------------------------------------------------------------
+# Versuch 1: Hyprland, und damit die Maske auf JEDEM Schirm
+# --------------------------------------------------------------------
+# Die drei Werte unten reisen durch die UMGEBUNG und nicht durch die
+# Konfigurationsdatei: die gehoert root und ist fuer jede Anmeldung
+# dieselbe, waehrend Thema und Sprache erst hier oben aufgeloest werden.
+# Derselbe Weg, den XKB_DEFAULT_LAYOUT schon nimmt; der Kopf von
+# src/bin/zepos-greeter-maske traegt die Begruendung ausgeschrieben.
+hyprland_attempt() {
+    rm -f "$RC_FILE"
+    log "--- Hyprland, $GREETER_HYPRLAND_CONFIG"
+
+    if [[ ! -r "$GREETER_HYPRLAND_CONFIG" ]]; then
+        # Fehlt sie, startet Hyprland NICHT mit Vorgaben, sondern sucht
+        # sich eine Konfiguration in XDG_CONFIG_HOME und /etc/xdg
+        # (src/config/supplementary/jeremy/Jeremy.cpp:19-54). Was es dort
+        # findet, ist im besten Fall nichts und im schlechteren die Datei
+        # eines Benutzers - mit dessen Tastenbindungen auf einem
+        # Bildschirm, an dem noch niemand angemeldet ist. Lieber hier
+        # aufhoeren.
+        log "--- die Compositor-Konfiguration fehlt, Hyprland faellt aus"
+        return 1
     fi
+
+    ZEPOS_REGREET_CONFIG="$REGREET_CONFIG" \
+    ZEPOS_REGREET_STYLE="$REGREET_STYLE" \
+    ZEPOS_GREETER_RC="$RC_FILE" \
+        Hyprland -c "$GREETER_HYPRLAND_CONFIG" >>"$LOG" 2>&1
+    log "--- Hyprland beendet rc=$? (die Maske lief: $([[ -f $RC_FILE ]] && echo ja || echo nein))"
+
+    [[ -f "$RC_FILE" ]]
+}
+
+# --------------------------------------------------------------------
+# Versuch 2: cage, auf EINEM Schirm
+# --------------------------------------------------------------------
+# WARUM cage NOCH DA IST, OBWOHL ES DER FEHLER WAR
+#     cage war nicht kaputt - es stand falsch. Auf einer Maschine mit
+#     EINEM Bildschirm zeigt es die Anmeldung tadellos, und das ist die
+#     Lage, in der dieser Versuch ueberhaupt drankommt: wenn Hyprland
+#     gar nicht erst hochgekommen ist.
+#
+#     Die Wahl steht dann zwischen einer grafischen Anmeldung auf einem
+#     Schirm und einer Textanmeldung auf der Konsole. Auf mehreren
+#     Schirmen bleibt es beim alten Verhalten - die Maske liegt auf dem
+#     ersten Ausgang -, aber ein Rueckfall, der einen Schirm richtig
+#     bedient, ist kein Rueckschritt gegenueber einem, der gar keins
+#     hat.
+#
+# WAS HIER NICHT MEHR STEHT: DER ERSTE cage-VERSUCH
+#     Bis zum 01.09.2026 lief cage zweimal - erst mit dem gewoehnlichen
+#     Renderer, dann mit WLR_RENDERER=pixman. Den ersten Platz hat jetzt
+#     Hyprland, also bleibt hier der Versuch, der etwas anderes probiert
+#     als der davor: der reine Software-Renderer. Er ist die Antwort auf
+#     Maschinen, deren EGL/GBM-Weg nicht traegt, und er ist der einzige
+#     Grund, warum dieser zweite Versuch mehr ist als eine Wiederholung.
+#
+#     Der Schalter gehoert wlroots und wirkt nur auf cage. Hyprland 0.56
+#     ist nicht auf wlroots gebaut, sondern auf aquamarine, und liest
+#     ihn nicht: `grep -rhoE 'getenv\("[A-Z_]+"\)' src/` ueber den
+#     ausgelieferten Quelltext nennt HOME, HYPRCURSOR_SIZE,
+#     HYPRLAND_CONFIG, PATH, XCURSOR_SIZE, XCURSOR_THEME,
+#     XDG_CACHE_HOME, XDG_CURRENT_DESKTOP, XDG_DATA_HOME und
+#     XDG_RUNTIME_DIR - kein WLR_ und kein AQ_.
+cage_attempt() {
+    rm -f "$RC_FILE"
+    export WLR_RENDERER=pixman
+    log "--- cage mit WLR_RENDERER=pixman (Rueckfall, ein Schirm)"
 
     # -s laesst den Benutzer die Konsole wechseln. Ein Anmeldebildschirm,
     # von dem aus [Strg]+[Alt]+[F2] nicht mehr geht, ist ein Rechner ohne
-    # Notausgang.
+    # Notausgang. Hyprland oben braucht dafuer keinen Schalter: es faengt
+    # die Tastensymbole XF86Switch_VT_1 bis _12 selbst ab, VOR jeder
+    # Benutzerbindung - src/managers/KeybindManager.cpp:901-923 und 377
+    # der ausgelieferten Fassung.
     # -d spart die Fensterdekoration, die in einem Vollbild-Greeter
     # ohnehin nichts umrahmt.
     cage -s -d -- bash -c '
@@ -378,6 +472,7 @@ graphical_attempt() {
     ' _ "$REGREET_CONFIG" "$REGREET_STYLE" "$RC_FILE" >>"$LOG" 2>&1
     log "--- cage beendet rc=$? (regreet lief: $([[ -f $RC_FILE ]] && echo ja || echo nein))"
 
+    unset WLR_RENDERER
     [[ -f "$RC_FILE" ]]
 }
 
@@ -398,8 +493,8 @@ console_attempt() {
 
 if compgen -G "$ZEPOS_GREETER_ROOT/dev/dri/card*" >/dev/null; then
     if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
-        graphical_attempt ""       && exit 0
-        graphical_attempt "pixman" && exit 0
+        hyprland_attempt && exit 0
+        cage_attempt     && exit 0
     else
         log "--- kein XDG_RUNTIME_DIR, der Compositor haette keinen Socket"
     fi

@@ -1,0 +1,259 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Die Anmeldung auf JEDEN Schirm spiegeln - installiert nach
+# /usr/bin/zepos-greeter-spiegel.
+#
+# Gestartet aus /etc/greetd/zepos-greeter-hyprland.conf als exec-once,
+# also als Kind des Compositors, dessen Schirme es ordnet.
+#
+# WAS DIESES SKRIPT LOEST
+#     GEMELDET am 01.09.2026: der Anmeldebildschirm verschwindet, sobald
+#     ein zweiter Monitor angesteckt wird - schwarzer Schirm, zurueck ins
+#     System nur ueber das GRUB-Menue. Die Ursache und warum cage sie
+#     nicht melden konnte, steht ausgeschrieben im Kopf von
+#     src/login/greeter-hyprland.conf.
+#
+#     Die Antwort ist Spiegelung: EIN Ausgang zeichnet, alle anderen
+#     zeigen sein Bild. Danach gibt es genau ein Bild und genau eine
+#     Arbeitsflaeche - die Maske kann also gar nicht mehr auf einem
+#     Schirm landen, auf den niemand schaut.
+#
+# WARUM DAS EIN PROGRAMM IST UND KEINE ZEILE KONFIGURATION
+#     Eine mirror-Regel braucht den NAMEN ihres Ziels:
+#     src/config/legacy/ConfigManager.cpp:1345-1382 der ausgelieferten
+#     Fassung 0.56.1 liest
+#
+#         monitor = NAME, Aufloesung, Position, Skalierung, mirror, ZIEL
+#
+#     Die Namen der Ausgaenge kennt zur Bauzeit niemand, und Hyprland hat
+#     kein Namensmuster: src/output/Monitor.cpp:1201-1211
+#     (matchesStaticSelector) kennt "desc:"-Praefixe und exakte
+#     Namensgleichheit, sonst nichts. Also muss jemand den laufenden
+#     Compositor fragen, und das ist diese Datei.
+#
+# WARUM NACHGESEHEN UND NICHT AUF EREIGNISSE GEHORCHT WIRD
+#     Hyprland hat einen Ereignis-Socket, und er meldet auch das
+#     Richtige: `monitoradded` und `monitorremoved`
+#     (src/output/Monitor.cpp:387-399). Trotzdem wird hier nachgesehen,
+#     und zwar aus zwei gemessenen Gruenden:
+#
+#       1. DIE EREIGNISSE ERZAEHLEN NICHT ALLES. GEMESSEN am 01.09.2026:
+#          faellt die QUELLE weg, macht Hyprland aus jedem Spiegel wieder
+#          einen gewoehnlichen Ausgang - und postet dafuer KEIN
+#          monitoradded. Wer nur horcht, sieht nach dem Abstecken der
+#          Quelle zwei eigenstaendige Bilder und merkt es nie.
+#       2. DEN SOCKET LESEN KANN BASH NICHT. Es braeuchte socat oder nc,
+#          und keins von beiden gehoert zu base. Ein Anmeldebildschirm,
+#          der an einem nachinstallierbaren Programm haengt, ist ein
+#          Anmeldebildschirm, der irgendwann fehlt - dieselbe
+#          Ueberlegung, aus der src/bin/zepos-greeter ohne `jq` auskommt.
+#
+#     Der Preis ist ein `hyprctl monitors` alle zwei Sekunden, solange
+#     jemand vor der Anmeldung sitzt. Das ist ein Prozessstart auf einer
+#     Maschine, die sonst nichts tut.
+#
+# WAS ES NICHT TUT: EINEN AUSGANG ABSCHALTEN
+#     Naheliegend waere gewesen, alle bis auf einen abzuschalten. Das
+#     waere derselbe schwarze Schirm mit einer anderen Begruendung. Ein
+#     Spiegel ZEIGT.
+set -u
+
+# Wie oft nachgesehen wird. Zwei Sekunden: schnell genug, dass niemand
+# ein Kabel einsteckt und wartet, und langsam genug, dass es nicht
+# auffaellt. Ueberschreibbar, damit tests/render/test_anmeldung_spiegel.py
+# nicht laenger warten muss als noetig - im Betrieb setzt das niemand.
+INTERVALL="${ZEPOS_SPIEGEL_INTERVALL:-2}"
+
+# Ein Protokoll, wenn eins gewuenscht ist. Ohne die Variable schreibt
+# dieses Skript NICHTS: es laeuft als Benutzer "greeter", und ein Pfad,
+# in den es nicht schreiben darf, waere bei jedem Durchlauf eine
+# Fehlermeldung ins Leere.
+LOG="${ZEPOS_SPIEGEL_LOG:-}"
+
+log() {
+    [[ -n "$LOG" ]] || return 0
+    printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" >>"$LOG" 2>/dev/null || true
+}
+
+# Wie viele erfolglose Anfragen hintereinander als "der Compositor ist
+# weg" gelten. Nicht eine: ein einzelnes `hyprctl`, das unter Last in
+# sein Zeitlimit laeuft, ist kein Grund, die Spiegelung fuer den Rest
+# der Anmeldung einzustellen.
+GEDULD=5
+
+# --------------------------------------------------------------------
+# Wer ist da?
+# --------------------------------------------------------------------
+# `hyprctl monitors` UND NICHT `-j`: eine JSON-Antwort braeuchte `jq`,
+# und das gehoert nicht zu base. Die Textform ist stabil und beginnt
+# jeden Block mit einer Zeile
+#
+#     Monitor HEADLESS-1 (ID 1):
+#
+# also ist $2 der Name und $4 die Kennung mit einem "):" daran.
+#
+# GEZAEHLT WERDEN NUR DIE EIGENSTAENDIGEN AUSGAENGE, und das ist der
+# Kniff, der dieses Skript kurz macht: `hyprctl monitors` fuehrt einen
+# GESPIEGELTEN Ausgang gar nicht mehr - gemessen am 01.09.2026, er
+# taucht nur noch in `hyprctl monitors all` auf. Was hier herauskommt,
+# ist also genau die Liste der Schirme, die ein EIGENES Bild zeigen, und
+# die Arbeit ist getan, sobald davon einer uebrig ist.
+auslesen() {
+    hyprctl monitors 2>/dev/null | awk '
+        /^Monitor / {
+            kennung = $4
+            sub(/\):?$/, "", kennung)
+            print kennung + 0, $2
+        }
+    '
+}
+
+# --------------------------------------------------------------------
+# Wer zeichnet, und wer zeigt nur?
+# --------------------------------------------------------------------
+# DIE QUELLE BLEIBT DIE QUELLE, SOLANGE ES SIE GIBT.
+#
+# Naheliegend waere gewesen, jedes Mal neu die niedrigste Kennung zu
+# nehmen. Das war die erste Fassung dieses Skripts, und der Messlauf am
+# 01.09.2026 hat gezeigt, warum es falsch ist: HYPRLAND VERGIBT KENNUNGEN
+# WIEDER. Wird ein Ausgang abgesteckt und ein anderer angesteckt, kann
+# der neue die freigewordene niedrigere Kennung bekommen - und dann
+# wandert die Quelle auf den Schirm, der gerade erst dazugekommen ist.
+#
+# Im Protokoll jenes Laufs sah das so aus:
+#
+#     HEADLESS-1 zeigt jetzt HEADLESS-2
+#     HEADLESS-3 zeigt jetzt HEADLESS-2
+#     HEADLESS-3 zeigt jetzt HEADLESS-1
+#
+# Dreimal umgehaengt fuer ein Ergebnis, das jedes Mal gleich aussieht.
+# Und es ist nicht nur Arbeit ohne Ertrag: die Anmeldemaske liegt auf der
+# Arbeitsflaeche der QUELLE, also nimmt jeder Wechsel sie mit. Auf einem
+# Bildschirm, vor dem jemand gerade sein Passwort tippt, ist ein
+# springendes Fenster das Letzte, was man will.
+#
+# Also: ist die zuletzt gewaehlte Quelle noch da, bleibt sie es. Erst
+# wenn sie weg ist, wird neu gewaehlt - dann nach der niedrigsten
+# Kennung, weil das auf einem Rechner mit fest angeschlossenem Bildschirm
+# bei jedem Start derselbe ist.
+#
+# Welcher Schirm es ist, entscheidet uebrigens nichts ueber das Ergebnis:
+# alle zeigen dasselbe Bild. Es entscheidet nur darueber, wie oft
+# umgehaengt wird.
+QUELLE=""
+
+# --------------------------------------------------------------------
+# Einmal aufraeumen
+# --------------------------------------------------------------------
+# Rueckgabe 1 heisst "der Compositor hat nicht geantwortet" und NICHT
+# "es gab nichts zu tun". Nur so kann die Schleife unten den Unterschied
+# zwischen einem ruhigen Anmeldebildschirm und einem beendeten
+# Compositor sehen.
+abgleich() {
+    local zeilen id name quelle="" kleinste="" kleinster="" geaendert=0
+    zeilen="$(auslesen)" || return 1
+    [[ -n "$zeilen" ]] || return 1
+
+    # Erster Durchgang: steht die bisherige Quelle noch da, und welches
+    # ist sonst die niedrigste Kennung?
+    while read -r id name; do
+        [[ -n "$name" ]] || continue
+        [[ "$name" != "$QUELLE" ]] || quelle="$name"
+        if [[ -z "$kleinste" ]] || (( id < kleinste )); then
+            kleinste="$id"
+            kleinster="$name"
+        fi
+    done <<<"$zeilen"
+
+    [[ -n "$quelle" ]] || quelle="$kleinster"
+    # Ohne Quelle kein Spiegel. Ein Aufruf mit leerem Ziel hiesse
+    # `mirror,` und das schaltet die Spiegelung AB
+    # (src/state/MonitorQueryCore.cpp:196-198: eine leere Zeichenkette
+    # ergibt nullptr).
+    [[ -n "$quelle" ]] || return 1
+    QUELLE="$quelle"
+
+    # Zweiter Durchgang: alles, was nicht die Quelle ist, zeigt sie.
+    while read -r id name; do
+        [[ -n "$name" ]] || continue
+        [[ "$name" != "$quelle" ]] || continue
+
+        # preferred/auto/1: der Ausgang soll in seiner eigenen besten
+        # Aufloesung laufen. Was er ZEIGT, kommt ohnehin von der Quelle.
+        if hyprctl keyword monitor \
+                "$name,preferred,auto,1,mirror,$quelle" >/dev/null 2>&1
+        then
+            log "$name zeigt jetzt $quelle"
+            geaendert=1
+        else
+            log "$name liess sich nicht auf $quelle spiegeln"
+        fi
+    done <<<"$zeilen"
+
+    # ------------------------------------------------------------
+    # UND JETZT DIE ZEILE, OHNE DIE DAS OBEN FOLGENLOS BLEIBT
+    # ------------------------------------------------------------
+    # `hyprctl keyword monitor ...` LEGT die Regel nur ab. Angewendet
+    # wird sie von CMonitorRuleManager::ensureMonitorStatus(), und die
+    # haengt an einem Zuhoerer auf dem Ereignis render.preChecks -
+    # src/config/shared/monitor/MonitorRuleManager.cpp:24-30 der
+    # ausgelieferten Fassung 0.56.1:
+    #
+    #     m_listeners.preChecksRender =
+    #         Event::bus()->m_events.render.preChecks.listen([this](PHLMONITOR m) {
+    #             if (m_reloadScheduled)
+    #                 ensureMonitorStatus();
+    #             m_reloadScheduled = false;
+    #         });
+    #
+    # Eine abgelegte Regel wird also erst wirksam, wenn IRGENDEIN Schirm
+    # das naechste Mal ZEICHNET. Solange sich auf der Anmeldemaske etwas
+    # bewegt - regreets Uhr tut das jede Minute, der Textcursor
+    # oefter -, faellt das nicht auf. Auf einem Bild, das steht, faellt
+    # es sehr auf.
+    #
+    # GEMESSEN am 01.09.2026 an drei headless-Ausgaengen: nach dem
+    # Abstecken der QUELLE machte Hyprland aus beiden Spiegeln wieder
+    # eigenstaendige Schirme (richtig), dieses Skript legte prompt die
+    # neue Regel ab (richtig) - und sie blieb 14 Durchlaeufe lang
+    # wirkungslos, weil kein Schirm mehr etwas zu zeichnen hatte. Zwei
+    # Bilder statt einem, also genau der Zustand, gegen den dieses Skript
+    # geschrieben ist.
+    #
+    # `dispatch forcerendererreload` umgeht beides - den Zuhoerer UND
+    # den Vergleich, der eine Regel als "schon so" verwirft:
+    # src/config/shared/actions/ConfigActions.cpp:1194-1212 laeuft ueber
+    # alle Schirme und ruft applyMonitorRule(get(m)) unbedingt auf.
+    #
+    # NUR WENN SICH ETWAS GEAENDERT HAT. Bei jedem Durchlauf hiesse:
+    # alle Ausgaenge alle zwei Sekunden neu konfigurieren, auf einer
+    # Maschine, an der jemand gerade sein Passwort tippt.
+    if (( geaendert )); then
+        hyprctl dispatch forcerendererreload >/dev/null 2>&1 || true
+    fi
+}
+
+# --------------------------------------------------------------------
+# Und immer wieder
+# --------------------------------------------------------------------
+# WARUM DAS ENDET, WENN DER COMPOSITOR ENDET
+#     Sonst liefe hier nach der Anmeldung ein Skript weiter, das alle
+#     zwei Sekunden ein `hyprctl` gegen einen Socket startet, den es
+#     nicht mehr gibt. greetd raeumt die Sitzung zwar ab, aber sich
+#     darauf zu verlassen hiesse, die eigene Schleife jemand anderem
+#     anzuvertrauen.
+log "Spiegel gestartet, Intervall ${INTERVALL}s"
+fehlschlaege=0
+while :; do
+    if abgleich; then
+        fehlschlaege=0
+    else
+        fehlschlaege=$((fehlschlaege + 1))
+        if (( fehlschlaege >= GEDULD )); then
+            log "der Compositor antwortet seit $GEDULD Versuchen nicht - Ende"
+            exit 0
+        fi
+    fi
+    sleep "$INTERVALL"
+done

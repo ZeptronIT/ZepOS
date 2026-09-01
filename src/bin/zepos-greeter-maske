@@ -1,0 +1,88 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Die Anmeldemaske im Compositor - installiert nach
+# /usr/bin/zepos-greeter-maske.
+#
+# Gestartet aus /etc/greetd/zepos-greeter-hyprland.conf als exec-once.
+# Alles, was diese Datei ueber DIESE Maschine wissen muss, steht in der
+# Umgebung; gesetzt hat sie src/bin/zepos-greeter, bevor es Hyprland
+# gestartet hat.
+#
+# WARUM DIE UMGEBUNG UND NICHT DIE KONFIGURATIONSDATEI
+#     Die Maske braucht zwei Pfade, die erst zur Laufzeit feststehen:
+#     das Blatt zum eingestellten Thema (/etc/zepos/theme) und - auf
+#     einer nicht-deutschen Maschine - die uebersetzte regreet-Datei aus
+#     XDG_RUNTIME_DIR. Beides loest src/bin/zepos-greeter auf.
+#
+#     /etc/greetd/zepos-greeter-hyprland.conf kann sie deshalb nicht
+#     tragen: sie gehoert root, wird zur Bauzeit geschrieben und ist fuer
+#     jede Anmeldung dieselbe. Sie zur Laufzeit umzuschreiben ginge auch
+#     gar nicht - der Greeter laeuft als Benutzer "greeter".
+#
+#     Die Umgebung ist der Weg, den dieser Anmeldepfad ohnehin schon
+#     benutzt: XKB_DEFAULT_LAYOUT und XKB_DEFAULT_VARIANT kommen seit dem
+#     12.08.2026 genauso von src/bin/zepos-greeter zum Compositor.
+#     Hyprland startet jedes exec-once ueber `/bin/sh -c`
+#     (src/config/supplementary/executor/Executor.cpp:171-213) und gibt
+#     seine eigene Umgebung weiter.
+#
+# WAS HIER ABSICHTLICH FEHLT: EIN ZEITABLAUF
+#     Der Nutzer am 01.09.2026 zu genau diesem Vorschlag: "Kein
+#     Notausgang". Es gibt hier also keine Uhr, die nach N Sekunden auf
+#     tuigreet umschaltet. Der Rueckfall auf den Textgreeter haengt am
+#     tatsaechlich gescheiterten Start des Compositors, und den stellt
+#     src/bin/zepos-greeter fest - an derselben Merkdatei, die unten
+#     geschrieben wird.
+set -u
+
+REGREET_CONFIG="${ZEPOS_REGREET_CONFIG:-}"
+REGREET_STYLE="${ZEPOS_REGREET_STYLE:-}"
+RC_FILE="${ZEPOS_GREETER_RC:-}"
+
+# --------------------------------------------------------------------
+# Die Maske
+# --------------------------------------------------------------------
+# --config und --style ausgeschrieben, aus den Gruenden, die
+# src/login/regreet.toml und src/bin/zepos-greeter tragen: die Vorgaben
+# /etc/greetd/regreet.toml und /etc/greetd/regreet.css gehoeren dem Paket
+# greetd-regreet, ZepOS legt daneben ab und zeigt darauf.
+regreet --config "$REGREET_CONFIG" --style "$REGREET_STYLE"
+ergebnis=$?
+
+# --------------------------------------------------------------------
+# Die Merkdatei - der Beweis, dass es die Maske GAB
+# --------------------------------------------------------------------
+# Nicht der Rueckgabewert des Compositors entscheidet ueber den
+# Rueckfall, sondern diese Datei. Der Grund steht im Kopf von
+# src/bin/zepos-greeter und aendert sich durch den Wechsel von cage zu
+# Hyprland nicht: ein GELUNGENER Login sieht von aussen aus wie ein
+# Absturz, weil greetd den Greeter beendet, sobald der die Sitzung
+# anfordert. Liegt die Datei da, hat die Oberflaeche existiert und ein
+# Rueckfall auf den Textgreeter waere falsch.
+if [[ -n "$RC_FILE" ]]; then
+    printf %s "$ergebnis" >"$RC_FILE" 2>/dev/null || true
+fi
+
+# --------------------------------------------------------------------
+# Und den Compositor mitnehmen
+# --------------------------------------------------------------------
+# DIESE ZEILE ERSETZT EINE EIGENSCHAFT, DIE cage GESCHENKT HAT.
+#
+# `cage -- programm` endete, wenn das Programm endete. Hyprland tut das
+# nicht: src/main.cpp:44-52 der Fassung 0.56.1 setzt SA_NOCLDWAIT, die
+# Kinder werden also eingesammelt, ohne dass sie jemand beobachtet, und
+# in src/ steht kein waitpid auf ein exec-once. Ohne diese Zeile bliebe
+# nach der Anmeldung ein leerer Compositor auf tty1 stehen - und greetd
+# saehe einen Greeter, der noch laeuft.
+#
+# `dispatch exit` ist der Weg dafuer:
+# src/config/legacy/DispatcherTranslator.cpp:826 fuehrt
+# m_dispMap["exit"] = ::exitHyprland, und das loest ueber
+# Actions::exit() das Ereignis aus, an dem der Compositor herunterfaehrt.
+# GEMESSEN am 01.09.2026 an einem verschachtelten Hyprland: der
+# Compositor endete mit 0, 4,3 s nach dem Start - genau dann, als das
+# Kind fertig war.
+hyprctl dispatch exit >/dev/null 2>&1 || true
+
+exit "$ergebnis"

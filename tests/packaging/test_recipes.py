@@ -606,12 +606,19 @@ def test_the_desktop_brings_everything_the_login_starts():
     depends = re.search(r"^depends=\((.*?)^\)", _code(_pkgbuild("zepos-desktop")),
                         re.S | re.M)
     assert depends, "zepos-desktop hat keine depends-Liste"
-    for package in ("greetd", "greetd-regreet", "greetd-tuigreet", "cage"):
+    # zepos-hyprland seit dem 01.09.2026: es traegt nicht mehr nur die
+    # SITZUNG, sondern auch die ANMELDUNG. src/bin/zepos-greeter ruft
+    # `Hyprland -c /etc/greetd/zepos-greeter-hyprland.conf` als ersten
+    # Versuch, und nur dieser Versuch spiegelt die Ausgaenge - faellt er
+    # aus, steht die Maske wieder auf einem Schirm allein, also genau so
+    # wie vor der Behebung.
+    for package in ("greetd", "greetd-regreet", "greetd-tuigreet", "cage",
+                    "zepos-hyprland"):
         assert re.search(rf"^\s*'{re.escape(package)}'", depends.group(1), re.M), (
             f"{package} ist keine Abhaengigkeit des Desktops")
 
     greeter = _read(ROOT / "src" / "bin" / "zepos-greeter")
-    for command in ("cage", "regreet", "tuigreet"):
+    for command in ("Hyprland", "cage", "regreet", "tuigreet"):
         assert re.search(rf"^\s*(exec\s+)?{command}\b", greeter, re.M), (
             f"zepos-greeter ruft {command} nicht mehr auf; die "
             "Abhaengigkeit daneben bewacht dann nichts mehr")
