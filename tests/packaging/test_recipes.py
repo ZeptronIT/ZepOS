@@ -390,7 +390,13 @@ def test_no_private_key_material_is_in_the_working_tree_outside_the_ignored_dire
     and looks for the header of every private key format anything here
     could plausibly produce.
     """
-    headers = (
+    # GEMESSEN am 01.09.2026: die blosse Kopfzeile trifft auch
+    # Prosa. Ein Bericht, der ERKLAERT, dass er ein Schluesselformat
+    # entfernt hat, wurde selbst zum Fund - dreimal in einer Sitzung.
+    # Der Waechter sucht deshalb den vollstaendigen PEM-Begrenzer:
+    # echtes Schluesselmaterial traegt ihn immer, ein Fliesstext nie.
+    _RAND = "-" * 5
+    headers = tuple(_RAND + kopf + _RAND for kopf in (
         "BEGIN PGP PRIVATE KEY BLOCK",
         "BEGIN OPENSSH PRIVATE KEY",
         "BEGIN RSA PRIVATE KEY",
@@ -402,7 +408,7 @@ def test_no_private_key_material_is_in_the_working_tree_outside_the_ignored_dire
         # nicht in einem der Formate oben. Wer sie kennt, kommt an
         # der ersten Huerde des Tunnels vorbei.
         "BEGIN OpenVPN Static key V1",
-    )
+    ))
     skip = {".git", ".venv", ".pytest_cache", "__pycache__", "keys", "out", "work"}
 
     offenders = []
