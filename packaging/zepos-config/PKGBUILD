@@ -119,6 +119,13 @@ backup=(
     # npm-Praefix woanders hin legt, soll ihn beim naechsten Aktualisieren
     # behalten.
     'etc/npmrc'
+    # Seit dem 22.08.2026, und sie gehoert aus demselben Grund hierher:
+    # welcher Portalanbieter den Dateidialog zeichnet, ist eine
+    # EINSTELLUNG. Wer sie umstellt, soll sie beim naechsten
+    # Aktualisieren behalten - und wer sie ganz ersetzen will, kann das
+    # ueber $XDG_CONFIG_HOME tun, das der Vorderbau vor /etc absucht
+    # (Suchreihenfolge gemessen, siehe die Datei selbst).
+    'etc/xdg-desktop-portal/hyprland-portals.conf'
 )
 
 package() {
@@ -341,6 +348,24 @@ assert "dock_pins" not in d, ("die Anheftungen gehoeren zepos-apps und "
     # Paket ist das, welches unter /etc ablegt - dieselbe Rolle, in der
     # es schon greetds Dateien danebenlegt.
     install -Dm644 system/npmrc "$pkgdir/etc/npmrc"
+
+    # Welcher Portalanbieter welche Schnittstelle beantwortet. Ohne diese
+    # Datei entschied es die des Pakets xdg-desktop-portal-hyprland, und
+    # das kostete zwei Dinge, die am 22.08.2026 gemessen wurden: der
+    # Dateidialog blieb GTK3, obwohl zepos-apps das GTK4-Portal
+    # ausdruecklich mitinstalliert (es lief sieben Tage lang kein
+    # einziges Mal), und die Bitte einer Anwendung, den Schirm wach zu
+    # halten, lief dreimal an einem Vormittag ins Leere. Die Datei selbst
+    # traegt beide Messungen.
+    #
+    # Nach /etc und nicht nach /usr/share: den Pfad dort besitzt
+    # xdg-desktop-portal-hyprland, und zwei Pakete auf einem Pfad sind in
+    # pacman ein Dateikonflikt - dieselbe Ueberlegung, aus der drei
+    # Zeilen tiefer greetds Dateien ein zepos- im Namen tragen. Dass /etc
+    # in der Suchreihenfolge des Vorderbaus VOR /usr/share kommt, ist
+    # gemessen und steht in der Datei.
+    install -Dm644 system/hyprland-portals.conf \
+        "$pkgdir/etc/xdg-desktop-portal/hyprland-portals.conf"
 
     install -Dm644 login/greetd.toml "$pkgdir/etc/greetd/zepos.toml"
     install -Dm644 login/regreet.toml "$pkgdir/etc/greetd/zepos-regreet.toml"
