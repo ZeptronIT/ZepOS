@@ -643,6 +643,64 @@ def test_the_generated_config_carries_both_rules_for_every_surface(
             "durchsichtigen Stellen laeuft")
 
 
+def test_the_layer_rules_have_a_master_switch_and_it_is_on(
+        processor, monkeypatch, tmp_path):
+    """`decoration:blur:enabled` traegt AUCH die Flaechen, nicht nur Fenster.
+
+    WARUM DAS EINE EIGENE PRUEFUNG BRAUCHT (01.09.2026)
+        Die Pruefung darueber verlangt fuer jede Flaeche ihre
+        `layerrule = ..., blur on`. Diese Zeile BITTET aber nur um die
+        Unschaerfe - ausgefuehrt wird sie erst, wenn der Hauptschalter im
+        decoration-Block an ist. Ohne ihn haetten alle Flaechen ihre
+        Regeln, und keine haette Glas: die Pruefung oben waere gruen und
+        die Leiste ein Loch, durch das die Tapete scharf zu sehen ist.
+
+    DIE MESSUNG, DIE DEN ZUSAMMENHANG BELEGT
+        Am 01.09.2026 fiel der aufgezwungene Glaseffekt von fremden
+        Anwendungen (die sieben `opacity 0.8 0.8` in
+        hyprland-universal-config.template). Dabei stand die Frage, ob
+        die Fensterunschaerfe mitfallen kann - sie kostet mehr als die
+        Haelfte der Bildarbeit beim Fensterziehen.
+
+        Gemessen in EINER verschachtelten Sitzung (Hyprland 0.56.2,
+        1920x1080, tests/render/desktop_session.py), mit einem
+        Schachbrett aus 8-px-Kacheln als Tapete und `hyprctl keyword
+        decoration:blur:enabled` als einzigem Unterschied zwischen zwei
+        Abzuegen:
+
+            Leiste   78880 von 81840 Bildpunkten (96,4 %) verschieden
+            Dock      8015 von 13320 Bildpunkten (60,2 %) verschieden
+
+        Mit der ausgelieferten Tapete waren es 0,9 %, weil sie unter der
+        Leiste fast einfarbig ist - deshalb das Schachbrett. Die Antwort
+        ist also nein: der Schalter traegt das Glas der eigenen
+        Flaechen, und er bleibt.
+
+    Geprueft wird die ERZEUGTE Datei, aus demselben Grund wie oben.
+    """
+    test_sizes._no_compositor(monkeypatch)
+    style = test_sizes._import_style(tmp_path / "stil", monkeypatch)
+
+    out = tmp_path / "hyprland.conf"
+    processor.ConfigProcessor(
+        styles=dict(style.STYLE_VARIABLES)).apply_template(HYPRLAND, out)
+    text = out.read_text(encoding="utf-8")
+
+    # Der Block, nicht die blosse Zeile: ein `enabled = true` gibt es in
+    # dieser Datei mehrfach, und nur das im blur-Block ist gemeint.
+    block = re.search(r"\n[ \t]*blur[ \t]*\{(.*?)\n[ \t]*\}", text, re.S)
+    assert block, (
+        "im decoration-Block steht kein blur-Block mehr. Die layerrule "
+        "jeder Flaeche bittet dann um eine Unschaerfe, die niemand "
+        "einschaltet - Leiste und Dock verlieren ihr Glas, ohne dass "
+        "eine andere Pruefung faellt")
+    assert re.search(r"^[ \t]*enabled[ \t]*=[ \t]*(true|yes|1|on)[ \t]*$",
+                     block.group(1), re.M), (
+        "decoration:blur:enabled ist nicht mehr an. Gemessen am "
+        "01.09.2026 aendert das 96,4 % der Bildpunkte der Leiste und "
+        "60,2 % derer des Docks - die layerrule allein macht kein Glas")
+
+
 # --------------------------------------------------------------------
 # Und jede Flaeche malt auch wirklich durchsichtig
 # --------------------------------------------------------------------

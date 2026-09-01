@@ -362,6 +362,48 @@ decoration {
     # steht in hyprland-plugins-config.template.
     rounding = {{STYLE_WINDOW_ROUNDING}}
 
+    # DIESER SCHALTER IST DER HAUPTSCHALTER FUER DAS GLAS DER EIGENEN
+    # FLAECHEN - er gilt nicht nur fuer Fenster, und das ist gemessen.
+    #
+    # WARUM DIE FRAGE ENTSTAND (01.09.2026)
+    #     Mit den sieben Deckkraftregeln weiter unten fiel der Zwang zur
+    #     Halbdurchsichtigkeit auf fremde Anwendungen. Damit lag nahe,
+    #     auch die Fensterunschaerfe hier fallen zu lassen: sie kostet
+    #     laut derselben Messung mehr als die Haelfte der Bildarbeit
+    #     beim Fensterziehen (4,20 s gegen 1,95 s GPU je 600 Bilder),
+    #     und die eigenen Flaechen haben doch ihre eigenen Regeln -
+    #     `layerrule = match:namespace ^(name)$, blur on`, erzeugt aus
+    #     GLASS_LAYERS, siehe weiter unten.
+    #
+    # DIE MESSUNG, DIE ES ENTSCHIEDEN HAT
+    #     EINE verschachtelte Sitzung (Hyprland 0.56.2, 1920x1080), die
+    #     ganze Oberflaeche darin, ein SCHACHBRETT aus 8-px-Kacheln als
+    #     Tapete - die ausgelieferte Tapete ist unter der Leiste fast
+    #     einfarbig, und ein Weichzeichner ueber einer einfarbigen
+    #     Flaeche ist von keinem Weichzeichner zu unterscheiden (der
+    #     erste Anlauf mass mit ihr 0,9 % Unterschied und haette fast das
+    #     Gegenteil belegt). Dann derselbe Schirm zweimal abgezogen, nur
+    #     mit `hyprctl keyword decoration:blur:enabled` dazwischen:
+    #
+    #         Leiste   78880 von 81840 Bildpunkten (96,4 %) verschieden
+    #         Dock      8015 von 13320 Bildpunkten (60,2 %) verschieden
+    #
+    #     Die Streuung der Helligkeit in der Leiste stieg dabei von 39,1
+    #     auf 42,8 und ihre Spanne von 43..234 auf 26..234: das
+    #     Schachbrett kam schaerfer durch. Ohne diese Zeile ist das Glas
+    #     der Leiste kein Glas mehr, sondern ein Loch.
+    #
+    #     `layerrule = blur on` BITTET also nur um die Unschaerfe fuer
+    #     eine Flaeche - ausgefuehrt wird sie erst, wenn sie hier
+    #     eingeschaltet ist. Die beiden sind kein Entweder-oder, sondern
+    #     Schalter und Auswahl.
+    #
+    # WAS DARAUS FOLGT
+    #     Die Fensterunschaerfe bleibt, weil sie die Flaechenunschaerfe
+    #     traegt. Was faellt, ist die Halbdurchsichtigkeit, die sie auf
+    #     fremden Fenstern ueberhaupt erst anwirft: ein deckendes Fenster
+    #     hat nichts, wodurch etwas durchscheinen koennte, und der
+    #     Compositor rechnet unter ihm nichts.
     blur {
         enabled = true
         size = 7
@@ -480,7 +522,74 @@ gestures {
 # WINDOW RULES (Hyprland 0.53+ Syntax)
 # =========================================
 
-# Transparency Rules
+# HIER STANDEN SIEBEN DECKKRAFTREGELN, UND SIE SIND AM 01.09.2026 GEFALLEN
+#
+# WAS GEMELDET WURDE, WOERTLICH
+#     "bitte diesen effekt glasmorphism, der auf alle anwendungen
+#      aufgezwungen wird, raus machen - dadurch machen wir alle nur
+#      buggy, wer auch immer das macht"
+#
+# WAS HIER STAND
+#     `opacity 0.8 0.8` auf kitty, org.gnome.Nautilus, firefox,
+#     org.gnome.TextEditor, org.gnome.baobab, org.gnome.Loupe und
+#     org.gnome.Papers - also auf jede Anwendung, die ZepOS ausliefert.
+#
+# WARUM ES FALSCH WAR, UND ES IST KEINE GESCHMACKSFRAGE
+#     Das Glas dieses Systems ist fuer die EIGENEN Flaechen entworfen:
+#     Leiste, Dock, Ueberlagerungen, Kontrollzentrum. Dort sitzt eine
+#     Platte bekannter Farbe vor der Tapete, und tests/src/test_glass.py
+#     rechnet fuer genau diese Platte nach, dass die Schrift darauf im
+#     schlechtesten Fall noch 4,5:1 Kontrast hat.
+#
+#     Ein fremdes Fenster hat diese Platte nicht. `opacity` in Hyprland
+#     blendet das GANZE Fenster ab, samt seiner Schrift - der Textbereich
+#     eines Editors, die Dateiliste des Dateimanagers und der Satz einer
+#     Webseite liegen dann zu 20 % ueber dem, was zufaellig dahinter
+#     steht. Fuer diese Flaechen ist die Kontrastrechnung nie gefuehrt
+#     worden, und sie laesst sich auch nicht fuehren: was hinter einem
+#     Fenster liegt, weiss niemand vorher.
+#
+#     Dazu kommt die Rechenarbeit. Ein halbdurchsichtiges Fenster zwingt
+#     den Compositor, bei JEDEM Bild die Unschaerfe unter ihm neu zu
+#     rechnen, statt es als deckende Flaeche einfach hinzulegen.
+#
+# GEMESSEN am 01.09.2026, UND ZWAR AN DER GRAFIKKARTE
+#     Die Rechenzeit der CPU taugt hier nicht: sie stieg um 7 %, und das
+#     liegt nicht daran, dass die Unschaerfe billig ist, sondern daran,
+#     dass sie ein Schattenprogramm ist und gar nicht auf der CPU laeuft.
+#     Gezaehlt wird deshalb `drm-engine-render` aus /proc/<pid>/fdinfo -
+#     die Nanosekunden, die die Render-Einheit fuer den Compositor
+#     gearbeitet hat, je Kennung des Geraetezugangs einmal. Das
+#     Gruppieren ist noetig und nicht Vorsicht: der Compositor haelt
+#     denselben Zugang mehrfach offen, jeder Eintrag traegt denselben
+#     Zaehler, und die blosse Summe meldete 23,7 s Bildarbeit in 11,7 s
+#     Uhrzeit - mehr, als die Karte in der Zeit leisten kann.
+#
+#     Aufbau: verschachtelter Compositor (Hyprland 0.56.2, 1920x1080,
+#     tests/render/desktop_session.py) auf integrierter Intel-Grafik, ein
+#     kitty-Fenster von 1400x900, 600 Verschiebungen im Abstand eines
+#     Bildes - also knapp 12 Sekunden ununterbrochenes Ziehen. kitty
+#     wird fuer jeden Lauf neu gestartet, damit die Regel beim Aufgehen
+#     des Fensters anliegt; dass sie anlag, ist am Abzug nachgeprueft
+#     (100 % der Bildpunkte im Fensterinneren verschieden).
+#
+#         mit opacity 0.8       5,31 s GPU    8,86 ms je Bild
+#         voll deckend          4,20 s GPU    6,99 ms je Bild   1,27x
+#
+#     Ein Fenster zu ziehen kostete also ein Viertel mehr Bildarbeit,
+#     nur weil es halbdurchsichtig war. Der Wert ist in zwei getrennten
+#     Sitzungen gemessen worden und kam mit 1,29x und 1,27x wieder.
+#
+#     Zum Vergleich, aus demselben Lauf: ganz OHNE Fensterunschaerfe
+#     waeren es 1,95 s (3,25 ms je Bild). Diese Ersparnis wird hier
+#     NICHT gehoben - warum, steht oben im decoration-Block.
+#
+# WAS BLEIBT UND WARUM
+#     Die Zeile fuer org.gnome.Nautilus trug NEBEN der Deckkraft noch
+#     `float on, center on, size 1200 800`. Das ist eine Aussage darueber,
+#     WO der Dateimanager aufgeht, und keine ueber sein Glas - sie steht
+#     seit der ersten oeffentlichen Fassung und war nie Teil der Meldung.
+#     Gefallen ist deshalb ihre Deckkraft, nicht ihre Lage.
 #
 # DIE KLASSENNAMEN SIND DIE APP-IDs, UND DAS IST DER GRUND
 #     Ein Wayland-Fenster meldet als Klasse seine app_id, und die ist bei
@@ -488,21 +597,7 @@ gestures {
 #     Domainschreibung ihrer .desktop-Datei - org.gnome.Nautilus, nicht
 #     "nautilus". Eine Regel auf den Kurznamen greift nicht, und sie
 #     scheitert lautlos: das Fenster erscheint einfach ohne sie.
-#
-#     Hier standen bis zum 11.08.2026 Regeln fuer thunar, chromium,
-#     sublime_text, smerge, ferdium und ncspot. Von diesen sechs war
-#     keines je auf einem ZepOS installiert - vier sind AUR (Spec §4.3),
-#     thunar war eine optdepend, die pacman nicht installiert, und
-#     chromium ist GTK3. Sechs Regeln fuer sechs Fenster, die es nicht
-#     gab. Sie sind durch die Anwendungen ersetzt, die ZepOS wirklich
-#     ausliefert.
-windowrule = match:class (?i)^(kitty)$, opacity 0.8 0.8
-windowrule = match:class (?i)^(org\.gnome\.Nautilus)$, opacity 0.8 0.8, float on, center on, size 1200 800
-windowrule = match:class (?i)^(firefox)$, opacity 0.8 0.8
-windowrule = match:class (?i)^(org\.gnome\.TextEditor)$, opacity 0.8 0.8
-windowrule = match:class (?i)^(org\.gnome\.baobab)$, opacity 0.8 0.8
-windowrule = match:class (?i)^(org\.gnome\.Loupe)$, opacity 0.8 0.8
-windowrule = match:class (?i)^(org\.gnome\.Papers)$, opacity 0.8 0.8
+windowrule = match:class (?i)^(org\.gnome\.Nautilus)$, float on, center on, size 1200 800
 
 # Application Specific Rules
 #
