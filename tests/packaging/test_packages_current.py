@@ -33,6 +33,7 @@ WHY THE FIXTURE IS SYNTHESISED AND NOT packaging/out/
 """
 import importlib.util
 import io
+import re
 import sys
 import tarfile
 from pathlib import Path
@@ -52,18 +53,76 @@ check_current = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(check_current)
 
 
+EIGENE = (*check_current.OWN_PACKAGES, check_current.META_PACKAGE)
+
+
+def _gebaute_archive() -> dict[str, Path]:
+    """Jedes eigene Paket, so wie es GERADE im Repository liegt.
+
+    NACH NAMEN GESUCHT, NIE BUCHSTABIERT, und das ist der ganze Zweck
+    dieser Funktion.
+
+    Gemessen am 22.08.2026: die Bedingung zum Ueberspringen fragte
+    frueher nach dem Dateinamen von zepos-config in Fassung 0.1.0. Diese
+    Datei gibt es seit elf Fassungen nicht mehr, also lautete die
+    Antwort seit elf Fassungen "kein gebautes Repository" - neben einem
+    vollstaendig gebauten Archiv (0.1.11-1, alle fuenf eigenen Pakete
+    vorhanden) gezaehlt: 10 skipped, 3 passed. Zehn Wachen, die nie
+    liefen, in einer Sammlung, die gruen aussah.
+
+    Die Suche ist dieselbe wie in check-current.py's _packages():
+    der Name, ein Bindestrich, eine Ziffer. Das trennt zepos-installer
+    von zepos-installer-gui, ohne ueber Fassungen etwas anzunehmen -
+    r912.9dac92f und 0.1.0.r20.1eed6ee liegen beide in diesem
+    Verzeichnis.
+    """
+    if not REPO_DIR.is_dir():
+        return {}
+    gefunden: dict[str, Path] = {}
+    for name in EIGENE:
+        treffer = sorted(REPO_DIR.glob(f"{name}-[0-9]*.pkg.tar.zst"))
+        if treffer:
+            gefunden[name] = treffer[0]
+    return gefunden
+
+
+GEBAUT = _gebaute_archive()
+_FEHLEND = [name for name in EIGENE if name not in GEBAUT]
+
+# Alle fuenf, nicht nur eines: _repo_matching_the_tree() liest jedes
+# Paket aus OWN_PACKAGES und _stage_meta_package() das Meta-Paket. Ein
+# halb gebautes Repository liesse sie mit FileNotFoundError umfallen
+# statt sauber zu ueberspringen - genau das war am 11.08.2026 in einem
+# frischen git-worktree gemessen worden.
 needs_repo = pytest.mark.skipif(
-    not (REPO_DIR / "zepos-config-0.1.0-1-any.pkg.tar.zst").exists(),
-    reason="no built repository in packaging/out/ - run packaging/build.sh")
+    bool(_FEHLEND),
+    reason=("kein gebautes Archiv fuer " + ", ".join(_FEHLEND) +
+            " in packaging/out/x86_64 - packaging/build.sh laeuft noch nicht"))
 
 needs_zstd = pytest.mark.skipif(
     sys.version_info < (3, 14),
     reason="tarfile reads zstd from Python 3.14")
 
 
-def _rewrite(source: Path, destination: Path, *, rename=None, replace=None):
-    """A copy of a package with one file renamed, or one file's bytes
-    replaced. Everything else is carried across unchanged."""
+def _teile(package: Path) -> tuple[str, str, str, str]:
+    """Name, Fassung, Baunummer, Bauart aus einem Paketdateinamen.
+
+    Von hinten geschnitten, wie check-current.py's _orphan_findings():
+    drei Bindestrich-Felder am Ende sind pkgver, pkgrel und arch, und
+    alles davor ist der Name. Das kommt ohne Annahme darueber aus, was
+    in einer Fassung stehen darf - in diesem Verzeichnis liegen
+    r912.9dac92f und 0.1.0.r20.1eed6ee nebeneinander.
+    """
+    stem = package.name[:-len(".pkg.tar.zst")]
+    name, fassung, bau, bauart = stem.rsplit("-", 3)
+    return name, fassung, bau, bauart
+
+
+def _rewrite(source: Path, destination: Path, *, rename=None, replace=None,
+             add=None):
+    """A copy of a package with one file renamed, one file's bytes
+    replaced, or one file added. Everything else is carried across
+    unchanged."""
     with tarfile.open(source, "r:zst") as archive, \
             tarfile.open(destination, "w:zst") as out:
         for entry in archive:
@@ -78,6 +137,10 @@ def _rewrite(source: Path, destination: Path, *, rename=None, replace=None):
                 data = replace[1]
             entry.size = len(data)
             out.addfile(entry, io.BytesIO(data) if entry.isfile() else None)
+        if add:
+            info = tarfile.TarInfo(add[0])
+            info.size = len(add[1])
+            out.addfile(info, io.BytesIO(add[1]))
 
 
 def _break_one(tmp_path: Path, name: str, **mutation) -> Path:
@@ -91,7 +154,7 @@ def _break_one(tmp_path: Path, name: str, **mutation) -> Path:
     below can only have come from the mutation.
     """
     staged = _repo_matching_the_tree(tmp_path)
-    package = staged / f"{name}-0.1.0-1-any.pkg.tar.zst"
+    package = staged / GEBAUT[name].name
     broken = tmp_path / f"broken-{package.name}"
     _rewrite(package, broken, **mutation)
     package.write_bytes(broken.read_bytes())
@@ -118,7 +181,7 @@ def _repo_matching_the_tree(tmp_path: Path) -> Path:
     staged.mkdir()
 
     for name in check_current.OWN_PACKAGES:
-        real = REPO_DIR / f"{name}-0.1.0-1-any.pkg.tar.zst"
+        real = GEBAUT[name]
         members: dict[str, bytes] = {}
         # Which tree directory each shipped directory came from, so a
         # file added to it can be given the right destination.
@@ -134,7 +197,34 @@ def _repo_matching_the_tree(tmp_path: Path) -> Path:
                     members[entry.name] = extracted.read()
                     continue
                 source = check_current._source_for(entry.name)
-                if source is None or not source.exists():
+                if source is None:
+                    # NICHT still weglassen, und das ist am 22.08.2026
+                    # gemessen worden.
+                    #
+                    # "Der Baum sagt nicht, woher das kommt" ist kein
+                    # veraltetes Paket - es ist eine Luecke in SOURCE_OF,
+                    # und ein frisch gebautes Paket traegt diese Datei
+                    # GENAUSO, weil sich das Rezept nicht geaendert hat.
+                    # Ein Pruefstueck, das sie weglaesst, faelscht also
+                    # Stille herbei, die es in keinem echten Repository
+                    # gibt.
+                    #
+                    # Gemessen: mit dem weggelassenen SOURCE_OF-Eintrag
+                    # fuer etc/xdg-desktop-portal/hyprland-portals.conf -
+                    # dem Fund, an dem der ISO-Bau am 01.09.2026 stand -
+                    # liefen alle vierzehn Tests dieser Datei GRUEN
+                    # durch, waehrend check-current.py selbst mit
+                    # Rueckgabe 1 abbrach. Das Ueberspringen war damit
+                    # nur verschoben: die Wachen liefen wieder und sahen
+                    # trotzdem nichts.
+                    raise AssertionError(
+                        f"{name} installiert {entry.name}, und SOURCE_OF in "
+                        f"packaging/check-current.py sagt nicht, woher das "
+                        f"kommt. Ein Repository, das zu diesem Baum passt, "
+                        f"laesst sich daraus nicht bauen - genau das meldet "
+                        f"check-current.py auch, und der ISO-Bau steht so "
+                        f"lange. Trag das Ziel in SOURCE_OF ein.")
+                if not source.exists():
                     continue        # renamed away: the package drops it
                 members[entry.name] = source.read_bytes()
                 # Nur, wenn der Name unterwegs gleich bleibt.
@@ -195,11 +285,16 @@ def _stage_meta_package(staged: Path, depends: list[str] | None = None) -> Path:
     """
     if depends is None:
         depends = sorted(check_current._recipe_depends(check_current.META_PACKAGE))
-    pkginfo = "pkgname = {}\npkgver = 0.1.0-1\narch = any\n".format(
-        check_current.META_PACKAGE)
+    # Fassung und Bauart aus dem echten Dateinamen abgelesen statt hier
+    # geschrieben: der Pruefer liest zwar nur die depend-Zeilen, aber
+    # eine .PKGINFO, die eine andere Fassung nennt als ihr Dateiname,
+    # waere eine Unwahrheit im Pruefstueck.
+    _, fassung, bau, bauart = _teile(GEBAUT[check_current.META_PACKAGE])
+    pkginfo = "pkgname = {}\npkgver = {}-{}\narch = {}\n".format(
+        check_current.META_PACKAGE, fassung, bau, bauart)
     pkginfo += "".join(f"depend = {name}\n" for name in depends)
 
-    package = staged / f"{check_current.META_PACKAGE}-0.1.0-1-any.pkg.tar.zst"
+    package = staged / GEBAUT[check_current.META_PACKAGE].name
     with tarfile.open(package, "w:zst") as out:
         data = pkginfo.encode("utf-8")
         info = tarfile.TarInfo(".PKGINFO")
@@ -256,11 +351,43 @@ def test_a_package_carrying_a_renamed_file_is_caught(tmp_path):
 
 @needs_repo
 @needs_zstd
+def test_ein_ziel_das_der_baum_nicht_kennt_wird_gefunden(tmp_path):
+    """Der Zweig, an dem der ISO-Bau am 01.09.2026 stand - und der
+    einzige des Pruefers, den bis heute kein Test betrat.
+
+    zepos-config legte /etc/xdg-desktop-portal/hyprland-portals.conf ab
+    (PKGBUILD:367), SOURCE_OF kannte das Ziel nicht, und
+    check-current.py sagte zu Recht "nothing in this tree says where
+    that comes from" - Rueckgabe 1, kein Medium. Der Zweig ist der
+    wichtigste der drei im Vorwaertsdurchgang, weil er als einziger
+    auch dann anschlaegt, wenn Paket und Baum inhaltlich einig sind:
+    er fragt nicht "stimmt der Inhalt", sondern "weiss ueberhaupt
+    jemand, was das ist".
+
+    Das Ziel hier ist erfunden und nicht das echte: ein Test, der auf
+    hyprland-portals.conf zeigt, wird gruen, sobald jemand den Eintrag
+    ergaenzt - und bewacht danach nichts mehr.
+    """
+    staged = _break_one(
+        tmp_path, "zepos-config",
+        add=("etc/xdg-desktop-portal/ein-ziel-das-niemand-kennt.conf",
+             b"# aus keiner Datei dieses Baums kopiert\n"))
+
+    problems = check_current.check(staged)
+
+    assert len(problems) == 1, problems
+    assert "ein-ziel-das-niemand-kennt.conf" in problems[0], problems[0]
+    assert "nothing in this tree says where that comes from" in problems[0], (
+        problems[0])
+
+
+@needs_repo
+@needs_zstd
 def test_a_package_that_was_never_built_is_caught(tmp_path):
     """A repository can be current and still be incomplete. Removing
     zepos-installer-tui leaves three packages that all match the tree."""
     staged = _repo_matching_the_tree(tmp_path)
-    (staged / "zepos-installer-tui-0.1.0-1-any.pkg.tar.zst").unlink()
+    (staged / GEBAUT["zepos-installer-tui"].name).unlink()
 
     problems = check_current.check(staged)
 
@@ -276,8 +403,14 @@ def test_two_builds_of_the_same_package_are_refused(tmp_path):
     guess: repo-add keeps the newest, but the older file is still there
     to be installed by name."""
     staged = _repo_matching_the_tree(tmp_path)
-    (staged / "zepos-config-0.2.0-1-any.pkg.tar.zst").write_bytes(
-        (staged / "zepos-config-0.1.0-1-any.pkg.tar.zst").read_bytes())
+    vorhanden = staged / GEBAUT["zepos-config"].name
+    # Die zweite Fassung wird aus der ersten abgeleitet und nicht
+    # geschrieben: sie muss nur ANDERS sein, und ein fester Wert hier
+    # waere wieder eine Zahl, die stehen bleibt, waehrend der Baum
+    # weiterlaeuft.
+    name, fassung, bau, bauart = _teile(vorhanden)
+    zweite = staged / f"{name}-{fassung}.1-{bau}-{bauart}.pkg.tar.zst"
+    zweite.write_bytes(vorhanden.read_bytes())
 
     with pytest.raises(SystemExit, match="2 builds of zepos-config"):
         check_current.check(staged)
@@ -332,11 +465,65 @@ def test_a_meta_package_that_was_not_built_is_caught(tmp_path):
     "not built at all" der anderen vier - und ein Medium ohne Meta-Paket
     installiert einen Desktop, der aus nichts besteht."""
     staged = _repo_matching_the_tree(tmp_path)
-    (staged / f"{check_current.META_PACKAGE}-0.1.0-1-any.pkg.tar.zst").unlink()
+    (staged / GEBAUT[check_current.META_PACKAGE].name).unlink()
 
     problems = check_current.check(staged)
 
     assert problems == [f"not built at all: {check_current.META_PACKAGE}"], problems
+
+
+def test_kein_eigenes_paket_steht_in_dieser_datei_mit_fester_fassung():
+    """Die Sperre gegen die Wiederholung, und sie laeuft IMMER.
+
+    WAS ELF FASSUNGEN LANG GESCHAH
+        Die Bedingung zum Ueberspringen fragte, ob eine bestimmte Datei
+        da ist: zepos-config, Fassung 0.1.0, Bau 1, Bauart any. Ab 0.1.1
+        gab es diese Datei nicht mehr, also sagte die Bedingung "kein
+        gebautes Repository" - und sie sagte es auch dann, wenn ein
+        vollstaendig gebautes Repository danebenlag.
+
+        Gemessen am 22.08.2026 gegen packaging/out/x86_64 mit allen
+        fuenf eigenen Paketen in 0.1.11-1: 10 skipped, 3 passed. Die
+        zehn Wachen dieser Datei liefen seit 0.1.0 kein einziges Mal.
+
+        Was in der Zwischenzeit durchging: zepos-config legt seit dem
+        01.09.2026 /etc/xdg-desktop-portal/hyprland-portals.conf ab,
+        ohne dass check-current.py's SOURCE_OF davon wusste. Der
+        ISO-Bau stand - und dieser Zweig des Pruefers hatte bis heute
+        keinen einzigen Test (er hat jetzt einen:
+        test_ein_ziel_das_der_baum_nicht_kennt_wird_gefunden).
+
+    WARUM DIESER TEST UND NICHT NUR DIE REPARATUR
+        Eine reparierte Bedingung ist wieder kaputtzuschreiben, und der
+        Schaden ist unsichtbar: ein uebersprungener Test faerbt nichts
+        rot. Die Regel muss also ueberprueft werden statt eingehalten -
+        kein Dateiname eines EIGENEN Pakets darf in dieser Datei eine
+        Fassung tragen. Sie werden gesucht (_gebaute_archive), nicht
+        buchstabiert.
+
+        Fremde Pakete sind ausgenommen: libastal-4 und zepos-hyprbars
+        tragen die Fassung ihres Ursprungs, und die Pruefstuecke weiter
+        unten brauchen genau die.
+    """
+    quelle = Path(__file__).read_text(encoding="utf-8")
+
+    for name in EIGENE:
+        gefunden = re.findall(rf"{re.escape(name)}-\d[\w.]*", quelle)
+        assert not gefunden, (
+            f"{name} steht mit fester Fassung in dieser Datei: "
+            f"{sorted(set(gefunden))}. So wurden zehn Wachen elf Fassungen "
+            f"lang still uebersprungen - such das Archiv ueber "
+            f"_gebaute_archive(), statt seinen Dateinamen zu schreiben.")
+
+    # Und die Gegenprobe zur Sperre selbst: sie muesste anschlagen, wenn
+    # jemand einen solchen Namen schriebe. Gemessen an einem erfundenen,
+    # damit der Nachweis nicht davon abhaengt, dass gerade jemand einen
+    # Fehler gemacht hat.
+    erfunden = f"{check_current.OWN_PACKAGES[0]}-0.1.0-1-any.pkg.tar.zst"
+    assert re.findall(
+        rf"{re.escape(check_current.OWN_PACKAGES[0])}-\d[\w.]*", erfunden), (
+        "das Muster findet einen festgeschriebenen Dateinamen nicht mehr; "
+        "diese Sperre bewacht dann nichts")
 
 
 def test_the_recipe_is_read_the_way_a_recipe_is_written():
@@ -398,9 +585,9 @@ def test_the_iso_build_runs_the_checker_before_it_builds_anything():
 # ueber _repo_matching_the_tree(), das die echten Pakete aus
 # packaging/out/x86_64/ liest. In einem frischen Arbeitsbaum gibt es das
 # Verzeichnis nicht - gemessen am 11.08.2026 in einem git-worktree, wo
-# genau diese zwei mit FileNotFoundError auf
-# zepos-config-0.1.0-1-any.pkg.tar.zst umfielen, waehrend die acht
-# anderen ordentlich uebersprungen wurden. Ein Test, dessen Ergebnis
+# genau diese zwei mit FileNotFoundError auf das fehlende Archiv von
+# zepos-config umfielen, waehrend die acht anderen ordentlich
+# uebersprungen wurden. Ein Test, dessen Ergebnis
 # davon abhaengt, wann jemand zuletzt gebaut hat, ist genau das, was der
 # Kopf von _stage_meta_package() vermeiden wollte.
 @needs_repo
