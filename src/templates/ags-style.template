@@ -2459,17 +2459,30 @@ modelbutton {
 }
 
 // IM EINSTELLUNGSFENSTER (.vpn-connection-picker)
-//     Eine schmale Leiste links, mit derselben Trennlinie wie
-//     .zep-sidebar. NICHT deren 208px: WIN_WIDTH dieses Fensters
-//     haengt an der Fusszeile (siehe der Kopf von
-//     ags-vpn-settings.template), und 208 plus den Anspruch der vier
-//     Reiter passt in keine Sprosse, die MEASURE_MODAL_SHARE noch
-//     zulaesst. GEMESSEN in tests/render/test_vpn_breite.py, nicht
-//     hier gerechnet.
+//     Bis zum 01.09.2026 eine WAAGERECHTE Leiste ueber der
+//     Reiterleiste, mit derselben Trennlinie wie .zep-sidebar. Seit dem
+//     01.09.2026 ist sie eine SENKRECHTE Liste, die allein in ihrer
+//     eigenen Ansicht steht - gemeldet vom Nutzer: "es wird wie in
+//     einer reihe aufgelistet statt eine liste, und auch da viel zu
+//     wenig platz". Die Begruendung, warum das die Breite nicht
+//     sprengt, steht bei "Assemble" in ags-vpn-settings.template.
+//
+//     Die Trennlinie BLEIBT: sie trennte vorher Liste von Reitern und
+//     trennt jetzt Liste von der Fusszeile darunter - dieselbe Kante,
+//     dieselbe Aufgabe.
 .vpn-connection-picker {
   border-bottom: 1px solid $border;
   padding-bottom: {{STYLE_SPACE_8}};
   margin-bottom: {{STYLE_SPACE_12}};
+}
+
+// DER WEG ZURUECK AUS DER EINZELHEIT (.vpn-detail-back), 01.09.2026
+//     Eine eigene Zeile ueber der Reiterleiste, mit demselben Abstand
+//     darunter, den die Liste zu ihrer Nachbarschaft haelt. Ein Rahmen
+//     waere hier zuviel: die Reiterleiste direkt darunter zeichnet
+//     ihre eigene Kante.
+.vpn-detail-back {
+  margin-bottom: {{STYLE_SPACE_8}};
 }
 
 // ENTFERNT am 18.08.2026: vpn-header samt der darin verschachtelten

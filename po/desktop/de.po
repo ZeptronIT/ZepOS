@@ -1811,6 +1811,16 @@ msgstr "Verbindung löschen"
 msgid "New connection"
 msgstr "Neue Verbindung"
 
+# --------------------------------------------------------------------
+# Aus der Liste in die Einzelheit und zurueck (01.09.2026)
+# --------------------------------------------------------------------
+# Gemeldet: "ich will eine reine liste bei vpn sehen, und bei klick auf
+# das item einer vpn oder 'neu erstellen' will ich auf die details
+# kommen." Der Rueckweg braucht ein Wort, und es ist auf beiden
+# Flaechen dasselbe - Schalenseite wie Einstellungsfenster.
+msgid "All connections"
+msgstr "Alle Verbindungen"
+
 msgid "No connection configured yet - add one."
 msgstr "Noch keine Verbindung eingerichtet – bitte eine hinzufügen."
 

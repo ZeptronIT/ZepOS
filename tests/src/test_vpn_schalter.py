@@ -115,12 +115,24 @@ ARBEIT_SERVER = "vpn.arbeit.example"
 ZUHAUSE_UNTER = f"WireGuard · {HEIM_ENDPUNKT}"
 ARBEIT_UNTER = f"IPsec · {ARBEIT_SERVER}"
 
+# Die dritte, nur fuer `_einstellungen(dritte=True)` - siehe dort.
+REISE = "Reise"
+REISE_REMOTE = "ovpn.reise.example"
+REISE_UNTER = f"OpenVPN · {REISE_REMOTE}"
+
 # Welche Zeile das Kind umlegt: die zweite (IPsec). Siehe den Dateikopf.
 UMGELEGT = 1
 
 
-def _einstellungen(user_root: Path) -> None:
+def _einstellungen(user_root: Path, dritte: bool = False) -> None:
     """Die Einstellungsdatei, aus der die Seite ihre Liste liest.
+
+    `dritte` haengt eine OpenVPN-Verbindung an - seit dem 01.09.2026,
+    fuer tests/src/test_vpn_ansicht.py. Der Nutzer hat die Liste mit
+    DREI Eintraegen sehen wollen ("bei wireguard, weil ich dort mehrere
+    vpns habe"), und der Platz, den eine Liste braucht, ist eine Frage
+    an ihre Laenge. Vorgabe bleibt zwei, damit die Zusicherungen dieser
+    Datei unveraendert weitermessen.
 
     Aus settings.defaults() und settings.default_connection() gebaut und
     nicht getippt: `schema_version` und die Feldnamen einer Verbindung
@@ -149,7 +161,20 @@ def _einstellungen(user_root: Path) -> None:
             "server": ARBEIT_SERVER,
         })
 
-        dokument["vpn"] = {"active": "c1", "connections": [zuhause, arbeit]}
+        verbindungen = [zuhause, arbeit]
+        if dritte:
+            reise = dict(settings.default_connection())
+            reise.update({
+                "id": "c3",
+                "connection_name": REISE,
+                "kind": "openvpn",
+            })
+            reise["openvpn"] = dict(reise["openvpn"])
+            reise["openvpn"]["remote"] = REISE_REMOTE
+            reise["openvpn"]["connection_type"] = "password-tls"
+            verbindungen.append(reise)
+
+        dokument["vpn"] = {"active": "c1", "connections": verbindungen}
     finally:
         sys.path.remove(str(SRC))
 
@@ -189,8 +214,17 @@ def _render(target: Path, system_root: Path) -> None:
         sys.path.remove(str(SRC))
 
 
-def _baue(wurzel: Path, ohne_schalter: bool = False) -> tuple[Path, Path]:
-    """Die uebersetzte Seite. Zurueck kommen Buendel und Systemwurzel."""
+def _baue(wurzel: Path, ohne_schalter: bool = False,
+          kind: Path = CHILD) -> tuple[Path, Path]:
+    """Die uebersetzte Seite. Zurueck kommen Buendel und Systemwurzel.
+
+    `kind` ist ein Parameter geworden, als am 01.09.2026 ein ZWEITES
+    Kind dieselbe Seite bauen musste (tests/src/test_vpn_ansicht.py, der
+    Wechsel zwischen Liste und Einzelheit). Der Aufbau darum herum -
+    Attrappe fuer vpn.py, Uebersetzen der drei Vorlagen, `ags bundle`,
+    Anzeigeserver - ist fuer beide derselbe, und zwei Kopien davon waeren
+    zwei Kopien, die auseinanderlaufen.
+    """
     if shutil.which("ags") is None:
         pytest.skip("ags fehlt; es kommt mit dem Paket aylurs-gtk-shell")
 
@@ -211,7 +245,7 @@ def _baue(wurzel: Path, ohne_schalter: bool = False) -> tuple[Path, Path]:
             "bewiese nichts. SCHALTER_ZEILE nachziehen.")
         seite.write_text(text.replace(SCHALTER_ZEILE, ""), encoding="utf-8")
 
-    shutil.copy(CHILD, ags / "child.tsx")
+    shutil.copy(kind, ags / "child.tsx")
     buendel = wurzel / "child.js"
     ergebnis = subprocess.run(
         ["ags", "bundle", str(ags / "child.tsx"), str(buendel),
@@ -253,12 +287,14 @@ class Lauf:
                 f"spur:\n{self.spur}")
 
 
-def _lauf(wurzel: Path, ohne_schalter: bool = False) -> Lauf:
+def _lauf(wurzel: Path, ohne_schalter: bool = False,
+          kind: Path = CHILD, dritte: bool = False) -> Lauf:
     server_befehl = broadwayd()
     if server_befehl is None:
         pytest.skip("gtk4-broadwayd fehlt; es kommt mit dem Paket gtk4")
 
-    buendel, _system_root = _baue(wurzel, ohne_schalter=ohne_schalter)
+    buendel, _system_root = _baue(wurzel, ohne_schalter=ohne_schalter,
+                                  kind=kind)
 
     laufzeit = wurzel / "run"
     laufzeit.mkdir()
@@ -267,7 +303,7 @@ def _lauf(wurzel: Path, ohne_schalter: bool = False) -> Lauf:
     laufzeit.chmod(0o700)
 
     user_root = wurzel / "zepos"
-    _einstellungen(user_root)
+    _einstellungen(user_root, dritte=dritte)
 
     spur = wurzel / "spur"
     nummer = next(_DISPLAYS)
