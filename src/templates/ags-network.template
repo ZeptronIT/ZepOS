@@ -274,6 +274,10 @@ const ICONS = {
   info: "{{ICON_INFO}}",
   disconnect: "{{ICON_DISCONNECT}}",
   settings: "{{ICON_SETTINGS}}",
+  // Fuer den Kopierknopf der Geraeteadresse (22.08.2026) - dasselbe
+  // Zeichen, das ags-vpn-settings.template fuer den oeffentlichen
+  // WireGuard-Schluessel benutzt, weil es dieselbe Handlung ist.
+  copy: "{{ICON_COPY}}",
 }
 
 // Das Wort, mit dem ags-network-scripts eine Kabelverbindung meldet.
@@ -292,6 +296,27 @@ interface WifiNetwork {
   signal: number
   security: string
   active: boolean
+  // Die Adresse des Zugangspunktes, aus derselben Abfrage wie alles
+  // andere in dieser Zeile (siehe network_list in
+  // ags-network-scripts.template). Sie kostet hier nichts und
+  // beantwortet in der Detailansicht die Frage, an welchem der Sender
+  // eines grossen Netzes dieser Rechner gerade haengt.
+  bssid: string
+}
+
+/** Was ueber die AKTUELLE Verbindung bekannt ist, ohne eine Rueckfrage.
+ *
+ * Als eigener Typ und nicht mehr viermal derselbe Klammerausdruck
+ * (22.08.2026): mit `bssid` kam ein fuenftes Feld dazu, und vier
+ * Stellen, die dieselbe Form buchstabieren, sind vier Gelegenheiten,
+ * drei davon zu treffen.
+ */
+interface ConnectionInfo {
+  type: string
+  name: string
+  ip: string
+  signal: number
+  bssid: string
 }
 
 // Zustand
@@ -328,7 +353,8 @@ async function scanWifi(mitSuchlauf: boolean): Promise<WifiNetwork[]> {
     const output = await execAsync(argumente)
     const parsed = JSON.parse(output.trim())
     for (const net of parsed) {
-      networks.push({ ssid: net.ssid, signal: net.signal, security: net.secure ? "WPA" : "", active: net.active })
+      networks.push({ ssid: net.ssid, signal: net.signal, security: net.secure ? "WPA" : "",
+                      active: net.active, bssid: net.bssid || "" })
     }
   } catch (e) { console.error("Die WLAN-Suche schlug fehl:", e) }
   return networks.sort((a, b) => b.signal - a.signal)
@@ -354,23 +380,28 @@ async function scanWifi(mitSuchlauf: boolean): Promise<WifiNetwork[]> {
  */
 async function getConnectionInfo(
   networks: WifiNetwork[],
-): Promise<{ type: string; name: string; ip: string; signal: number }> {
+): Promise<ConnectionInfo> {
   try {
     const [name, ip] = await Promise.all([
       execAsync([SCRIPTS.network, "info"]),
       execAsync([SCRIPTS.network, "ip"]),
     ])
-    let type = "none", signal = 0
+    let type = "none", signal = 0, bssid = ""
     if (name.trim() && name.trim() !== NOT_CONNECTED) {
       if (name.trim() === WIRED_NAME) { type = "ethernet" }
       else {
         type = "wifi"
+        // Signalstaerke UND Adresse des Zugangspunktes stammen aus
+        // derselben Zeile derselben Liste - wer die eine hat, hat die
+        // andere schon. Eine eigene Frage danach waere genau der
+        // doppelte Aufruf, den der Kommentar ueber dieser Funktion
+        // beschreibt.
         const active = networks.find(n => n.active)
-        if (active) signal = active.signal
+        if (active) { signal = active.signal; bssid = active.bssid }
       }
     }
-    return { type, name: name.trim() || NOT_CONNECTED, ip: ip.trim() || "", signal }
-  } catch { return { type: "none", name: NOT_CONNECTED, ip: "", signal: 0 } }
+    return { type, name: name.trim() || NOT_CONNECTED, ip: ip.trim() || "", signal, bssid }
+  } catch { return { type: "none", name: NOT_CONNECTED, ip: "", signal: 0, bssid: "" } }
 }
 
 async function connectToNetwork(ssid: string, password?: string): Promise<boolean> {
@@ -432,7 +463,18 @@ export const networkSeite: ShellSeite = {
     let passwordSsidLabel: Gtk.Label, passwordErrorLabel: Gtk.Label, mainContent: Gtk.Box
     let detailBox: Gtk.Box, detailHeaderWrap: Gtk.Box
     let detailSecurityLabel: Gtk.Label, detailIpLabel: Gtk.Label, detailGatewayLabel: Gtk.Label, detailDnsLabel: Gtk.Label
-    let currentConnectionInfo: { type: string; name: string; ip: string; signal: number } = { type: "none", name: "", ip: "", signal: 0 }
+    // Die Geraeteadresse und die des Zugangspunktes (22.08.2026, siehe
+    // showDetail()). `detailMacRow` und `detailBssidRow` sind hier
+    // mitgefuehrt, weil BEIDE Zeilen ihre Sichtbarkeit vom Zustand
+    // abhaengig machen und nicht nur ihren Text.
+    let detailMacLabel: Gtk.Label, detailMacHint: Gtk.Label, detailMacCopy: Gtk.Button
+    let detailBssidLabel: Gtk.Label, detailBssidRow: Gtk.Box
+    let detailDisconnectBtn: Gtk.Button
+    // Was der Kopierknopf in die Zwischenablage legt. Der Text der
+    // Beschriftung taugt dafuer nicht: steht dort NOTHING, waere der
+    // Gedankenstrich das Kopierte.
+    let macZumKopieren = ""
+    let currentConnectionInfo: ConnectionInfo = { type: "none", name: "", ip: "", signal: 0, bssid: "" }
 
     // Wo die Ansage "es wird gesucht" steht. Genau EIN Kind oder keines -
     // dieselbe Bauart wie statusWrap darueber.
@@ -466,11 +508,44 @@ export const networkSeite: ShellSeite = {
       passwordEntry.grab_focus()
     }
 
+    // EINE FRAGE STATT DREI, UND SIE BRINGT DIE GERAETEADRESSE MIT -
+    // GEAENDERT am 22.08.2026
+    //
+    // WAS HIER STAND
+    //     Drei `execAsync("bash -c ...")` hintereinander, jedes mit
+    //     `await` vor dem naechsten: Gateway, DNS, Verschluesselung.
+    //     Drei Shells, drei Prozessketten, drei Wartezeiten - fuer drei
+    //     Felder EINER Auskunft, waehrend `details` in
+    //     ags-network-scripts.template genau diese Auskunft schon als
+    //     Aufgabe hatte und von niemandem gerufen wurde.
+    //
+    //     Es ist dieselbe Rechnung wie am 20.08.2026 (Aufgabe 36: 2160
+    //     ms auf 43 ms) - nicht die einzelne Frage ist teuer, sondern
+    //     die Zahl der Fragen. Die Geraeteadresse, der Anlass dieser
+    //     Aenderung, kommt darum NICHT als vierter Aufruf dazu: sie ist
+    //     ein Feld derselben Antwort.
+    //
+    // DIE ADRESSE DES ZUGANGSPUNKTES FRAGT GAR NIEMAND
+    //     Sie steht in `currentConnectionInfo`, wo sie aus der
+    //     Netzliste des laufenden Taktes stammt (siehe
+    //     getConnectionInfo). Kein Aufruf, kein Warten.
     const showDetail = async () => {
       currentView = "detail"
       mainContent.set_visible(false)
       passwordBox.set_visible(false)
       detailBox.set_visible(true)
+
+      // OHNE VERBINDUNG IST DIESE ANSICHT SEIT DEM 22.08.2026 ERREICHBAR
+      //
+      //     Der Anlass: die eigene Geraeteadresse braucht man, um sie in
+      //     einem Hochschul-, Firmen- oder Hotelnetz ANZUMELDEN - und
+      //     wer das tut, ist noch NICHT verbunden. Eine Ansicht, die nur
+      //     im verbundenen Zustand aufgeht, haette die Adresse genau in
+      //     dem Fall verschwiegen, fuer den sie gezeigt wird.
+      //
+      //     Was es ohne Verbindung nicht gibt, steht auch nicht da: kein
+      //     Trennen-Knopf, keine Signalstaerke, kein Zugangspunkt.
+      const verbunden = currentConnectionInfo.type !== "none"
 
       // Kopf der Detailansicht als frische zepRow (18.08.2026, task-C) -
       // dieselbe Form wie statusWrap in updateDisplay(), aus demselben
@@ -478,25 +553,60 @@ export const networkSeite: ShellSeite = {
       removeAllChildren(detailHeaderWrap)
       detailHeaderWrap.append(zepRow({
         symbol: getSignalIcon(currentConnectionInfo.signal),
-        titel: currentConnectionInfo.name,
-        unterzeile: `${currentConnectionInfo.signal}%`,
+        titel: currentConnectionInfo.name || NOT_CONNECTED,
+        unterzeile: verbunden ? `${currentConnectionInfo.signal}%` : NOTHING,
       }))
       detailIpLabel.set_text(currentConnectionInfo.ip || NOTHING)
+      detailDisconnectBtn.set_visible(verbunden)
+
+      // Der Zugangspunkt ist die Adresse der GEGENSEITE, und die gibt es
+      // nur ueber Funk. An einer Kabelverbindung existiert kein
+      // Zugangspunkt, und ohne Verbindung haengt man an keinem - ein
+      // Gedankenstrich stuende dort fuer "unbekannt" und behauptete
+      // damit, es gaebe eine Antwort. Die Zeile geht darum weg.
+      detailBssidRow.set_visible(currentConnectionInfo.type === "wifi")
+      detailBssidLabel.set_text(currentConnectionInfo.bssid || NOTHING)
+
+      const leer = () => {
+        detailGatewayLabel.set_text(NOTHING)
+        detailDnsLabel.set_text(NOTHING)
+        detailSecurityLabel.set_text(NOTHING)
+        detailMacLabel.set_text(NOTHING)
+        detailMacHint.set_visible(false)
+        macZumKopieren = ""
+        detailMacCopy.set_sensitive(false)
+      }
 
       try {
-        const gatewayOut = await execAsync("bash -c \"ip route | grep default | awk '{print \\$3}'\"")
-        detailGatewayLabel.set_text(gatewayOut.trim() || NOTHING)
-      } catch { detailGatewayLabel.set_text(NOTHING) }
+        const auskunft = JSON.parse(
+          (await execAsync([SCRIPTS.network, "details"])).trim())
 
-      try {
-        const dnsOut = await execAsync("bash -c \"cat /etc/resolv.conf | grep nameserver | head -1 | awk '{print \\$2}'\"")
-        detailDnsLabel.set_text(dnsOut.trim() || NOTHING)
-      } catch { detailDnsLabel.set_text(NOTHING) }
+        detailGatewayLabel.set_text(auskunft.gateway || NOTHING)
+        detailDnsLabel.set_text(auskunft.dns || NOTHING)
 
-      try {
-        const secOut = await execAsync(`bash -c "LANG=C nmcli -t -f 802-11-wireless-security.key-mgmt connection show '${currentConnectionInfo.name}' 2>/dev/null | cut -d: -f2"`)
+        // DIE ADRESSE, DIE DAS NETZ SIEHT - und der Hinweis, wenn sie
+        // nicht die des Adapters ist. Warum das ausgerechnet die
+        // gefaehrliche Stelle dieser Anzeige ist, steht ueber
+        // adapter_adresse() in ags-network-scripts.template.
+        macZumKopieren = auskunft.mac || ""
+        detailMacLabel.set_text(macZumKopieren || NOTHING)
+        detailMacCopy.set_sensitive(Boolean(macZumKopieren))
+        detailMacHint.set_visible(Boolean(auskunft.mac_wechselt))
+
+        // "Offen" IST EINE AUSSAGE UEBER EIN FUNKNETZ, NICHT UEBER
+        // NICHTS - berichtigt am 22.08.2026
+        //
+        //     Hier stand `secOut.trim() ? ... : pgettext(...,"Open")`,
+        //     also: leere Antwort heisst "unverschluesselt". Die
+        //     Antwort ist aber auch dann leer, wenn die Frage gar nicht
+        //     zu stellen war - an einer Kabelverbindung (nmcli kennt
+        //     `802-11-wireless-security` dort nicht) und ohne
+        //     Verbindung (es gibt keine, nach der man fragen koennte).
+        //     Beide lasen sich als "Sicherheit: Offen", und das ist
+        //     keine Auskunft, sondern eine Behauptung.
+        //
         // "Offen" im Sinne von UNGESICHERT, nicht im Sinne von
-        // "oeffnen".
+        // "oeffnen" - und darum mit `pgettext`.
         //
         // GEMESSEN am 21.08.2026: dieselbe msgid `_("Open")` stand hier
         // UND in ags-home.template:810, dort als Menuepunkt, der eine
@@ -511,10 +621,17 @@ export const networkSeite: ShellSeite = {
         // Sicherheitsangabe bekommt ihren eigenen Eintrag. Dieselbe
         // Bauweise wie bei der Schirmausrichtung in
         // ags-wallpaper.template.
-        detailSecurityLabel.set_text(
-          secOut.trim() ? secOut.trim().toUpperCase()
-            : pgettext("wifi security", "Open"))
-      } catch { detailSecurityLabel.set_text(NOTHING) }
+        if (auskunft.type === "802-11-wireless") {
+          detailSecurityLabel.set_text(
+            auskunft.security ? String(auskunft.security).toUpperCase()
+              : pgettext("wifi security", "Open"))
+        } else {
+          detailSecurityLabel.set_text(NOTHING)
+        }
+      } catch (e) {
+        console.error("Die Verbindungsauskunft schlug fehl:", e)
+        leer()
+      }
     }
 
     const showMain = () => {
@@ -597,7 +714,7 @@ export const networkSeite: ShellSeite = {
      * laufen kann: einmal sofort mit dem Zwischenspeicher und einmal,
      * wenn der Suchlauf etwas Besseres gebracht hat.
      */
-    const zeichne = (connInfo: { type: string; name: string; ip: string; signal: number },
+    const zeichne = (connInfo: ConnectionInfo,
                      networks: WifiNetwork[], wifiEnabled: boolean) => {
       // Der Zustandskopf als frischer zepStateHeader (18.08.2026,
       // Aufgabe 12) - siehe die Begruendung bei der Deklaration von
@@ -619,10 +736,15 @@ export const networkSeite: ShellSeite = {
       // Verbindung bleibt bestehen, auch wenn der WLAN-Schalter aus
       // steht - beide Bedienelemente wirken darum unabhaengig
       // voneinander, nie beide auf dasselbe Feld.
+      // DIE SPERRE IST AM 22.08.2026 GEFALLEN
+      //     Hier stand `if (currentConnectionInfo.type !== "none")`, das
+      //     Symbol tat also im getrennten Zustand nichts - ohne zu
+      //     sagen, warum. Seit die Detailansicht die Geraeteadresse
+      //     traegt, hat sie im getrennten Zustand ihre WICHTIGSTE
+      //     Auskunft (siehe showDetail()): wer seine Adresse in einem
+      //     fremden Netz anmelden muss, ist noch nicht drin.
       const buildDetailButton = (): Gtk.Widget =>
-        zepButton(ICONS.info, "still", () => {
-          if (currentConnectionInfo.type !== "none") showDetail()
-        })
+        zepButton(ICONS.info, "still", () => { showDetail() })
 
       // Derselbe Kunstgriff wie buildPowerToggle() in
       // ags-bluetooth.template: frisch gebaut fuer DIESEN Takt, damit
@@ -1007,28 +1129,127 @@ export const networkSeite: ShellSeite = {
 
     const [ipRow, ipVal] = createDetailRow(_("IP address"))
     detailIpLabel = ipVal
+
+    // ----- Die beiden Adressen, und warum sie zwei verschiedene Zeilen
+    // -----  mit zwei verschiedenen Namen sind (22.08.2026)
+    //
+    // GEMELDET, woertlich: "mir ist aufgefallen, dass man in dem ags
+    // fenster für wlan nirgendwo eine info zur macadresse hat, weil
+    // diese teilweise auch sehr wichtig ist".
+    //
+    // ES GIBT ZWEI, UND SIE BEANTWORTEN VERSCHIEDENE FRAGEN
+    //     Die des ADAPTERS beantwortet "welche Adresse melde ich an" -
+    //     Hochschulen, Firmen, Hotels, Netze mit Adressfilter verlangen
+    //     sie, und man muss sie ablesen und eintragen koennen. Das ist
+    //     die Frage aus der Meldung ("teilweise auch sehr wichtig"),
+    //     und darum steht sie DIREKT UNTER der IP-Adresse: beides sind
+    //     Adressen DIESES Rechners, und wer nach seiner Adresse sucht,
+    //     sucht oben.
+    //
+    //     Die des ZUGANGSPUNKTES beantwortet "an welchem der fuenf
+    //     Sender haenge ich" - nuetzlich in einem grossen Netz, in dem
+    //     eine Ecke schlecht funkt. Sie steht darum bei Gateway und
+    //     DNS: das sind die Angaben ueber die GEGENSEITE.
+    //
+    // ZWEI ZEILEN "MAC" UNTEREINANDER WAEREN SCHLIMMER ALS EINE
+    //     Beide sind sechs Zweiergruppen aus Hexziffern; wer sie
+    //     verwechselt, meldet in seinem Hochschulnetz den Sender der
+    //     Hochschule an. Sie heissen deshalb NICHT beide "MAC": die
+    //     eine traegt das Wort aus der Meldung ("MAC-Adresse", sonst
+    //     findet der Nutzer sie nicht), die andere sagt, WESSEN Adresse
+    //     sie ist ("Zugangspunkt"). Beide Namen bleiben unter der
+    //     Spaltenbreite von 90 Punkten, damit die Werte aller Zeilen
+    //     auf derselben Kante beginnen.
+    const [macRow, macVal] = createDetailRow(_("MAC address"))
+    detailMacLabel = macVal
+    macVal.set_tooltip_text(
+      _("The address of this computer's adapter - the one a network asks for when it wants a device registered"))
+
+    // Der Hinweis steht NEBEN der Adresse und nicht am Zeilenende:
+    // er gilt genau ihr. Dafuer gibt der Wert seine Dehnung ab - eine
+    // Adresse ist siebzehn Zeichen lang und braucht keine.
+    macVal.set_hexpand(false)
+    detailMacHint = new Gtk.Label({
+      label: _("temporary"), xalign: 0, hexpand: true, visible: false,
+      ellipsize: Pango.EllipsizeMode.END,
+      max_width_chars: {{STYLE_MEASURE_LINE}},
+    })
+    detailMacHint.add_css_class("net-detail-hinweis")
+    detailMacHint.set_tooltip_text(
+      _("This is not the adapter's own address - NetworkManager put a substitute in its place, so it can change. A registration made with it may stop working."))
+    macRow.append(detailMacHint)
+
+    // EIN KLICK LEGT SIE IN DIE ZWISCHENABLAGE, UND DAS IST KEIN
+    // SCHMUCK
+    //     Eine Adresse, die man abtippt, ist eine Adresse, die man
+    //     vertippt: "00:00:5E:00:53:0B" sind siebzehn Zeichen aus
+    //     einem Alphabet, in dem 0/O und 8/B nebeneinander liegen, und
+    //     sie wird in ein Anmeldeformular getippt, das eine falsche
+    //     Adresse anstandslos annimmt. Der Fehler zeigt sich dann als
+    //     "das Netz laesst mich nicht rein" - an einer Stelle, an der
+    //     niemand mehr nach einem Tippfehler sucht.
+    //
+    //     `wl-copy` ist in diesem Baum schon der Weg dorthin
+    //     (ags-vpn-settings.template fuer den oeffentlichen
+    //     WireGuard-Schluessel, cliphist-menu-config.template fuer den
+    //     Zwischenablageverlauf). Der Wert steht als ARGUMENT nach
+    //     `--`, nicht in einer Befehlszeile: eine Adresse aus
+    //     Hexziffern und Doppelpunkten ist zwar harmlos, aber die Regel
+    //     dieses Baumes lautet "kein fremder Wert in eine Shell", und
+    //     hier gibt es gar keine.
+    //
+    //     Das Haekchen erscheint erst, wenn wl-copy WIRKLICH
+    //     zurueckgekommen ist. Ein Haekchen, das schon beim Klick
+    //     erscheint, sagt "kopiert" - auch wenn wl-clipboard fehlt, und
+    //     dann sucht der Nutzer den Fehler in seiner Einfuegestelle.
+    detailMacCopy = zepButton(ICONS.copy, "still", () => {
+      if (!macZumKopieren) return
+      const zeichen = detailMacCopy.get_child() as Gtk.Label
+      execAsync(["wl-copy", "--", macZumKopieren])
+        .then(() => {
+          zeichen.set_label(ICONS.connected)
+          setTimeout(() => zeichen.set_label(ICONS.copy), 1500)
+        })
+        .catch((e) => console.error("Das Kopieren der Adresse schlug fehl:", e))
+    })
+    detailMacCopy.set_tooltip_text(_("Copy the MAC address"))
+    detailMacCopy.set_sensitive(false)
+    macRow.append(detailMacCopy)
+
     const [gwRow, gwVal] = createDetailRow(_("Gateway"))
     detailGatewayLabel = gwVal
     const [dnsRow, dnsVal] = createDetailRow(_("DNS"))
     detailDnsLabel = dnsVal
+    const [bssidRow, bssidVal] = createDetailRow(_("Access point"))
+    detailBssidRow = bssidRow
+    detailBssidLabel = bssidVal
+    bssidVal.set_tooltip_text(
+      _("The address of the transmitter this computer is currently on (BSSID)"))
     const [secRow, secVal] = createDetailRow(_("Security"))
     detailSecurityLabel = secVal
 
     detailGrid.append(ipRow)
+    detailGrid.append(macRow)
     detailGrid.append(gwRow)
     detailGrid.append(dnsRow)
+    detailGrid.append(bssidRow)
     detailGrid.append(secRow)
 
     // Trennen ist zerstoerend - Rolle "kritisch", nicht "umrandet"
     // (Task-C-Auftrag, ausdruecklich genannt).
-    const disconnectBtn = zepButton(
+    //
+    // Seit dem 22.08.2026 mitgefuehrt, weil showDetail() ihn wegnimmt,
+    // wenn nichts verbunden ist: ein Knopf, der eine Verbindung trennen
+    // will, die es nicht gibt, ist ein Angebot auf eine Handlung ohne
+    // Gegenstand.
+    detailDisconnectBtn = zepButton(
       `${ICONS.disconnect} ${_("Disconnect")}`, "kritisch",
       async () => { await disconnect(); showMain(); setTimeout(updateDisplay, 1000) })
 
     detailBox.append(detailBackBtn)
     detailBox.append(detailHeaderWrap)
     detailBox.append(detailGrid)
-    detailBox.append(disconnectBtn)
+    detailBox.append(detailDisconnectBtn)
 
     // ----- Die drei Ansichten untereinander, immer genau eine sichtbar -----
     const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })

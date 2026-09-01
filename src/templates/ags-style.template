@@ -1764,6 +1764,21 @@ modelbutton {
   color: $text;
 }
 
+// Der Hinweis neben der Geraeteadresse, wenn NetworkManager sie ersetzt
+// hat (22.08.2026, siehe showDetail() in ags-network.template).
+//
+// $yellow und nicht $subtext: das ist eine WARNUNG, keine Fussnote - wer
+// eine wechselnde Adresse in einem Netz anmeldet, das sie dauerhaft
+// erwartet, bekommt einen Fehler, den er hinterher nirgends mehr findet.
+// Dieselbe Farbe wie .vpn-psk-status.warning, das dieselbe Rolle hat.
+//
+// Kleiner als der Wert daneben (CAPTION statt BODY): er BEGLEITET die
+// Adresse, er streitet nicht mit ihr um den Blick.
+.net-detail-hinweis {
+  font-size: {{STYLE_FONT_CAPTION}};
+  color: $yellow;
+}
+
 // Network Password Entry
 .net-password-box {
   background: rgba($surface, 0.3);

@@ -297,7 +297,7 @@ network_list() {
     #     Zeile wiederholen", und die Zahl waechst mit der Zahl der
     #     Nachbarn.
     #
-    #     Uebergeben ueber `--args` und `$ARGS.positional`, VIER Werte je
+    #     Uebergeben ueber `--args` und `$ARGS.positional`, FUENF Werte je
     #     Netz, nicht ueber eine Zeile mit Trennzeichen: eine SSID gehoert
     #     dem, der den Zugangspunkt aufstellt, und darf JEDES Zeichen
     #     tragen - Anfuehrungszeichen, Backslash, Doppelpunkt, auch einen
@@ -305,13 +305,33 @@ network_list() {
     #     darum an keinem zerbrechen. Genau diese Sorte Fehler steht
     #     zweimal im Kopf dieser Datei (`IFS=:` und `cut -d:`), und ein
     #     drittes Mal soll sie nicht entstehen.
+    #
+    # DIE BSSID FAEHRT IN DIESER ABFRAGE MIT - NEU am 22.08.2026
+    #     Die Adresse des Zugangspunktes gehoert in die Detailansicht
+    #     (welcher der fuenf Sender traegt mich gerade), und sie waere
+    #     ueber `nmcli -t -f ACTIVE,BSSID dev wifi list` als EIGENE
+    #     Abfrage zu haben. Das waere ein zweiter nmcli-Prozess fuer eine
+    #     Spalte, die DIESE Abfrage ohne jeden Aufpreis mitbringt: ein
+    #     Feld mehr in derselben `-f`-Liste, derselbe Prozess, dieselbe
+    #     Antwort. GEMESSEN am 22.08.2026 auf der Maschine des Nutzers,
+    #     `--rescan no`, 26 Netze in Reichweite: mit vier Feldern und mit
+    #     fuenf beide unter der Aufloesung des Unterschieds; ein
+    #     zusaetzlicher `nmcli`-Start kostet dagegen die vollen ~13 ms,
+    #     die im Kopf dieser Funktion stehen.
+    #
+    #     Die BSSID ist das Feld dieser Zeile, das am DICHTESTEN mit
+    #     Doppelpunkten besetzt ist (fuenf Stueck), und nmcli schuetzt
+    #     jeden davon mit einem Backslash. Sie geht darum durch
+    #     nmcli_fields wie der Name auch - `IFS=:` haette aus einem Netz
+    #     zehn Felder gemacht.
     local werte=()
-    local line fields=() ssid signal security
+    local line fields=() ssid signal security bssid
     while IFS= read -r line; do
         mapfile -t fields < <(nmcli_fields "$line")
         ssid="${fields[0]}"
         signal="${fields[1]}"
         security="${fields[2]}"
+        bssid="${fields[4]}"
         [ -z "$ssid" ] && continue
         local is_active="false"
         # Die Spalte ACTIVE ist "yes" oder "no" und kommt von
@@ -319,8 +339,8 @@ network_list() {
         [ "${fields[3]}" = "yes" ] && is_active="true"
         local is_secure="false"
         [ -n "$security" ] && [ "$security" != "--" ] && is_secure="true"
-        werte+=("$ssid" "$signal" "$is_secure" "$is_active")
-    done < <(LANG=C nmcli -t -f SSID,SIGNAL,SECURITY,ACTIVE dev wifi list \
+        werte+=("$ssid" "$signal" "$is_secure" "$is_active" "$bssid")
+    done < <(LANG=C nmcli -t -f SSID,SIGNAL,SECURITY,ACTIVE,BSSID dev wifi list \
                   --rescan "$scan_mode" 2>/dev/null)
 
     # Auch die leere Liste geht durch jq - `[]` faellt hier von selbst
@@ -332,14 +352,30 @@ network_list() {
     # Je Name der staerkste Zugangspunkt, absteigend nach Signal -
     # dieselbe Auswahl wie vorher, nur dass "aktiv" jetzt ueber ALLE
     # Zugangspunkte dieses Namens geodert wird (siehe oben).
+    #
+    # DIE BSSID IST DIE EINE AUSNAHME VON "DER STAERKSTE GEWINNT"
+    #     Fuer Signal und Verschluesselung ist der staerkste Sender die
+    #     richtige Auskunft: das ist der, mit dem ein Verbinden zu tun
+    #     haette. Fuer die BSSID ist er die FALSCHE - gefragt ist, an
+    #     welchem Sender man HAENGT, und das kann in einem Netz mit
+    #     mehreren Sendern ein schwaecherer sein (ein Rechner bleibt an
+    #     seinem Sender, bis der Wechsel sich lohnt). Ist einer der
+    #     Zugangspunkte dieses Namens aktiv, gilt darum SEINE Adresse;
+    #     sonst die des staerksten - dann ist sie ohnehin nur die
+    #     Auskunft ueber ein Netz, auf dem man nicht ist.
     jq -cn --args '
-      [ range(0; ($ARGS.positional | length); 4) as $i
+      [ range(0; ($ARGS.positional | length); 5) as $i
         | { ssid:   $ARGS.positional[$i],
             signal: ($ARGS.positional[$i + 1] | tonumber? // 0),
             secure: ($ARGS.positional[$i + 2] == "true"),
-            active: ($ARGS.positional[$i + 3] == "true") } ]
+            active: ($ARGS.positional[$i + 3] == "true"),
+            bssid:  $ARGS.positional[$i + 4] } ]
       | group_by(.ssid)
-      | map( max_by(.signal) + { active: (map(.active) | any) } )
+      | map( max_by(.signal) as $staerkster
+             | $staerkster
+             + { active: (map(.active) | any),
+                 bssid: (((map(select(.active)) | first) // $staerkster)
+                         | .bssid) } )
       | sort_by(-.signal)
     ' "${werte[@]}"
 }
@@ -356,33 +392,215 @@ network_connect() {
     fi
 }
 
+# Die Adresse, die auf dem Netzadapter liegt - und ob sie seine eigene
+# ist.
+#
+# NEU am 22.08.2026. GEMELDET, woertlich: "mir ist aufgefallen, dass man
+# in dem ags fenster für wlan nirgendwo eine info zur macadresse hat,
+# weil diese teilweise auch sehr wichtig ist".
+#
+# ES GIBT ZWEI ANTWORTEN, UND NUR EINE DAVON DARF ANGEZEIGT WERDEN
+#     NetworkManager kann die Adresse ersetzen (`wifi.cloned-mac-address`
+#     = random/stable/stable-ssid oder eine getippte Adresse). Dann gibt
+#     es die DAUERHAFTE, die auf dem Geraet steht, und die BENUTZTE, die
+#     das Netz sieht - und sie sind verschieden.
+#
+#     Wer die dauerhafte anzeigt, waehrend eine ersetzte benutzt wird,
+#     schickt den Nutzer in einen Fehler, den er nicht findet: er traegt
+#     sie zur Anmeldung in ein Hochschul- oder Firmennetz ein, das Netz
+#     sieht eine andere, nichts geht - und die angezeigte Zahl sieht
+#     dabei die ganze Zeit richtig aus. Angezeigt wird darum die
+#     BENUTZTE. Die dauerhafte wird nur noch dazu gebraucht, den
+#     Unterschied zu MELDEN.
+#
+# WARUM `ip -d link` UND KEINE ZWEITE nmcli-FRAGE
+#     `nmcli device show` kennt nur GENERAL.HWADDR, also die benutzte -
+#     GEPRUEFT am 22.08.2026, die Feldliste des Fehlertextes von
+#     `nmcli -g GENERAL.PERM-HWADDR device show` fuehrt sie nicht.
+#     Die dauerhafte steht bei NetworkManager nur auf dem D-Bus
+#     (PermHwAddress) und beim Kernel in IFLA_PERM_ADDRESS. `ip -d link
+#     show dev X` holt BEIDE in EINEM Aufruf: `link/ether <benutzt>` und,
+#     dahinter, `permaddr <dauerhaft>`.
+#
+#     `ip` steht hier ohnehin schon zweimal (network_ip und das Gateway
+#     darunter) - es kommt also kein Programm hinzu, nur ein Aufruf, und
+#     zwar einer statt der zwei, die `busctl` plus Pfadsuche gekostet
+#     haetten.
+#
+# WARUM DER VERGLEICH TROTZDEM HIER STEHT UND NICHT IN iproute2
+#     iproute2 druckt `permaddr` NUR, wenn die dauerhafte von der
+#     benutzten abweicht - im Handbuch steht das Wort nicht (GEPRUEFT am
+#     22.08.2026: `ip-link.8` kennt es nicht, das Programm schon, es
+#     steht in seinen Zeichenketten). Auf eine undokumentierte Bedingung
+#     ein "diese Adresse wechselt" zu stuetzen hiesse, sie zu raten.
+#     Hier wird darum BEIDES gelesen und SELBST verglichen: fehlt
+#     `permaddr`, sind sie gleich; steht es da, entscheidet der
+#     Vergleich. Das ist unter beiden Verhaltensweisen richtig.
+#
+# GEMESSEN am 22.08.2026 auf der Maschine des Nutzers, rein lesend und
+# aus drei voneinander unabhaengigen Quellen (NetworkManagers
+# PermHwAddress ueber D-Bus, /sys/class/net/<dev>/phy80211/macaddress,
+# und das Ausbleiben von `permaddr` in `ip -d link`): benutzte und
+# dauerhafte Adresse sind dort GLEICH. In /etc/NetworkManager/conf.d
+# liegt keine Vorgabe fuer cloned-mac-address, keine der neun
+# WLAN-Verbindungen setzt eine, und ohne Angabe ist die Vorgabe von
+# NetworkManager 1.58 "preserve" (nm-settings-nmcli(5)). Auf einem
+# ZepOS ist also im Regelfall EINE Zeile richtig - der Hinweis unten ist
+# fuer die Aufstellung da, die es anders haelt, und er entscheidet sich
+# bei jedem Aufruf neu.
+adapter_adresse() {
+    local device="$1"
+    [ -z "$device" ] && { printf '\n\n'; return; }
+
+    local zeile benutzt="" dauerhaft="" rest
+    while IFS= read -r zeile; do
+        case "$zeile" in
+            *"link/ether "*) ;;
+            *) continue ;;
+        esac
+        rest="${zeile#*link/ether }"
+        benutzt="${rest%% *}"
+        case "$zeile" in
+            *" permaddr "*)
+                rest="${zeile#* permaddr }"
+                dauerhaft="${rest%% *}"
+                ;;
+        esac
+        break
+    done < <(LANG=C ip -d link show dev "$device" 2>/dev/null)
+
+    printf '%s\n%s\n' "$benutzt" "$dauerhaft"
+}
+
+# Der WLAN-Adapter, auch wenn er auf keinem Netz ist.
+#
+# DIE EIGENE ADRESSE GIBT ES OHNE VERBINDUNG, UND GENAU DANN BRAUCHT MAN
+# SIE: wer sie in einem Hochschul- oder Firmennetz anmelden muss, ist
+# noch NICHT drin. Waere sie nur ueber die aktive Verbindung zu haben,
+# faehlte sie in dem einen Fall, fuer den sie gebraucht wird.
+#
+# `wifi` wird auf Gleichheit geprueft und nicht mit einem Muster: das
+# Geraet `p2p-dev-<adapter>` traegt den Typ `wifi-p2p`, hat keine eigene
+# Verbindung und waere hier die falsche Antwort.
+wlan_geraet() {
+    local zeile fields=()
+    while IFS= read -r zeile; do
+        mapfile -t fields < <(nmcli_fields "$zeile")
+        if [ "${fields[1]}" = "wifi" ]; then
+            printf '%s\n' "${fields[0]}"
+            return
+        fi
+    done < <(LANG=C nmcli -t -f DEVICE,TYPE dev 2>/dev/null)
+}
+
+# Die Verschluesselung der genannten Verbindung.
+#
+# HERGEZOGEN am 22.08.2026 aus showDetail() in ags-network.template. Sie
+# stand dort als eigenes `execAsync("bash -c \"LANG=C nmcli ... | cut -d:
+# -f2\"")` - also eine dritte Frage aus dem Fenster heraus, neben Gateway
+# und DNS, jede mit eigener Shell und eigenem Warten. Hier gehoert sie
+# hin: sie ist ein Feld der Verbindungsauskunft wie die anderen auch, und
+# der Antwortsatz unten traegt sie mit.
+#
+# `cut -d: -f2` ist dabei gefallen. Der Wert selbst (`wpa-psk`) traegt
+# keinen Doppelpunkt, aber die Regel dieser Datei steht dreimal in ihrem
+# Kopf, und eine vierte Stelle, die sie bricht, ist eine Stelle zu viel.
+verschluesselung() {
+    local name="$1"
+    [ -z "$name" ] && return
+    local zeile
+    while IFS= read -r zeile; do
+        nmcli_field "$zeile" 2
+        return
+    done < <(LANG=C nmcli -t -f 802-11-wireless-security.key-mgmt \
+                  connection show "$name" 2>/dev/null)
+}
+
 # Network details
+#
+# EIN AUFRUF FUER DIE GANZE DETAILANSICHT - GEAENDERT am 22.08.2026
+#     showDetail() in ags-network.template stellte drei eigene Fragen
+#     (Gateway, DNS, Verschluesselung), jede ueber `execAsync("bash -c
+#     ...")` und jede mit `await` vor der naechsten, waehrend `details`
+#     danebenstand und von niemandem gerufen wurde. Diese Antwort traegt
+#     jetzt alle drei - und dazu die Geraeteadresse, die der Anlass
+#     dieser Aenderung war. Aus drei Shells und drei Wartezeiten in der
+#     Oberflaeche wird eine.
+#
+#     Das ist dieselbe Rechnung wie am 20.08.2026 (Aufgabe 36, 2160 ms
+#     auf 43 ms): nicht die einzelne Frage ist teuer, sondern die Zahl
+#     der Fragen.
 network_details() {
-    local info=$(nmcli -t -f NAME,TYPE,DEVICE,STATE con show --active 2>/dev/null | head -1)
+    # WELCHE DER AKTIVEN VERBINDUNGEN GEMEINT IST - GEAENDERT am
+    # 22.08.2026
+    #
+    #     Hier stand `| head -1`, also "die erste, die nmcli nennt". Das
+    #     ist bei stehendem VPN die falsche: `con show --active` fuehrt
+    #     auch den Tunnel, und dann beschrieb diese Auskunft ihn statt
+    #     der Leitung darunter - mit SEINEM Geraet, und damit ab heute
+    #     mit der falschen Geraeteadresse (ein tun/wg-Anschluss hat gar
+    #     keine).
+    #
+    #     Gesucht ist die Verbindung, die an einem echten Netzadapter
+    #     haengt. Die erste Zeile bleibt als Rueckfall stehen, damit eine
+    #     Bauart, die hier niemand aufgezaehlt hat (Mobilfunk, Bridge),
+    #     dieselbe Auskunft bekommt wie bisher.
+    local zeile fields=() erste="" bevorzugt=""
+    while IFS= read -r zeile; do
+        [ -z "$erste" ] && erste="$zeile"
+        mapfile -t fields < <(nmcli_fields "$zeile")
+        case "${fields[1]}" in
+            802-11-wireless|802-3-ethernet) bevorzugt="$zeile"; break ;;
+        esac
+    done < <(nmcli -t -f NAME,TYPE,DEVICE,STATE con show --active 2>/dev/null)
+    local info="${bevorzugt:-$erste}"
+
+    local name="" type="" device="" ip="" gateway="" dns="" security=""
     if [ -n "$info" ]; then
         # Der Name gehoert dem Benutzer und darf einen Doppelpunkt
         # enthalten. `cut -d: -f1` schnitt ihn dort ab und schob Typ und
         # Geraet um ein Feld weiter, sodass das Widget als Typ den Rest
         # des Namens anzeigte.
-        local fields=()
         mapfile -t fields < <(nmcli_fields "$info")
-        local name="${fields[0]}"
-        local type="${fields[1]}"
-        local device="${fields[2]}"
-        local ip=$(network_ip)
-        local gateway=$(ip route | grep default | awk '{print $3}')
-        local dns=$(grep nameserver /etc/resolv.conf 2>/dev/null | head -1 | awk '{print $2}')
-
-        # Derselbe Grund wie in network_list: der Verbindungsname wird
-        # vom Benutzer vergeben, und ein Anführungszeichen darin machte
-        # aus dieser Antwort kaputtes JSON.
-        jq -n --arg name "$name" --arg type "$type" --arg device "$device" \
-              --arg ip "$ip" --arg gateway "$gateway" --arg dns "$dns" \
-              '{name: $name, type: $type, device: $device,
-                ip: $ip, gateway: $gateway, dns: $dns}'
+        name="${fields[0]}"
+        type="${fields[1]}"
+        device="${fields[2]}"
+        ip=$(network_ip)
+        gateway=$(ip route | grep default | awk '{print $3}')
+        dns=$(grep nameserver /etc/resolv.conf 2>/dev/null | head -1 | awk '{print $2}')
+        security=$(verschluesselung "$name")
     else
-        echo "{}"
+        # Ohne Verbindung gibt es keine Adresse im Netz, kein Gateway und
+        # keinen Namensdienst - aber sehr wohl einen Adapter mit einer
+        # Adresse. Siehe wlan_geraet().
+        device=$(wlan_geraet)
     fi
+
+    local adresse=()
+    mapfile -t adresse < <(adapter_adresse "$device")
+    local mac="${adresse[0]}"
+    local dauerhaft="${adresse[1]}"
+    # "Wechselnd" heisst hier genau eine Sache, und nur die: die Adresse
+    # auf dem Adapter ist nicht seine eigene. Ob sie bei jedem Verbinden
+    # neu gewuerfelt wird (`random`) oder je Netz dieselbe bleibt
+    # (`stable`), steht in einer Einstellung, deren WIRKSAMEN Wert man
+    # ohne Root nicht sieht (eine leere Verbindungseinstellung heisst
+    # "die globale Vorgabe gilt", und die liest nur
+    # `NetworkManager --print-config`). Behauptet wird darum nur, was
+    # gemessen ist.
+    local mac_wechselt="false"
+    [ -n "$dauerhaft" ] && [ "$dauerhaft" != "$mac" ] && mac_wechselt="true"
+
+    # Derselbe Grund wie in network_list: der Verbindungsname wird
+    # vom Benutzer vergeben, und ein Anführungszeichen darin machte
+    # aus dieser Antwort kaputtes JSON.
+    jq -n --arg name "$name" --arg type "$type" --arg device "$device" \
+          --arg ip "$ip" --arg gateway "$gateway" --arg dns "$dns" \
+          --arg security "$security" --arg mac "$mac" \
+          --argjson mac_wechselt "$mac_wechselt" \
+          '{name: $name, type: $type, device: $device,
+            ip: $ip, gateway: $gateway, dns: $dns,
+            security: $security, mac: $mac, mac_wechselt: $mac_wechselt}'
 }
 
 # Main dispatcher
