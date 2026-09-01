@@ -346,10 +346,25 @@ def test_the_dock_is_visible_without_anyone_pressing_a_key():
     Gesucht wird im Fensterrumpf und nicht in der ganzen Datei: das
     Wort steht auch im Rumpf der Leiste, und die steht dort absichtlich
     auf false und wird erst nach dem Einhaengen ihres Inhalts sichtbar.
+
+    SEIT DEM 01.09.2026 IN ZWEI TEILEN, und das ist keine Aufweichung.
+        Das Fenster entsteht mit `visible: sichtbar`, weil ein Schirm
+        auch NACH dem Anmelden angesteckt werden kann (jeSchirm() in
+        ags-kit.template): sein Dock muss so stehen wie die anderen, und
+        ein festes `true` liesse bei jedem Kabel ein Dock erscheinen,
+        obwohl der Nutzer es gerade mit SUPER+B weggeschickt hat.
+
+        Gefragt wird deshalb nach beidem - dem Feld IM Fenster und dem
+        Anfangswert davor. `let sichtbar = false` faellt hier durch wie
+        `visible: false` vorher, und ein Fenster, das seinen
+        Anfangsstand gar nicht mehr liest, jetzt auch.
     """
     code = _code(DOCK, "//")
     body = code[code.index("namespace: \"zepos-dock\""):]
-    assert re.search(r"visible:\s*true", body.split("})")[0]), (
+    assert re.search(r"visible:\s*sichtbar", body.split("})")[0]), (
+        "das Dockfenster liest seinen Anfangsstand nicht - dann haengt "
+        "es davon ab, was in seiner Zeile zufaellig steht")
+    assert re.search(r"let sichtbar = true", code), (
         "das Dock entsteht unsichtbar - dann sieht es nur, wer SUPER+B "
         "kennt")
 

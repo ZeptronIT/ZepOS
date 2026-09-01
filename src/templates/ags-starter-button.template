@@ -179,6 +179,7 @@ import { faehrtMitDemDock } from "./Dock"
 // importiert und nicht nachgebaut wird.
 import { SymbolCell } from "./Bar"
 import { ask } from "../utils/hyprland"
+import { jeSchirm } from "../utils/kit"
 import { _ } from "../utils/i18n"
 
 // Sechs Punkte - siehe den Dateikopf und src/icon_definition.py.
@@ -283,20 +284,15 @@ export function StarterButtonContent(): Gtk.Box {
  * zepos-menu), also gibt es hier nichts nachzuschlagen.
  */
 export default function StarterButton(): void {
-  const display = Gdk.Display.get_default()
-  if (!display) {
-    console.error("Keine Anzeige - es gibt keinen Starterknopf")
-    return
-  }
-
   // Die eigenen Flaechen, je Schirm eine. Sie stehen hier und nicht
   // modulweit: was mitfaehrt, sind die Fenster GENAU DIESES Aufrufs.
   const flaechen: Astal.Window[] = []
 
-  const monitors = display.get_monitors()
-  for (let index = 0; index < monitors.get_n_items(); index++) {
-    const monitor = monitors.get_item(index) as Gdk.Monitor
+  // Ob das Dock gerade eingefahren ist - dieselbe Zahl und dieselbe
+  // Begruendung wie beim Abschaltknopf (01.09.2026, siehe dort).
+  let dockSteht = true
 
+  jeSchirm("Starterknopf", (monitor: Gdk.Monitor) => {
     const plate = StarterButtonContent()
 
     const window = new Astal.Window({
@@ -315,14 +311,19 @@ export default function StarterButton(): void {
       // Astal.Window als Beweis, dass es KEIN Modal ist.
       keymode: Astal.Keymode.NONE,
       gdkmonitor: monitor,
-      visible: true,
+      visible: dockSteht,
     })
     window.add_css_class("starter-button-window")
     window.set_margin_bottom(EDGE_GAP)
     window.set_margin_right(EDGE_GAP)
     window.set_child(plate)
     flaechen.push(window)
-  }
+    return window
+  }, (window: Astal.Window) => {
+    const stelle = flaechen.indexOf(window)
+    if (stelle >= 0) flaechen.splice(stelle, 1)
+    window.destroy()
+  })
 
   // MIT DEM DOCK EIN UND AUS - siehe den Dateikopf. `visible` setzen und
   // nicht show()/hide(): dasselbe, was das Dock in seinem toggle() tut
@@ -330,6 +331,11 @@ export default function StarterButton(): void {
   // Flaeche abzumelden, waeren drei Wege, an denen sich etwas
   // unterscheiden koennte.
   faehrtMitDemDock(sichtbar => {
+    // GEMERKT und nicht nur gesetzt, seit dem 01.09.2026: ein Schirm,
+    // der spaeter angesteckt wird, baut seine Flaeche mit `dockSteht`
+    // (siehe jeSchirm() oben). Ohne diese Zeile erschiene dort ein
+    // Knopf, obwohl das Dock ueberall eingefahren ist.
+    dockSteht = sichtbar
     for (const flaeche of flaechen) flaeche.visible = sichtbar
   })
 }

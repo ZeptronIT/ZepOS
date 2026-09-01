@@ -726,6 +726,12 @@ export default async function Settings(): Promise<ShellWidget | null> {
   // erreichbar sein, ohne dass jemand erst scrollt.
   let behaltenKnopf: ((wort: string) => void) | null = null
 
+  // Was an der angewandten Anordnung auffaellt, ohne sie zu verbieten -
+  // heute genau ein Satz: zwei Schirme liegen uebereinander. Die Bruecke
+  // schickt ihn seit dem 01.09.2026 als `warnings` neben der Meldung,
+  // dass die Frist laeuft; siehe arm() in bridge.py.
+  let warnungen: string[] = []
+
   const anordnungSeite = (element: Bedienelement,
                           zeichneNeu: () => void): Gtk.Widget => {
     const kasten = new Gtk.Box({
@@ -900,8 +906,14 @@ export default async function Settings(): Promise<ShellWidget | null> {
           // der laeuft im Waechter, in einem eigenen Prozess. Er ist die
           // Hoeflichkeit davor: wer sieht, was er bestellt hat, soll
           // nicht funfzehn Sekunden warten muessen.
-          sagen(format(_("Applied, on probation. Keep it? {seconds} s"),
-            { seconds: antwort.seconds ?? 0 }))
+          //
+          // `warnings` VOR dem Zaehler, seit dem 01.09.2026: die Bruecke
+          // lehnt eine Ueberlappung seit diesem Tag nicht mehr ab (siehe
+          // arm() in bridge.py, "was auffaellt, aber nicht verbietet"),
+          // sondern nennt sie. Der Augenblick, in dem das zaehlt, ist
+          // dieser eine - danach steht die Anordnung, und der Nutzer
+          // sieht alles doppelt, ohne zu wissen warum.
+          warnungen = antwort.warnings ?? []
           zeigeRueckfrage(antwort.seconds ?? 0, antworte)
           return
         }
@@ -939,6 +951,12 @@ export default async function Settings(): Promise<ShellWidget | null> {
   const zeigeRueckfrage = (sekunden: number,
                            antworte: (wort: string) => void) => {
     let rest = sekunden
+    // Die Warnungen VOR dem Zaehler, in derselben Zeile - `sagen()` ist
+    // die einzige Stelle, an der dieses Fenster waehrend der Frist
+    // ueberhaupt spricht. Eine zweite Meldung daneben waere eine, die
+    // der Zaehler eine Sekunde spaeter ueberschreibt.
+    const mitWarnung = (satz: string) =>
+      warnungen.length > 0 ? warnungen.join("\n") + "\n" + satz : satz
     const ticken = () => {
       if (waechter === null) return
       rest -= 1
@@ -947,11 +965,13 @@ export default async function Settings(): Promise<ShellWidget | null> {
         antworte(VERWERFEN)
         return
       }
-      sagen(format(_("Applied, on probation. Keep it? {seconds} s"),
-        { seconds: rest }))
+      sagen(mitWarnung(format(_("Applied, on probation. Keep it? {seconds} s"),
+        { seconds: rest })))
       timeout(1000, ticken)
     }
     behaltenKnopf = antworte
+    sagen(mitWarnung(format(_("Applied, on probation. Keep it? {seconds} s"),
+      { seconds: rest })))
     timeout(1000, ticken)
   }
 

@@ -394,6 +394,96 @@ def test_a_screen_that_is_off_does_not_move():
     assert displays.snap([layout[0], off], "eDP-1").x == 99
 
 
+def test_the_snap_does_not_stack_a_screen_on_its_neighbour():
+    """DIE URSACHE VON "alles doppelt auf einem monitor" (01.09.2026).
+
+    GEMESSEN vor der Behebung: zwei gleich grosse Schirme, der eine bei
+    0,0, der andere nach 40,40 gezogen. _snap_axis fand auf BEIDEN
+    Achsen den Kandidaten "vorne buendig" (0, Abstand 40 - innerhalb von
+    SNAP_DISTANCE), und das Ergebnis war 0,0: der gezogene Schirm lag
+    exakt auf dem anderen. Zwei Schirme auf demselben Fleck heissen zwei
+    Leisten und zwei Docks an derselben Stelle - genau das Bild, das der
+    Nutzer gemeldet hat.
+
+    Die zwei buendigen Kandidaten sind AUSRICHTUNGEN und keine
+    Anlegungen; getrennt je Achse gerechnet koennen sie beide zugleich
+    gewinnen. Das Einrasten hat die Ueberlappung also nicht durchgelassen
+    - es hat sie erzeugt.
+    """
+    steht = displays.Placement("A", "A", True, 1920, 1080, 60, 0, 0, 1.0, 0)
+    gezogen = displays.Placement("B", "B", True, 1920, 1080, 60, 40, 40, 1.0, 0)
+
+    assert displays._snap_axis(40, 1920, [(0, 1920)], 100) == 0
+    assert displays._snap_axis(40, 1080, [(0, 1080)], 100) == 0
+
+    landed = displays.snap([steht, gezogen], "B")
+
+    assert displays.overlaps([steht, landed]) == [], (
+        f"B ist auf {landed.x},{landed.y} eingerastet und liegt damit auf A")
+    # Und zwar an die naechstgelegene Kante. GEMESSEN am 01.09.2026:
+    # nach unten sind es 1040 Punkte, nach oben 1120, nach rechts 1880 -
+    # also unten. Die Zahl steht hier, weil "irgendwohin, Hauptsache
+    # nicht darauf" keine Zeichnung ergibt, der man beim Ziehen zusieht.
+    assert (landed.x, landed.y) == (0, 1080)
+
+
+def test_a_screen_dragged_above_its_neighbour_lands_above_it():
+    """Die Richtung kommt aus der Bewegung und nicht aus einer Vorliebe.
+
+    Gezogen wird von OBEN in den Schirm hinein, 180 Punkte zu tief - zu
+    weit fuer den Fangbereich (SNAP_DISTANCE, 100), also greift hier
+    nichts als das Ausweichen selbst. Es legt den Schirm an die Kante an,
+    an der er steht: darueber.
+    """
+    steht = displays.Placement("A", "A", True, 1920, 1080, 60, 0, 0, 1.0, 0)
+    gezogen = displays.Placement("B", "B", True, 1920, 1080, 60, 30, -900,
+                                 1.0, 0)
+
+    landed = displays.snap([steht, gezogen], "B")
+
+    assert (landed.x, landed.y) == (0, -1080)
+    assert displays.overlaps([steht, landed]) == []
+
+
+def test_a_screen_dropped_dead_centre_still_lands_beside_the_other():
+    """Ohne jeden Fangpunkt in Reichweite - also nichts, was das
+    Einrasten retten koennte. Ein Rechteck, das sich mitten auf einem
+    anderen ablegen laesst, ist der Fehler; der Fangbereich ist nur der
+    haeufigste Weg dorthin."""
+    steht = displays.Placement("A", "A", True, 3440, 1440, 60, 0, 0, 1.0, 0)
+    gezogen = displays.Placement("B", "B", True, 800, 600, 60, 1300, 400, 1.0, 0)
+
+    landed = displays.snap([steht, gezogen], "B")
+
+    assert displays.overlaps([steht, landed]) == [], (
+        f"B liegt auf {landed.x},{landed.y} mitten auf A")
+
+
+def test_a_screen_that_lands_free_is_not_pushed_anywhere():
+    """Die Gegenprobe. Ein Ausweichen, das auch dann zieht, wenn nichts
+    im Weg liegt, waere eine Zeichnung, die den Schirm nicht dort
+    ablegt, wo der Zeiger ihn hinbringt."""
+    layout = a_desk()
+    frei = displays.replace(layout[1], x=3440 + displays.SNAP_DISTANCE + 1)
+
+    landed = displays.snap([layout[0], frei], "eDP-1")
+
+    assert (landed.x, landed.y) == (frei.x, frei.y)
+
+
+def test_a_screen_that_is_off_is_no_obstacle():
+    """Ein abgeschalteter Schirm nimmt keine Flaeche ein - dieselbe
+    Regel, nach der normalised() ihn beim Ursprung uebergeht und
+    overlaps() ihn nicht zaehlt. Er zieht deshalb nicht an, und man weicht
+    ihm auch nicht aus: der Schirm bleibt genau da, wo er abgelegt wird."""
+    aus = displays.Placement("A", "A", False, 1920, 1080, 60, 0, 0, 1.0, 0)
+    gezogen = displays.Placement("B", "B", True, 1920, 1080, 60, 40, 40, 1.0, 0)
+
+    landed = displays.snap([aus, gezogen], "B")
+
+    assert (landed.x, landed.y) == (40, 40)
+
+
 def test_a_rotated_screen_occupies_its_short_side():
     """`hyprctl` meldet den MODUS. Ein Nachbar, der gegen die
     Modus-Breite gesetzt wird, ueberlappt bei jeder Drehung."""
@@ -447,6 +537,34 @@ def test_two_screens_on_the_same_spot_are_reported():
 def test_screens_that_merely_touch_do_not_overlap():
     assert displays.overlaps(a_desk()) == []
     assert displays.problems(a_desk()) == []
+
+
+def test_an_overlap_is_a_remark_and_not_a_blocker():
+    """DIE ENTSCHEIDUNG VOM 01.09.2026, als Zusicherung.
+
+    Eine Ueberlappung wird GEMELDET und nicht verweigert - die
+    Begruendung steht bei overlaps() und bei blockers(). Ohne diese
+    Trennung behandelten die zwei Oberflaechen dieselbe Anordnung
+    verschieden: das AGS-Fenster lehnte ab, das GTK-Fenster warnte.
+    """
+    layout = a_desk()
+    layout[1] = displays.replace(layout[1], x=0)
+
+    assert displays.blockers(layout) == []
+    assert len(displays.remarks(layout)) == 1
+    assert "uebereinander" in displays.remarks(layout)[0]
+    assert displays.problems(layout) == displays.remarks(layout)
+
+
+def test_a_desk_without_a_screen_left_on_is_a_blocker():
+    """Der eine Fall, aus dem es keinen Rueckweg gibt, bleibt einer."""
+    layout = [displays.replace(item, enabled=False) for item in a_desk()]
+
+    assert len(displays.blockers(layout)) == 1
+    assert "Kein Bildschirm" in displays.blockers(layout)[0]
+    assert displays.remarks(layout) == [], (
+        "ein Schreibtisch ohne eingeschalteten Schirm hat keine "
+        "Ueberlappung - abgeschaltete Schirme nehmen keine Flaeche ein")
 
 
 # --------------------------------------------------------------------

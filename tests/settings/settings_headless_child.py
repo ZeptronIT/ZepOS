@@ -219,6 +219,17 @@ def report_screens(window) -> None:
         # Falle steht in genau diesen zwei Werten.
         note(f"dialog-default:{page.dialog.get_default_response()}")
         note(f"dialog-close:{page.dialog.get_close_response()}")
+        # WAS IN DER RUECKFRAGE STEHT, in einer Zeile.
+        #
+        # Seit dem 01.09.2026 steht dort auch die Warnung ueber eine
+        # Ueberlappung, und sie ist der Grund fuer diese Marke: der
+        # Nutzer hat die Warnung unter der Zeichnung nicht gelesen, weil
+        # dort noch nichts passiert war. Ob sie IM AUGENBLICK DER
+        # ENTSCHEIDUNG dasteht, ist nur hier zu sehen.
+        note("dialog-body:"
+             + (page.dialog.get_body() or "").replace("\n", " | "))
+    # Was unter der Zeichnung steht - dieselbe Warnung, nur frueher.
+    note("screens-hint:" + page.hint.get_text().replace("\n", " | "))
     for item in page.desk.placements:
         note(f"screen:{item.name}={item.x}x{item.y}:"
              f"{item.displayed_width}x{item.displayed_height}:"

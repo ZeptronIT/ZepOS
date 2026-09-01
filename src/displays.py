@@ -736,6 +736,35 @@ def snap(placements: Iterable[Placement], name: str,
     getrennt, weil ein Schirm rechts neben einem anderen stehen und
     gleichzeitig oben buendig sein soll; ein einziger Fangpunkt fuer
     beides koennte nur eins von beidem.
+
+    UND DANN NOCH EINMAL HIN, WENN DABEI EINE UEBERLAPPUNG HERAUSKOMMT.
+
+    GEMESSEN am 01.09.2026, und es ist die Ursache der Meldung "ich sehe
+    seit dem anwenden alle sachen doppelt auf einem monitor":
+
+        Zwei Schirme, 1920x1080 bei 0,0 und 1920x1080 bei 40,40.
+        _snap_axis fand auf der x-Achse den Kandidaten "vorne buendig"
+        (0, Abstand 40) und auf der y-Achse denselben (0, Abstand 40).
+        Ergebnis: 0,0 - der gezogene Schirm lag EXAKT auf dem anderen.
+
+    Die zwei buendigen Kandidaten sind AUSRICHTUNGEN und keine
+    Anlegungen: "oben buendig" ist eine Aussage ueber die y-Achse, die
+    erst dann etwas bedeutet, wenn die x-Achse ANLEGT. Getrennt
+    gerechnet kann jede Achse fuer sich buendig ausfallen, und dann
+    liegen beide Schirme aufeinander. Das Einrasten hat die Ueberlappung
+    also nicht bloss durchgelassen - es hat sie ERZEUGT, und zwar genau
+    dann, wenn jemand einen Schirm ungefaehr ueber einen anderen zieht.
+
+    Deshalb wird das Ergebnis geprueft und noetigenfalls an die
+    naechstgelegene KANTE des Schirms geschoben, den es trifft. Wer
+    einen Schirm oben auf einen anderen zieht, bekommt ihn darueber -
+    das ist, was er wollte, und nicht der Zustand, in dem sein
+    Schreibtisch doppelt aussieht.
+
+    Der Fangbereich gilt fuer das Ausweichen NICHT. Eine Ueberlappung
+    ist eine Ueberlappung, auch 500 Pixel tief; `distance` sagt, wann
+    zwei Kanten sich anziehen, und nicht, wann zwei Flaechen einander
+    ausweichen duerfen.
     """
     placements = list(placements)
     moving = next(item for item in placements if item.name == name)
@@ -751,7 +780,50 @@ def snap(placements: Iterable[Placement], name: str,
     y = _snap_axis(
         moving.y, moving.displayed_height,
         [(other.y, other.displayed_height) for other in others], distance)
-    return replace(moving, x=x, y=y)
+    return _stepped_aside(replace(moving, x=x, y=y), others)
+
+
+def _hit(item: Placement, others: list[Placement]) -> Placement | None:
+    """Der erste Schirm, auf dem dieser hier liegt - oder None."""
+    for other in others:
+        if (item.x < other.right and other.x < item.right
+                and item.y < other.bottom and other.y < item.bottom):
+            return other
+    return None
+
+
+def _stepped_aside(item: Placement, others: list[Placement]) -> Placement:
+    """Denselben Schirm, aber neben und nicht auf seinen Nachbarn.
+
+    Ausgewichen wird an die naechstgelegene der vier Kanten des Schirms,
+    den er trifft: rechts daneben, links daneben, darunter, darueber.
+    "Naechstgelegen" heisst hier "am wenigsten weit von der Stelle, an
+    der er gerade liegt" - der Schirm rutscht also aus der Ueberdeckung
+    heraus, statt an eine ausgesuchte Stelle zu springen.
+
+    Die Schleife laeuft hoechstens so oft, wie es Nachbarn gibt, PLUS
+    einmal: jeder Schritt legt den Schirm an einen Nachbarn an, und wenn
+    er dabei auf den naechsten faellt, ist der schon abgearbeitet. Bleibt
+    danach noch eine Ueberdeckung, wird rechts vom ganzen Schreibtisch
+    angelegt - eine Stelle, die es immer gibt. Eine Schleife ohne Deckel
+    waere ein Einstellungsfenster, das beim Ziehen stehenbleibt.
+    """
+    if not others:
+        return item
+    for _round in range(len(others) + 1):
+        other = _hit(item, others)
+        if other is None:
+            return item
+        item = min(
+            (replace(item, x=other.right),
+             replace(item, x=other.x - item.displayed_width),
+             replace(item, y=other.bottom),
+             replace(item, y=other.y - item.displayed_height)),
+            key=lambda candidate: (abs(candidate.x - item.x)
+                                   + abs(candidate.y - item.y)))
+    if _hit(item, others) is None:
+        return item
+    return replace(item, x=max(other.right for other in others))
 
 
 def _snap_axis(start: int, length: int,
@@ -804,24 +876,48 @@ def overlaps(placements: Iterable[Placement]) -> list[tuple[str, str]]:
     return found
 
 
+def blockers(placements: Iterable[Placement]) -> list[str]:
+    """Was diese Anordnung wirklich VERBIETET, im Wortlaut.
+
+    Genau ein Fall, und er ist der, aus dem es keinen Rueckweg gibt.
+    Alles andere ist sichtbar und damit zuruecknehmbar und steht in
+    remarks().
+
+    GETRENNT SEIT DEM 01.09.2026, und die Trennung ist gemessen:
+    settings/zepos_settings_gui/bridge.py hat bis dahin BEIDE Listen
+    gleich behandelt und eine Ueberlappung abgelehnt, waehrend das
+    GTK-Fenster sie nur gemeldet hat. Zwei Antworten auf dieselbe
+    Anordnung waren eine zu viel - und die strengere kam ausgerechnet
+    aus dem Fenster, das Schirme gar nicht verschieben kann.
+    """
+    if any(item.enabled for item in placements):
+        return []
+    return ["Kein Bildschirm bleibt an. Es gibt keinen Rueckweg aus einem "
+            "Schreibtisch ohne Bild: die Frage, ob man ihn behalten will, "
+            "stuende auf keinem Schirm mehr."]
+
+
+def remarks(placements: Iterable[Placement]) -> list[str]:
+    """Was an dieser Anordnung auffaellt, ohne sie zu verbieten.
+
+    Gemeldet und nicht verweigert, mit der Begruendung, die bei
+    overlaps() steht: eine Ueberlappung ist fast immer ein Versehen,
+    aber sie ist eine Anordnung, die man SIEHT und zuruecknehmen kann.
+    """
+    return [f"{first} und {second} liegen uebereinander. Fenster gehen "
+            "dann auf einem Schirm auf, der teilweise verdeckt ist."
+            for first, second in overlaps(placements)]
+
+
 def problems(placements: Iterable[Placement]) -> list[str]:
     """Was dieser Anordnung im Weg steht, im Wortlaut.
 
-    Eine leere Liste heisst: anwendbar. Der Eintrag, der wirklich zaehlt,
-    ist der erste - alles andere ist sichtbar und damit zuruecknehmbar.
+    Eine leere Liste heisst: nichts zu melden. Der Eintrag, der wirklich
+    zaehlt, ist der erste - alles andere ist sichtbar und damit
+    zuruecknehmbar.
     """
     placements = list(placements)
-    found = []
-    if not any(item.enabled for item in placements):
-        found.append(
-            "Kein Bildschirm bleibt an. Es gibt keinen Rueckweg aus einem "
-            "Schreibtisch ohne Bild: die Frage, ob man ihn behalten will, "
-            "stuende auf keinem Schirm mehr.")
-    for first, second in overlaps(placements):
-        found.append(
-            f"{first} und {second} liegen uebereinander. Fenster gehen "
-            "dann auf einem Schirm auf, der teilweise verdeckt ist.")
-    return found
+    return blockers(placements) + remarks(placements)
 
 
 def normalised(placements: Iterable[Placement]) -> list[Placement]:
@@ -948,7 +1044,7 @@ def apply_command(placements: Iterable[Placement]) -> list[str]:
     """
     placements = list(placements)
     if not any(item.enabled for item in placements):
-        raise NoScreenLeft(problems(placements)[0])
+        raise NoScreenLeft(blockers(placements)[0])
     batch = " ; ".join(
         f"keyword monitor {spec(item)}"
         for item in sorted(placements, key=lambda item: item.name))

@@ -455,7 +455,7 @@ import * as Hyprland from "../utils/hyprland"
 // durchsichtige Huelle), zepDivider der Trenner. Rundung, Farbe und
 // Abstand stehen damit in ags-style.template und nicht hier - siehe den
 // Kopfabschnitt "DAS RECHTSKLICK-MENUE".
-import { zepRow, zepDivider } from "../utils/kit"
+import { zepRow, zepDivider, jeSchirm } from "../utils/kit"
 import { _ } from "../utils/i18n"
 // Die Einstellungsdatei, aus der Sicht der Oberflaeche - Aufgabe 53
 // (21.08.2026). Hier standen bis dahin bruecke(), gepflegtePins() und
@@ -1893,16 +1893,21 @@ export function faehrtMitDemDock(folge: Mitfahrer): void {
  * tests/src/test_placement.py.
  */
 export default function Dock(): DockHandle {
-  const display = Gdk.Display.get_default()
   const windows: Astal.Window[] = []
-  if (!display) {
-    console.error("Keine Anzeige - es gibt kein Dock")
-    return { windows, toggle: () => {}, visible: () => false }
-  }
 
-  const monitors = display.get_monitors()
-  for (let index = 0; index < monitors.get_n_items(); index++) {
-    const monitor = monitors.get_item(index) as Gdk.Monitor
+  // OB DAS DOCK GERADE EINGEFAHREN IST, als eigene Zahl neben den
+  // Fenstern.
+  //
+  // Gebraucht seit dem 01.09.2026, seit ein Schirm auch NACH dem
+  // Anmelden dazukommen kann (siehe jeSchirm() in ../utils/kit): das
+  // neue Fenster muss so stehen wie die anderen. Ohne diese Zahl
+  // erschiene bei jedem angesteckten Schirm ein Dock, obwohl der Nutzer
+  // es gerade mit SUPER+B weggeschickt hat - `windows.some(...)` kann
+  // es nicht sagen, weil die Liste in genau diesem Moment leer sein
+  // kann (alle Schirme fort, einer kommt wieder).
+  let sichtbar = true
+
+  jeSchirm("Dock", (monitor: Gdk.Monitor) => {
     const window = new Astal.Window({
       namespace: "zepos-dock",
       name: `dock-${monitor.connector}`,
@@ -1910,30 +1915,41 @@ export default function Dock(): DockHandle {
       anchor: Astal.WindowAnchor.BOTTOM,
       exclusivity: Astal.Exclusivity.EXCLUSIVE,
       gdkmonitor: monitor,
-      visible: true,
+      visible: sichtbar,
     })
     window.add_css_class("dock-window")
     window.set_margin_bottom(DOCK_MARGIN_BOTTOM)
     window.set_child(DockContent())
     windows.push(window)
-  }
+    return window
+  }, (window: Astal.Window) => {
+    const stelle = windows.indexOf(window)
+    if (stelle >= 0) windows.splice(stelle, 1)
+    window.destroy()
+  })
 
   // Der Anfangsstand fuer alle, die mitfahren wollen. Er steht HIER und
-  // nicht als Vorgabe bei `stand`, weil `visible: true` eine Zeile
-  // weiter oben steht: waeren es zwei Stellen, koennte jemand die eine
-  // aendern und die andere vergessen.
-  melde(windows.some(window => window.visible))
+  // nicht als Vorgabe bei `stand`, weil `sichtbar` eine Zeile weiter
+  // oben steht: waeren es zwei Stellen, koennte jemand die eine aendern
+  // und die andere vergessen.
+  melde(sichtbar)
 
   return {
     windows,
     toggle: () => {
-      const showing = windows.some(window => window.visible)
+      // `showing` ist der Stand VOR dem Umschalten - dieselbe Zeile wie
+      // vor dem 01.09.2026, nur dass er jetzt aus `sichtbar` kommt und
+      // nicht aus `windows.some(...)`. Die Liste kann in genau diesem
+      // Augenblick leer sein (alle Schirme fort), und "keine Flaeche
+      // sichtbar" hiesse dann faelschlich "eingefahren".
+      const showing = sichtbar
+      sichtbar = !showing
       for (const window of windows) window.visible = !showing
       // NACH der Schleife und im selben Durchlauf: erst steht der neue
       // Stand des Docks fest, dann faehrt alles mit, was mitfaehrt -
       // und beides, bevor GTK das naechste Mal zum Compositor schreibt.
-      melde(!showing)
+      melde(sichtbar)
     },
-    visible: () => windows.some(window => window.visible),
+    visible: () => sichtbar,
   }
 }

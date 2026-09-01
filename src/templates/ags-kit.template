@@ -15,7 +15,7 @@
 // Das Kit kennt Knopf, Zeile, Schalter, Abschnittsmarke und Trenner -
 // mehr nicht. Ein Bauteil, das nur ein Fenster braucht, gehoert in
 // dieses Fenster.
-import { Gtk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
 
 export type ZepRolle = "voll" | "umrandet" | "still" | "kritisch"
 
@@ -428,4 +428,128 @@ export function zepStateHeader(opts: {
 
   if (opts.ende) kopf.append(opts.ende)
   return kopf
+}
+
+
+// ============================================================================
+// EINE FLAECHE JE SCHIRM - AUCH NACH DEM ANSTECKEN
+// ============================================================================
+
+/** Was jeSchirm() zurueckgibt. */
+export interface SchirmFolge {
+  /** Wie viele Stuecke gerade stehen. Fuer Messungen und Protokolle. */
+  anzahl: () => number
+  /** Alles abraeumen und nicht mehr mitzaehlen. */
+  aufloesen: () => void
+}
+
+/** Fuer jeden Schirm ein Stueck bauen - jetzt UND bei jeder Aenderung.
+ *
+ * WAS GEMELDET WURDE
+ *     Der Nutzer am 01.09.2026, woertlich: "ich habe einen bildschirm
+ *     hingezogen und ueber dem monitor geplaced und trotzdem wird die
+ *     oberflaeche nicht erweitert - ich sehe auf dem monitor nicht den
+ *     header usw, die dock dort nochmal, sondern einfach nur ein grauer
+ *     bildschirm".
+ *
+ * DIE URSACHE, GEMESSEN am 01.09.2026
+ *     Fuenf Bauteile bauten eine Layer-Shell-Flaeche je Schirm - die
+ *     Leiste, das Dock, das Home, der Abschaltknopf und der
+ *     Starterknopf -, und alle fuenf fragten `get_monitors()` GENAU
+ *     EINMAL, beim Start. Ein `grep` ueber src/templates fand am selben
+ *     Tag KEIN einziges "items-changed", "monitor-added" oder
+ *     "monitor-removed". Ein Schirm, der nach dem Anmelden dazukam,
+ *     bekam deshalb nie eine Flaeche: er blieb grau, weil auf ihm
+ *     nichts gebaut worden war.
+ *
+ * WARUM EIN EINZIGER WEG UND NICHT FUENF
+ *     Fuenf Schleifen sind fuenf Stellen, an denen jemand das
+ *     Abraeumen vergisst - und das Abraeumen ist die Haelfte, die weh
+ *     tut: eine Flaeche, deren Schirm verschwindet, haelt einen Zeiger
+ *     auf einen Gdk.Monitor, den es nicht mehr gibt. Wird sie danach
+ *     wieder sichtbar gemacht (das Dock und die beiden Knoepfe tun
+ *     genau das bei jedem SUPER+B), landet sie auf dem Schirm, den der
+ *     Compositor sich aussucht. So entstehen zwei Leisten auf einem
+ *     Schirm.
+ *
+ * WORAN ERKANNT WIRD, DASS EIN SCHIRM DERSELBE IST
+ *     Am Gdk.Monitor SELBST und nicht an seinem Anschlussnamen. Ein
+ *     Schirm, der abgesteckt und wieder angesteckt wird, heisst wieder
+ *     "DP-1" - aber GDK wirft sein altes Objekt weg und legt ein neues
+ *     an. Wer nach dem Namen vergleicht, haelt die alte, tote Flaeche
+ *     fuer die richtige und baut keine neue; wer nach dem Objekt
+ *     vergleicht, raeumt die tote ab und baut eine, die wirklich auf
+ *     dem neuen Ausgang sitzt.
+ *
+ * ERST ABRAEUMEN, DANN BAUEN, und das ist kein Geschmack: ein Wechsel
+ * kann beides in einem Ereignis bringen (ein Schirm geht, einer kommt).
+ * Andersherum stuenden fuer einen Augenblick zwei Flaechen desselben
+ * Bauteils da - genau das Bild, das der Nutzer gemeldet hat.
+ *
+ * `baue` und `raeumeAb` laufen in einem eigenen try: ein Bauteil, das
+ * an einem Schirm scheitert, darf die anderen vier nicht mitnehmen.
+ * Dieselbe Ueberlegung, aus der ags-config.template jedes Widget in
+ * sein eigenes try setzt.
+ */
+export function jeSchirm<T>(
+  name: string,
+  baue: (monitor: Gdk.Monitor) => T,
+  raeumeAb: (stueck: T) => void,
+): SchirmFolge {
+  const display = Gdk.Display.get_default()
+  const gebaut = new Map<Gdk.Monitor, T>()
+  if (!display) {
+    console.error(`Keine Anzeige - es gibt kein ${name}`)
+    return { anzahl: () => 0, aufloesen: () => {} }
+  }
+
+  const monitors = display.get_monitors()
+
+  const abgleichen = () => {
+    const jetzt: Gdk.Monitor[] = []
+    for (let index = 0; index < monitors.get_n_items(); index++) {
+      const monitor = monitors.get_item(index) as Gdk.Monitor
+      if (monitor) jetzt.push(monitor)
+    }
+
+    for (const [monitor, stueck] of [...gebaut]) {
+      if (jetzt.indexOf(monitor) >= 0) continue
+      gebaut.delete(monitor)
+      try {
+        raeumeAb(stueck)
+      } catch (fehler) {
+        console.error(`${name}: eine Flaeche liess sich nicht abraeumen:`,
+                      fehler)
+      }
+    }
+
+    for (const monitor of jetzt) {
+      if (gebaut.has(monitor)) continue
+      try {
+        gebaut.set(monitor, baue(monitor))
+      } catch (fehler) {
+        console.error(`${name}: keine Flaeche fuer ${monitor.connector}:`,
+                      fehler)
+      }
+    }
+  }
+
+  const kennung = monitors.connect("items-changed", () => abgleichen())
+  abgleichen()
+
+  return {
+    anzahl: () => gebaut.size,
+    aufloesen: () => {
+      monitors.disconnect(kennung)
+      for (const [monitor, stueck] of [...gebaut]) {
+        gebaut.delete(monitor)
+        try {
+          raeumeAb(stueck)
+        } catch (fehler) {
+          console.error(`${name}: eine Flaeche liess sich nicht abraeumen:`,
+                        fehler)
+        }
+      }
+    },
+  }
 }

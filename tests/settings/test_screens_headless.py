@@ -393,3 +393,82 @@ def test_the_question_defaults_to_giving_it_back(tmp_path):
     assert "3440x0,1" in one(run, "applied-last"), run.report
     assert one(run, "written") == "False", run.report
     assert one(run, "screens-attempt") == "False", run.report
+
+
+# --------------------------------------------------------------------
+# Die Ueberlappung: sie entsteht nicht mehr, und sie wird gesagt
+# --------------------------------------------------------------------
+
+# Zwei Schirme, die uebereinanderliegen - so, wie der Compositor sie
+# nach dem 01.09.2026 wirklich gemeldet hat. Kein erfundener Fall: der
+# Nutzer hatte einen Schirm auf den anderen gezogen und die Anordnung
+# bestaetigt, und danach standen beide auf demselben Fleck.
+UEBEREINANDER = [
+    {**MONITORS[0]},
+    {**MONITORS[1], "x": 0, "y": 0},
+]
+
+
+@pytest.mark.allow_subprocess
+def test_a_screen_dragged_onto_another_does_not_end_up_on_top_of_it(tmp_path):
+    """DIE BESTELLUNG, woertlich (01.09.2026): "ich sehe seit dem
+    anwenden alle sachen doppelt auf einem monitor, so buggy ist das".
+
+    Gezogen wird eDP-1 mitten auf DP-1 - dieselbe Geste wie "einen
+    bildschirm hingezogen und ueber dem monitor geplaced". Vor dem
+    01.09.2026 rastete er dort EIN: _snap_axis fand auf beiden Achsen
+    den Kandidaten "vorne buendig", und der gezogene Schirm lag exakt
+    auf dem anderen. Zwei Schirme auf demselben Fleck sind zwei Leisten
+    und zwei Docks an derselben Stelle.
+
+    Geprueft wird die Seite und nicht nur die Rechnung darunter: was
+    zaehlt, ist, wo das Rechteck liegt, nachdem man es losgelassen hat.
+    """
+    run = run_screens(tmp_path, "drag:eDP-1@40,40")
+
+    stand = per_screen(run, "screen")
+    orte = {name: wert.split(":")[0] for name, wert in stand.items()}
+    assert orte["DP-1"] != orte["eDP-1"], (
+        f"beide Schirme stehen auf {orte['DP-1']}:\n" + run.report)
+    assert "uebereinander" not in one(run, "screens-hint"), run.report
+    assert run.applied == [], run.report
+
+
+@pytest.mark.allow_subprocess
+def test_an_overlap_that_is_already_there_is_named_under_the_drawing(tmp_path):
+    """Sie kann noch immer dastehen - aus der Datei, aus einem Massstab,
+    aus einer Aufloesung. Dann wird sie gesagt."""
+    run = run_screens(tmp_path, "screen:eDP-1", monitors=UEBEREINANDER)
+
+    assert "uebereinander" in one(run, "screens-hint"), run.report
+    # UND DER KNOPF BLEIBT LEBENDIG, sobald sich etwas geaendert hat.
+    # Eine Oberflaeche, die eine bestehende Ueberlappung nicht mehr
+    # anwenden laesst, ist die einzige, mit der man sie aufloesen wollte.
+    assert one(run, "screens-changed") == "False", run.report
+
+
+@pytest.mark.allow_subprocess
+def test_the_question_names_the_overlap_before_the_countdown(tmp_path):
+    """DIE ENTSCHEIDUNG VOM 01.09.2026: melden, nicht verweigern - aber
+    an der Stelle, an der es zaehlt.
+
+    Die Warnung stand schon vorher unter der Zeichnung. Gelesen wurde
+    sie nicht, weil dort noch nichts passiert war. In der Rueckfrage
+    steht sie in dem einzigen Augenblick, in dem sie eine Entscheidung
+    aendern kann - und die Rueckfrage ist zugleich der Weg zurueck.
+    """
+    run = run_screens(tmp_path, "screen:eDP-1 screen-scale:2 screen-apply",
+                      monitors=UEBEREINANDER)
+
+    koerper = one(run, "dialog-body")
+    assert "uebereinander" in koerper, run.report
+    assert koerper.index("uebereinander") < koerper.index("Sekunden"), (
+        "die Warnung steht hinter dem Zaehler - dann liest sie niemand:\n"
+        + run.report)
+    # GEMELDET UND NICHT VERWEIGERT: der Compositor hat die Anordnung
+    # bekommen, waehrend die Frage steht. Gezaehlt wird die Marke aus
+    # DIESEM Augenblick und nicht `run.applied` nach dem Lauf - beim
+    # Aufraeumen nimmt der Waechter zurueck, und das ist ein zweiter
+    # Aufruf, der zu dieser Frage nichts sagt.
+    assert one(run, "applied") == "1", run.report
+    assert one(run, "written") == "False", run.report

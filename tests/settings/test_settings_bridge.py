@@ -991,7 +991,8 @@ class _FakeOutcome:
         return self.code == 0
 
 
-def _arm(bridge, monkeypatch, eingabe: str, versuch=None):
+def _arm(bridge, monkeypatch, eingabe: str, versuch=None,
+         monitore: str = ONE_SCREEN):
     """`--json arm` mit einem nachgestellten Waechter."""
     import io
 
@@ -1007,7 +1008,8 @@ def _arm(bridge, monkeypatch, eingabe: str, versuch=None):
 
     stdin = io.StringIO(eingabe)
     stdout = io.StringIO()
-    code = bridge.arm(runner=screen_runner(), stdin=stdin, stdout=stdout)
+    code = bridge.arm(runner=screen_runner(monitore), stdin=stdin,
+                      stdout=stdout)
     zeilen = [json.loads(zeile) for zeile in stdout.getvalue().splitlines()
               if zeile.strip()]
     return code, zeilen, gesehen, attempt
@@ -1119,6 +1121,50 @@ def test_eine_anordnung_die_nicht_geht_wird_gar_nicht_erst_scharf(
     assert any(erwartet in klage for klage in zeilen[-1]["problems"]), zeilen
     assert gesehen == {}, "es wurde trotz Ablehnung ein Waechter scharfgemacht"
     assert not displays.config_path().exists()
+
+
+ZWEI_SCHIRME_UEBEREINANDER = json.dumps([
+    {"name": "eDP-1", "description": "Ein Schirm", "width": 1920,
+     "height": 1080, "refreshRate": 60.0, "x": 0, "y": 0, "scale": 1.0,
+     "transform": 0, "disabled": False,
+     "availableModes": ["1920x1080@60.00Hz"]},
+    {"name": "HDMI-A-1", "description": "Der zweite", "width": 1920,
+     "height": 1080, "refreshRate": 60.0, "x": 0, "y": 0, "scale": 1.0,
+     "transform": 0, "disabled": False,
+     "availableModes": ["1920x1080@60.00Hz"]},
+])
+
+
+def test_eine_ueberlappung_wird_gemeldet_und_nicht_verweigert(
+        bridge, monkeypatch):
+    """DIE ENTSCHEIDUNG VOM 01.09.2026.
+
+    Hier stand `problems.extend(desk.problems())`, und damit lehnte diese
+    Bruecke eine Ueberlappung ab, waehrend das GTK-Fenster daneben sie
+    nur meldete. Zwei Antworten auf dieselbe Anordnung sind eine zu viel
+    - und die strengere kam aus dem Fenster, das Schirme gar nicht
+    verschieben kann (siehe den Absatz "Position: every screen keeps the
+    place it has" in ags-settings.template). Wer sich dort mit einem
+    Massstab eine Ueberlappung baute, bekam "geht nicht" von der einzigen
+    Oberflaeche, die sie nicht aufloesen konnte.
+
+    Gemeldet wird sie trotzdem, und zwar in DER Zeile, mit der die Frist
+    beginnt: das ist der Augenblick, in dem der Nutzer noch etwas davon
+    hat.
+    """
+    code, zeilen, gesehen, attempt = _arm(
+        bridge, monkeypatch, json.dumps({"layout": [{"name": "HDMI-A-1"}]})
+        + "\nbehalten\n",
+        monitore=ZWEI_SCHIRME_UEBEREINANDER)
+
+    scharf = [zeile for zeile in zeilen if zeile.get("armed")]
+    assert scharf, f"es wurde gar nicht erst scharfgemacht: {zeilen}"
+    assert scharf[0]["problems"] == []
+    assert any("uebereinander" in satz for satz in scharf[0]["warnings"]), (
+        f"die Warnung fehlt in {scharf[0]}")
+    assert gesehen, "es wurde trotz der Warnung kein Waechter scharfgemacht"
+    assert code == 0
+    assert attempt.antwort == "behalten"
 
 
 def test_das_dokument_nennt_den_laufenden_weg_und_seine_bedingung(

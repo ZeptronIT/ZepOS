@@ -950,11 +950,30 @@ def arm(*, runner=None, stdin=None, stdout=None) -> int:
         return 1
 
     _arm_plan(document, desk, problems)
-    problems.extend(desk.problems())
+    problems.extend(displays.blockers(desk.placements))
     if problems:
         say({"schema": SCHEMA, "ok": False, "armed": False,
              "problems": problems})
         return 1
+
+    # WAS AUFFAELLT, ABER NICHT VERBIETET - seit dem 01.09.2026.
+    #
+    #     Hier stand `problems.extend(desk.problems())`, und damit war
+    #     eine Ueberlappung in DIESEM Fenster eine Ablehnung, im
+    #     GTK-Fenster dagegen nur eine Warnung (screens.py,
+    #     _show_state()). Zwei Antworten auf dieselbe Anordnung sind eine
+    #     zu viel, und die strengere war die falsche: dieses Fenster kann
+    #     Schirme gar nicht gegeneinander VERSCHIEBEN - es sagt das
+    #     ausdruecklich ("Position: every screen keeps the place it has",
+    #     ags-settings.template). Wer sich hier mit einem Massstab oder
+    #     einer Aufloesung eine Ueberlappung baut, bekam die Meldung
+    #     "geht nicht" von genau dem Fenster, das sie nicht aufloesen
+    #     kann. Eine Sackgasse ist keine Sicherung.
+    #
+    #     Der Fall OHNE Rueckweg bleibt eine Ablehnung, und er bleibt
+    #     auch VOR dem Waechter: displays.blockers() steht eine Zeile
+    #     ueber diesem Absatz in derselben Liste wie die Formfehler.
+    hinweise = displays.remarks(desk.placements)
 
     try:
         attempt = displays.arm_and_apply(desk.placements, desk.original,
@@ -968,8 +987,14 @@ def arm(*, runner=None, stdin=None, stdout=None) -> int:
     # Von hier an steht die neue Anordnung auf dem Schirm, und die Frist
     # laeuft. Diese Zeile ist das Zeichen fuer das Fenster, seine
     # Rueckfrage zu zeigen.
+    #
+    # `warnings` steht NEBEN `problems` und nicht darin: `problems` heisst
+    # in jeder anderen Antwort dieser Bruecke "es ist nichts passiert",
+    # und ein Fenster, das beides gleich behandelt, meldete eine
+    # angewandte Anordnung als gescheitert.
     say({"schema": SCHEMA, "ok": True, "armed": True,
          "seconds": displays.CONFIRM_SECONDS, "problems": [],
+         "warnings": hinweise,
          "applied": list(attempt.applied)})
 
     answer = (read_from.readline() or "").strip()

@@ -148,7 +148,7 @@ import GObject from "gi://GObject"
 import GioUnix from "gi://GioUnix?version=2.0"
 import { Gtk, Gdk } from "ags/gtk4"
 import * as Hyprland from "../utils/hyprland"
-import { zepRow, zepDivider } from "../utils/kit"
+import { zepRow, zepDivider, jeSchirm } from "../utils/kit"
 import { _ } from "../utils/i18n"
 // Die Einstellungsdatei, aus der Sicht der Oberflaeche - Aufgabe 53
 // (21.08.2026). Bis dahin standen frage(), lies() und schreibe() hier;
@@ -541,12 +541,7 @@ export interface HomeHandle {
 export default function Home(
   toggleByName: (name: string, at?: any) => void,
 ): HomeHandle {
-  const display = Gdk.Display.get_default()
   const windows: Astal.Window[] = []
-  if (!display) {
-    console.error("Keine Anzeige - es gibt kein Home")
-    return { windows }
-  }
 
   // Der Zustand: was zuletzt gelesen wurde. Er steht hier und nicht in
   // einem Modul-Feld, damit zwei Homes (falls je zwei entstehen) sich
@@ -564,8 +559,6 @@ export default function Home(
   // dockPunkt()) und frisch gehalten von derselben Ueberwachung.
   let dockNamen: string[] = []
 
-  const monitors = display.get_monitors()
-
   /** Eine Flaeche: ihr Fenster, ihr Gitter und was darauf zuletzt lag. */
   interface Flaeche {
     window: Astal.Window
@@ -578,8 +571,21 @@ export default function Home(
   }
   const flaechen: Flaeche[] = []
 
-  for (let index = 0; index < monitors.get_n_items(); index++) {
-    const monitor = monitors.get_item(index) as Gdk.Monitor
+  // EINE FLAECHE JE SCHIRM, UND ZWAR AUCH NACH DEM ANSTECKEN
+  //
+  //     Ueber jeSchirm() aus ../utils/kit, wie die Leiste, das Dock und
+  //     die beiden Knoepfe. Bis zum 01.09.2026 stand hier eine eigene
+  //     Schleife ueber `get_monitors()`, EINMAL beim Start gelaufen -
+  //     ein spaeter angesteckter Schirm bekam kein Home, und ein
+  //     abgesteckter liess seine Flaeche mit einem toten Gdk.Monitor
+  //     stehen. Die Begruendung steht bei jeSchirm().
+  //
+  //     Die drei Zeilen, die frueher NACH der Schleife noch einmal ueber
+  //     `flaechen` liefen (annahme() und verfolgeGroesse()), stehen jetzt
+  //     HIER: ein Schirm, der spaeter dazukommt, braucht sie genauso -
+  //     ohne annahme() nimmt seine Flaeche kein gezogenes Symbol an, ohne
+  //     verfolgeGroesse() bleibt sie leer.
+  jeSchirm("Home", (monitor: Gdk.Monitor) => {
     const window = new Astal.Window({
       namespace: WINDOW_NAME,
       name: `home-${monitor.connector}`,
@@ -633,11 +639,21 @@ export default function Home(
     //
     //     Was es kostet: nichts. 0.00 % im Leerlauf je Flaeche, gemessen
     //     (siehe Kopf).
-    flaechen.push({ window, fixed, gelegt: [] })
+    const flaeche: Flaeche = { window, fixed, gelegt: [] }
+    flaechen.push(flaeche)
     windows.push(window)
 
     rechtsklickAufDieFlaeche(fixed)
-  }
+    annahme(flaeche)
+    verfolgeGroesse(window)
+    return flaeche
+  }, (flaeche: Flaeche) => {
+    const imGitter = flaechen.indexOf(flaeche)
+    if (imGitter >= 0) flaechen.splice(imGitter, 1)
+    const imFeld = windows.indexOf(flaeche.window)
+    if (imFeld >= 0) windows.splice(imFeld, 1)
+    flaeche.window.destroy()
+  })
 
   // ===================================================================
   // ZEICHNEN
@@ -1051,8 +1067,9 @@ export default function Home(
   }
 
   // Jede Flaeche nimmt ein gezogenes Symbol an - auf jedem Schirm, weil
-  // auf jedem Schirm Symbole liegen.
-  for (const flaeche of flaechen) annahme(flaeche)
+  // auf jedem Schirm Symbole liegen. GERUFEN WIRD DAS OBEN, beim Bauen
+  // der Flaeche: seit dem 01.09.2026 kann eine spaeter dazukommen, und
+  // eine Schleife an dieser Stelle liefe fuer sie nie.
 
   // ===================================================================
   // LESEN UND NEU ZEICHNEN
@@ -1155,7 +1172,10 @@ export default function Home(
     else window.connect("map", anhaengen)
   }
 
-  for (const flaeche of flaechen) verfolgeGroesse(flaeche.window)
+  // GERUFEN WIRD DAS OBEN, beim Bauen der Flaeche - aus demselben
+  // Grund wie annahme(): ein Schirm, der spaeter angesteckt wird, kommt
+  // an einer Schleife an dieser Stelle nicht mehr vorbei, und seine
+  // Flaeche bliebe leer.
 
   // DASS EINE FREMDE AENDERUNG HIER ANKOMMT - seit dem 21.08.2026
   //

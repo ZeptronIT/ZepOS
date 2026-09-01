@@ -963,7 +963,26 @@ def test_the_dock_window_stands_on_the_screen_from_the_start(tree):
     body = "\n".join(line for line in dock.splitlines()
                      if not line.lstrip().startswith("//"))
 
-    assert "visible: true," in body, (
+    # SEIT DEM 01.09.2026 STEHT DER ANFANGSSTAND EINE ZEILE HOEHER, und
+    # diese Pruefung ist dadurch nicht schwaecher geworden.
+    #
+    #     Das Fenster entsteht seither mit `visible: sichtbar`, weil ein
+    #     Schirm auch NACH dem Anmelden angesteckt werden kann (siehe
+    #     jeSchirm() in src/templates/ags-kit.template): sein Dock muss
+    #     so stehen wie die anderen, und "true" hiesse, dass bei jedem
+    #     angesteckten Kabel ein Dock erschiene, obwohl der Nutzer es
+    #     gerade mit SUPER+B weggeschickt hat.
+    #
+    #     Gefragt wird deshalb nach BEIDEN Haelften. Wer `let sichtbar =
+    #     false` schreibt oder das Feld gegen einen anderen Wert
+    #     tauscht, faellt hier genauso durch wie vorher, wer `visible:
+    #     false` schrieb - und der Fall, den es gar nicht gab, ist jetzt
+    #     mit abgedeckt: ein Fenster, das seinen Anfangsstand ueberhaupt
+    #     nicht mehr liest.
+    assert "visible: sichtbar," in body, (
+        "das Dockfenster liest seinen Anfangsstand nicht mehr - dann "
+        "haengt es davon ab, was in seiner Zeile zufaellig steht")
+    assert "let sichtbar = true" in body, (
         "das Dockfenster startet unsichtbar - genau der Zustand, in dem "
         "es der Nutzer am 11.08.2026 nicht gefunden hat")
     assert "visible: false," not in body, body[-1200:]

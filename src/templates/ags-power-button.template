@@ -88,6 +88,7 @@ import { faehrtMitDemDock } from "./Dock"
 // der Leiste traegt. Siehe PowerButtonContent() unten, warum sie
 // importiert und nicht nachgebaut wird.
 import { SymbolCell } from "./Bar"
+import { jeSchirm } from "../utils/kit"
 import { _ } from "../utils/i18n"
 
 // Dasselbe Zeichen wie der Kopf von ags-logout.template - derselbe
@@ -171,20 +172,19 @@ export function PowerButtonContent(toggle: (name: string) => void): Gtk.Box {
  * Klick hier geht denselben Weg wie SUPER+M, kein zweiter.
  */
 export default function PowerButton(toggle: (name: string) => void): void {
-  const display = Gdk.Display.get_default()
-  if (!display) {
-    console.error("Keine Anzeige - es gibt keinen Abschaltknopf")
-    return
-  }
-
   // Die eigenen Flaechen, je Schirm eine. Sie stehen hier und nicht
   // modulweit: was mitfaehrt, sind die Fenster GENAU DIESES Aufrufs.
   const flaechen: Astal.Window[] = []
 
-  const monitors = display.get_monitors()
-  for (let index = 0; index < monitors.get_n_items(); index++) {
-    const monitor = monitors.get_item(index) as Gdk.Monitor
+  // Ob das Dock gerade eingefahren ist. Gebraucht seit dem 01.09.2026,
+  // seit ein Schirm auch NACH dem Anmelden dazukommen kann (siehe
+  // jeSchirm() in ../utils/kit): der Knopf auf dem neuen Schirm muss so
+  // stehen wie die anderen. Ohne diese Zahl erschiene bei jedem
+  // angesteckten Schirm ein Knopf, obwohl der Nutzer das Dock gerade
+  // mit SUPER+B weggeschickt hat.
+  let dockSteht = true
 
+  jeSchirm("Abschaltknopf", (monitor: Gdk.Monitor) => {
     const plate = PowerButtonContent(toggle)
 
     const window = new Astal.Window({
@@ -222,14 +222,19 @@ export default function PowerButton(toggle: (name: string) => void): void {
       // einzige Weg.
       keymode: Astal.Keymode.NONE,
       gdkmonitor: monitor,
-      visible: true,
+      visible: dockSteht,
     })
     window.add_css_class("power-button-window")
     window.set_margin_bottom(EDGE_GAP)
     window.set_margin_left(EDGE_GAP)
     window.set_child(plate)
     flaechen.push(window)
-  }
+    return window
+  }, (window: Astal.Window) => {
+    const stelle = flaechen.indexOf(window)
+    if (stelle >= 0) flaechen.splice(stelle, 1)
+    window.destroy()
+  })
 
   // MIT DEM DOCK EIN UND AUS - siehe den Dateikopf, warum das eine
   // Anmeldung ist und kein zweiter Zweig in app.ts.
@@ -238,6 +243,11 @@ export default function PowerButton(toggle: (name: string) => void): void {
   // seinem toggle() tut. Zwei Wege, eine Flaeche abzumelden, waeren zwei
   // Wege, an denen sich etwas unterscheiden koennte.
   faehrtMitDemDock(sichtbar => {
+    // GEMERKT und nicht nur gesetzt, seit dem 01.09.2026: ein Schirm,
+    // der spaeter angesteckt wird, baut seine Flaeche mit `dockSteht`
+    // (siehe jeSchirm() oben). Ohne diese Zeile erschiene dort ein
+    // Knopf, obwohl das Dock ueberall eingefahren ist.
+    dockSteht = sichtbar
     for (const flaeche of flaechen) flaeche.visible = sichtbar
   })
 }

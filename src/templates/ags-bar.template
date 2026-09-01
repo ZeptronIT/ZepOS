@@ -127,6 +127,7 @@ import { execAsync } from "ags/process"
 import { interval } from "ags/time"
 import * as Hyprland from "../utils/hyprland"
 import { Tray } from "../utils/tray"
+import { jeSchirm } from "../utils/kit"
 import { _, ngettext, format } from "../utils/i18n"
 // NUR DER TYP, und `import type` steht hier mit Absicht: es ist die eine
 // Einfuhr, die esbuild restlos wegwirft. Ein gewoehnliches `import
@@ -2738,19 +2739,20 @@ function staticModule(name: string, icon: string, tooltip: string,
   return box
 }
 
-/** Eine Leiste je Schirm. */
+/** Eine Leiste je Schirm - und zwar auch nach dem Anstecken.
+ *
+ * Ueber jeSchirm() aus ../utils/kit und nicht ueber eine eigene
+ * Schleife ueber `get_monitors()`. Bis zum 01.09.2026 stand hier genau
+ * diese Schleife, EINMAL beim Start gelaufen, und der Nutzer sah auf
+ * einem nachtraeglich angesteckten Schirm "einfach nur ein grauer
+ * bildschirm". Die Begruendung fuer den einen gemeinsamen Weg - und
+ * warum das Abraeumen die wichtigere Haelfte ist - steht bei jeSchirm().
+ */
 export default function Bar(toggle: (name: string, at?: OverlayAnchor) => void,
                             notifications: NotificationView): BarHandle {
-  const display = Gdk.Display.get_default()
   const windows: Astal.Window[] = []
-  if (!display) {
-    console.error("Keine Anzeige - es gibt keine Leiste")
-    return { windows }
-  }
 
-  const monitors = display.get_monitors()
-  for (let index = 0; index < monitors.get_n_items(); index++) {
-    const monitor = monitors.get_item(index) as Gdk.Monitor
+  jeSchirm("Leiste", (monitor: Gdk.Monitor) => {
     const window = new Astal.Window({
       namespace: "zepos-bar",
       name: `bar-${monitor.connector}`,
@@ -2816,7 +2818,15 @@ export default function Bar(toggle: (name: string, at?: OverlayAnchor) => void,
     window.set_child(content)
     window.visible = true
     windows.push(window)
-  }
+    return window
+  }, (window: Astal.Window) => {
+    // Aus der Liste UND aus dem Compositor. Nur `visible = false` zu
+    // setzen liesse das Fenster mit seinem toten Gdk.Monitor stehen -
+    // siehe jeSchirm(), Abschnitt "warum ein einziger Weg".
+    const stelle = windows.indexOf(window)
+    if (stelle >= 0) windows.splice(stelle, 1)
+    window.destroy()
+  })
 
   return { windows }
 }

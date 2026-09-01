@@ -737,8 +737,30 @@ class ScreensPage(Gtk.Box):
         dialog.present(self)
 
     def _countdown_text(self) -> str:
+        """Was in der Rueckfrage steht - und die Warnung ZUERST.
+
+        WARUM DIE WARNUNG HIER NOCH EINMAL STEHT, obwohl sie schon unter
+        der Zeichnung steht (siehe _show_state())
+            Weil das der einzige Augenblick ist, in dem sie zaehlt. Der
+            Nutzer am 01.09.2026, nachdem er einen Schirm auf einen
+            anderen gezogen und die Anordnung bestaetigt hatte: "ich sehe
+            seit dem anwenden alle sachen doppelt auf einem monitor, so
+            buggy ist das". Die Warnung stand die ganze Zeit unter der
+            Zeichnung; gelesen wurde sie nicht, weil dort noch nichts
+            passiert war.
+
+            VERWEIGERT wird trotzdem nicht - siehe displays.problems():
+            eine Ueberlappung ist eine Anordnung, die man SEHEN und
+            zuruecknehmen kann, und dieser Dialog ist genau der Weg
+            zurueck. Verweigern hiesse ausserdem, ausgerechnet dem
+            Fenster den Weg zu versperren, mit dem man eine schon
+            bestehende Ueberlappung wieder aufloest.
+        """
+        troubles = self.desk.problems()
+        warning = ("\n\n".join(troubles) + "\n\n") if troubles else ""
         return (
-            f"Ohne Antwort wird in {self.countdown} Sekunden die alte "
+            warning
+            + f"Ohne Antwort wird in {self.countdown} Sekunden die alte "
             "Anordnung wiederhergestellt.\n\n"
             "Das passiert auch dann, wenn dieses Fenster in der "
             "Zwischenzeit abstuerzt: der Rueckweg laeuft in einem eigenen "
