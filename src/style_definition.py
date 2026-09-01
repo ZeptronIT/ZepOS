@@ -475,6 +475,32 @@ def clock_zones_block():
     except UnusableSettings as exc:
         raise _unusable_clocks(exc) from exc
 
+def clock_interval_ms():
+    """Der Takt des Zusatzuhren-Moduls, als Zahl fuer die Leiste.
+
+    1000, solange mindestens eine Zone eingestellt ist - die Begruendung
+    fuer genau diese Zahl steht in bar-clocks-config.template und bleibt
+    unberuehrt. 0, wenn keine eingestellt ist, und dann richtet
+    scriptModule() in ags-bar.template gar keinen Takt ein.
+
+    GEMESSEN am 01.09.2026: das Modul war mit 60 Aufrufen je Minute und
+    Leiste der groesste einzelne Posten am Prozess-Sturm im Leerlauf, und
+    ohne Zone druckt jeder dieser Aufrufe eine leere Zeile.
+
+    DIESELBE QUELLE WIE DER BLOCK DARUNTER, und das ist der Punkt:
+    clocks.zones() entscheidet, ob die Leiste eine Uhr bekommt, und
+    dieselbe Funktion entscheidet, ob sie danach noch einmal fragt. Eine
+    zweite Bedingung ("hat der Nutzer clocks.zones gesetzt?") waere eine
+    Liste, die neben der ersten veraltet - genau der Fehler, den
+    _unusable_clocks oben schon einmal beschreibt.
+    """
+    try:
+        section = clocks.settings_section(USER_SETTINGS)
+        return "1000" if clocks.zones(section) else "0"
+    except UnusableSettings as exc:
+        raise _unusable_clocks(exc) from exc
+
+
 def clock_format_literal():
     """The date(1) format as one shell literal."""
     try:
@@ -1738,7 +1764,22 @@ _FIXED_STYLE_VARIABLES = {
     # GLASS_SOLO_ALPHA haengt sie an den Farben des NUTZERS und nicht an
     # den Feldern des Themas, und die drei sind ueber `zepos-settings set
     # colors.overlay_text` verstellbar.
-    "STYLE_GTK4_DIM_OPACITY": THEME.dim_opacity(
+    # NICHT STYLE_GTK4_*, UND DAS IST DER GRUND
+    #
+    #     Jeder Name mit diesem Praefix ist eine FARBE, die fremde
+    #     Fenster bekommen - tests/packaging/test_apps.py prueft genau
+    #     das: dass jeder einzelne Wert in der Palette der Marke steht.
+    #     Eine Deckkraft ist keine Farbe und stand in keiner Palette;
+    #     unter dem alten Namen hat sie diese Zusicherung gebrochen
+    #     (gemessen am 01.09.2026: "Farben ausserhalb der Marke:
+    #     {'STYLE_GTK4_DIM_OPACITY': '77%'}").
+    #
+    #     Der Ausweg ist der Name und nicht die Zusicherung: "alles, was
+    #     STYLE_GTK4_ heisst, ist eine Farbe" ist eine Aussage, die es zu
+    #     behalten lohnt. Das hier gehoert ohnehin libadwaita - der Wert
+    #     landet in dessen `--dim-opacity` -, und genau so heisst er
+    #     jetzt auch.
+    "STYLE_ADWAITA_DIM_OPACITY": THEME.dim_opacity(
         get_user_color("overlay_text"),
         get_user_color("overlay_surface"),
         get_user_color("overlay_subtext")),
@@ -1948,6 +1989,7 @@ _FIXED_STYLE_VARIABLES = {
     # of slots, most of them permanently empty and all of them a ceiling
     # nobody is told about. See src/clocks.py.
     "STYLE_CLOCK_ZONES": clock_zones_block(),
+    "STYLE_CLOCK_INTERVAL_MS": clock_interval_ms(),
     "STYLE_CLOCK_FORMAT": clock_format_literal(),
 
     # ============================================================================

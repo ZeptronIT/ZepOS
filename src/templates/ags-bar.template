@@ -1870,8 +1870,48 @@ export function BarContent(monitorName: string,
       //
       // Das Datum daneben oeffnet weiterhin den Kalender. Zwei
       // Zeitmodule, zwei Fenster: was WANN ist, und was WAR.
+      // DER TAKT IST NULL, SOLANGE KEINE ZUSATZUHR EINGESTELLT IST
+      //
+      //     GEMESSEN am 01.09.2026 auf einem Schreibtisch, den niemand
+      //     anfasst: 65 Prozessstarts je SEKUNDE, davon rund 850
+      //     Statusskripte je Minute aus AGS. Der groesste einzelne
+      //     Posten war dieses Modul - 60 Starts je Minute und Leiste,
+      //     und auf einer frischen Installation druckt jeder davon eine
+      //     LEERE Zeile und endet.
+      //
+      //     Der Absatz darueber sagt seit dem 12.08.2026, dass dieses
+      //     Modul ohne eingestellte Zone leer ausgibt und damit
+      //     unsichtbar ist. Ein unsichtbares Modul im Sekundentakt zu
+      //     befragen ist Arbeit fuer eine Auskunft, die niemand sieht.
+      //
+      //     WARUM NICHT LANGSAMER STATT AUS: fuer eine Uhr, die WIRKLICH
+      //     dasteht, bleibt es bei einer Sekunde, und die Begruendung
+      //     dafuer steht unveraendert in bar-clocks-config.template
+      //     ("eine Uhr, die um eine halbe Minute falsch geht, ist eine
+      //     falsche Uhr"). Es geht hier nicht um einen Kompromiss beim
+      //     Takt, sondern um den Fall, in dem es gar keine Uhr gibt.
+      //
+      //     WER DEN WERT SETZT: style_definition.clock_interval_ms(),
+      //     aus derselben clocks.zones(), aus der auch der Zonenblock
+      //     von clocks.sh kommt - eine Quelle, keine zweite Liste, die
+      //     veralten koennte.
+      //
+      //     DER NAME DES ZONEN-PLATZHALTERS STEHT HIER NICHT AUSGESCHRIEBEN,
+      //     und das ist kein Geschmack: der Erzeuger ersetzt ihn auch im
+      //     Kommentar. Gemessen am 01.09.2026 - der Zonenblock ist
+      //     mehrzeiliges Shell, seine erste Zeile faengt mit '#' an, und
+      //     `ags bundle` brach mit `Syntax error "\x0A"` in Bar.tsx ab.
+      //     Ein Platzhaltername in einer Vorlage ist immer ein Aufruf,
+      //     nie eine Erwaehnung.
+      //
+      //     scriptModule() fragt einmal ab
+      //     und richtet bei 0 keinen Takt ein (siehe `if
+      //     (spec.intervalMs > 0)` dort); das Modul bleibt also
+      //     erreichbar und stumm, statt zu verschwinden. Wer eine Zone
+      //     eintraegt, bekommt beim naechsten Erzeugen seinen Takt.
       case "custom/clocks": return scriptModule({
-        name, exec: `${SCRIPTS}/clocks.sh`, intervalMs: 1000,
+        name, exec: `${SCRIPTS}/clocks.sh`,
+        intervalMs: {{STYLE_CLOCK_INTERVAL_MS}},
         toggles: "notifications",
       }, toggle, refit, monitorName)
 

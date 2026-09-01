@@ -713,3 +713,52 @@ def test_the_pins_come_from_the_one_place_that_knows_them():
             "label": "Systemeinstellungen"} in pins, (
         "die Einstellungen stehen nicht in der Auswahl, also kann die "
         f"Einstellungs-Anwendung sie nicht zeigen: {pins}")
+
+
+# --------------------------------------------------------------------
+# der Takt der Zusatzuhren
+# --------------------------------------------------------------------
+#
+# GEMESSEN am 01.09.2026 auf einem Schreibtisch im Leerlauf: 65
+# Prozessstarts je Sekunde, rund 850 Statusskripte je Minute aus AGS.
+# Der groesste einzelne Posten war `custom/clocks` mit 60 Aufrufen je
+# Minute und Leiste - und ohne eingestellte Zone druckt jeder davon eine
+# leere Zeile und endet.
+#
+# Die drei Zusicherungen unten halten die beiden Haelften des Fixes
+# zusammen: dass die Zahl von der Zone abhaengt, und dass die Vorlage sie
+# ueberhaupt liest. Ohne die dritte koennte jemand `intervalMs: 1000`
+# zurueckschreiben, ohne dass eine der ersten beiden rot wuerde.
+
+def test_without_a_configured_zone_the_clock_module_gets_no_interval(
+        tmp_path, monkeypatch):
+    """Der Auslieferungszustand: keine Zone, also auch kein Takt."""
+    module = _import_style_with(tmp_path, monkeypatch, None)
+
+    assert module.clock_interval_ms() == "0", (
+        "ohne Zone gibt clocks.sh eine leere Zeile aus - dafuer darf die "
+        "Leiste keine Shell je Sekunde starten")
+    assert module._FIXED_STYLE_VARIABLES["STYLE_CLOCK_INTERVAL_MS"] == "0", (
+        "die Funktion stimmt, aber der Wert steht nicht in der Tabelle, "
+        "aus der die Vorlage gefuellt wird")
+
+
+def test_a_configured_zone_brings_the_second_back(tmp_path, monkeypatch):
+    """Eine echte Uhr bekommt ihre Sekunde - die Begruendung dafuer steht
+    unveraendert in bar-clocks-config.template."""
+    module = _import_style_with(
+        tmp_path, monkeypatch, {"clocks": {"zones": ["Asia/Tokyo"]}})
+
+    assert module.clock_interval_ms() == "1000", (
+        "eine eingestellte Uhr, die um eine halbe Minute falsch geht, "
+        "waere eine falsche Uhr")
+
+
+def test_the_bar_reads_the_interval_instead_of_naming_a_number():
+    """Die Vorlage muss den Platzhalter tragen, sonst wirkt nichts davon."""
+    bar = (SRC / "templates" / "ags-bar.template").read_text(encoding="utf-8")
+
+    assert "intervalMs: {{STYLE_CLOCK_INTERVAL_MS}}," in bar, (
+        "der Takt des Uhrenmoduls steht wieder als feste Zahl in der "
+        "Vorlage; dann hilft clock_interval_ms() niemandem")
+    assert "clocks.sh`,\n        intervalMs: 1000" not in bar

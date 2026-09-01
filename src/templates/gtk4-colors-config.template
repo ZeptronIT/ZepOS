@@ -331,7 +331,7 @@
      * (15 %). Ein abgeschaltetes Bedienelement soll abgeschaltet
      * aussehen - WCAG 1.4.3 nimmt es woertlich aus -, und eine
      * Trennlinie zwischen zwei Zeilen traegt keine Auskunft. */
-    --dim-opacity: {{STYLE_GTK4_DIM_OPACITY}};
+    --dim-opacity: {{STYLE_ADWAITA_DIM_OPACITY}};
 
     /* UND DIE RECHENVORSCHRIFT SELBST
      * Die fuenf Zeilen oben setzen die Zustandsfarben fest, und damit
