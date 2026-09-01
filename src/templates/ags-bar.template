@@ -829,6 +829,70 @@ interface SharedSink {
 //     Lautstaerke steht nicht auf der Leiste.
 const AUDIO_KLASSE = /^Audio\/(Sink|Source)/
 
+// DAS VIERTE SIGNAL - NACHGETRAGEN am 22.08.2026 (Aufgabe 64)
+//
+// DIE LUECKE, GEMESSEN
+//     Die drei Signale darueber (`object-added`, `object-removed`,
+//     `params-changed`/Props) decken jedes NEUE, jedes VERSCHWUNDENE und
+//     jedes LAUTER GEDREHTE Geraet ab. Sie decken den WECHSEL DER
+//     VORGABE nicht ab, und der ist ab heute ein Klick im
+//     Kontrollzentrum.
+//
+//     GEMESSEN am 22.08.2026 an einer eigenen, privaten
+//     PipeWire-Instanz (eigener Runtime-Ordner, eigener Socket; die
+//     laufende Sitzung wurde nicht angefasst), mit einem Horcher auf
+//     allen vier Signalen. Nach `wpctl set-default 51`:
+//
+//         object-added     - nichts
+//         object-removed   - nichts
+//         params-changed   - nichts
+//         metadata changed - ZWEI, 0,4 ms auseinander:
+//             default.configured.audio.sink = { "name": "zep_sink_b" }
+//             default.audio.sink            = {"name":"zep_sink_b"}
+//
+//     Ohne das vierte Signal steht die Zahl auf der Leiste also bis zum
+//     naechsten Zweisekundentakt auf dem Wert des ALTEN Geraets - genau
+//     der Ausfall, den 930fced fuer die Lautstaerke beseitigt hat, nur
+//     an einer anderen Stelle wieder aufgemacht.
+//
+// UND DERSELBE HORCHER DECKT DEN ABGEZOGENEN KOPFHOERER MIT
+//     Wenn das gewaehlte Geraet verschwindet, waehlt WirePlumber selbst.
+//     GEMESSEN im selben Lauf, nach dem Wegfall des Knotens:
+//
+//         6998,1 ms  object-removed zep_sink_b
+//         6998,6 ms  metadata changed default.audio.sink -> zep_sink_a
+//
+//     Beide melden. Das ist kein doppelter Aufwand: die Drossel
+//     (tonDrossel, 250 ms) legt sie zu EINEM Lauf von status.sh
+//     zusammen. Und es ist eine Absicherung, die sich am selben Tag
+//     bezahlt gemacht hat - gjs hat den `object-removed`-Rueckruf im
+//     Messlauf mehrfach mit "Attempting to call back into JSAPI during
+//     the sweeping phase of GC" VERWORFEN, weil er auf einem gerade
+//     freigegebenen Knoten `get_property` ruft. Die Metadaten leben
+//     weiter; ihr Signal kam an.
+//
+// DAS METADATENOBJEKT HEISST "default" UND NICHT "default-nodes"
+//     Nachgeschlagen, nicht abgeschrieben - `pw-cli ls Metadata` nennt
+//     am 22.08.2026 neun Metadatenobjekte: settings, schema-sm-settings,
+//     persistent-sm-settings, sm-settings, sm-objects, default-profile,
+//     default, filters, route-settings. Ein "default-nodes" ist NICHT
+//     darunter; ein Horcher auf diesen Namen haette schweigend nie
+//     gefeuert, und das saehe genauso aus wie heute.
+const VORGABE_METADATEN = "default"
+
+// Welche Schluessel dieses Objekts die Leiste angehen.
+//
+// `default.audio.sink` ist WirePlumbers ANTWORT, `default.configured.
+// audio.sink` der WUNSCH des Nutzers. Beide zaehlen: der zweite feuert
+// auch dann, wenn der Wunsch das ohnehin schon aktive Geraet nennt
+// (gemessen am 22.08.2026 - ein `set-default` auf die laufende Vorgabe
+// meldet NUR den configured-Schluessel), und ein Klick, auf den nichts
+// folgt, ist ein Klick, der kaputt aussieht.
+//
+// `default.video.source` steht im selben Objekt und geht die Leiste
+// nichts an - sie zeigt keine Kamera.
+const VORGABE_SCHLUESSEL = /^default\.(configured\.)?audio\.(sink|source)$/
+
 // Wer geweckt werden will, wenn sich am Ton etwas tut. Eine Liste und
 // nicht ein Rueckruf, weil Bar() je Schirm eine Leiste baut und jede
 // ihren eigenen poll() hat - aber ALLE dieselbe eine Verbindung zu
@@ -1000,6 +1064,22 @@ function tonVerbinden(): void {
     // Versionssprung lautlos falsch wird.
     verwalter.request_object_features(Wp.Node.$gtype, Wp.OBJECT_FEATURES_ALL)
 
+    // DAS ZWEITE INTERESSE AM SELBEN VERWALTER - 22.08.2026 (Aufgabe 64)
+    //
+    // Ein Verwalter und nicht zwei, und das ist gemessen: dieselbe
+    // Bauart mit zwei Verwaltern und zwei `install_object_manager()`
+    // meldete am 22.08.2026 dasselbe, kostete aber einen zweiten
+    // Objektbestand ueber dieselbe Verbindung - und vor allem ein
+    // zweites Objekt, das die Lebensdauer-Regel von oben (tonKern/
+    // tonVerwalter) einhalten muesste. Ein Verwalter mit zwei
+    // Interessen war in derselben Messreihe wortgleich richtig:
+    // `metadata "default" da` nach 1,2 ms, die vier Tonknoten nach
+    // 1,9 ms, und der Wechsel meldete beide Schluessel.
+    verwalter.add_interest_full(
+      Wp.ObjectInterest.new_type(Wp.Metadata.$gtype))
+    verwalter.request_object_features(Wp.Metadata.$gtype,
+                                      Wp.OBJECT_FEATURES_ALL)
+
     // GObject.signal_connect und nicht verwalter.connect(...): Wp.Core
     // traegt eine EIGENE Methode `connect()` - die, die die Verbindung
     // aufbaut -, und sie verdeckt die des Signalsystems. Gemessen am
@@ -1009,6 +1089,31 @@ function tonVerbinden(): void {
     // nebeneinander stehen, von denen nur eine an einer Stelle richtig
     // ist.
     GObject.signal_connect(verwalter, "object-added", (_v: any, node: any) => {
+      // Die Metadaten kommen ueber DENSELBEN Kanal herein wie die
+      // Knoten - ein Verwalter, zwei Interessen. Sie zuerst, weil sie
+      // kein `media.class` haben und istTongeraet() sie ohnehin
+      // wegwerfen wuerde.
+      if (node instanceof Wp.Metadata) {
+        // `get_global_properties().get(...)` und NICHT
+        // `get_property("metadata.name")`. Gemessen am 22.08.2026:
+        // Wp.Node fuehrt WpPipewireObject und damit ein einargumentiges
+        // get_property(schluessel); Wp.Metadata fuehrt es NICHT, und der
+        // Aufruf landet in GObject.Object.get_property - "At least 2
+        // arguments required, but only 1 passed", neunmal je Verbindung
+        // (einmal je Metadatenobjekt) und mitten im Rueckruf.
+        let name = ""
+        try {
+          name = node.get_global_properties().get("metadata.name") ?? ""
+        } catch (error) {
+          return
+        }
+        if (name !== VORGABE_METADATEN) return
+        GObject.signal_connect(node, "changed",
+                               (_m: any, _subjekt: number, schluessel: string) => {
+          if (VORGABE_SCHLUESSEL.test(schluessel)) tonMelden()
+        })
+        return
+      }
       if (!istTongeraet(node)) return
       // Ein neues Geraet IST eine Aenderung: der Kopfhoerer, der gerade
       // eingestoepselt wurde, wird zur Vorgabesenke.

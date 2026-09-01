@@ -1,0 +1,298 @@
+#!/bin/bash
+# Die Ton-Geraete, und der Wechsel zwischen ihnen
+# Erzeugt von ZepOS - NICHT DIREKT BEARBEITEN!
+# Zum Anpassen: Vorlage nach $XDG_CONFIG_HOME/zepos/templates/audio-devices-config.template kopieren
+#
+# WAS BESTELLT WURDE
+#     Der Nutzer am 22.08.2026, woertlich: "ich will pro ton und
+#     mikrofon auch das geraet waehlen koennen, falls mehrere
+#     angeschlossen sind. ok, das muss gehen."
+#
+#     Bis dahin lief ALLES ueber @DEFAULT_AUDIO_SINK@ und
+#     @DEFAULT_AUDIO_SOURCE@ - also ueber das, was WirePlumber gerade
+#     fuer richtig haelt. Es gab keine Auswahl, an keiner Stelle. Wer
+#     ein Headset einsteckt und nicht von selbst dort landet, hatte
+#     keinen Weg.
+#
+# DIE VIER ZAHLEN, DIE EINE ZEILE LIEFERT
+#     `wpctl status` nennt in EINER Antwort alles, was die Auswahl
+#     braucht: die Kennung, den sprechenden Namen, das Sternchen fuer
+#     die aktuelle Vorgabe und die Lautstaerke samt "MUTED".
+#
+#         Sinks:
+#          *   45. Kopfhoerer (Attrappe A)        [vol: 0.30]
+#              51. Lautsprecher (Attrappe B)      [vol: 0.80 MUTED]
+#
+#     Das ist der Grund, aus dem hier EIN Aufruf steht und nicht neun.
+#     Der Weg ueber `wpctl inspect` je Knoten (so macht es src/audio.py,
+#     das den node.name BRAUCHT) waere bei vier Geraeten 1 + 4 + 4 = 9
+#     Prozessstarts - im Drei-Sekunden-Takt der offenen Seite also drei
+#     Starts je Sekunde fuer eine Liste, die sich fast nie aendert.
+#
+#     Was hier BEWUSST fehlt: der node.name. Er ist der Schluessel fuer
+#     eine WirePlumber-Regel (src/audio.py, wireplumber-config.template),
+#     aber nichts in dieser Auswahl haengt an ihm - umgeschaltet wird
+#     ueber die Kennung, angezeigt wird der Name fuers Auge. Ein Feld
+#     zu holen, das niemand liest, kostet hier acht Prozessstarts.
+#
+# WARUM DER NAME AUS `wpctl status` DER RICHTIGE IST
+#     GEMESSEN am 22.08.2026: `/usr/share/locale/de/LC_MESSAGES/
+#     wireplumber.mo` enthaelt GENAU FUENF Eintraege, und alle fuenf
+#     sind GERAETENAMEN - "Built-in Audio" -> "Internes Audio",
+#     "Built-in Front Camera", "Loopback", "Modem". WirePlumber setzt
+#     den sprechenden Namen also selbst zusammen UND uebersetzt ihn.
+#
+#     Das ist der Name, den der Nutzer wiedererkennt.
+#     `alsa_output.pci-0000_00_1f.3.analog-stereo` ist keiner.
+#
+# LC_ALL=C, UND ES KOSTET DEN NAMEN NICHT
+#     Die Ueberschriften ("Sinks:", "Sources:") und das Wort "MUTED"
+#     sind das, worauf dieses Skript parst; sie duerfen nicht an der
+#     Sprache des Aufrufers haengen. GEMESSEN am 22.08.2026 gegen die
+#     laufende Sitzung: `LC_ALL=C wpctl status` zeigt das Geraet
+#     WEITERHIN als "Schein-Ausgabe" und nicht als "Dummy Output" - der
+#     Name entsteht im DIENST (pid 715, in dessen Sprache) und steht in
+#     node.description; wpctl gibt ihn nur weiter. Das Sprachpaket von
+#     wireplumber uebersetzt ohnehin keine der Ueberschriften (siehe die
+#     fuenf Eintraege oben).
+#
+#     Also: der Parser wird stabil, der Name bleibt deutsch. Beides.
+#
+# DREI ZUSTAENDE, DIESELBEN WIE IN bar-status-config.template
+#     fehlt   wpctl ist nicht installiert (Paket wireplumber)
+#     stumm   wpctl ist da, der Dienst antwortet nicht
+#     da      der Dienst antwortet
+#
+#     Sie stehen hier NOCH EINMAL und werden nicht von dort geholt: die
+#     beiden Skripte laufen in verschiedenen Takten und beantworten
+#     verschiedene Fragen. Eine gemeinsame Datei waere ein dritter Ort,
+#     an dem beide gleichzeitig richtig sein muessen. Was sie teilen,
+#     ist die UNTERSCHEIDUNG, und die steht ausgeschrieben im Kopf von
+#     bar-status-config.template.
+
+# Jede Frage an ein fremdes Werkzeug bekommt eine Frist - dieselbe
+# Begruendung und dieselbe Zahl wie in bar-status-config.template:
+# `wpctl` wartet auf wireplumber, und ein blockierter Aufruf haelt das
+# ganze Skript an. `timeout` gibt bei Ablauf 124 zurueck, also einen
+# Fehlschlag wie jeden anderen.
+ANTWORTFRIST=3
+
+frag() {
+    LC_ALL=C timeout "$ANTWORTFRIST" "$@"
+}
+
+# ---------------------------------------------------------------------
+# Antwortet der Tondienst?
+# ---------------------------------------------------------------------
+dienst_zustand() {
+    if ! command -v wpctl >/dev/null 2>&1; then
+        printf 'fehlt'
+    elif frag wpctl status >/dev/null 2>&1; then
+        printf 'da'
+    else
+        printf 'stumm'
+    fi
+}
+
+# ---------------------------------------------------------------------
+# `wpctl status` zu einer Tabelle
+# ---------------------------------------------------------------------
+#
+# Ein Feldtrenner, sechs Spalten:
+#
+#     art  kennung  name  vorgabe  lautstaerke  stumm
+#
+# WARUM DER ABSCHNITT DER OBERSTEN EBENE MITGEFUEHRT WIRD
+#     `wpctl status` fuehrt "Sinks:" und "Sources:" ZWEIMAL - einmal
+#     unter "Audio" und einmal unter "Video". Ein Parser, der nur auf
+#     die Ueberschrift sieht, zaehlt die Kamera als Tonquelle. GEMESSEN
+#     am 22.08.2026 auf dieser Maschine: unter "Video" stehen vier
+#     Knoten "Integrated Camera", und `src/audio.py::_from_wpctl` liest
+#     sie heute als Quellen mit (dort gemeldet, hier nicht wiederholt).
+#
+#     Die oberste Ebene ist an der Einrueckung zu erkennen: nur sie
+#     beginnt in Spalte 1 mit einem Buchstaben.
+#
+# WARUM DER EINTRAG VOR DER UEBERSCHRIFT GEPRUEFT WIRD
+#     Ein Geraetename darf auf einen Doppelpunkt enden. Wuerde zuerst
+#     auf ":$" geprueft, verschwaende so ein Geraet aus der Liste -
+#     lautlos, und nur auf der einen Maschine, an der es haengt.
+tabelle() {
+    frag wpctl status 2>/dev/null | awk '
+        # Die oberste Ebene: keine Einrueckung, kein Baumzeichen.
+        /^[A-Za-z]/ { bereich = $0; art = ""; next }
+
+        {
+            zeile = $0
+            # Baumzeichen und Einrueckung abschneiden. Das Sternchen
+            # bleibt stehen, weil es die Vorgabe markiert.
+            sub(/^[^A-Za-z0-9*]*/, "", zeile)
+            if (zeile == "") { art = ""; next }
+            if (bereich != "Audio") next
+
+            if (zeile ~ /^\*/ || zeile ~ /^[0-9]+\./) {
+                if (art == "") next
+
+                vorgabe = 0
+                if (substr(zeile, 1, 1) == "*") {
+                    vorgabe = 1
+                    sub(/^\*[ \t]*/, "", zeile)
+                }
+                if (zeile !~ /^[0-9]+\./) next
+
+                kennung = zeile
+                sub(/\..*$/, "", kennung)
+                rest = zeile
+                sub(/^[0-9]+\.[ \t]*/, "", rest)
+
+                laut = ""
+                stumm = 0
+                if (match(rest, /\[vol: [0-9.]+( MUTED)?\][ \t]*$/)) {
+                    klammer = substr(rest, RSTART, RLENGTH)
+                    rest = substr(rest, 1, RSTART - 1)
+                    if (klammer ~ /MUTED/) stumm = 1
+                    laut = klammer
+                    sub(/^\[vol: /, "", laut)
+                    sub(/( MUTED)?\][ \t]*$/, "", laut)
+                }
+                sub(/[ \t]+$/, "", rest)
+                if (rest == "") next
+
+                printf "%s\t%s\t%s\t%d\t%s\t%d\n", \
+                       art, kennung, rest, vorgabe, laut, stumm
+                next
+            }
+
+            if (zeile == "Sinks:")   { art = "ausgabe"; next }
+            if (zeile == "Sources:") { art = "eingabe"; next }
+            if (zeile ~ /:$/)        { art = ""; next }
+        }
+    '
+}
+
+# ---------------------------------------------------------------------
+# list - die Liste, als JSON
+# ---------------------------------------------------------------------
+#
+# Die Lautstaerke steht als GANZE PROZENT in der Antwort und nicht als
+# Bruchteil: der Regler im Kontrollzentrum rechnet in Prozent, und die
+# Rundung an ZWEI Stellen zu machen, waere die zweite Fassung derselben
+# Rechnung - siehe volume_of() in bar-status-config.template, das
+# dieselbe Rundung fuer die Leiste macht.
+liste() {
+    local zustand
+    zustand=$(dienst_zustand)
+
+    if [ "$zustand" != da ]; then
+        jq -n -c --arg dienst "$zustand" \
+            '{dienst: $dienst, ausgabe: [], eingabe: []}'
+        return
+    fi
+
+    tabelle | jq -R -s -c '
+        [ split("\n")[]
+          | select(length > 0)
+          | split("\t")
+          | { art: .[0],
+              kennung: (.[1] | tonumber),
+              name: .[2],
+              vorgabe: (.[3] == "1"),
+              lautstaerke: (if .[4] == "" then null
+                            else ((.[4] | tonumber) * 100 | round) end),
+              stumm: (.[5] == "1") } ]
+        | { dienst: "da",
+            ausgabe: [ .[] | select(.art == "ausgabe") | del(.art) ],
+            eingabe: [ .[] | select(.art == "eingabe") | del(.art) ] }'
+}
+
+# ---------------------------------------------------------------------
+# set-sink / set-source - der Wechsel
+# ---------------------------------------------------------------------
+#
+# `wpctl set-default` UND NICHT wp_metadata_set() AUS DER ANBINDUNG
+#
+#     Beides schreibt am Ende dasselbe. GEMESSEN am 22.08.2026 an einer
+#     EIGENEN, privaten PipeWire-Instanz (eigener Runtime-Ordner, eigener
+#     Socket; die laufende Sitzung wurde nicht angefasst):
+#
+#         wpctl set-default 51
+#         -> default.configured.audio.sink = { "name": "zep_sink_b" }
+#         -> default.audio.sink            = {"name":"zep_sink_b"}
+#
+#     Drei Gruende fuer wpctl, und der dritte ist der ausschlaggebende:
+#
+#     1. DER SCHLUESSEL IST LEICHT ZU VERFEHLEN. Der Wunsch des Nutzers
+#        steht in `default.configured.audio.sink`; `default.audio.sink`
+#        ist WirePlumbers ANTWORT darauf. Wer selbst schreibt und den
+#        zweiten nimmt, hat eine Vorgabe gesetzt, die beim naechsten
+#        Nachdenken des Dienstes wieder verschwindet. wpctl kennt den
+#        Unterschied.
+#     2. wpctl IST SCHON DA. bar-status-config.template ruft es im
+#        Zweisekundentakt, `wireplumber` ist eine harte Abhaengigkeit.
+#        Die Anbindung dagegen ist eine ABKUERZUNG: ags-bar.template
+#        ueberlebt es ausdruecklich, wenn libwireplumber fehlt (siehe
+#        wireplumber() dort). Ein Umschalten, das an ihr haengt, waere
+#        auf genau der Maschine weg, auf der die Leiste noch laeuft.
+#     3. `wp_metadata_set()` GIBT NICHTS ZURUECK - void, gemessen in
+#        /usr/share/gir-1.0/Wp-0.5.gir. Ein Wechsel, den der Dienst
+#        ablehnt, saehe damit genauso aus wie einer, der geklappt hat.
+#        `wpctl set-default` kehrt mit einem Rueckgabewert zurueck, und
+#        das Kontrollzentrum kann sagen, was schiefging.
+#
+# DIE KENNUNG WIRD GEPRUEFT, BEVOR SIE WEITERGEREICHT WIRD
+#     `wpctl set-default` nimmt JEDE Knotenkennung, auch die einer
+#     Kamera - es wuerde dann die Vorgabe fuer Video umstellen. Kennungen
+#     sind fluechtig: zwischen dem Zeichnen der Liste und dem Klick kann
+#     ein Geraet verschwunden und seine Nummer neu vergeben worden sein.
+#     Deshalb wird die Liste unmittelbar vor dem Wechsel noch einmal
+#     gelesen und die Kennung darin gesucht - in der RICHTUNG, die
+#     gefragt war.
+waehle() {
+    local art="$1" kennung="$2" zustand treffer
+
+    case "$kennung" in
+        ''|*[!0-9]*)
+            echo "Keine Geraetekennung: '$kennung'" >&2
+            return 2 ;;
+    esac
+
+    zustand=$(dienst_zustand)
+    if [ "$zustand" != da ]; then
+        if [ "$zustand" = fehlt ]; then
+            echo "wpctl ist nicht installiert (Paket wireplumber)" >&2
+        else
+            echo "wireplumber antwortet nicht - kein Tondienst" >&2
+        fi
+        return 3
+    fi
+
+    # Die Richtung, in der die Kennung tatsaechlich steht - oder nichts.
+    # Zwei getrennte Meldungen, weil es zwei verschiedene Lagen sind:
+    # ein Geraet, das inzwischen weg ist, und eine Kennung, die zur
+    # anderen Richtung gehoert (oder gar zur Kamera). Die zweite ist der
+    # Fall, gegen den dieser Waechter ueberhaupt steht.
+    treffer=$(tabelle | awk -F'\t' -v kennung="$kennung" \
+                  '$2 == kennung { print $1; exit }')
+    if [ -z "$treffer" ]; then
+        echo "Geraet $kennung gibt es nicht (mehr)" >&2
+        return 4
+    fi
+    if [ "$treffer" != "$art" ]; then
+        echo "Geraet $kennung gehoert nicht zu dieser Richtung" >&2
+        return 4
+    fi
+
+    frag wpctl set-default "$kennung" || {
+        echo "wpctl set-default $kennung ist gescheitert" >&2
+        return 5
+    }
+}
+
+case "${1:-list}" in
+    list)       liste ;;
+    set-sink)   waehle ausgabe "${2:-}" ;;
+    set-source) waehle eingabe "${2:-}" ;;
+    *)
+        echo "Usage: $0 {list|set-sink ID|set-source ID}" >&2
+        exit 64 ;;
+esac

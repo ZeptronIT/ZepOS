@@ -425,8 +425,33 @@ def test_template_count_is_seventy_seven():
     drei Fensterregeln in hyprland-universal-config.template) faellt mit
     ihr, nach Regel 14. Das PAKET blueman bleibt - es ist der einzige
     Weg zur Bluetooth-Dateiuebertragung in diesem Baum.
+
+    90 STATT 89, am 22.08.2026 (Aufgabe 64): audio-devices-config. Der
+    Nutzer bestellte die Geraetewahl woertlich so - "ich will pro ton und
+    mikrofon auch das geraet waehlen koennen, falls mehrere angeschlossen
+    sind. ok, das muss gehen." Bis dahin lief ALLES ueber
+    @DEFAULT_AUDIO_SINK@ und @DEFAULT_AUDIO_SOURCE@, also ueber das, was
+    WirePlumber gerade fuer richtig haelt; eine Auswahl gab es nirgends.
+
+    Die neue Vorlage erzeugt ags/scripts/audio-devices.sh: EIN Aufruf an
+    `wpctl status` liefert Kennung, sprechenden Namen, Sternchen der
+    Vorgabe und Lautstaerke samt MUTED, und `set-sink`/`set-source`
+    schalten ueber `wpctl set-default` um - mit einer Pruefung davor, weil
+    `wpctl set-default` auch die Kennung einer Kamera annimmt.
+
+    Sie steht NEBEN status.sh und nicht darin, aus demselben Grund wie
+    privacy.sh/media.sh/updates.sh: ein anderer Takt. status.sh laeuft
+    alle zwei Sekunden fuer jede Leiste, diese Liste nur, solange die
+    Ton-Seite des Kontrollzentrums offen ist. In status.sh haette dieselbe
+    Antwort 43200 Laeufe am Tag gekostet, von denen niemand einen sieht.
+
+    Netto plus eine Datei und minus zwei Funktionen: getVolumeStatus()
+    und getMicStatus() in ags-control-center.template sind mit ihr
+    gegangen (Regel 14). Beide fragten `pamixer` nach dem VORGABEGERAET
+    und konnten ueber kein anderes berichten - genau daran haette der
+    Regler nach einem Wechsel gelogen.
     """
-    assert len(list((SRC / "templates").glob("*.template"))) == 89
+    assert len(list((SRC / "templates").glob("*.template"))) == 90
 
 
 def test_nothing_refers_to_a_deleted_template():

@@ -167,6 +167,16 @@ NEVER_PASSTHROUGH = frozenset({
     "hyprctl", "hyprpm", "ags", "waybar", "swaybg", "swaync", "zepos-menu",
     "notify-send", "pkill", "pgrep", "killall", "systemctl", "dbus-send",
     "setsid", "nohup", "gsettings",
+    # the sound the developer is listening to. NACHGETRAGEN am
+    # 22.08.2026 (Aufgabe 64): seit audio-devices-config.template gibt es
+    # eine erzeugte Datei, die `wpctl set-default` ruft - einen
+    # SCHREIBENDEN Aufruf. Ein Durchreich-Stummel dafuer waere das echte
+    # Programm gegen den laufenden Tondienst des Entwicklers: sein
+    # Kopfhoerer waere nach dem Testlauf nicht mehr das Vorgabegeraet,
+    # und nichts im Protokoll saehe danach aus. pamixer steht daneben,
+    # weil das Kontrollzentrum damit stumm schaltet und Regler zieht;
+    # die drei uebrigen sind die anderen Wege an denselben Dienst.
+    "wpctl", "pamixer", "pactl", "pw-cli", "pw-metadata",
     # the network
     "nmcli", "iwctl", "ip", "ifconfig", "ping", "traceroute", "curl",
     "wget", "ssh", "scp",

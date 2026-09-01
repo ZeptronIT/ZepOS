@@ -35,7 +35,12 @@ import Pango from "gi://Pango"
 // ShellSeite ist der Typ jeder einzelnen Seite der Seitenleiste.
 import { createShellWindow, ShellSeite, ShellWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
-import { zepButton, zepStateHeader } from "../utils/kit"
+// zepRow und zepSectionLabel dazu seit Aufgabe 64 (22.08.2026): die
+// Ton-Seite listet ihre Geraete mit DERSELBEN Zeile, die die Bluetooth-
+// und die Netzseite fuer ihre Geraete benutzen - samt dem
+// "aktiv"-Streifen fuer das, was gerade spielt. Kein eigener Zeilentyp
+// fuer eine Liste, die genauso aussieht wie die zwei daneben.
+import { zepButton, zepRow, zepSectionLabel, zepStateHeader } from "../utils/kit"
 // AUFGABE 7 (18.08.2026): die echte Bluetooth-Seite statt des
 // Umzugshinweises - bluetoothSeite baut sich selbst vollstaendig
 // (Kopf, Geraeteliste, eigener Takt), diese Datei haengt sie nur noch
@@ -105,6 +110,12 @@ const SCRIPTS = {
   privacy: `${CONFIG_HOME}/ags/scripts/privacy.sh`,
   media: `${CONFIG_HOME}/ags/scripts/media.sh`,
   updates: `${CONFIG_HOME}/ags/scripts/updates.sh`,
+  // Die Ton-Geraete und der Wechsel zwischen ihnen - AUFGABE 64
+  // (22.08.2026). Neben status.sh und nicht darin, weil es einen
+  // anderen Takt hat: status.sh laeuft alle zwei Sekunden fuer JEDE
+  // Leiste, diese Liste nur, solange die Ton-Seite offen ist. Die
+  // Begruendung im Einzelnen steht im Kopf der Vorlage.
+  audioDevices: `${CONFIG_HOME}/ags/scripts/audio-devices.sh`,
   // Die zwei aus dem Abschnitt SCHREIBTISCH, die einen TEXT zeigen und
   // nicht nur ein Fenster oeffnen. Wieder DIESELBEN Skripte, die auch
   // die Leiste ruft, wenn man sie dort zuschaltet - aus demselben
@@ -290,33 +301,21 @@ async function getWatchdogClass(): Promise<string> {
   return await runScript("watchdog-class") || ""
 }
 
-// Die Lautstaerke
-async function getVolumeStatus(): Promise<{ level: number; muted: boolean }> {
-  try {
-    const vol = await execAsync("pamixer --get-volume")
-    const muted = await execAsync("pamixer --get-mute")
-    return {
-      level: parseInt(vol.trim()) || 0,
-      muted: muted.trim() === "true"
-    }
-  } catch {
-    return { level: 0, muted: false }
-  }
-}
-
-// Das Mikrofon
-async function getMicStatus(): Promise<{ level: number; muted: boolean }> {
-  try {
-    const vol = await execAsync("pamixer --default-source --get-volume")
-    const muted = await execAsync("pamixer --default-source --get-mute")
-    return {
-      level: parseInt(vol.trim()) || 0,
-      muted: muted.trim() === "true"
-    }
-  } catch {
-    return { level: 0, muted: false }
-  }
-}
+// getVolumeStatus() UND getMicStatus() STANDEN HIER - 22.08.2026,
+// Aufgabe 64. Beide fragten `pamixer` nach dem VORGABEGERAET und konnten
+// deshalb ueber kein anderes berichten. Die Ton-Seite liest ihre Zahlen
+// jetzt aus audio-devices.sh, das je Geraet antwortet; die Begruendung
+// im Einzelnen steht unten bei updateSound(). Geloescht und nicht als
+// veraltet markiert - Regel 14.
+//
+// pamixer BLEIBT der Weg zum SCHREIBEN (stumm schalten, Regler ziehen).
+// Dass Lesen und Schreiben damit zwei Werkzeuge sind, ist geprueft und
+// nicht angenommen: GEMESSEN am 22.08.2026 gegen eine eigene, private
+// PipeWire-Instanz mit eigenem pipewire-pulse - `pamixer --set-volume`
+// auf 10/25/50/75/100 % gab bei `wpctl` genau 10/25/50/75/100 %. Die
+// beiden rechnen auf dieser PipeWire-Fassung (1.6.8) in derselben
+// Skala; eine Kurve dazwischen haette den Regler nach jedem Zug
+// springen lassen.
 
 // Die Helligkeit
 async function getBrightness(): Promise<number> {
@@ -490,9 +489,20 @@ export default function ControlCenter(
     // der fuer eine Seite arbeitet, die gerade niemand sieht, ist
     // unnoetige Arbeit bei jedem Oeffnen der Schale.
     //
-    // getVolumeStatus()/getMicStatus()/getBrightness() bleiben
-    // module-weite Funktionen (siehe oben) - soundSeite/displaySeite
-    // rufen dieselben drei auf, keine zweite Fassung.
+    // getBrightness() bleibt eine module-weite Funktion (siehe oben) -
+    // displaySeite ruft sie, keine zweite Fassung.
+    //
+    // getVolumeStatus()/getMicStatus() STANDEN HIER UND SIND WEG -
+    // 22.08.2026, Aufgabe 64. Sie fragten `pamixer --get-volume`, also
+    // IMMER das Vorgabegeraet, und konnten deshalb nach einem
+    // Geraetewechsel gar nichts anderes zeigen als die Vorgabe. Die
+    // Ton-Seite liest ihre Zahlen seither aus audio-devices.sh, das JE
+    // GERAET antwortet - und damit aus derselben Antwort, die sagt,
+    // welches Geraet ueberhaupt gewaehlt ist. Zwei Quellen fuer eine
+    // Zahl waeren zwei Messzeitpunkte gewesen; genau daran haette der
+    // Regler nach dem Wechsel gelogen. Kein Aufrufer blieb uebrig
+    // (`grep -c` ueber diese Datei gab 0), also geloescht statt als
+    // veraltet markiert - Regel 14.
 
     // Systemdienste
     printerLabel.set_text(await getPrinterStatus())
@@ -651,17 +661,33 @@ export default function ControlCenter(
   //     (Aufgabe 4, ags-kit.template) - "der Kopf ist der Zustand"
   //     (Spezifikation 2.2). Die Sound-Seite haelt ZWEI unabhaengige
   //     Regler (Lautstaerke, Mikrofon); ihr Zustand ist deshalb beides:
-  //     Titel fuer die Lautstaerke (die Beispielzeile des Aufgabenblatts,
-  //     "Lautstaerke 40 %") und Nebenzeile fuer das Mikrofon. Anzeige
-  //     traegt nur einen Regler und darum nur einen Titel.
+  //     Titel fuer die Lautstaerke und Nebenzeile fuer das Mikrofon.
+  //     Anzeige traegt nur einen Regler und darum nur einen Titel.
   //
-  // WAS AN DEN UEBERNOMMENEN BEDIENELEMENTEN SELBST GEAENDERT WURDE:
-  // NICHTS. Byte fuer Byte dieselben zepButton()-Aufrufe, dieselben
-  // Gtk.Scale-Bereiche (0-100 fuer Ton, 5-100 fuer Helligkeit) und
-  // dieselben Befehle (pamixer/brightnessctl) wie vorher auf "general" -
-  // nur updateDisplay() heisst hier lokal updateSound()/updateBrightness()
-  // und liest istAktiv(), wie es Netzwerk/Bluetooth/VPN seit Aufgabe
-  // 15/16 auch tun (kein Takt fuer eine Seite, die niemand sieht).
+  //     SEIT AUFGABE 64 (22.08.2026) traegt jede der beiden Zeilen
+  //     ausserdem den NAMEN ihres Geraets. Das ist keine Zierde: bei
+  //     genau einem Geraet je Richtung erscheint die Auswahlliste
+  //     absichtlich nicht (siehe zeichneWahl unten), und der Kopf ist
+  //     dann der einzige Ort, an dem ueberhaupt steht, worueber der
+  //     Regler spricht.
+  //
+  // WAS AN DEN UEBERNOMMENEN BEDIENELEMENTEN GEAENDERT WURDE
+  //     Bis zum 22.08.2026: NICHTS - Byte fuer Byte dieselben
+  //     zepButton()-Aufrufe, dieselben Gtk.Scale-Bereiche (0-100 fuer
+  //     Ton, 5-100 fuer Helligkeit) und dieselben Befehle
+  //     (pamixer/brightnessctl) wie vorher auf "general"; nur
+  //     updateDisplay() heisst hier lokal updateSound()/
+  //     updateBrightness() und liest istAktiv(), wie es
+  //     Netzwerk/Bluetooth/VPN seit Aufgabe 15/16 auch tun (kein Takt
+  //     fuer eine Seite, die niemand sieht).
+  //
+  //     MIT AUFGABE 64 sind es drei Dinge, und alle drei stehen unten
+  //     mit ihrer Messung: die Regler LESEN aus audio-devices.sh statt
+  //     aus pamixer (je Geraet statt nur "die Vorgabe"), sie werden
+  //     unbedienbar, wenn es kein Geraet gibt (Spezifikation 7.4), und
+  //     eine Sperre haelt die programmatische Zuweisung davon ab, als
+  //     Befehl zurueckzulaufen. Die pamixer-Aufrufe zum SCHREIBEN sind
+  //     unveraendert.
   //
   // BEDIENELEMENTE VORHER/NACHHER (Aufgabenblatt 17, "zaehl sie wieder"):
   // siehe der Bericht dieser Aufgabe fuer die vollstaendige Rechnung -
@@ -704,6 +730,24 @@ export default function ControlCenter(
       let headerWrap: Gtk.Box
       let volumeSlider: Gtk.Scale, volumeIcon: Gtk.Label, volumeLabel: Gtk.Label
       let micSlider: Gtk.Scale, micIcon: Gtk.Label, micLabel: Gtk.Label
+      // Die zwei Geraetewahlen - AUFGABE 64 (22.08.2026). Je ein
+      // Behaelter, den updateSound() neu fuellt; er bleibt LEER, solange
+      // es nichts zu waehlen gibt (siehe zeichneWahl()).
+      let ausgabeWahl: Gtk.Box, eingabeWahl: Gtk.Box
+
+      // DER SCHUTZ VOR DEM SCHREIBEN, DAS AUS EINEM LESEN ENTSTEHT
+      //
+      //     `volumeSlider.set_value(...)` loest "value-changed" aus, und
+      //     dieser Rueckruf ruft `pamixer --set-volume`. Jede Anzeige
+      //     war damit zugleich ein Befehl. Solange die Zahl aus
+      //     DEMSELBEN Geraet kam, das der Befehl trifft, fiel das nicht
+      //     auf - der Wert wurde auf sich selbst gesetzt.
+      //
+      //     Mit der Geraetewahl faellt es auf: nach einem Wechsel zeigt
+      //     der Regler den Wert des NEUEN Geraets, und ohne diese Sperre
+      //     schriebe er ihn ungefragt auch hin. Die Sperre steht
+      //     deshalb ab heute um jede programmatische Zuweisung.
+      let stelleEin = false
 
       // KOPF AUSSERHALB DER FLAECHE - GEAENDERT am 20.08.2026 (Aufgabe
       // 49). Bis hierher hing der zepStateHeader IN `.cc-container`
@@ -743,6 +787,7 @@ export default function ControlCenter(
       volumeSlider.set_range(0, 100)
       volumeSlider.add_css_class("cc-slider")
       volumeSlider.connect("value-changed", () => {
+        if (stelleEin) return
         const val = Math.round(volumeSlider.get_value())
         volumeLabel.set_text(`${val}%`)
         execAsync(`pamixer --set-volume ${val}`)
@@ -768,6 +813,7 @@ export default function ControlCenter(
       micSlider.set_range(0, 100)
       micSlider.add_css_class("cc-slider")
       micSlider.connect("value-changed", () => {
+        if (stelleEin) return
         const val = Math.round(micSlider.get_value())
         micLabel.set_text(`${val}%`)
         execAsync(`pamixer --default-source --set-volume ${val}`)
@@ -781,25 +827,198 @@ export default function ControlCenter(
       flaeche.append(volRow)
       flaeche.append(micRow)
 
+      // DIE GERAETEWAHL - AUFGABE 64 (22.08.2026)
+      //
+      // BESTELLT, woertlich: "ich will pro ton und mikrofon auch das
+      // geraet waehlen koennen, falls mehrere angeschlossen sind. ok,
+      // das muss gehen."
+      //
+      // WARUM HIER UND NICHT IN DEN EINSTELLUNGEN
+      //     GEMESSEN in ags-bar.template: das Lautstaerkemodul UND das
+      //     Mikrofonmodul der Leiste tragen beide `toggles: "sound"`.
+      //     Ein Klick auf eines von beiden fuehrt also genau auf diese
+      //     Seite - und das ist der Moment, in dem jemand ein Headset
+      //     einsteckt. Das Einstellungsfenster ist der Ort fuer die
+      //     dauerhafte VORGABE, und die gibt es dort schon als
+      //     `audio.default_sink` / `audio.default_source`
+      //     (wireplumber-config.template, src/audio.py). Zwei
+      //     verschiedene Fragen, zwei verschiedene Orte.
+      //
+      // EIN GERAET IST KEINE WAHL
+      //     Der Nutzer sagt es selbst: "falls mehrere angeschlossen
+      //     sind". Woertlich gelesen heisst das: die Liste erscheint,
+      //     wenn es etwas zu waehlen gibt, und sonst nicht. Sie
+      //     erscheint darum JE RICHTUNG einzeln - ein Rechner mit einer
+      //     Tonkarte und drei Mikrofonen zeigt die Wahl nur beim
+      //     Mikrofon.
+      //
+      //     Eine Liste mit einem Eintrag waere nicht nur Platz: sie
+      //     laedt zu einem Klick ein, nach dem sich nichts aendert, und
+      //     das sieht aus wie ein Fehler.
+      const ausgabeLabel = zepSectionLabel(_("Output device"))
+      ausgabeWahl = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+      const eingabeLabel = zepSectionLabel(_("Input device"))
+      eingabeWahl = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+      flaeche.append(ausgabeLabel)
+      flaeche.append(ausgabeWahl)
+      flaeche.append(eingabeLabel)
+      flaeche.append(eingabeWahl)
+
+      /** Eine Richtung zeichnen - und sich ganz ausblenden, wenn es
+       * nichts zu waehlen gibt.
+       *
+       * `zepRow` mit `aktion` und `ausgewaehlt` und kein eigener
+       * Zeilentyp: dieselbe Zeile, die die Bluetooth- und die Netzseite
+       * schon benutzen, mit demselben "aktiv"-Streifen fuer das Geraet,
+       * das gerade spielt.
+       *
+       * EIN ZEICHEN JE RICHTUNG UND KEINE RATEREI. Der Kopfhoerer liesse
+       * sich am node.name erkennen (so macht es die Leiste in
+       * bar-status-config.template), aber diese Liste holt den node.name
+       * bewusst nicht - siehe den Kopf von audio-devices-config.template.
+       * Aus dem ANGEZEIGTEN Namen zu raten waere schlechter als gar
+       * nicht zu raten: er ist uebersetzt, und ein Wortvergleich gegen
+       * eine uebersetzte Zeichenkette trifft auf der naechsten Sprache
+       * nichts mehr.
+       */
+      const zeichneWahl = (behaelter: Gtk.Box, marke: Gtk.Widget,
+                           geraete: any[], symbol: string,
+                           waehlen: (kennung: number) => void) => {
+        removeAllChildren(behaelter)
+        const zeigen = geraete.length > 1
+        behaelter.set_visible(zeigen)
+        marke.set_visible(zeigen)
+        if (!zeigen) return
+        for (const geraet of geraete) {
+          behaelter.append(zepRow({
+            symbol,
+            titel: String(geraet.name ?? ""),
+            ausgewaehlt: geraet.vorgabe === true,
+            aktion: () => waehlen(Number(geraet.kennung)),
+          }))
+        }
+      }
+
+      /** Umschalten und SOFORT neu lesen.
+       *
+       * Das `await` ist der ganze Punkt und keine Formsache: erst wenn
+       * audio-devices.sh zurueck ist, steht die neue Vorgabe fest, und
+       * erst dann darf die Seite sie lesen. GEMESSEN am 22.08.2026 an
+       * einer privaten PipeWire-Instanz: `set-sink` kehrt nach 21,5 ms
+       * zurueck, und die naechste Liste 15,4 ms spaeter nennt bereits das
+       * neue Geraet MIT SEINER EIGENEN Lautstaerke (77 % statt der 55 %
+       * des alten). Der Regler kann danach nichts Falsches zeigen, weil
+       * er seinen Wert aus derselben Antwort nimmt, die sagt, welches
+       * Geraet gewaehlt ist.
+       */
+      const waehle = async (unterbefehl: string, kennung: number) => {
+        try {
+          await execAsync([SCRIPTS.audioDevices, unterbefehl, String(kennung)])
+        } catch (error) {
+          console.error("audio-devices.sh:", String(error))
+        }
+        updateSound()
+      }
+
       const updateSound = async () => {
-        const vol = await getVolumeStatus()
-        volumeSlider.set_value(vol.level)
-        volumeIcon.set_text(vol.muted ? ICONS.volumeMute : ICONS.volume)
-        volumeLabel.set_text(`${vol.level}%`)
+        const geraete = await readJson(SCRIPTS.audioDevices + " list")
+        const ausgabe: any[] = Array.isArray(geraete.ausgabe) ? geraete.ausgabe : []
+        const eingabe: any[] = Array.isArray(geraete.eingabe) ? geraete.eingabe : []
+        const vorgabe = (liste: any[]) =>
+          liste.find(eintrag => eintrag.vorgabe === true) ?? null
 
-        const mic = await getMicStatus()
-        micSlider.set_value(mic.level)
-        micIcon.set_text(mic.muted ? ICONS.micMute : ICONS.mic)
-        micLabel.set_text(`${mic.level}%`)
+        const vol = vorgabe(ausgabe)
+        const mic = vorgabe(eingabe)
 
+        // DIE DREI ZUSTAENDE, DIE DAS SKRIPT UNTERSCHEIDET, UND EIN
+        // VIERTER, DEN NUR DIESE SEITE SEHEN KANN
+        //
+        //     "fehlt"/"stumm" kommen aus audio-devices.sh (dieselbe
+        //     Unterscheidung wie in bar-status-config.template: das
+        //     Paket fehlt, oder der Dienst antwortet nicht). Ein
+        //     LEERES Objekt dagegen heisst, dass das Skript selbst
+        //     nicht geantwortet hat - readJson() gibt dann {} zurueck,
+        //     und `dienst` ist undefined.
+        //
+        //     Warum das getrennt gehoert: die ersten beiden kann der
+        //     Nutzer beheben (Paket nachinstallieren, Dienst starten),
+        //     der dritte ist ein kaputter Erzeugungslauf. Eine
+        //     gemeinsame Meldung schickte ihn in die falsche Richtung.
+        const dienst = typeof geraete.dienst === "string" ? geraete.dienst : ""
+        const klage = dienst === "fehlt"
+          ? _("wireplumber is not installed")
+          : dienst === "stumm"
+            ? _("The sound service is not answering")
+            : dienst === ""
+              ? _("The device list is not answering")
+              : ""
+
+        // Ein Regler ohne Geraet ist ein Bedienelement ohne Ziel -
+        // Spezifikation 7.4. Er bleibt stehen (er verschwindet nicht,
+        // sonst springt die Seite), aber er nimmt keine Eingabe an.
+        volumeSlider.set_sensitive(vol !== null)
+        micSlider.set_sensitive(mic !== null)
+
+        // stelleEin sperrt "value-changed" - siehe die Begruendung bei
+        // der Angabe selbst. Ohne die Sperre schriebe jede dieser drei
+        // Zuweisungen den gelesenen Wert ungefragt zurueck.
+        stelleEin = true
+        try {
+          volumeSlider.set_value(vol ? Number(vol.lautstaerke ?? 0) : 0)
+          micSlider.set_value(mic ? Number(mic.lautstaerke ?? 0) : 0)
+        } finally {
+          stelleEin = false
+        }
+
+        volumeIcon.set_text(vol && vol.stumm ? ICONS.volumeMute : ICONS.volume)
+        volumeLabel.set_text(vol ? `${vol.lautstaerke}%` : "—")
+        micIcon.set_text(mic && mic.stumm ? ICONS.micMute : ICONS.mic)
+        micLabel.set_text(mic ? `${mic.lautstaerke}%` : "—")
+
+        zeichneWahl(ausgabeWahl, ausgabeLabel, ausgabe, ICONS.volume,
+                    kennung => waehle("set-sink", kennung))
+        zeichneWahl(eingabeWahl, eingabeLabel, eingabe, ICONS.mic,
+                    kennung => waehle("set-source", kennung))
+
+        // DER KOPF NENNT DAS GERAET MIT - GEAENDERT am 22.08.2026
+        //
+        //     Bis hierher stand hier "Lautstaerke 40 %" und darunter
+        //     "Mikrofon 60 %". Zwei Zahlen ohne die Angabe, WOVON.
+        //     Solange es nichts zu waehlen gab, war das vollstaendig;
+        //     ab heute ist es die halbe Auskunft - und auf einem
+        //     Rechner mit genau EINEM Geraet je Richtung (die Liste
+        //     erscheint dann nicht, siehe zeichneWahl) ist der Kopf der
+        //     EINZIGE Ort, an dem der Name ueberhaupt steht.
+        //
+        //     "Lautstaerke 40 %" und "Lautstaerke 40 % - Internes Audio"
+        //     sind darum zwei msgids und nicht einer mit leerem Feld:
+        //     eine Beschriftung, die auf " - " endet, weil das Geraet
+        //     fehlt, ist kein uebersetzbarer Satz.
         removeAllChildren(headerWrap)
         headerWrap.append(zepStateHeader({
-          titel: vol.muted
-            ? _("Volume muted")
-            : format(_("Volume {level}%"), { level: vol.level }),
-          unterzeile: mic.muted
-            ? _("Microphone muted")
-            : format(_("Microphone {level}%"), { level: mic.level }),
+          // Der Kopf IST der Zustand (Spezifikation 2.2). Steht der Ton
+          // still, sagt er warum - und nicht "Lautstaerke 0 %", was eine
+          // Messung behauptet, die es nicht gab.
+          titel: klage
+            ? klage
+            : vol === null
+              ? _("No output device")
+              : vol.stumm
+                ? format(_("Volume muted - {device}"),
+                         { device: String(vol.name ?? "") })
+                : format(_("Volume {level}% - {device}"),
+                         { level: vol.lautstaerke,
+                           device: String(vol.name ?? "") }),
+          unterzeile: klage
+            ? ""
+            : mic === null
+              ? _("No input device")
+              : mic.stumm
+                ? format(_("Microphone muted - {device}"),
+                         { device: String(mic.name ?? "") })
+                : format(_("Microphone {level}% - {device}"),
+                         { level: mic.lautstaerke,
+                           device: String(mic.name ?? "") }),
         }))
       }
 

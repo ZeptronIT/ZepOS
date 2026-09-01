@@ -1258,5 +1258,15 @@ def test_the_template_count_is_seventy_seven():
     GTK3-Programm. Die vollstaendige Begruendung samt der gemessenen
     Kette bis in den Kern steht bei der Zwillingszusicherung in
     tests/src/test_inventory.py.
+
+    90 STATT 89, am 22.08.2026 (Aufgabe 64): audio-devices-config. Sie
+    erzeugt ags/scripts/audio-devices.sh - die Liste der Ton-Geraete und
+    der Wechsel zwischen ihnen, bestellt mit "ich will pro ton und
+    mikrofon auch das geraet waehlen koennen, falls mehrere angeschlossen
+    sind". Ein Skript NEBEN status.sh und nicht darin, weil es einen
+    anderen Takt hat. Was es tut, wird in tests/src/test_audio_devices.py
+    ausgefuehrt und nicht gelesen; die vollstaendige Rechnung steht bei
+    der Zwillingszusicherung in tests/src/test_inventory.py, und beide
+    muessen zusammen wandern.
     """
-    assert len(list(TEMPLATES.glob("*.template"))) == 89
+    assert len(list(TEMPLATES.glob("*.template"))) == 90

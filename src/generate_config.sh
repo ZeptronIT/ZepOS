@@ -1390,6 +1390,18 @@ case "$CONFIG_NAME" in
         CONFIG_FILE="updates.sh"
         MAKE_EXECUTABLE=true
         ;;
+    # Die Ton-Geraetewahl (22.08.2026, Aufgabe 64). Wieder ein eigenes
+    # Skript neben status.sh und aus demselben Grund wie die drei
+    # darueber: ein anderer TAKT. status.sh laeuft alle zwei Sekunden
+    # fuer jede Leiste; diese Liste liest nur das Kontrollzentrum, nur
+    # solange die Ton-Seite offen ist, und dann alle drei Sekunden. In
+    # status.sh haette dieselbe Antwort 43200 Laeufe am Tag gekostet,
+    # von denen der Nutzer keinen einzigen sieht.
+    audio-devices-config)
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags/scripts"
+        CONFIG_FILE="audio-devices.sh"
+        MAKE_EXECUTABLE=true
+        ;;
     ags-config)
         CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/ags"
         CONFIG_FILE="app.ts"
