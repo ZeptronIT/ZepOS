@@ -133,20 +133,49 @@ def _shipped_settings(kind: str = "ipsec") -> str:
     try:
         import settings
         document = settings.defaults()
-        document["vpn"]["kind"] = kind
+        # ZWEI VERBINDUNGEN, SEIT DEM 22.08.2026 - und das ist keine
+        # Zutat, sondern der Punkt.
+        #
+        #     Der Nutzer hat die Liste bestellt, weil er MEHRERE
+        #     Zugaenge hat. Ein Bildlauf mit einer einzigen Verbindung
+        #     zeichnete eine Liste, die aussieht wie vorher, und
+        #     bewiese ueber die Breite genau nichts: die
+        #     Verbindungsleiste links traegt erst dann ihre volle
+        #     Anspruchsbreite, wenn wirklich Zeilen darin stehen.
+        #
+        #     Die zweite ist ABSICHTLICH WireGuard, auch im
+        #     IPsec-Lauf: "bei wireguard, weil ich dort mehrere vpns
+        #     habe ... das gleiche gilt uebrigens fuer die anderen vpn
+        #     verbindungen auch". Zwei Bauarten nebeneinander sind der
+        #     Fall, den es vor dieser Aufgabe nicht geben konnte.
+        erste = dict(settings.default_connection(), id="c1")
+        erste["kind"] = kind
+        erste["connection_name"] = "arbeit"
+        erste["server"] = "gateway.example.invalid"
+        zweite = dict(settings.default_connection(), id="a1b2c3d4")
+        zweite["kind"] = "wireguard"
+        zweite["connection_name"] = "zuhause"
+        zweite["wireguard"] = dict(zweite["wireguard"])
+        zweite["wireguard"]["peers"] = [{
+            "public_key": "", "endpoint": "heim.example.invalid:51820",
+            "allowed_ips": ["10.9.0.0/24"], "keepalive": 25,
+            "preshared_key_file": "",
+        }]
+        document["vpn"] = {"active": "c1", "connections": [erste, zweite]}
         if kind == "openvpn":
+            erste["openvpn"] = dict(erste["openvpn"])
             # Ein Endpunkt und ein Zertifikatsname, damit die Reiter
             # "Verbindung" und "Zertifikate" wirklich Inhalt tragen -
             # ein leeres Fenster misst seine eigene Leere.
-            document["vpn"]["openvpn"]["remote"] = "gateway.example.invalid"
-            document["vpn"]["openvpn"]["port"] = 1194
-            document["vpn"]["openvpn"]["connection_type"] = "password-tls"
-            document["vpn"]["openvpn"]["username"] = "jemand"
-            document["vpn"]["openvpn"]["ca_file"] = "work-ca.pem"
-            document["vpn"]["openvpn"]["cert_file"] = "work-cert.pem"
-            document["vpn"]["openvpn"]["key_file"] = "work-key.pem"
-            document["vpn"]["openvpn"]["tls_auth_file"] = "work-tls-auth.key"
-            document["vpn"]["openvpn"]["extra"] = [
+            erste["openvpn"]["remote"] = "gateway.example.invalid"
+            erste["openvpn"]["port"] = 1194
+            erste["openvpn"]["connection_type"] = "password-tls"
+            erste["openvpn"]["username"] = "jemand"
+            erste["openvpn"]["ca_file"] = "work-ca.pem"
+            erste["openvpn"]["cert_file"] = "work-cert.pem"
+            erste["openvpn"]["key_file"] = "work-key.pem"
+            erste["openvpn"]["tls_auth_file"] = "work-tls-auth.key"
+            erste["openvpn"]["extra"] = [
                 ["data-ciphers", "AES-256-GCM:AES-128-GCM"]]
         return json.dumps(document, indent=2)
     finally:
@@ -284,3 +313,243 @@ def test_der_ueberhang_ist_auch_unter_openvpn_null(protokoll_openvpn):
     Nutzer.
     """
     _pruefe_ueberhang(protokoll_openvpn)
+
+
+# --------------------------------------------------------------------
+# Der Bildbeweis: die Liste ist wirklich in der Oberflaeche
+# --------------------------------------------------------------------
+#
+# AUF ANSAGE DES NUTZERS (22.08.2026)
+#     "bitte diese liste mit toggle auch visuell im ags fenster
+#      umsetzen"
+#
+#     Die Messungen oben sagen, dass der Inhalt in seine Sprosse passt.
+#     Sie sagen NICHT, dass eine Liste mit Schaltern dasteht - ein
+#     Fenster ohne Liste passt genauso gut. Eine Datenschicht mit einem
+#     Versprechen ist genau das, was hier nicht abgeliefert werden
+#     soll, also wird es gezeichnet und angesehen.
+#
+# WAS DAS BILD ZEIGEN MUSS
+#     Zwei Verbindungen mit verschiedenen Bauarten ("arbeit", IPsec;
+#     "zuhause", WireGuard - siehe _shipped_settings()) und je einem
+#     Schalter. Genau der Fall, den es vor dieser Aufgabe nicht geben
+#     konnte.
+
+# `ags request vpn` oeffnet die SCHALE auf der VPN-Seite - seit
+# Aufgabe 9 (18.08.2026) gibt es kein eigenes VPN-Fenster mehr
+# (ags-config.template::requestHandler, Zweig "vpn" ->
+# toggleByName("vpn") -> widgets.control.zeigeSeite("vpn")). Die
+# Layer-Flaeche heisst deshalb "control", die ANFRAGE aber "vpn".
+#
+# GEMESSEN am 22.08.2026: mit "control" angefragt zeigte das Bild die
+# Schale auf irgendeiner Seite - der erste Anlauf dieses Beweises
+# lieferte zweimal den blanken Schreibtisch.
+SEITE_ANFRAGE = "vpn"
+
+
+def _erschienen(vorher: Path, nachher: Path) -> int:
+    """Wieviele Bildpunkte sich geaendert haben.
+
+    Der Beweis, dass die Flaeche WIRKLICH DA IST. Der Kopf dieser Datei
+    beschreibt, warum an dieser Vorrichtung nicht auf die Flaeche
+    gewartet werden kann: sie erscheint in einem Teil der Laeufe gar
+    nicht. Eine Zusicherung, die nur prueft, ob eine PNG-Datei
+    entstanden ist, geht in genau diesen Laeufen durch und beweist
+    nichts - GEMESSEN am 22.08.2026, als sie das zweimal tat.
+    """
+    from tests.render.measure import changed_pixels, read_png
+    a, b = read_png(vorher), read_png(nachher)
+    return len(changed_pixels(a, b, (0, 0, a.width, a.height)))
+
+
+# Wieviel Flaeche eine geoeffnete Schale mindestens bedeckt. Sie ist
+# 880 breit und mehrere hundert hoch; 200 000 Punkte sind ein Zehntel
+# davon und damit weit unter dem, was ein echtes Fenster aendert, aber
+# weit ueber dem, was Uhrzeit und Auslastungsanzeige in der Leiste
+# zwischen zwei Aufnahmen bewegen.
+MINDESTFLAECHE = 200_000
+
+
+def _bilder(bau) -> dict:
+    """Beide Flaechen in EINER Sitzung oeffnen und abziehen.
+
+    In einer modulweiten Vorrichtung und nicht im Test selbst - genau
+    wie `protokoll` oben. Der Isolationswaechter (tests/conftest.py) ist
+    funktionsweit: er patcht os.open fuer die Dauer EINES Tests, und
+    `start_bus()` startet dbus-daemon mit subprocess.DEVNULL, was durch
+    diesen Patch laeuft. GEMESSEN am 22.08.2026: derselbe Aufbau, im
+    Test aufgerufen, brach mit "tried to write on '/dev/null'" ab; in
+    einer Vorrichtung aufgerufen, laeuft er - so wie die beiden
+    Ueberhang-Messungen oben es seit jeher tun.
+    """
+    ags = render_configuration(bau)
+    bundle(ags, bau)
+    (bau / "zepos").mkdir(parents=True, exist_ok=True)
+    (bau / "zepos" / "user-settings.json").write_text(
+        _shipped_settings("ipsec"), encoding="utf-8")
+
+    ergebnis = {}
+    with Session(1920, 1080) as sitzung:
+        sitzung.start_bus()
+        workspaces_file(bau, sitzung.output)
+        # Der Mauspfeil waere auf dem Bild ein Befund, der keiner ist -
+        # dieselbe Zeile wie in test_starter.py.
+        sitzung.hyprctl("keyword", "cursor:invisible", "true")
+        sitzung.wallpaper()
+
+        # DER ZEIGER MUSS AUF DEN ABGEBILDETEN SCHIRM - ohne diese Zeile
+        # erscheint die Schale ueberhaupt nicht.
+        #
+        #     GEMESSEN am 22.08.2026, nach zwei Fehlanlaeufen: `ags
+        #     request control` antwortet "toggled", das Fehlerprotokoll
+        #     bleibt leer, und `layers()` fuehrt Leiste, Dock, Tapete,
+        #     Home, Power und Starter - aber nie 'control'. Auch OHNE
+        #     jede Einstellungsdatei, also nicht an dieser Aufgabe
+        #     gelegen.
+        #
+        #     Der Grund steht bei move_cursor() in desktop_session.py:
+        #     utils/overlay.ts fragt vor jedem Aufklappfenster `hyprctl
+        #     cursorpos -j` und sucht den Schirm, auf dem der Zeiger
+        #     steht. Der verschachtelte Compositor hat ZWEI Ausgaenge -
+        #     den des Wirtsfensters und den headless-Ausgang, der
+        #     abgebildet wird -, und der Zeiger steht anfangs auf dem
+        #     falschen. Die Schale ging also jedes Mal auf, nur eben
+        #     nicht dort, wo hingesehen wird.
+        #
+        #     tests/render/test_schale_stil.py hat diese Zeile seit
+        #     jeher; sie hat hier gefehlt.
+        sitzung.move_cursor(960, 540)
+        sitzung.shell(bau / "zepos-shell.js", bau)
+        time.sleep(SETTLE)
+
+        blank = sitzung.shoot(bau / "0-nur-schreibtisch.png")
+
+        # AUFWAERMEN: die Schale einmal ueber "control" oeffnen, bevor
+        # irgendetwas gemessen wird.
+        #
+        #     GEMESSEN am 22.08.2026: `ags request vpn` als ALLERERSTE
+        #     Anfrage einer Sitzung antwortet "toggled", aber die
+        #     Flaeche 'control' erscheint auch nach 45 Sekunden nicht -
+        #     zweimal nacheinander, mit leerem Fehlerprotokoll.
+        #     Dieselbe Anfrage NACH einem "control" laesst sie sofort
+        #     erscheinen.
+        #
+        #     Das deckt sich mit tests/render/test_schale_stil.py, das
+        #     seine vier Seiten in der Reihenfolge control, network,
+        #     bluetooth, vpn durchgeht und deshalb nie auf diese Lage
+        #     stoesst - und mit dem Kommentar dort ueber "den
+        #     allerersten `ags request` in einer Sitzung". Es ist eine
+        #     Schwaeche der Vorrichtung und keine der Oberflaeche: die
+        #     Seite selbst wird dort seit jeher gezeichnet und gemessen.
+        sitzung.request("control")
+        deadline = time.monotonic() + 45.0
+        aufgewaermt = False
+        while time.monotonic() < deadline:
+            if sitzung.layers().get("control"):
+                aufgewaermt = True
+                break
+            time.sleep(0.3)
+        ergebnis["aufwaermung"] = aufgewaermt
+        time.sleep(2.0)
+
+        # Das VIERTE Feld ist die Anfrage, die wieder ZUMACHT - und sie
+        # ist nicht immer dieselbe wie die zum Aufmachen.
+        #
+        #     GEMESSEN am 22.08.2026: `ags request vpn` geht ueber
+        #     toggleByName() auf `zeigeSeite("vpn")`, und das ist KEIN
+        #     Umschalter - es wechselt die Seite und ruft `show()`.
+        #     Ein zweites `ags request vpn` laesst die Schale also
+        #     offen, und das danach angefragte Einstellungsfenster
+        #     erschien nie ('vpn-settings' fehlte in layers()).
+        #     Zugemacht wird die Schale mit "control", das ueber
+        #     toggleWidget() laeuft und wirklich umschaltet.
+        for schluessel, anfrage, flaeche, zumachen, datei in (
+                ("schale", SEITE_ANFRAGE, "control", "control",
+                 "vpn-liste-schale.png"),
+                ("fenster", NAMESPACE, NAMESPACE, NAMESPACE,
+                 "vpn-liste-einstellungen.png")):
+            antwort = sitzung.request(anfrage)
+            assert "toggled" in antwort or "shown" in antwort, (
+                f"ags request {anfrage} antwortete {antwort!r}")
+
+            # GERUETTELT STATT GEWARTET, UND NUR EIN EINZIGES `ags
+            # request` - beides abgeschrieben von
+            # tests/render/test_schale_stil.py, wo es begruendet steht:
+            #
+            #   * Die Flaeche bleibt in einem Teil der Laeufe laenger
+            #     als 20 Sekunden ganz aus. Eine feste Wartezeit ist
+            #     entweder zu kurz oder zu lang.
+            #   * Ein ZWEITER `ags request` waere falsch: GJS ist
+            #     einstraengig, der zweite Aufruf wird erst NACH dem
+            #     ersten verarbeitet und knipst das gerade erschienene
+            #     Fenster sofort wieder zu. "Ein Waechter, der sein
+            #     eigenes Messobjekt wegklickt, ist schlimmer als einer,
+            #     der lang wartet."
+            #
+            # GEMESSEN am 22.08.2026: der erste Anlauf dieses Beweises
+            # rief bis zu dreimal `ags request` und bekam zweimal den
+            # blanken Schreibtisch - 0 geaenderte Bildpunkte. Genau der
+            # Fehler, vor dem der Kommentar dort warnt.
+            deadline = time.monotonic() + 45.0
+            platte = None
+            while time.monotonic() < deadline:
+                platte = sitzung.layers().get(flaeche)
+                if platte:
+                    break
+                time.sleep(0.3)
+            assert platte, (
+                f"keine Flaeche '{flaeche}' auf dem Schirm nach "
+                f"'ags request {anfrage}' (Antwort: {antwort!r}):\n"
+                + sitzung.read_shell_log())
+
+            # Die erste Zuteilung ist oft noch ein Platzhalter - dieselbe
+            # Beobachtung wie dort, darum nach dem Erscheinen noch ein
+            # Moment fuer die endgueltige Groesse.
+            time.sleep(3.0)
+            bild = sitzung.shoot(bau / datei)
+            ergebnis[schluessel] = bild
+            ergebnis[schluessel + "-punkte"] = _erschienen(blank, bild)
+
+            # Wieder zu, damit die naechste Flaeche allein dasteht.
+            sitzung.request(zumachen)
+            frist = time.monotonic() + 15.0
+            while time.monotonic() < frist:
+                if not sitzung.layers().get(flaeche):
+                    break
+                time.sleep(0.3)
+            time.sleep(1.0)
+    return ergebnis
+
+
+@pytest.fixture(scope="module")
+def bildbeweis(tmp_path_factory) -> dict:
+    fehlt = required_tools()
+    if fehlt:
+        pytest.skip(f"fuer den Bildlauf fehlt: {', '.join(fehlt)}")
+    return _bilder(tmp_path_factory.mktemp("zepvpn-bild"))
+
+
+def test_die_schale_zeigt_die_verbindungsliste(bildbeweis):
+    """Gezeichnet, nicht behauptet.
+
+    Die Messungen oben sagen, dass der Inhalt in seine Sprosse passt.
+    Sie sagen NICHT, dass eine Liste mit Schaltern dasteht - ein
+    Fenster ohne Liste passt genauso gut.
+    """
+    bild = bildbeweis["schale"]
+    assert bild.is_file() and bild.stat().st_size > 0
+    assert bildbeweis["schale-punkte"] >= MINDESTFLAECHE, (
+        f"die Schale ist auf dem Bild nicht erschienen - nur "
+        f"{bildbeweis['schale-punkte']} Punkte haben sich gegenueber dem "
+        f"blanken Schreibtisch geaendert: {bild}")
+    print(f"\nBildbeweis Schalenseite: {bild}")
+
+
+def test_das_einstellungsfenster_zeigt_die_verbindungsliste(bildbeweis):
+    """Dasselbe fuer das Einstellungsfenster."""
+    bild = bildbeweis["fenster"]
+    assert bild.is_file() and bild.stat().st_size > 0
+    assert bildbeweis["fenster-punkte"] >= MINDESTFLAECHE, (
+        f"das Einstellungsfenster ist auf dem Bild nicht erschienen - nur "
+        f"{bildbeweis['fenster-punkte']} Punkte geaendert: {bild}")
+    print(f"\nBildbeweis Einstellungsfenster: {bild}")

@@ -40,6 +40,7 @@ import pytest
 from src import vpn
 from src.settings import SCHEMA_VERSION
 from src.settings import defaults as settings_defaults
+from src.settings import default_connection as settings_default_connection
 from src.vpn import (
     UnreadableWireGuardConfig,
     nm_own_argv,
@@ -59,7 +60,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
 
-def _user_settings_defaults() -> dict:
+def _user_settings_connection() -> dict:
     """DEFAULT_SETTINGS, geladen wie /usr/share/zepos es laedt.
 
     `from src.user_settings import ...` geht nicht: das Modul importiert
@@ -73,7 +74,10 @@ def _user_settings_defaults() -> dict:
     sys.path.insert(0, str(SRC))
     try:
         import user_settings
-        return user_settings.DEFAULT_SETTINGS
+        # DEFAULT_CONNECTION und nicht mehr DEFAULT_SETTINGS["vpn"]:
+        # der VPN-Abschnitt traegt seit dem 22.08.2026 eine Liste, die
+        # Vorgaben EINER Verbindung stehen eine Ebene tiefer.
+        return user_settings.DEFAULT_CONNECTION
     finally:
         sys.path.remove(str(SRC))
 
@@ -191,7 +195,7 @@ def test_the_old_configuration_produces_the_very_same_swanctl_file():
 
     migrated = json.loads(json.dumps(LEGACY))
     migrated["vpn"]["kind"] = "ipsec"
-    migrated["vpn"]["wireguard"] = settings_defaults()["vpn"]["wireguard"]
+    migrated["vpn"]["wireguard"] = settings_default_connection()["wireguard"]
     after = swanctl_config(migrated)
 
     assert before == after, (
@@ -211,8 +215,12 @@ def test_both_default_tables_carry_the_same_wireguard_keys():
     lehnt `zepos-settings set` einen Pfad ab, den das Fenster daneben
     schreibt.
     """
-    lean = settings_defaults()["vpn"]
-    full = _user_settings_defaults()["vpn"]
+    # BEIDE HEISSEN SEIT DEM 22.08.2026 default_connection() bzw.
+    # DEFAULT_CONNECTION: der Abschnitt ist eine Ebene tiefer
+    # gerutscht, weil `vpn` jetzt eine Liste traegt. Verglichen wird
+    # unveraendert dasselbe - EINE Verbindung gegen EINE Verbindung.
+    lean = settings_default_connection()
+    full = _user_settings_connection()
     assert lean["kind"] == full["kind"] == "ipsec"
     assert lean["wireguard"] == full["wireguard"]
     assert lean["wireguard"]["private_key_file"] == ""

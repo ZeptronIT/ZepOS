@@ -2444,6 +2444,34 @@ modelbutton {
   min-width: 400px;
 }
 
+// DIE VERBINDUNGSLISTE - beide Flaechen, seit dem 22.08.2026
+//
+//     Die Liste besteht aus zepRow und zepToggle (ags-kit.template) und
+//     bringt deren Aussehen mit; hier steht nur, WO sie sitzt.
+//
+// AUF DER SCHALENSEITE (.vpn-connection-list)
+//     Ueber den zwei Ansichten, mit einem Trennabstand darunter -
+//     ohne ihn klebte die Statuskarte der ausgewaehlten Verbindung
+//     unmittelbar an der letzten Zeile, und die Liste saehe aus wie
+//     ihr Kopf statt wie ihr Ueberblick.
+.vpn-connection-list {
+  margin-bottom: {{STYLE_SPACE_12}};
+}
+
+// IM EINSTELLUNGSFENSTER (.vpn-connection-picker)
+//     Eine schmale Leiste links, mit derselben Trennlinie wie
+//     .zep-sidebar. NICHT deren 208px: WIN_WIDTH dieses Fensters
+//     haengt an der Fusszeile (siehe der Kopf von
+//     ags-vpn-settings.template), und 208 plus den Anspruch der vier
+//     Reiter passt in keine Sprosse, die MEASURE_MODAL_SHARE noch
+//     zulaesst. GEMESSEN in tests/render/test_vpn_breite.py, nicht
+//     hier gerechnet.
+.vpn-connection-picker {
+  border-bottom: 1px solid $border;
+  padding-bottom: {{STYLE_SPACE_8}};
+  margin-bottom: {{STYLE_SPACE_12}};
+}
+
 // ENTFERNT am 18.08.2026: vpn-header samt der darin verschachtelten
 // vpn-header-icon/vpn-header-title - repo-weit ohne Leser (GEPRUEFT:
 // `grep -c '"vpn-header' src/templates/ags-vpn.template` auf 0).

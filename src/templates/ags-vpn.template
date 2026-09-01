@@ -171,7 +171,7 @@ import Gio from "gi://Gio"
 // (Aufgabe 8) an derselben Stelle.
 import type { ShellSeite } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
-import { zepButton } from "../utils/kit"
+import { zepButton, zepRow, zepSectionLabel, zepToggle } from "../utils/kit"
 
 const UPDATE_INTERVAL = 5000
 
@@ -236,12 +236,135 @@ const VPN_STATUS_QUERY = ["python3", "{{ZEPOS_SYSTEM_ROOT}}/vpn.py", "--status"]
 // Settings file path
 const SETTINGS_FILE = `${ZEPOS_USER_ROOT}/user-settings.json`
 
+// DER VPN-ABSCHNITT TRAEGT SEIT DEM 22.08.2026 EINE LISTE
+//
+//     "ich will, dass ich in der liste das auswaehlen kann per toggle,
+//      welche vpn aktiv sein soll - bei wireguard, weil ich dort
+//      mehrere vpns habe und alle darueber verwaltbar sein muessen.
+//      das gleiche gilt uebrigens fuer die anderen vpn verbindungen
+//      auch!!!"
+//
+//     `vpn.connections` ist die Liste, `vpn.active` die Kennung der
+//     gewaehlten. Ein Abschnitt OHNE `connections` ist genau eine
+//     Verbindung - dieselbe Regel wie src/vpn.py::connection(), und aus
+//     demselben Grund: eine Einstellungsdatei, die settings.load() noch
+//     nicht gewandert hat, muss hier weiter lesbar sein, sonst steht
+//     der Nutzer nach einer Aktualisierung vor einer leeren Seite.
+interface VpnEintrag {
+  id: string
+  name: string
+  kind: string
+  ziel: string
+  ovpnAuth: string
+}
+
+function vpnSection(data: any): any {
+  return (data && typeof data.vpn === "object" && data.vpn) || {}
+}
+
+// Die Bauart, wie src/vpn.py::vpn_kind() sie liest: ein unbekannter
+// Wert wird zu "ipsec" und nicht durchgereicht. Eine vertippte Bauart
+// darf nicht in eine Verbindung fuehren, die niemand gemeint hat.
+function vpnKind(entry: any): string {
+  const k = entry?.kind
+  return (k === "wireguard" || k === "openvpn") ? k : "ipsec"
+}
+
+// Wohin die Verbindung geht - EINE Zeile fuer drei Bauarten. IPsec
+// nennt es `server`, WireGuard den `endpoint` seiner ersten
+// Gegenstelle, OpenVPN `remote`. Drei Zeilen, von denen bei jeder
+// Verbindung zwei leer blieben, waeren dieselbe Auskunft dreimal.
+function vpnZiel(entry: any): string {
+  const kind = vpnKind(entry)
+  if (kind === "openvpn") return entry?.openvpn?.remote || ""
+  if (kind === "wireguard") {
+    const peers = entry?.wireguard?.peers ?? []
+    return peers.length ? (peers[0].endpoint || "") : ""
+  }
+  return entry?.server || ""
+}
+
+function vpnConnections(data: any): VpnEintrag[] {
+  const section = vpnSection(data)
+  const roh = Array.isArray(section.connections)
+    ? section.connections
+    // Der alte Abschnitt IST eine Verbindung - siehe oben. Ein LEERER
+    // ist dagegen keine: eine frische Installation hat nichts
+    // eingestellt, und ihr eine leere Verbindung vorzuspiegeln waere
+    // schlimmer als eine leere Liste.
+    : (Object.keys(section).length ? [section] : [])
+  return roh.filter((e: any) => e && typeof e === "object").map((e: any) => ({
+    id: String(e.id ?? ""),
+    name: String(e.connection_name || "work"),
+    kind: vpnKind(e),
+    ziel: vpnZiel(e),
+    ovpnAuth: ["password", "password-tls"].includes(e?.openvpn?.connection_type)
+      ? e.openvpn.connection_type : "tls",
+  }))
+}
+
+// DIE GEWAEHLTE VERBINDUNG - dieselbe Auswahl wie src/vpn.py.
+function vpnActive(data: any): any {
+  const section = vpnSection(data)
+  if (!Array.isArray(section.connections)) return section
+  const eintraege = section.connections.filter(
+    (e: any) => e && typeof e === "object")
+  if (!eintraege.length) return {}
+  return eintraege.find((e: any) => e.id === section.active) || eintraege[0]
+}
+
+// Die Liste, wie sie beim letzten Lesen dastand, und welche Zeile
+// gerade AUSGEWAEHLT ist. Ausgewaehlt und verbunden sind zwei
+// verschiedene Dinge: ausgewaehlt heisst "diese Verbindung zeigen die
+// zwei Ansichten unten", verbunden heisst "dieser Tunnel steht".
+let vpnListe: VpnEintrag[] = []
+let gewaehlteId = ""
+let listenBox: Gtk.Box
+
+// WELCHE VERBINDUNG WIRKLICH STEHT - und nicht, welche gewaehlt ist.
+//
+//     `vpn.py --status` fragt ohne Kennung nach der GEWAEHLTEN
+//     (`vpn.active`), und weil nur eine zur Zeit stehen kann, ist die
+//     stehende genau die gewaehlte, sobald der Bericht "connected"
+//     sagt. Das ist der Grund, aus dem hier EIN Unterprozess je Takt
+//     genuegt und nicht einer je Verbindung: eine Leiste, die
+//     fuenfmal je Minute drei Prozesse startet, ist eine Leiste, die
+//     ruckelt.
+//
+//     Steht nichts, ist die Zeichenkette leer, und keine Zeile zeigt
+//     einen eingeschalteten Schalter.
+let laufendeId = ""
+
+// Der Rueckruf, mit dem der Statustakt die Liste neu zeichnen laesst.
+// updateStatusDisplay() steht auf Modulebene (der Takt laeuft fuer die
+// Lebensdauer der Schale, siehe Dateikopf), zeichneListe() entsteht
+// erst in bauen() - eine Zuweisung statt eines Vorwaertsverweises,
+// damit es nicht zwei Zeichner gibt.
+let listeNeuZeichnen: () => void = () => {}
+
 // Load VPN settings dynamically from user-settings.json
 function loadVpnSettings() {
   try {
     const [ok, contents] = GLib.file_get_contents(SETTINGS_FILE)
     if (ok && contents) {
       const data = JSON.parse(new TextDecoder().decode(contents))
+      // Die Liste bei jedem Lesen mitnehmen, damit Zeilen und
+      // Formular nie ueber verschiedene Staende reden.
+      vpnListe = vpnConnections(data)
+      if (!vpnListe.some((e) => e.id === gewaehlteId)) {
+        gewaehlteId = vpnListe.length
+          ? (vpnSection(data).active || vpnListe[0].id) : ""
+      }
+      // Die AUSGEWAEHLTE Verbindung fuellt die beiden Ansichten unten -
+      // nicht mehr "der" vpn-Abschnitt, den es seit dem 22.08.2026
+      // nicht mehr gibt.
+      const gewaehlt = vpnListe.length
+        ? (vpnListe.find((e) => e.id === gewaehlteId) || vpnListe[0]) : null
+      const alle = vpnSection(data).connections
+      data.vpn = Array.isArray(alle)
+        ? (alle.find((e: any) => e && e.id === (gewaehlt ? gewaehlt.id : ""))
+           || vpnActive(data))
+        : data.vpn
       if (data.vpn) {
         const peers = data.vpn.wireguard?.peers ?? []
         return {
@@ -443,6 +566,9 @@ async function getVpnStatus(): Promise<VpnStatus> {
 // Update status display - toggles between connected view and form view
 async function updateStatusDisplay() {
   currentStatus = await getVpnStatus()
+  // Welche Zeile ihren Schalter auf "an" zeigt - siehe `laufendeId`.
+  laufendeId = currentStatus.status === "connected" ? gewaehlteId : ""
+  listeNeuZeichnen()
 
   if (currentStatus.status === "connected") {
     // Show centered connected view, hide form
@@ -887,6 +1013,123 @@ export const vpnSeite: ShellSeite = {
     connectedView.append(connectedSettingsBtn)
 
     // ================================================================
+    // DIE LISTE DER VERBINDUNGEN - seit dem 22.08.2026
+    // ================================================================
+    //
+    // "in der liste das auswaehlen ... per toggle". Hier, auf der
+    // Schalenseite, und nicht nur im Einstellungsfenster: das ist der
+    // Ort, an dem im Alltag umgeschaltet wird.
+    //
+    // AUS ZEPROW UND ZEPTOGGLE, KEIN NEUES BAUTEIL
+    //     zepRow traegt `ende` (fuer den Schalter), `ausgewaehlt` und
+    //     `aktion` seit dem 19.08.2026; zepSidebar und die
+    //     Netzwerkseite bauen ihre Zeilen genau so. Eine eigene
+    //     Zeilenform hier waere die Doppelung, die Aufgabe 15/16 fuer
+    //     Knoepfe gerade abgeraeumt hat.
+    //
+    // WAS DER SCHALTER BEDEUTET: "DIESER TUNNEL STEHT"
+    //     Nicht "diese Konfiguration ist gewaehlt". Der Nutzer liest
+    //     einen Schalter so, und alles andere waere eine Anzeige, die
+    //     etwas anderes behauptet als die Maschine tut. Seine Stellung
+    //     kommt darum aus `vpn.py --status` und nie aus der
+    //     Einstellungsdatei.
+    //
+    //     Braucht die Verbindung eine Anmeldung (IPsec immer, OpenVPN
+    //     je nach `connection_type`), kann der Schalter nicht blind
+    //     verbinden. Er WAEHLT die Zeile dann aus und zeigt ihr
+    //     Formular; der Tunnel steht erst, wenn "Verbinden" gedrueckt
+    //     wurde, und bis dahin steht der Schalter auf aus. Ein
+    //     Schalter, der "an" zeigt, waehrend nichts steht, waere
+    //     schlimmer als gar keiner.
+    //
+    // NUR EINE ZUR ZEIT
+    //     Einschalten trennt die bisherige zuerst, sichtbar und
+    //     benannt. Die Begruendung steht in src/settings.py bei
+    //     `vpn.active`; die kuerzeste davon ist die Zustandsdatei
+    //     $XDG_RUNTIME_DIR/vpn-active - EINE Datei mit EINEM
+    //     Verbindungsnamen, an der vier rechtelose Leser haengen.
+    listenBox = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL, spacing: 0,
+    })
+    listenBox.add_css_class("vpn-connection-list")
+
+    // Was in der Nebenzeile steht: Bauart und Ziel. Die Bauart, weil
+    // genau sie der Grund fuer die Liste ist (WireGuard UND IPsec
+    // nebeneinander), das Ziel, weil zwei Verbindungen zum selben
+    // Arbeitgeber sonst nicht auseinanderzuhalten waeren.
+    function eintragUnterzeile(eintrag: VpnEintrag): string {
+      const bauart = eintrag.kind === "wireguard" ? "WireGuard"
+        : eintrag.kind === "openvpn" ? "OpenVPN" : "IPsec"
+      return eintrag.ziel ? `${bauart} · ${eintrag.ziel}` : bauart
+    }
+
+    async function schalte(eintrag: VpnEintrag, an: boolean) {
+      if (!an) {
+        await disconnectVpn()
+        return
+      }
+      // Steht schon eine andere, wird sie zuerst getrennt - und der
+      // Nutzer erfaehrt es, statt es zu erraten.
+      const stehende = vpnListe.find(
+        (e) => e.id === laufendeId && e.id !== eintrag.id)
+      if (stehende) {
+        errorLabel.set_text(format(
+          _("Only one VPN can be connected at a time - {name} is being disconnected."),
+          { name: stehende.name }))
+        await disconnectVpn()
+      }
+      gewaehlteId = eintrag.id
+      vpnSettings = loadVpnSettings()
+      applyVpnKind()
+      const brauchtAnmeldung = eintrag.kind === "ipsec"
+        || (eintrag.kind === "openvpn" && eintrag.ovpnAuth !== "tls")
+      if (brauchtAnmeldung) {
+        // Auswaehlen und das Formular zeigen - nicht verbinden. Siehe
+        // die Begruendung oben.
+        zeichneListe()
+        usernameEntry.grab_focus()
+        return
+      }
+      await connectVpn()
+    }
+
+    function zeichneListe() {
+      let kind = listenBox.get_first_child()
+      while (kind) {
+        const naechstes = kind.get_next_sibling()
+        listenBox.remove(kind)
+        kind = naechstes
+      }
+      if (!vpnListe.length) {
+        const leer = new Gtk.Label({
+          label: _("No connection configured yet - add one."),
+          xalign: 0, wrap: true,
+        })
+        leer.add_css_class("vpn-field-label")
+        listenBox.append(leer)
+        return
+      }
+      listenBox.append(zepSectionLabel(_("VPN connections")))
+      for (const eintrag of vpnListe) {
+        const steht = eintrag.id === laufendeId
+          && currentStatus.status === "connected"
+        listenBox.append(zepRow({
+          symbol: steht ? ICONS.vpn : ICONS.vpnOff,
+          titel: eintrag.name,
+          unterzeile: eintragUnterzeile(eintrag),
+          ausgewaehlt: eintrag.id === gewaehlteId,
+          aktion: () => {
+            gewaehlteId = eintrag.id
+            vpnSettings = loadVpnSettings()
+            applyVpnKind()
+            zeichneListe()
+          },
+          ende: zepToggle(steht, (an) => { void schalte(eintrag, an) }),
+        }))
+      }
+    }
+
+    // ================================================================
     // DISCONNECTED VIEW - Form for connecting
     // ================================================================
     formView = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
@@ -1120,8 +1363,13 @@ export const vpnSeite: ShellSeite = {
     //     (`.vpn-container`) misst 496 und ist damit die breiteste der
     //     sechs Schalenseiten - immer noch weit unter dem, was die
     //     Schale ihr laesst (645 auf 1920x1080).
+    // Die Liste zuerst: sie ist der Ueberblick, die zwei Ansichten
+    // darunter sind die Einzelheit zur ausgewaehlten Zeile.
+    listeNeuZeichnen = zeichneListe
+    mainBox.append(listenBox)
     mainBox.append(connectedView)
     mainBox.append(formView)
+    zeichneListe()
 
     // DER TAKT LAEUFT FUER DIE LEBENSDAUER DER SCHALE (Aufgabe 9,
     // 18.08.2026) - siehe die ausfuehrliche Begruendung am Kopf dieser

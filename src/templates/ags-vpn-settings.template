@@ -8,7 +8,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { createOverlayWindow, OverlayWidget } from "../utils/overlay"
 import { _, format } from "../utils/i18n"
-import { zepButton } from "../utils/kit"
+import { zepButton, zepRow, zepSectionLabel } from "../utils/kit"
 
 const WINDOW_NAME = "vpn-settings"
 
@@ -485,20 +485,82 @@ function deepMerge(target: any, source: any): any {
 }
 
 // Load settings from file
-function loadSettings(): VpnSettings {
+// ALLE VERBINDUNGEN, NICHT MEHR EINE - seit dem 22.08.2026
+//
+//     `vpn` traegt eine Liste (`connections`) und die Kennung der
+//     gewaehlten (`active`). Ein Abschnitt OHNE `connections` ist genau
+//     EINE Verbindung - dieselbe Regel wie src/vpn.py::connection().
+//
+//     `currentSettings` bleibt, was es war: die Verbindung, die die
+//     vier Reiter gerade zeigen. Genau deshalb muss an den acht
+//     `build*Tab()` KEINE Zeile geaendert werden - sie fuellen
+//     weiterhin dasselbe Objekt, es ist nur nicht mehr das einzige.
+let alleVerbindungen: VpnSettings[] = []
+let gewaehlteId = ""
+let listenBox: Gtk.Box | null = null
+
+function neueKennung(): string {
+  // Acht Hexzeichen, wie src/vpn.py::new_connection_id(). Sie benennt
+  // die Schluesseldateien dieser Verbindung, darum nicht aus einem
+  // Zaehler und nicht aus dem Namen.
+  let s = ""
+  for (let i = 0; i < 8; i++) s += "0123456789abcdef"[Math.floor(Math.random() * 16)]
+  return s
+}
+
+function verbindungAus(roh: any): VpnSettings {
+  // Deep merge to preserve nested objects (phase1, phase2, dns)
+  const v = deepMerge(defaultSettings(), roh) as VpnSettings
+  if (!(v as any).id) (v as any).id = neueKennung()
+  return v
+}
+
+function loadAllSettings(): VpnSettings[] {
   try {
     const [ok, contents] = GLib.file_get_contents(SETTINGS_FILE)
     if (ok && contents) {
       const data = JSON.parse(new TextDecoder().decode(contents))
-      if (data.vpn) {
-        // Deep merge to preserve nested objects (phase1, phase2, dns)
-        return deepMerge(defaultSettings(), data.vpn)
+      const section = (data && typeof data.vpn === "object" && data.vpn) || {}
+      if (Array.isArray(section.connections)) {
+        const liste = section.connections
+          .filter((e: any) => e && typeof e === "object")
+          .map(verbindungAus)
+        if (liste.length) {
+          if (!liste.some((e: any) => e.id === gewaehlteId)) {
+            gewaehlteId = section.active || liste[0].id
+          }
+          return liste
+        }
+        return []
+      }
+      if (Object.keys(section).length) {
+        // Die alte Form: EINE Verbindung. Sie bekommt hier noch keine
+        // Kennung eingetragen - settings.py vergibt beim Wandern "c1",
+        // und zwei Stellen, die Kennungen vergeben, waeren zwei
+        // verschiedene.
+        const eine = verbindungAus(section)
+        gewaehlteId = (eine as any).id
+        return [eine]
       }
     }
   } catch (e) {
     console.error("Failed to load VPN settings:", e)
   }
-  return defaultSettings()
+  return []
+}
+
+function loadSettings(): VpnSettings {
+  alleVerbindungen = loadAllSettings()
+  if (!alleVerbindungen.length) {
+    const frisch = defaultSettings()
+    ;(frisch as any).id = neueKennung()
+    alleVerbindungen = [frisch]
+    gewaehlteId = (frisch as any).id
+  }
+  const gewaehlt = alleVerbindungen.find(
+    (e: any) => e.id === gewaehlteId) || alleVerbindungen[0]
+  gewaehlteId = (gewaehlt as any).id
+  return gewaehlt
 }
 
 // Save settings to file (closeFn passed in to allow closing overlay)
@@ -522,7 +584,19 @@ async function saveSettings() {
   // it. A second implementation of that in GJS is what produced both
   // failures above, so there is not one.
   try {
-    await execAsync([...SETTINGS_WRITER, JSON.stringify({ vpn: currentSettings })])
+    // DIE GANZE LISTE, nicht nur die gezeigte Verbindung.
+    //
+    //     settings.py::merge() ERSETZT ganze Abschnitte - das ist
+    //     Absicht und steht dort begruendet. Wuerde hier nur
+    //     `currentSettings` hinausgehen, ersetzte das den Abschnitt
+    //     durch EINE Verbindung, und der Nutzer verlaere beim
+    //     Speichern der einen alle anderen. Genau die Sorte Verlust,
+    //     gegen die merge() ueberhaupt geschrieben wurde.
+    const liste = alleVerbindungen.map(
+      (e: any) => (e.id === gewaehlteId ? currentSettings : e))
+    await execAsync([...SETTINGS_WRITER, JSON.stringify({
+      vpn: { active: gewaehlteId, connections: liste },
+    })])
   } catch (e) {
     // Reported, not swallowed. The dialog closed on a save that never
     // happened, and the next thing the user saw was a tunnel dialling
@@ -637,8 +711,17 @@ async function saveSettings() {
 }
 
 // Reset settings to defaults
+//
+// SEIT DEM 22.08.2026 GILT DAS DER GEWAEHLTEN VERBINDUNG und nicht
+// mehr dem ganzen Abschnitt. Dieselbe Beschriftung, engerer Umfang -
+// die EINZIGE Bedeutungsaenderung an einer bestehenden Beschriftung
+// dieses Fensters, und darum hier benannt. Ein "Reset", das bei einer
+// Liste alle Verbindungen loeschte, waere ein Knopf, der etwas ganz
+// anderes tut als das, was danebensteht.
 function resetSettings() {
+  const kennung = (currentSettings as any).id
   currentSettings = defaultSettings()
+  ;(currentSettings as any).id = kennung
   updateAllTabs()
 }
 
@@ -2365,7 +2448,122 @@ export default function VpnSettings(): OverlayWidget {
       actionsBox.append(cancelBtn)
       actionsBox.append(saveBtn)
 
+      // ============================================================
+      // DIE VERBINDUNGSLISTE LINKS - seit dem 22.08.2026
+      // ============================================================
+      //
+      // "das gleiche gilt uebrigens fuer die anderen vpn verbindungen
+      //  auch!!!" - also nicht nur auf der Schalenseite, sondern auch
+      // dort, wo eine Verbindung eingerichtet wird.
+      //
+      // KEIN FUENFTER REITER UND KEIN ZWEITES FENSTER
+      //     Die Reiterleiste bleibt bei VIER Knoepfen (siehe
+      //     tabsForKind()), und rechts steht Zeile fuer Zeile, was
+      //     vorher dastand - dieselben acht build*Tab(). Was sich
+      //     aendert, ist nur, WELCHE Verbindung sie fuellen.
+      //
+      // AUS ZEPROW, NICHT AUS ZEPSIDEBAR
+      //     zepSidebar (ags-kit.template) baut die Seitenleiste der
+      //     SCHALE: 208px breit, mit Gruppen. Hier waeren die 208px
+      //     genau das, was die Breitenrechnung im Dateikopf nicht
+      //     hergibt. Dieselbe ZEILE (zepRow, mit `ausgewaehlt` und
+      //     `aktion`) in einer schmaleren Huelle ist darum keine
+      //     dritte Zeilenform, sondern derselbe Baustein an einer
+      //     Flaeche mit anderem Mass - genau die Unterscheidung, die
+      //     der Kopf von zepSidebar am 19.08.2026 getroffen hat.
+      // Ein getippter Abstand und KEIN {{STYLE_SPACE_*}}: die
+      // Platzhalter loesen sich zu CSS-Werten mit Einheit auf ("12px"),
+      // und Gtk.Box.spacing ist eine Zahl. GEMESSEN am 22.08.2026:
+      // `ags bundle` brach mit `Syntax error "p"` ab. Dieselbe Zahl wie
+      // bei tabBar darunter, damit die zwei Leisten uebereinander
+      // denselben Rhythmus haben.
+      listenBox = new Gtk.Box({ spacing: 4 })
+      listenBox.add_css_class("vpn-connection-picker")
+
+      const zeichneListe = () => {
+        if (!listenBox) return
+        let kind = listenBox.get_first_child()
+        while (kind) {
+          const naechstes = kind.get_next_sibling()
+          listenBox.remove(kind)
+          kind = naechstes
+        }
+        listenBox.append(zepSectionLabel(_("VPN connections")))
+        for (const eintrag of alleVerbindungen) {
+          const kennung = (eintrag as any).id
+          const bauart = eintrag.kind === "wireguard" ? "WireGuard"
+            : eintrag.kind === "openvpn" ? "OpenVPN" : "IPsec"
+          listenBox.append(zepRow({
+            symbol: ICONS.server,
+            // Bauart UND Name in einer Zeile: eine Nebenzeile waere in
+            // einer waagerechten Leiste eine zweite Hoehe, keine
+            // zweite Zeile.
+            titel: `${eintrag.connection_name || _("New connection")} · ${bauart}`,
+            ausgewaehlt: kennung === gewaehlteId,
+            aktion: () => {
+              // Die gezeigte Verbindung zuerst in die Liste
+              // zurueckschreiben - sonst verlaere ein Klick auf eine
+              // andere Zeile jede Eingabe, die noch nicht gespeichert
+              // ist.
+              alleVerbindungen = alleVerbindungen.map(
+                (e: any) => (e.id === gewaehlteId ? currentSettings : e))
+              gewaehlteId = kennung
+              currentSettings = alleVerbindungen.find(
+                (e: any) => e.id === kennung) || currentSettings
+              rebuildTabs()
+              zeichneListe()
+            },
+          }))
+        }
+        const addBtn = zepButton(_("Add connection"), "umrandet", () => {
+          alleVerbindungen = alleVerbindungen.map(
+            (e: any) => (e.id === gewaehlteId ? currentSettings : e))
+          const frisch = defaultSettings()
+          ;(frisch as any).id = neueKennung()
+          frisch.connection_name = ""
+          alleVerbindungen = [...alleVerbindungen, frisch]
+          gewaehlteId = (frisch as any).id
+          currentSettings = frisch
+          rebuildTabs()
+          zeichneListe()
+        })
+        listenBox.append(addBtn)
+      }
+      zeichneListe()
+
       // Assemble
+      //
+      // DIE LEISTE STEHT OBEN UND NICHT LINKS - GEMESSEN, NICHT
+      // ENTSCHIEDEN (22.08.2026)
+      //
+      //     Entworfen war sie links, als senkrechte Leiste neben den
+      //     Reitern. Gemessen im verschachtelten Compositor
+      //     (tests/render/test_vpn_breite.py, 1920x1080) verlangte das
+      //     Fenster damit 1044 Punkte, wo Sprosse L 854 laesst -
+      //     UEBERHANG 190.
+      //
+      //     Der Grund ist nicht die Leiste allein (die misst ~180),
+      //     sondern die Form: nebeneinander ADDIEREN sich die
+      //     Ansprueche von Leiste und Reiterflaeche, uebereinander
+      //     gilt nur das MAXIMUM. Die Reiterflaeche allein verlangt
+      //     schon fast die ganze Sprosse.
+      //
+      //     Und eine breitere Sprosse gibt es nicht: L (880) ist die
+      //     oberste, und MEASURE_MODAL_SHARE (0,5) erlaubt auf 1920
+      //     hoechstens 960 - die 1070, die das Fenster mit
+      //     Seitenleiste braeuchte, sind auch mit einer neuen Sprosse
+      //     nicht zu haben. Eine Sprosse anzulegen waere ausserdem eine
+      //     Entscheidung ueber die LEITER und nicht ueber dieses
+      //     Fenster.
+      //
+      //     Also waagerecht, ueber der Reiterleiste. Es ist dieselbe
+      //     Liste aus denselben zepRow-Zeilen, dieselbe Auswahl und
+      //     derselbe Hinzufuegen-Knopf - sie steht nur an der Kante,
+      //     an der sie nichts kostet. Der senkrechte Entwurf ist damit
+      //     nicht verworfen, sondern vertagt, bis die Fusszeile
+      //     schmaler wird; der Befund steht im Bericht zu dieser
+      //     Aufgabe.
+      mainBox.append(listenBox)
       mainBox.append(tabBar)
       mainBox.append(contentBox)
       mainBox.append(actionsBox)

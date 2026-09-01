@@ -1776,3 +1776,32 @@ msgstr ""
 #: src/templates/ags-wallpaper.template:681
 msgid "Yes"
 msgstr ""
+
+# --------------------------------------------------------------------
+# Aus einer VPN-Verbindung wird eine Liste (22.08.2026)
+# --------------------------------------------------------------------
+# Die Liste mit den Schaltern - auf der Schalenseite und im
+# Einstellungsfenster. Die uebrigen 162 Beschriftungen der beiden
+# VPN-Vorlagen sind unveraendert geblieben; nachgewiesen in
+# tests/src/test_vpn_liste.py.
+
+msgid "VPN connections"
+msgstr ""
+
+msgid "Add connection"
+msgstr ""
+
+msgid "Delete connection"
+msgstr ""
+
+msgid "New connection"
+msgstr ""
+
+msgid "No connection configured yet - add one."
+msgstr ""
+
+msgid "Only one VPN can be connected at a time - {name} is being disconnected."
+msgstr ""
+
+msgid "Really delete {name}? Its keys and certificates are deleted with it."
+msgstr ""

@@ -60,6 +60,7 @@ import ipaddress
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -347,17 +348,25 @@ def swanctl_config(settings: dict[str, Any]) -> str:
     function is meant to serve, that is the worst possible answer: a
     report about a configuration other than the one deployed.
     """
-    vpn = settings.get("vpn", {})
+    # DURCH connection() SEIT DEM 22.08.2026, und darum nimmt diese
+    # Funktion weiterhin ein DOKUMENT: ein `vpn`-Abschnitt ohne
+    # `connections` ist eine Verbindung (siehe connection()), also
+    # bleibt `swanctl_config({"vpn": {...}})` in allen drei
+    # Zeichengleichheitstests woertlich gueltig.
+    #
+    # Die lokale Variable hiess bis heute `connection` und verdeckte
+    # damit genau die Funktion, die hier gebraucht wird.
+    vpn = connection(settings)
     server = str(vpn.get("server", "")).strip()
     if not server:
         raise ValueError("no VPN server configured")
 
-    connection = str(vpn.get("connection_name") or "work").strip()
+    verbindungsname = str(vpn.get("connection_name") or "work").strip()
     phase1 = vpn.get("phase1") or {}
     phase2 = vpn.get("phase2") or {}
 
     children = swanctl_children(
-        connection,
+        verbindungsname,
         vpn.get("routed_networks"),
         rekey_time=_setting(phase2, "rekey_time", REKEY_TIME),
         life_time=_setting(phase2, "life_time", LIFE_TIME),
@@ -376,7 +385,7 @@ def swanctl_config(settings: dict[str, Any]) -> str:
         aggressive = f"\n        aggressive = {_yes_no(phase1, 'aggressive', 'no')}"
 
     return f"""connections {{
-    {connection} {{
+    {verbindungsname} {{
         version = {version}{aggressive}
         proposals = {_setting(phase1, "proposals", PROPOSALS)}
         dpd_delay = {_setting(phase1, "dpd_delay", DPD_DELAY)}s
@@ -1070,6 +1079,91 @@ def wireguard_conf_text(document: dict[str, Any], private_key: str,
 # --------------------------------------------------------------------
 # Geheimnisse: 0600 vom ersten Byte, nie in einer Befehlszeile
 # --------------------------------------------------------------------
+
+# --------------------------------------------------------------------
+# Wo die Geheimnisse einer Verbindung liegen - seit dem 22.08.2026 je
+# Verbindung und nicht mehr je Maschine
+# --------------------------------------------------------------------
+#
+# DER DATEINAME TRAEGT DIE KENNUNG UND NICHT DEN NAMEN
+#     Bis heute hiessen sie nach `connection_name`: `work.key`,
+#     `work-peer1.psk`, `work-ca.pem`. Mit einer Liste geht das aus drei
+#     Gruenden nicht mehr:
+#
+#       * Zwei Verbindungen duerfen "work" heissen. Der Nutzer hat einen
+#         Zugang bei der Arbeit und einen zweiten dorthin - er wird sie
+#         nicht durchnummerieren, nur damit unsere Dateinamen aufgehen.
+#       * Umbenennen darf nichts auf der Platte anfassen. Der Name ist
+#         das, was NetworkManager und swanctl sehen, und er aendert sich.
+#       * "Verbindung loeschen" muss WISSEN, welche Dateien ihre eigenen
+#         sind. Ohne ein eindeutiges Praefix kann es das nicht, und dann
+#         bleibt entweder Schluesselmaterial liegen oder es loescht das
+#         einer anderen Verbindung mit.
+#
+# WAS SICH NICHT AENDERT: die Rechte. 0600 vom ersten Byte ueber
+# write_private_secret() (O_CREAT|O_EXCL|O_WRONLY), Verzeichnis 0700.
+# Und kein Byte Schluesselmaterial steht je in user-settings.json - dort
+# stehen nur diese NAMEN. Genau deshalb konnte die Wanderung am
+# 22.08.2026 ohne eine einzige Dateioperation auskommen.
+
+
+def secret_prefix(entry: dict[str, Any]) -> str:
+    """Das Praefix, unter dem die Dateien EINER Verbindung liegen.
+
+    Faellt auf den Verbindungsnamen zurueck, wenn es keine Kennung gibt:
+    ein Abschnitt in der alten Form hat keine, und seine Dateien heissen
+    genau so, wie sie immer geheissen haben.
+    """
+    return str(entry.get("id") or entry.get("connection_name") or "work")
+
+
+def strongswan_key_dir(config_home: str | None = None) -> Path:
+    """~/.config/strongswan - wo der IPsec-PSK liegt.
+
+    GEMESSEN am 22.08.2026 auf einer Maschine mit einem eingerichteten
+    Zugang: das Verzeichnis traegt 0755, die Datei `psk` darin 0600.
+    Solange es EINE Datei war, hat die Datei den Schutz allein
+    geleistet.
+
+    Mit mehreren Verbindungen liegen mehrere PSKs darin, und dann
+    verraten schon ihre NAMEN, welche Gegenstellen es gibt - genau der
+    Grund, aus dem ~/.config/wireguard seit dem 21.08.2026 0700 traegt
+    (siehe write_wireguard_secret()). write_private_secret() setzt das
+    Verzeichnis darum auch hier auf 0700, wenn es einen PSK schreibt.
+
+    Es wird NICHTS ANGELEGT, wo nichts ist, und der Inhalt wird nicht
+    angefasst: das Verzeichnis entsteht erst, wenn tatsaechlich ein PSK
+    gespeichert wird.
+    """
+    root = (config_home or os.environ.get("XDG_CONFIG_HOME")
+            or f"{os.path.expanduser('~')}/.config")
+    return Path(root) / "strongswan"
+
+
+# Wie die eine PSK-Datei hiess, als es nur eine gab.
+LEGACY_PSK_FILE = "psk"
+
+
+def psk_file_name(entry: dict[str, Any]) -> str:
+    """Wie die PSK-Datei DIESER Verbindung heisst.
+
+    FEHLT `psk_file`, HEISST SIE `psk` - und das ist die Zeile, die die
+    bestehende Verbindung des Nutzers unangetastet laesst.
+
+        Der IPsec-PSK lag bis zum 22.08.2026 unter dem festen Pfad
+        ~/.config/strongswan/psk und wurde in KEINER Einstellung
+        genannt. Die Wanderung traegt darum auch keinen Namen dafuer
+        nach: ein fehlendes `psk_file` heisst genau das, was es immer
+        geheissen hat. Dieselbe Zurueckhaltung wie bei `kind` (fehlt =
+        ipsec), und aus demselben Grund - eine Wanderung, die dem
+        Nutzer einen neuen Dateinamen eintraegt, muesste die Datei
+        umbenennen, und das ist das Einzige, was sie nicht darf.
+
+    Neu angelegte Verbindungen bekommen `<kennung>.psk`; erst dann steht
+    der Name auch in den Einstellungen.
+    """
+    return str(entry.get("psk_file") or LEGACY_PSK_FILE)
+
 
 def wireguard_key_dir(config_home: str | None = None) -> Path:
     root = (config_home or os.environ.get("XDG_CONFIG_HOME")
@@ -2143,7 +2237,100 @@ def wireguard_status(connection: str,
     return CONNECTED, address
 
 
-def vpn_kind(settings: dict[str, Any]) -> str:
+# --------------------------------------------------------------------
+# Welche Verbindung - der EINE Leser, seit dem 22.08.2026
+# --------------------------------------------------------------------
+#
+# DIE FRAGE, DIE ES VORHER NICHT GAB
+#     Bis hierher trug `vpn` genau eine Verbindung, und "welche?" war
+#     keine Frage, sondern eine Selbstverstaendlichkeit. Sechs Helfer in
+#     dieser Datei griffen sich darum jeder fuer sich
+#     `document["vpn"]["..."]` heraus - dieselben drei Zeilen, sechsmal
+#     abgeschrieben.
+#
+#     Mit einer Liste ist "welche?" die Frage, an der alles haengt: der
+#     Schalter, der Waechter, die Schluesseldateien, die Leiste. Sechs
+#     Antworten darauf waeren sechs Gelegenheiten, verschieden zu
+#     antworten - und die eine, die es falsch macht, faellt erst an
+#     einem Tunnel auf, der nicht der gemeinte ist.
+#
+# EIN ABSCHNITT OHNE `connections` IST EINE VERBINDUNG
+#     Keine Altlastentoleranz, sondern dieselbe Regel, die vpn_kind()
+#     seit dem 21.08.2026 anwendet: "kein `kind` heisst ipsec". Ein
+#     Abschnitt in der alten Form IST eine Verbindung, und ihn so zu
+#     lesen ist die Wahrheit ueber ihn, nicht ein Zugestaendnis.
+#
+#     Praktisch traegt das drei Faelle, die es wirklich gibt: ein
+#     Dokument, das settings.load() noch nicht gewandert hat; ein Test,
+#     der eine Verbindung von Hand hinschreibt (alle drei
+#     Zeichengleichheitstests in test_vpn_volltunnel.py tun genau das);
+#     und ein Aufrufer, der eine einzelne Verbindung uebergibt statt
+#     eines ganzen Dokuments.
+
+
+def new_connection_id() -> str:
+    """Die Kennung einer neu angelegten Verbindung.
+
+    Acht Hexzeichen aus `secrets` und nicht aus `random`: die Kennung
+    benennt die Schluesseldateien einer Verbindung (secret_prefix()),
+    und ein vorhersagbarer Name in einem Verzeichnis, in dem
+    Geheimnisse liegen, ist eine Einladung, ihnen zuvorzukommen -
+    dieselbe Ueberlegung, aus der settings.save() seine Zwischendatei
+    ueber mkstemp() und O_EXCL anlegt.
+
+    Kann mit settings.MIGRATED_ID ("c1") nicht zusammenstossen: das
+    sind zwei Zeichen, das hier sind acht.
+    """
+    return secrets.token_hex(4)
+
+
+def connections(document: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Alle eingestellten Verbindungen, in ihrer Reihenfolge."""
+    section = (document or {}).get("vpn") if isinstance(document, dict) else None
+    if not isinstance(section, dict):
+        return []
+    entries = section.get("connections")
+    if not isinstance(entries, list):
+        # Der alte Abschnitt IST eine Verbindung - siehe oben. Ein
+        # LEERER alter Abschnitt ist dagegen keine: eine frische
+        # Installation hat nichts eingestellt, und ihr eine leere
+        # Verbindung anzubieten hiesse, ihr eine vorzuspiegeln.
+        return [section] if section else []
+    return [e for e in entries if isinstance(e, dict)]
+
+
+def connection(document: dict[str, Any] | None,
+               ident: str | None = None) -> dict[str, Any]:
+    """DIE Verbindung - die gewaehlte, oder die benannte.
+
+    `ident` schlaegt `vpn.active`, und das ist keine Bequemlichkeit: der
+    Waechter kennt aus der Zustandsdatei die Kennung der Verbindung, die
+    WIRKLICH steht, und die kann eine andere sein als die zuletzt
+    gewaehlte. Wer waehrend eines stehenden Tunnels im Fenster eine
+    andere Verbindung anklickt, darf damit nicht die Reparatur der
+    stehenden umlenken.
+
+    Findet sich die gesuchte Kennung nicht, antwortet die ERSTE
+    Verbindung und nicht {}: eine Kennung, die es nicht mehr gibt
+    (geloescht, waehrend die Zustandsdatei noch stand), ist ein Grund,
+    die Liste von vorn zu lesen, und keiner, so zu tun, als sei nichts
+    eingestellt. Ohne jede Verbindung bleibt es bei {} - und jeder Leser
+    faellt dann auf genau dieselbe Vorgabe zurueck wie auf einer
+    frischen Installation.
+    """
+    entries = connections(document)
+    if not entries:
+        return {}
+    section = (document or {}).get("vpn") if isinstance(document, dict) else None
+    gesucht = ident if ident else (
+        section.get("active") if isinstance(section, dict) else None)
+    for entry in entries:
+        if entry.get("id") == gesucht:
+            return entry
+    return entries[0]
+
+
+def vpn_kind(settings: dict[str, Any], ident: str | None = None) -> str:
     """Welche Bauart eingestellt ist - und im Zweifel IPsec.
 
     Die Vorgabe ist NICHT geraten und darf es nie werden: jede
@@ -2152,9 +2339,13 @@ def vpn_kind(settings: dict[str, Any]) -> str:
     bleiben. Ein unbekannter Wert antwortet ebenfalls "ipsec" - eine
     vertippte Bauart darf nicht in eine Verbindung fuehren, die der
     Nutzer nicht gemeint hat.
+
+    SEIT DEM 22.08.2026 JE VERBINDUNG. Die Bauart ist der Grund, aus
+    dem die Liste ueberhaupt eine Liste ist: ohne ein eigenes `kind` je
+    Eintrag koennte niemand WireGuard UND IPsec haben, und genau das war
+    die Bestellung.
     """
-    section = settings.get("vpn") if isinstance(settings, dict) else None
-    value = (section or {}).get("kind") if isinstance(section, dict) else None
+    value = connection(settings, ident).get("kind")
     return value if value in VPN_KINDS else IPSEC_KIND
 
 
@@ -2260,26 +2451,35 @@ def _settings_document() -> dict[str, Any]:
         return {}
 
 
-def _wg_connection_name(document: dict[str, Any]) -> str:
-    section = document.get("vpn") if isinstance(document, dict) else None
-    name = (section or {}).get("connection_name") if isinstance(section, dict) else None
+# DIE VIER HELFER LESEN SEIT DEM 22.08.2026 DURCH connection()
+#
+#     Sie sahen vorher alle gleich aus - `document["vpn"]`, dann ein
+#     Schluessel daraus - und genau diese abgeschriebenen Zeilen waeren
+#     mit einer Liste vier verschiedene Antworten auf "welche
+#     Verbindung?" geworden. `ident` reicht jeder von ihnen durch, damit
+#     ein Aufrufer, der eine BESTIMMTE Verbindung meint (der Waechter,
+#     die Befehlszeile mit einer Kennung), sie auch bekommt.
+def _wg_connection_name(document: dict[str, Any],
+                        ident: str | None = None) -> str:
+    name = connection(document, ident).get("connection_name")
     return str(name or "work")
 
 
-def _wg_section(document: dict[str, Any]) -> dict[str, Any]:
-    section = document.get("vpn") if isinstance(document, dict) else None
-    block = (section or {}).get(WG_KIND) if isinstance(section, dict) else None
+def _wg_section(document: dict[str, Any],
+                ident: str | None = None) -> dict[str, Any]:
+    block = connection(document, ident).get(WG_KIND)
     return block if isinstance(block, dict) else {}
 
 
-def _wg_dns(document: dict[str, Any]) -> dict[str, Any]:
-    section = document.get("vpn") if isinstance(document, dict) else None
-    block = (section or {}).get("dns") if isinstance(section, dict) else None
+def _wg_dns(document: dict[str, Any],
+            ident: str | None = None) -> dict[str, Any]:
+    block = connection(document, ident).get("dns")
     return block if isinstance(block, dict) else {}
 
 
 def _wg_apply(document: dict[str, Any],
-              runner: Runner = subprocess.run) -> int:
+              runner: Runner = subprocess.run,
+              ident: str | None = None) -> int:
     """Die Verbindung aus den Einstellungen bauen.
 
     Die .conf wird in das Laufzeitverzeichnis des Nutzers geschrieben
@@ -2288,8 +2488,8 @@ def _wg_apply(document: dict[str, Any],
     den privaten Schluessel, und sie ist der einzige Grund, aus dem er
     NICHT in einer Befehlszeile steht.
     """
-    block = _wg_section(document)
-    name = _wg_connection_name(document)
+    block = _wg_section(document, ident)
+    name = _wg_connection_name(document, ident)
     key_file = str(block.get("private_key_file") or "")
     if not key_file:
         sys.stderr.write("no WireGuard private key is configured\n")
@@ -2323,7 +2523,8 @@ def _wg_apply(document: dict[str, Any],
     handle = os.open(conf_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     try:
         os.write(handle, wireguard_conf_text(
-            block, private_key, _wg_dns(document), secrets).encode("utf-8"))
+            block, private_key, _wg_dns(document, ident),
+            secrets).encode("utf-8"))
     finally:
         os.close(handle)
 
@@ -2342,13 +2543,14 @@ def _wg_apply(document: dict[str, Any],
     return 0
 
 
-def _ovpn_section(document: dict[str, Any]) -> dict[str, Any]:
-    section = document.get("vpn") if isinstance(document, dict) else None
-    block = (section or {}).get(OVPN_KIND) if isinstance(section, dict) else None
+def _ovpn_section(document: dict[str, Any],
+                  ident: str | None = None) -> dict[str, Any]:
+    block = connection(document, ident).get(OVPN_KIND)
     return block if isinstance(block, dict) else {}
 
 
-def _routed_networks(document: dict[str, Any]) -> list[str]:
+def _routed_networks(document: dict[str, Any],
+                     ident: str | None = None) -> list[str]:
     """Die Netzliste - DIESELBE fuer alle drei Bauarten.
 
     Hiess bis zum 22.08.2026 _ovpn_routed() und hat nie etwas
@@ -2358,8 +2560,7 @@ def _routed_networks(document: dict[str, Any]) -> list[str]:
     alle drei liest, waere der alte Name die Stelle, an der jemand eine
     zweite Liste daneben anlegt.
     """
-    section = document.get("vpn") if isinstance(document, dict) else None
-    values = (section or {}).get("routed_networks") if isinstance(section, dict) else None
+    values = connection(document, ident).get("routed_networks")
     return [str(entry) for entry in values] if isinstance(values, list) else []
 
 
@@ -2387,7 +2588,8 @@ def _write_private(path: Path, text: str) -> None:
 
 
 def _ovpn_apply(document: dict[str, Any],
-                runner: Runner = subprocess.run) -> int:
+                runner: Runner = subprocess.run,
+                ident: str | None = None) -> int:
     """Die OpenVPN-Verbindung aus den Einstellungen bauen.
 
     Die .ovpn liegt 0600 im Laufzeitverzeichnis und wird danach
@@ -2396,15 +2598,15 @@ def _ovpn_apply(document: dict[str, Any],
     Datei, aus der die Verbindung entsteht, und eine liegengebliebene
     Kopie ist eine zweite Wahrheit.
     """
-    block = _ovpn_section(document)
-    name = _wg_connection_name(document)
+    block = _ovpn_section(document, ident)
+    name = _wg_connection_name(document, ident)
     if not block.get("remote"):
         sys.stderr.write("no OpenVPN server is configured\n")
         return 1
 
     conf_file = _runtime_dir() / f"{name}.ovpn"
-    _write_private(conf_file, ovpn_conf_text(block, _wg_dns(document),
-                                             _routed_networks(document)))
+    _write_private(conf_file, ovpn_conf_text(block, _wg_dns(document, ident),
+                                             _routed_networks(document, ident)))
     try:
         for argv in (nm_import_argv(str(conf_file), OVPN_KIND),
                      nm_own_argv(name, os.environ.get("USER")
@@ -2473,7 +2675,8 @@ def _ovpn_credentials() -> dict[str, str]:
 
 def _ovpn_up(document: dict[str, Any],
              credentials: dict[str, str] | None = None,
-             runner: Runner = subprocess.run) -> int:
+             runner: Runner = subprocess.run,
+             ident: str | None = None) -> int:
     """Hochfahren - das Passwort ueber eine Datei, nie ueber argv.
 
     Die passwd-file liegt 0600 im Laufzeitverzeichnis und wird im
@@ -2481,7 +2684,7 @@ def _ovpn_up(document: dict[str, Any],
     fliegt. Bleibt sie liegen, ist ein Passwort auf der Platte, das
     vorher nirgends auf der Platte stand.
     """
-    name = _wg_connection_name(document)
+    name = _wg_connection_name(document, ident)
     given = credentials or {}
     text = openvpn_secrets_text(password=given.get("password", ""),
                                 token=given.get("token", ""),
@@ -2509,6 +2712,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 64
 
     query = arguments[0]
+    # DIE KENNUNG, WENN EINE MITGEGEBEN WURDE - seit dem 22.08.2026.
+    #
+    #     Jeder Befehl, der eine VERBINDUNG meint, nimmt sie als
+    #     zweites Argument. Ohne sie gilt die gewaehlte (`vpn.active`),
+    #     und damit verhaelt sich jeder alte Aufruf Zeile fuer Zeile wie
+    #     bisher - die Leiste, die `--status` ohne Argument fragt,
+    #     bekommt weiterhin genau eine Antwort.
+    ident = arguments[1] if len(arguments) > 1 else ""
     if query == "--virtual-address":
         report = sys.stdin.read()
         address = assigned_address(report)
@@ -2533,11 +2744,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         # in beiden Faellen derselbe: ein Wort, und dahinter, wenn es
         # eine gibt, die Adresse.
         document = _settings_document()
-        kind = vpn_kind(document)
+        kind = vpn_kind(document, ident)
         if kind == WG_KIND:
-            state, address = wireguard_status(_wg_connection_name(document))
+            state, address = wireguard_status(
+                _wg_connection_name(document, ident))
         elif kind == OVPN_KIND:
-            state, address = openvpn_status(_wg_connection_name(document))
+            state, address = openvpn_status(
+                _wg_connection_name(document, ident))
         else:
             state, address = tunnel_status()
         print(state if not address else f"{state} {address}")
@@ -2559,15 +2772,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 65
 
         document = _settings_document()
-        name = _wg_connection_name(document)
+        # Das Praefix kommt seit dem 22.08.2026 aus der KENNUNG und
+        # nicht mehr aus dem Verbindungsnamen - siehe secret_prefix().
+        # Zwei Verbindungen duerfen "work" heissen; zwei Dateien
+        # `work.key` koennen es nicht.
+        praefix = secret_prefix(connection(document, ident))
         private_key = conf.interface.get("PrivateKey", "")
         key_file = ""
         if private_key:
-            key_file = write_wireguard_secret(f"{name}.key", private_key).name
+            key_file = write_wireguard_secret(f"{praefix}.key",
+                                              private_key).name
         stored = []
         for index, peer in enumerate(conf.peers, start=1):
             secret = peer.get("PresharedKey", "")
-            stored.append(write_wireguard_secret(f"{name}-peer{index}.psk",
+            stored.append(write_wireguard_secret(f"{praefix}-peer{index}.psk",
                                                  secret).name
                           if secret else "")
         block = wireguard_document(
@@ -2613,10 +2831,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if query == "--wg-apply":
-        return _wg_apply(_settings_document())
+        return _wg_apply(_settings_document(), ident=ident)
 
     if query in ("--wg-up", "--wg-down"):
-        name = _wg_connection_name(_settings_document())
+        name = _wg_connection_name(_settings_document(), ident)
         verb = "up" if query == "--wg-up" else "down"
         completed = subprocess.run(["nmcli", "connection", verb, name],
                                    capture_output=True, text=True, timeout=60)
@@ -2639,8 +2857,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 65
 
         document = _settings_document()
-        name = _wg_connection_name(document)
-        stored = store_openvpn_blobs(conf, name)
+        # Ebenfalls ueber die Kennung - siehe --wg-import daryber.
+        stored = store_openvpn_blobs(
+            conf, secret_prefix(connection(document, ident)))
         block = openvpn_document(conf, stored_files=stored)
         # Der Nutzername aus den bestehenden Einstellungen bleibt
         # stehen: eine .ovpn traegt keinen (gemessen - NetworkManagers
@@ -2680,13 +2899,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if query == "--ovpn-apply":
-        return _ovpn_apply(_settings_document())
+        return _ovpn_apply(_settings_document(), ident=ident)
 
     if query == "--ovpn-up":
-        return _ovpn_up(_settings_document(), _ovpn_credentials())
+        return _ovpn_up(_settings_document(), _ovpn_credentials(),
+                        ident=ident)
 
     if query == "--ovpn-down":
-        name = _wg_connection_name(_settings_document())
+        name = _wg_connection_name(_settings_document(), ident)
         completed = subprocess.run(["nmcli", "connection", "down", name],
                                    capture_output=True, text=True, timeout=60)
         if completed.returncode != 0:

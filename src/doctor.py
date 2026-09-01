@@ -69,6 +69,7 @@ import settings
 import update
 import validate_output
 from paths import output_root, user_root
+from vpn import connection as vpn_connection
 from vpn import nonblank_entries
 
 # Where the generated Hyprland configuration ends up, and how a bind line
@@ -698,7 +699,19 @@ def configured_networks() -> tuple[list[Network], list[str], list[Finding]]:
                  f"aside and let the defaults be written again."),
         )]
 
-    vpn = document.get("vpn") or {}
+    # DIE GEWAEHLTE VERBINDUNG, seit `vpn` am 22.08.2026 eine Liste
+    # traegt. Ueber vpn.connection() und nicht ueber
+    # `document["vpn"]`: der Doktor soll ueber DIESELBE Verbindung
+    # berichten, die der Erzeuger baut und die der Nutzer im Fenster
+    # ausgewaehlt hat - ein Bericht ueber eine andere waere schlimmer
+    # als keiner.
+    #
+    # DER DOKTOR PRUEFT NUR DIE GEWAEHLTE UND NICHT ALLE. Das ist eine
+    # Entscheidung und keine Auslassung: nur eine Verbindung kann
+    # stehen (siehe src/settings.py), und "dieses Netz ueberschneidet
+    # sich mit deinem Container-Netz" ist eine Aussage ueber den Tunnel,
+    # der laeuft, nicht ueber einen, der eingetragen ist.
+    vpn = vpn_connection(document)
     try:
         # The same reader the generator uses, so that a list which is not
         # a list is refused here too. Iterated directly, a

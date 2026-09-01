@@ -39,6 +39,18 @@ import conftest
 # over a directory that was not there found nothing, and every guard
 # reported clean without reading a file.
 SRC = Path(__file__).resolve().parents[2] / "src"
+
+
+def settings_schema_version() -> int:
+    """Die Fassung, die settings.py fuehrt - nicht eine getippte Zahl.
+
+    Hier stand zweimal `== 1`. Als die Fassung am 22.08.2026 auf 2 stieg
+    (der VPN-Abschnitt traegt seither eine Liste), meldeten beide Tests
+    einen Fehler an einer Stelle, an der nichts kaputt war - und der
+    naechste Anstieg haette dasselbe noch einmal getan.
+    """
+    from src.settings import SCHEMA_VERSION
+    return SCHEMA_VERSION
 BIN = SRC / "bin"
 COMMANDS = ("zepos-generate", "zepos-settings", "zepos-doctor", "zepos-update")
 
@@ -204,7 +216,8 @@ def test_each_command_starts_from_a_checkout_without_being_told_anything(tmp_pat
 
     assert_ran(result)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["schema_version"] == 1
+    assert (json.loads(result.stdout)["schema_version"]
+            == settings_schema_version())
 
 
 @pytest.mark.allow_subprocess
@@ -221,7 +234,8 @@ def test_each_command_finds_the_modules_where_the_package_puts_them(tmp_path):
     result = run_command(binaries / "zepos-settings", "get",
                          stubs=stubs, home=tmp_path / "home", system_root=share)
     assert_ran(result)
-    assert json.loads(result.stdout)["schema_version"] == 1
+    assert (json.loads(result.stdout)["schema_version"]
+            == settings_schema_version())
 
     result = run_command(binaries / "zepos-doctor",
                          stubs=stubs, home=tmp_path / "home", system_root=share)
@@ -1197,7 +1211,24 @@ def test_the_command_the_dialogs_call_writes_the_file_the_module_owns(tmp_path,
     written = json.loads(existing.read_text(encoding="utf-8"))
     assert written["weather"] == {"location": "Bremen"}
     assert written["colors"] == {"success": "#a6e3a1"}, "a section was deleted"
-    assert written["vpn"] == {"server": "gw.example.org"}, "a section was deleted"
+    # DER VPN-ABSCHNITT IST GEWANDERT, UND DAS IST DER PUNKT.
+    #
+    #     Die Datei oben traegt schema_version 1. settings.load() wandert
+    #     sie beim Lesen (eine Verbindung wird zu einer Liste mit einer
+    #     darin), und dieser Schreibvorgang - ausgeloest von einem
+    #     Dialog, der ueber das WETTER spricht - legt die gewanderte
+    #     Fassung ab. Genau so war es entworfen: gewandert wird im
+    #     Speicher, geschrieben wird, wenn ohnehin jemand schreibt.
+    #
+    #     Geprueft wird deshalb beides: dass die Liste da ist UND dass
+    #     der Serverwert des Nutzers Zeichen fuer Zeichen mitgekommen
+    #     ist. Ein Abschnitt, der die Wanderung ueberlebt, aber seinen
+    #     Server verloren hat, waere schlimmer als einer, der gar nicht
+    #     gewandert waere.
+    assert written["schema_version"] == 2
+    assert written["vpn"]["active"] == "c1", "a section was deleted"
+    assert written["vpn"]["connections"] == [
+        {"server": "gw.example.org", "id": "c1"}], "a section was deleted"
     assert written["plugins"] == {"enabled": True}, "a section was deleted"
     assert stat.S_IMODE(existing.stat().st_mode) == 0o600
 

@@ -4,7 +4,8 @@ import os
 
 import pytest
 
-from src.settings import SCHEMA_VERSION, defaults, load, save
+from src.settings import (SCHEMA_VERSION, default_connection, defaults,
+                          load, save)
 from tests.origin_data import ORIGIN
 
 
@@ -44,10 +45,17 @@ def test_defaults_contain_no_employer_values():
 
 def test_roundtrip_preserves_values(tmp_path):
     path = tmp_path / "user-settings.json"
+    # Ueber eine echte Verbindung in der Liste, seit `vpn` am
+    # 22.08.2026 eine Liste traegt: `defaults()["vpn"]` ist jetzt
+    # {"active": "", "connections": []}, und ein Wert, den man dort
+    # hineinschreibt, waere keiner, den irgendein Leser findet.
     data = defaults()
-    data["vpn"]["dns"]["search_domain"] = "example.org"
+    verbindung = dict(default_connection(), id="c1")
+    verbindung["dns"]["search_domain"] = "example.org"
+    data["vpn"] = {"active": "c1", "connections": [verbindung]}
     save(data, path)
-    assert load(path)["vpn"]["dns"]["search_domain"] == "example.org"
+    gelesen = load(path)["vpn"]["connections"][0]
+    assert gelesen["dns"]["search_domain"] == "example.org"
 
 
 def test_a_missing_file_yields_the_defaults(tmp_path):

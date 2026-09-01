@@ -224,6 +224,46 @@ def _get(document: dict[str, Any], key: str | None) -> int:
     return 0
 
 
+# `vpn.<etwas>` MEINT DIE GEWAEHLTE VERBINDUNG - SEIT DEM 22.08.2026
+#
+#     `vpn` traegt seit heute eine Liste (`connections`) und die Kennung
+#     der gewaehlten (`active`). Damit gaebe es `vpn.server` als Pfad
+#     nicht mehr, und `zepos-settings set vpn.server ...` - der Weg, auf
+#     dem eine frische Installation ueberhaupt erst einen Zugang bekommt
+#     - haette "no such setting" geantwortet.
+#
+#     Das waere ein weggefallener Pfad und damit genau das, was dieser
+#     Umbau nicht tun darf. `vpn.server` bleibt deshalb `vpn.server` und
+#     landet in der GEWAEHLTEN Verbindung - dieselbe Auskunft, die
+#     get_vpn_setting() und der Erzeuger geben.
+#
+#     Die zwei Schluessel des Abschnitts selbst (`active`,
+#     `connections`) bleiben ausdruecklich erreichbar: wer die Liste
+#     als Ganzes setzen will, kann das, und `vpn.active` ist der Weg,
+#     die gewaehlte Verbindung von der Befehlszeile aus zu wechseln.
+VPN_SECTION_KEYS = ("active", "connections")
+
+
+def _vpn_target(document: dict[str, Any], parts: list[str]) -> list[str] | None:
+    """`["vpn", "server"]` -> `["vpn", "connections", "0", "server"]`.
+
+    Antwortet None, wenn der Pfad kein VPN-Verbindungspfad ist - dann
+    gilt die gewoehnliche Pruefung darunter unveraendert.
+    """
+    if len(parts) < 2 or parts[0] != "vpn" or parts[1] in VPN_SECTION_KEYS:
+        return None
+    section = document.get("vpn")
+    if not isinstance(section, dict):
+        return None
+    entries = section.get("connections")
+    if not isinstance(entries, list) or not entries:
+        return None
+    gesucht = section.get("active")
+    index = next((i for i, e in enumerate(entries)
+                  if isinstance(e, dict) and e.get("id") == gesucht), 0)
+    return ["vpn", "connections", str(index)] + parts[1:]
+
+
 def _set(document: dict[str, Any], key: str, raw: str) -> int:
     parts = key.split(".")
 
@@ -234,16 +274,30 @@ def _set(document: dict[str, Any], key: str, raw: str) -> int:
     # machines where it has to be set first. Checking the schema alone
     # would refuse the keys the style layer and the installer put there,
     # which are not in settings.defaults().
-    if not (_holds(document, parts) or _holds(settings.defaults(), parts)):
+    # Ein VPN-Pfad zeigt auf die gewaehlte Verbindung; gibt es noch
+    # keine, faellt er auf die Vorgabe EINER Verbindung zurueck, damit
+    # `set vpn.server` auf einer frischen Installation weiter geht.
+    umgeleitet = _vpn_target(document, parts)
+    if umgeleitet is not None:
+        if not (_holds(document, umgeleitet)
+                or _holds({"vpn": settings.default_connection()}, parts)):
+            return _unknown(key)
+        parts = umgeleitet
+    elif not (_holds(document, parts)
+              or _holds({"vpn": settings.default_connection()}, parts)
+              or _holds(settings.defaults(), parts)):
         # Refused rather than created. A mistyped key that is written and
         # then read by nobody is the quietest failure this program has:
         # the user changed a setting, the command said "saved", and
         # nothing about the machine changed.
         return _unknown(key)
 
-    section = document
+    section: Any = document
     for part in parts[:-1]:
-        if not isinstance(section.get(part), dict):
+        if isinstance(section, list):
+            section = section[int(part)]
+            continue
+        if not isinstance(section.get(part), (dict, list)):
             section[part] = {}
         section = section[part]
 
@@ -267,9 +321,22 @@ def _holds(document: dict[str, Any], parts: list[str]) -> bool:
     """Whether a dotted key names something in this document."""
     section: Any = document
     for part in parts[:-1]:
-        if not isinstance(section, dict) or not isinstance(section.get(part), dict):
+        # Eine Ziffer laeuft in eine Liste hinein - `vpn.connections.0`
+        # ist seit dem 22.08.2026 ein gueltiger Weg, und ohne diesen
+        # Zweig endete jeder VPN-Pfad hier an der Liste.
+        if isinstance(section, list) and part.isdigit():
+            index = int(part)
+            if index >= len(section):
+                return False
+            section = section[index]
+            continue
+        if not isinstance(section, dict) or part not in section:
             return False
         section = section[part]
+        if not isinstance(section, (dict, list)):
+            return False
+    if isinstance(section, list) and parts[-1].isdigit():
+        return int(parts[-1]) < len(section)
     return isinstance(section, dict) and parts[-1] in section
 
 

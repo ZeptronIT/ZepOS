@@ -55,6 +55,7 @@ from paths import user_root
 # every versioned reader - zepos-settings among them - refused it on a
 # machine where the user had done nothing but change a colour.
 from settings import SCHEMA_VERSION, UnusableSettings
+from vpn import connection as _vpn_connection
 from settings import load as read_settings_document
 from settings import merge as merge_settings_sections
 from settings import unreadable as unreadable_message
@@ -62,6 +63,136 @@ from settings import unreadable as unreadable_message
 # =============================================================================
 # DEFAULT SETTINGS
 # =============================================================================
+
+# EINE VPN-VERBINDUNG, WIE SIE UNKONFIGURIERT AUSSIEHT
+#
+#     Hiess bis zum 22.08.2026 DEFAULT_SETTINGS["vpn"] und ist Zeichen
+#     fuer Zeichen dasselbe: der Abschnitt ist nicht umgebaut, er ist
+#     eine Ebene tiefer gerutscht. Die Begruendung fuer die Liste steht
+#     bei DEFAULT_SETTINGS["vpn"] unten und ausfuehrlich in
+#     src/settings.py.
+#
+#     Dass es diese Tabelle NEBEN settings.default_connection() gibt,
+#     ist aelter als diese Aufgabe und wird von
+#     tests/src/test_vpn_wireguard.py bewacht - die beiden tragen fuer
+#     WireGuard und OpenVPN dieselben Schluessel. Fuer `phase1`,
+#     `phase2`, `username` und `remember_username` gilt das NICHT: die
+#     stehen nur hier. GEMESSEN am 22.08.2026 durch Vergleich der
+#     beiden Tabellen - ein eigener, aelterer Fund, hier benannt und
+#     nicht miterledigt, weil ihn zu beheben Vorgabewerte aendern
+#     wuerde und nicht Struktur.
+DEFAULT_CONNECTION = {
+    # Welche Bauart: "ipsec" (strongSwan) oder "wireguard"
+    # (NetworkManager). Vorgabe "ipsec", nie geraten - jede
+    # Installation von vor dem 21.08.2026 hat diesen Schluessel
+    # nicht und muss auf ihrem bisherigen Pfad bleiben.
+    "kind": "ipsec",
+    "server": "",
+    "username": "",
+    "connection_name": "work",
+    "remember_username": True,
+    # One CIDR per entry. The generator derives one child security
+    # association and one route from each. The origin had a single
+    # child SA carrying three comma-separated networks in one string,
+    # which is why adding a fourth meant editing a string.
+    "routed_networks": [],
+    # Networks kept OUTSIDE the tunnel even though a routed network
+    # covers them - a parallel WireGuard link into a home LAN inside
+    # 192.168.0.0/16, for instance. The origin had exactly one, its
+    # own, written into the connect script alongside the German
+    # interface name of its own router.
+    "bypass_networks": [],
+    # A host that only answers through the tunnel, so that an
+    # established tunnel carrying no traffic can be told apart from a
+    # working one.
+    "test_host": "",
+    "phase1": {
+        "version": 2,
+        "aggressive": False,
+        "proposals": "aes256-sha256-ecp521",
+        "keylife": 86400,
+        "dpd_delay": 30,
+        "dpd_timeout": 120,
+        "encap": True,
+        "mobike": False
+    },
+    "phase2": {
+        "rekey_time": 43200,
+        "life_time": 43200,
+        "mode": "tunnel",
+        "replay_window": 32,
+        "esp_proposals": "aes256-sha256-ecp521"
+    },
+    "dns": {
+        "servers": [],
+        "search_domain": ""
+    },
+    # WireGuard, seit dem 21.08.2026 die zweite Bauart. Rein
+    # ADDITIV, und `schema_version` bleibt darum 1: load()
+    # weist jede andere Version ab, eine Wanderung gibt es
+    # nicht, und get_user_vpn_setting() faellt je Schluessel auf
+    # seine Vorgabe zurueck. Eine Installation von vorher hat
+    # kein `kind`, bekommt "ipsec" und laeuft Zeile fuer Zeile
+    # weiter wie bisher.
+    #
+    # KEIN GEHEIMNIS STEHT HIER. `private_key_file` und
+    # `preshared_key_file` tragen DATEINAMEN, nicht Schluessel:
+    # dieses Dokument liest der Stil-Erzeuger, gibt
+    # `zepos-settings` aus und fasst der Doktor an. Die
+    # Schluessel liegen unter ~/.config/wireguard, 0600 vom
+    # ersten Byte, Verzeichnis 0700 - siehe
+    # src/vpn.py::write_wireguard_secret().
+    "wireguard": {
+        "addresses": [],
+        "listen_port": 0,
+        "mtu": 0,
+        "private_key_file": "",
+        "public_key": "",
+        "peers": [],
+    },
+    # OpenVPN, seit dem 22.08.2026 die dritte Bauart. Rein
+    # ADDITIV wie WireGuard, `schema_version` bleibt 1.
+    #
+    # KEIN GEHEIMNIS STEHT HIER. `ca_file`, `cert_file`,
+    # `key_file`, `tls_auth_file` und `tls_crypt_file` tragen
+    # DATEINAMEN; die Dateien liegen unter ~/.config/openvpn,
+    # 0600 vom ersten Byte, Verzeichnis 0700 - siehe
+    # src/vpn.py::store_openvpn_blobs(). Das Passwort steht
+    # ueberhaupt nicht auf der Platte: es geht beim Verbinden
+    # ueber eine 0600-Datei im Laufzeitverzeichnis an
+    # `nmcli ... passwd-file` und wird danach geloescht.
+    #
+    # `extra` traegt die Direktiven, fuer die es kein eigenes
+    # Feld gibt - aus einer ERLAUBNISLISTE
+    # (OVPN_CARRIED_EXTRA), nie eine Durchreiche. Die achtzehn
+    # ausfuehrenden Direktiven sind lange vorher abgelehnt.
+    "openvpn": {
+        "remote": "",
+        "port": 0,
+        "proto": "udp",
+        "dev": "tun",
+        "dev_type": "",
+        "connection_type": "tls",
+        "username": "",
+        "remote_cert_tls": "",
+        "cipher": "",
+        "auth": "",
+        "comp_lzo": "",
+        "tunnel_mtu": 0,
+        "reneg_seconds": -1,
+        "ta_dir": "",
+        "ca_file": "",
+        "cert_file": "",
+        "key_file": "",
+        "tls_auth_file": "",
+        "tls_crypt_file": "",
+        "pkcs12_file": "",
+        "extra": [],
+    },
+    "xauth_enabled": False,
+    "debug": False
+}
+
 
 DEFAULT_SETTINGS = {
     # Both writers of this file state it - see the import above.
@@ -148,117 +279,17 @@ DEFAULT_SETTINGS = {
     #
     # The tuning values below are not identifying and stay, so a user who
     # fills in a server and a network gets a tunnel that works.
-    "vpn": {
-        # Welche Bauart: "ipsec" (strongSwan) oder "wireguard"
-        # (NetworkManager). Vorgabe "ipsec", nie geraten - jede
-        # Installation von vor dem 21.08.2026 hat diesen Schluessel
-        # nicht und muss auf ihrem bisherigen Pfad bleiben.
-        "kind": "ipsec",
-        "server": "",
-        "username": "",
-        "connection_name": "work",
-        "remember_username": True,
-        # One CIDR per entry. The generator derives one child security
-        # association and one route from each. The origin had a single
-        # child SA carrying three comma-separated networks in one string,
-        # which is why adding a fourth meant editing a string.
-        "routed_networks": [],
-        # Networks kept OUTSIDE the tunnel even though a routed network
-        # covers them - a parallel WireGuard link into a home LAN inside
-        # 192.168.0.0/16, for instance. The origin had exactly one, its
-        # own, written into the connect script alongside the German
-        # interface name of its own router.
-        "bypass_networks": [],
-        # A host that only answers through the tunnel, so that an
-        # established tunnel carrying no traffic can be told apart from a
-        # working one.
-        "test_host": "",
-        "phase1": {
-            "version": 2,
-            "aggressive": False,
-            "proposals": "aes256-sha256-ecp521",
-            "keylife": 86400,
-            "dpd_delay": 30,
-            "dpd_timeout": 120,
-            "encap": True,
-            "mobike": False
-        },
-        "phase2": {
-            "rekey_time": 43200,
-            "life_time": 43200,
-            "mode": "tunnel",
-            "replay_window": 32,
-            "esp_proposals": "aes256-sha256-ecp521"
-        },
-        "dns": {
-            "servers": [],
-            "search_domain": ""
-        },
-        # WireGuard, seit dem 21.08.2026 die zweite Bauart. Rein
-        # ADDITIV, und `schema_version` bleibt darum 1: load()
-        # weist jede andere Version ab, eine Wanderung gibt es
-        # nicht, und get_user_vpn_setting() faellt je Schluessel auf
-        # seine Vorgabe zurueck. Eine Installation von vorher hat
-        # kein `kind`, bekommt "ipsec" und laeuft Zeile fuer Zeile
-        # weiter wie bisher.
-        #
-        # KEIN GEHEIMNIS STEHT HIER. `private_key_file` und
-        # `preshared_key_file` tragen DATEINAMEN, nicht Schluessel:
-        # dieses Dokument liest der Stil-Erzeuger, gibt
-        # `zepos-settings` aus und fasst der Doktor an. Die
-        # Schluessel liegen unter ~/.config/wireguard, 0600 vom
-        # ersten Byte, Verzeichnis 0700 - siehe
-        # src/vpn.py::write_wireguard_secret().
-        "wireguard": {
-            "addresses": [],
-            "listen_port": 0,
-            "mtu": 0,
-            "private_key_file": "",
-            "public_key": "",
-            "peers": [],
-        },
-        # OpenVPN, seit dem 22.08.2026 die dritte Bauart. Rein
-        # ADDITIV wie WireGuard, `schema_version` bleibt 1.
-        #
-        # KEIN GEHEIMNIS STEHT HIER. `ca_file`, `cert_file`,
-        # `key_file`, `tls_auth_file` und `tls_crypt_file` tragen
-        # DATEINAMEN; die Dateien liegen unter ~/.config/openvpn,
-        # 0600 vom ersten Byte, Verzeichnis 0700 - siehe
-        # src/vpn.py::store_openvpn_blobs(). Das Passwort steht
-        # ueberhaupt nicht auf der Platte: es geht beim Verbinden
-        # ueber eine 0600-Datei im Laufzeitverzeichnis an
-        # `nmcli ... passwd-file` und wird danach geloescht.
-        #
-        # `extra` traegt die Direktiven, fuer die es kein eigenes
-        # Feld gibt - aus einer ERLAUBNISLISTE
-        # (OVPN_CARRIED_EXTRA), nie eine Durchreiche. Die achtzehn
-        # ausfuehrenden Direktiven sind lange vorher abgelehnt.
-        "openvpn": {
-            "remote": "",
-            "port": 0,
-            "proto": "udp",
-            "dev": "tun",
-            "dev_type": "",
-            "connection_type": "tls",
-            "username": "",
-            "remote_cert_tls": "",
-            "cipher": "",
-            "auth": "",
-            "comp_lzo": "",
-            "tunnel_mtu": 0,
-            "reneg_seconds": -1,
-            "ta_dir": "",
-            "ca_file": "",
-            "cert_file": "",
-            "key_file": "",
-            "tls_auth_file": "",
-            "tls_crypt_file": "",
-            "pkcs12_file": "",
-            "extra": [],
-        },
-        "xauth_enabled": False,
-        "debug": False
-    },
+    # DER VPN-ABSCHNITT IST SEIT DEM 22.08.2026 EINE LISTE
+    #
+    #     "kann ich auch zwei wireguard verbindungen hinzufuegen,
+    #      sodass ich immer die nutze, die ich brauche?"
+    #
+    #     Bis hierher trug `vpn` GENAU EINE Verbindung. Wer WireGuard
+    #     einstellte, verlor damit seinen IPsec-Zugang, ohne dass ihn
+    #     jemand gefragt haette. `active` traegt die KENNUNG der
+    #     gewaehlten Verbindung, nie ihren Namen - die ausfuehrliche
+    #     Begruendung steht in src/settings.py.
+    "vpn": {"active": "", "connections": []},
     "watchdog": {
         # A public resolver, unlike the VPN values above: this only asks
         # whether the machine has any connectivity at all, so a working
@@ -902,7 +933,12 @@ def get_vpn_setting(key, default=None):
         The setting value or default
     """
     settings = load_settings()
-    vpn_settings = settings.get("vpn", {})
+    # Die GEWAEHLTE Verbindung, seit dem 22.08.2026 - dieselbe Auskunft,
+    # die auch der Erzeuger bekommt (src/style_definition.py). Ueber
+    # vpn.connection() und nicht selbst herausgegriffen: zwei Leser der
+    # Frage "welche Verbindung?" waeren zwei Gelegenheiten, sie
+    # verschieden zu beantworten.
+    vpn_settings = _vpn_connection(settings)
 
     # Handle dot notation for nested keys
     keys = key.split(".")
@@ -917,8 +953,11 @@ def get_vpn_setting(key, default=None):
     if value is None:
         # Try to get default from DEFAULT_SETTINGS
         if default is None:
-            default_vpn = DEFAULT_SETTINGS.get("vpn", {})
-            default_value = default_vpn
+            # Auf DEFAULT_CONNECTION und nicht auf
+            # DEFAULT_SETTINGS["vpn"]: dort steht seit dem 22.08.2026
+            # die leere Liste, und ein Rueckfall darauf haette fuer
+            # JEDEN Schluessel None ergeben.
+            default_value = DEFAULT_CONNECTION
             for k in keys:
                 if isinstance(default_value, dict):
                     default_value = default_value.get(k)

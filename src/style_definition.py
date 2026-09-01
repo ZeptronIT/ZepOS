@@ -42,6 +42,7 @@ from settings import FILENAME as SETTINGS_FILENAME
 from settings import SCHEMA_VERSION, UnusableSettings
 from settings import load as read_settings_document
 from vpn import (
+    connection as vpn_connection,
     child_names,
     nonblank_entries,
     routed_networks_line,
@@ -225,7 +226,21 @@ def get_user_vpn_setting(key, default=None):
     Returns:
         The setting value or default
     """
-    vpn_settings = USER_SETTINGS.get("vpn", {})
+    # DIE GEWAEHLTE VERBINDUNG, SEIT DEM 22.08.2026 - und nicht mehr
+    # der Abschnitt selbst.
+    #
+    #     `vpn` traegt seit heute eine LISTE (`connections`) und die
+    #     Kennung der gewaehlten (`active`); die Werte, nach denen hier
+    #     gefragt wird - server, connection_name, phase1.version,
+    #     dns.servers - stehen eine Ebene tiefer. Ueber vpn.connection()
+    #     gelesen und nicht selbst herausgegriffen, damit der Erzeuger
+    #     und das Verbindungsskript nicht zwei verschiedene Antworten
+    #     auf "welche Verbindung?" geben koennen.
+    #
+    #     Ein Abschnitt in der ALTEN Form ist dort eine Verbindung -
+    #     also antwortet diese Funktion auch fuer ein Dokument, das
+    #     settings.load() noch nicht gewandert hat, genau wie bisher.
+    vpn_settings = vpn_connection(USER_SETTINGS)
 
     # Handle dot notation for nested keys
     keys = key.split(".")
@@ -349,7 +364,7 @@ def vpn_wireguard_block():
     """
     block = get_user_vpn_setting("wireguard", None)
     if not isinstance(block, dict):
-        block = settings_module.defaults()["vpn"]["wireguard"]
+        block = settings_module.default_connection()["wireguard"]
     return json.dumps(block)
 
 def vpn_openvpn_block():
@@ -367,7 +382,7 @@ def vpn_openvpn_block():
     """
     block = get_user_vpn_setting("openvpn", None)
     if not isinstance(block, dict):
-        block = settings_module.defaults()["vpn"]["openvpn"]
+        block = settings_module.default_connection()["openvpn"]
     return json.dumps(block)
 
 def vpn_children_block():

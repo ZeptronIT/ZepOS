@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from src.settings import defaults
+from src.settings import default_connection, defaults
 from tests.origin_data import ORIGIN
 from src.vpn import (
     child_names,
@@ -83,11 +83,29 @@ def test_no_routed_networks_is_refused():
     raise AssertionError("an empty network list must be refused")
 
 
+# EINE VERBINDUNG ALS DOKUMENT - SEIT DEM 22.08.2026
+#
+#     `defaults()["vpn"]` war bis heute EIN Abschnitt, und diese Datei
+#     hat ihn an drei Stellen direkt beschrieben. Er traegt jetzt eine
+#     LISTE, und die Werte stehen eine Ebene tiefer.
+#
+#     Gebaut wird hier trotzdem die alte, flache Form - und zwar
+#     absichtlich: swanctl_config() nimmt ein Dokument, dessen
+#     `vpn`-Abschnitt EINE Verbindung ist (vpn.connection() liest einen
+#     Abschnitt ohne `connections` als genau eine), und diese Tests
+#     pruefen die Uebersetzung von Einstellungen nach swanctl - nicht
+#     die Auswahl aus einer Liste. Die prueft
+#     tests/src/test_vpn_liste.py.
+def _dokument(**werte):
+    """Ein Dokument mit genau einer Verbindung, aus der Vorgabe heraus."""
+    verbindung = dict(default_connection())
+    verbindung.update(werte)
+    return {"schema_version": 2, "vpn": verbindung}
+
+
 def test_config_uses_the_configured_server_not_a_constant():
-    cfg = dict(defaults())
-    cfg["vpn"]["server"] = "vpn.example.org"
-    cfg["vpn"]["routed_networks"] = ["10.0.0.0/8"]
-    out = swanctl_config(cfg)
+    out = swanctl_config(_dokument(server="vpn.example.org",
+                                   routed_networks=["10.0.0.0/8"]))
     assert "vpn.example.org" in out
 
 
@@ -98,20 +116,18 @@ def test_config_honours_the_phase_settings_it_is_handed():
     and fill the rest from its own constants, so it answered with IKEv2
     and ecp521 for exactly that user, silently. A doctor built on it
     would report a configuration other than the deployed one."""
-    cfg = dict(defaults())
-    cfg["vpn"]["server"] = "vpn.example.org"
-    cfg["vpn"]["routed_networks"] = ["10.0.0.0/8"]
-    cfg["vpn"]["phase1"] = {
-        "version": 1, "aggressive": True, "keylife": 28800,
-        "proposals": "aes128-sha1-modp1536", "dpd_delay": 15,
-        "dpd_timeout": 60, "encap": False, "mobike": True,
-    }
-    cfg["vpn"]["phase2"] = {
-        "rekey_time": 3600, "life_time": 7200, "mode": "transport",
-        "replay_window": 64, "esp_proposals": "aes128-sha1-modp1536",
-    }
-
-    out = swanctl_config(cfg)
+    out = swanctl_config(_dokument(
+        server="vpn.example.org",
+        routed_networks=["10.0.0.0/8"],
+        phase1={
+            "version": 1, "aggressive": True, "keylife": 28800,
+            "proposals": "aes128-sha1-modp1536", "dpd_delay": 15,
+            "dpd_timeout": 60, "encap": False, "mobike": True,
+        },
+        phase2={
+            "rekey_time": 3600, "life_time": 7200, "mode": "transport",
+            "replay_window": 64, "esp_proposals": "aes128-sha1-modp1536",
+        }))
 
     for expected in ("version = 1", "aggressive = yes",
                      "proposals = aes128-sha1-modp1536", "dpd_delay = 15s",
@@ -125,11 +141,9 @@ def test_config_honours_the_phase_settings_it_is_handed():
 def test_an_ikev2_config_carries_no_aggressive_keyword():
     """Aggressive mode is IKEv1 only; strongSwan rejects the keyword under
     version 2, and the connect script emits it only for version 1."""
-    cfg = dict(defaults())
-    cfg["vpn"]["server"] = "vpn.example.org"
-    cfg["vpn"]["routed_networks"] = ["10.0.0.0/8"]
-    cfg["vpn"]["phase1"] = {"version": 2, "aggressive": True}
-    assert "aggressive" not in swanctl_config(cfg)
+    assert "aggressive" not in swanctl_config(_dokument(
+        server="vpn.example.org", routed_networks=["10.0.0.0/8"],
+        phase1={"version": 2, "aggressive": True}))
 
 
 def test_defaults_produce_no_usable_config():

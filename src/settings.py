@@ -58,8 +58,63 @@ except ImportError:
     import sizes
     from paths import system_root, user_root
 
-SCHEMA_VERSION = 1
+# AUF 2 SEIT DEM 22.08.2026, UND WARUM DAS NICHT BELIEBIG IST
+#
+#     WireGuard (21.08.) und OpenVPN (22.08.) haben diese Zahl NICHT
+#     bewegt, und das war jedes Mal richtig: beide waren rein ADDITIV.
+#     Ein alter Leser fand jeden alten Schluessel unveraendert vor, gab
+#     auf die neuen seine Vorgabe zurueck und lief Zeile fuer Zeile
+#     weiter wie bisher.
+#
+#     DIE LISTE IST NICHT ADDITIV. `vpn.server`, `vpn.kind`,
+#     `vpn.routed_networks` und `vpn.connection_name` stehen danach
+#     nicht mehr unter `vpn`, sondern unter `vpn.connections[i]`. Was
+#     ein ZepOS von vorher damit macht, steht schon zweimal in diesem
+#     Baum beschrieben - im Kopf dieser Datei und in
+#     generate_config.sh: vpn_kind() antwortet "ipsec",
+#     get_user_vpn_setting("server") antwortet "", und der Erzeuger
+#     schreibt VPN_SERVER="" in vpn-connect.sh. Eine arbeitende
+#     VPN-Verbindung durch eine ersetzt, die nicht waehlen kann, ohne
+#     eine einzige Fehlermeldung.
+#
+#     Mit 2 wird daraus, was es sein muss: load() weist ab, die Zahl
+#     steht im Text der Ausnahme, und Doktor, zepos-settings und der
+#     Erzeuger erzeugen NICHTS statt etwas Falsches. Ein lauter
+#     Abbruch ist hier die freundlichere Antwort.
+SCHEMA_VERSION = 2
+
+# Die eine aeltere Fassung, die load() annimmt statt sie abzuweisen -
+# sonst waere jede bestehende Installation ab der ersten Zeile
+# unbrauchbar. Sie wird beim Lesen gewandert (migrate()), nicht beim
+# Schreiben: wer nur liest, aendert die Datei des Nutzers nicht.
+MIGRATABLE_VERSION = 1
 FILENAME = "user-settings.json"
+
+# Die Kennung, die die gewanderte Verbindung bekommt. FEST und nicht
+# gewuerfelt, und das ist die Zeile, an der die ganze Wanderung haengt.
+#
+#     migrate() laeuft bei JEDEM Lesen, und mehrere Leser laufen
+#     nebeneinander: die Leiste fragt `vpn.py --status` mehrmals je
+#     Minute, waehrend der Erzeuger dieselbe Datei liest. Eine
+#     gewuerfelte Kennung gaebe jedem Leser eine andere Antwort auf die
+#     Frage "welche Verbindung ist das?", und wer zuletzt speichert,
+#     gewinnt - mit Schluesseldateien, die dann auf eine Kennung zeigen,
+#     die es nicht mehr gibt.
+#
+#     "c1" ist damit idempotent: dieselbe Datei ergibt in jedem Prozess
+#     dieselbe gewanderte Fassung. Neu angelegte Verbindungen bekommen
+#     acht Hexzeichen (src/vpn.py::new_connection_id()) und koennen mit
+#     "c1" nicht zusammenstossen.
+MIGRATED_ID = "c1"
+
+# Die zwei Schluessel des VPN-Abschnitts, einmal benannt. Sie stehen in
+# settings.py, vpn.py, style_definition.py, doctor.py und in zwei
+# AGS-Vorlagen; getippt waeren das sieben Stellen, an denen ein Vertipper
+# eine leere Liste ergibt statt eines Fehlers.
+VPN = "vpn"
+VPN_ACTIVE = "active"
+VPN_CONNECTIONS = "connections"
+VPN_ID = "id"
 
 
 class UnusableSettings(ValueError):
@@ -84,89 +139,151 @@ class UnusableSettings(ValueError):
     """
 
 
+def default_connection() -> dict[str, Any]:
+    """EINE VPN-Verbindung, wie sie unkonfiguriert aussieht.
+
+    HIESS BIS ZUM 22.08.2026 `defaults()["vpn"]` UND IST ZEICHEN FUER
+    ZEICHEN DASSELBE
+        Der Abschnitt ist nicht umgebaut, er ist eine Ebene tiefer
+        gerutscht: was hier steht, stand vorher unter `vpn` und steht
+        jetzt in `vpn.connections[i]`. Genau deshalb kann migrate_vpn()
+        unten `{**alt, "id": MIGRATED_ID}` sein - und genau deshalb ist
+        die Wanderung beweisbar verlustfrei.
+
+    `id` STEHT HIER NICHT
+        Eine Verbindung bekommt ihre Kennung beim Anlegen, nicht aus
+        einer Vorgabentabelle - zwei Verbindungen aus derselben Vorgabe
+        haetten sonst dieselbe, und die Kennung ist das einzige, woran
+        Schalter, Waechter und Schluesseldateien sie auseinanderhalten.
+
+    `psk_file` STEHT HIER EBENSOWENIG, UND DAS IST EINE ENTSCHEIDUNG
+        Der IPsec-PSK lag bis heute unter dem FESTEN Pfad
+        ~/.config/strongswan/psk und wurde in keiner Einstellung
+        genannt. Ein fehlendes `psk_file` heisst darum genau das, was es
+        immer geheissen hat: die Datei heisst `psk`. Dieselbe
+        Zurueckhaltung wie bei `kind` (fehlt = ipsec), und der Grund ist
+        derselbe - die Wanderung darf die Datei des Nutzers nicht
+        anfassen, also darf sie ihm auch keinen neuen Namen dafuer
+        eintragen. Siehe src/vpn.py::psk_file_name().
+    """
+    return {
+        # Welche Bauart. "ipsec" (strongSwan) oder "wireguard"
+        # (NetworkManager). Die Vorgabe ist "ipsec" und darf nie
+        # geraten werden - siehe src/vpn.py::vpn_kind().
+        "kind": "ipsec",
+        "server": "",
+        "connection_name": "work",
+        "dns": {"servers": [], "search_domain": ""},
+        "test_host": "",
+        "routed_networks": [],
+        # Networks that must stay OUTSIDE the tunnel even though a
+        # routed network covers them - a parallel WireGuard link to a
+        # home LAN inside 192.168.0.0/16, say. Without a passthrough
+        # policy IPsec captures that traffic and the other tunnel
+        # goes dark. The origin had its own home subnet, and the
+        # German interface name it used, written into the script.
+        "bypass_networks": [],
+        # WireGuard, seit dem 21.08.2026 die zweite Bauart. Rein
+        # ADDITIV, und `schema_version` bleibt darum 1: load()
+        # weist jede andere Version ab, eine Wanderung gibt es
+        # nicht, und get_user_vpn_setting() faellt je Schluessel auf
+        # seine Vorgabe zurueck. Eine Installation von vorher hat
+        # kein `kind`, bekommt "ipsec" und laeuft Zeile fuer Zeile
+        # weiter wie bisher.
+        #
+        # KEIN GEHEIMNIS STEHT HIER. `private_key_file` und
+        # `preshared_key_file` tragen DATEINAMEN, nicht Schluessel:
+        # dieses Dokument liest der Stil-Erzeuger, gibt
+        # `zepos-settings` aus und fasst der Doktor an. Die
+        # Schluessel liegen unter ~/.config/wireguard, 0600 vom
+        # ersten Byte, Verzeichnis 0700 - siehe
+        # src/vpn.py::write_wireguard_secret().
+        "wireguard": {
+            "addresses": [],
+            "listen_port": 0,
+            "mtu": 0,
+            "private_key_file": "",
+            "public_key": "",
+            "peers": [],
+        },
+        # OpenVPN, seit dem 22.08.2026 die dritte Bauart. Rein
+        # ADDITIV wie WireGuard, `schema_version` bleibt 1.
+        #
+        # KEIN GEHEIMNIS STEHT HIER. `ca_file`, `cert_file`,
+        # `key_file`, `tls_auth_file` und `tls_crypt_file` tragen
+        # DATEINAMEN; die Dateien liegen unter ~/.config/openvpn,
+        # 0600 vom ersten Byte, Verzeichnis 0700 - siehe
+        # src/vpn.py::store_openvpn_blobs(). Das Passwort steht
+        # ueberhaupt nicht auf der Platte: es geht beim Verbinden
+        # ueber eine 0600-Datei im Laufzeitverzeichnis an
+        # `nmcli ... passwd-file` und wird danach geloescht.
+        #
+        # `extra` traegt die Direktiven, fuer die es kein eigenes
+        # Feld gibt - aus einer ERLAUBNISLISTE
+        # (OVPN_CARRIED_EXTRA), nie eine Durchreiche. Die achtzehn
+        # ausfuehrenden Direktiven sind lange vorher abgelehnt.
+        "openvpn": {
+            "remote": "",
+            "port": 0,
+            "proto": "udp",
+            "dev": "tun",
+            "dev_type": "",
+            "connection_type": "tls",
+            "username": "",
+            "remote_cert_tls": "",
+            "cipher": "",
+            "auth": "",
+            "comp_lzo": "",
+            "tunnel_mtu": 0,
+            "reneg_seconds": -1,
+            "ta_dir": "",
+            "ca_file": "",
+            "cert_file": "",
+            "key_file": "",
+            "tls_auth_file": "",
+            "tls_crypt_file": "",
+            "pkcs12_file": "",
+            "extra": [],
+        },
+    }
+
+
 def defaults() -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
-        "vpn": {
-            # Welche Bauart. "ipsec" (strongSwan) oder "wireguard"
-            # (NetworkManager). Die Vorgabe ist "ipsec" und darf nie
-            # geraten werden - siehe src/vpn.py::vpn_kind().
-            "kind": "ipsec",
-            "server": "",
-            "connection_name": "work",
-            "dns": {"servers": [], "search_domain": ""},
-            "test_host": "",
-            "routed_networks": [],
-            # Networks that must stay OUTSIDE the tunnel even though a
-            # routed network covers them - a parallel WireGuard link to a
-            # home LAN inside 192.168.0.0/16, say. Without a passthrough
-            # policy IPsec captures that traffic and the other tunnel
-            # goes dark. The origin had its own home subnet, and the
-            # German interface name it used, written into the script.
-            "bypass_networks": [],
-            # WireGuard, seit dem 21.08.2026 die zweite Bauart. Rein
-            # ADDITIV, und `schema_version` bleibt darum 1: load()
-            # weist jede andere Version ab, eine Wanderung gibt es
-            # nicht, und get_user_vpn_setting() faellt je Schluessel auf
-            # seine Vorgabe zurueck. Eine Installation von vorher hat
-            # kein `kind`, bekommt "ipsec" und laeuft Zeile fuer Zeile
-            # weiter wie bisher.
-            #
-            # KEIN GEHEIMNIS STEHT HIER. `private_key_file` und
-            # `preshared_key_file` tragen DATEINAMEN, nicht Schluessel:
-            # dieses Dokument liest der Stil-Erzeuger, gibt
-            # `zepos-settings` aus und fasst der Doktor an. Die
-            # Schluessel liegen unter ~/.config/wireguard, 0600 vom
-            # ersten Byte, Verzeichnis 0700 - siehe
-            # src/vpn.py::write_wireguard_secret().
-            "wireguard": {
-                "addresses": [],
-                "listen_port": 0,
-                "mtu": 0,
-                "private_key_file": "",
-                "public_key": "",
-                "peers": [],
-            },
-            # OpenVPN, seit dem 22.08.2026 die dritte Bauart. Rein
-            # ADDITIV wie WireGuard, `schema_version` bleibt 1.
-            #
-            # KEIN GEHEIMNIS STEHT HIER. `ca_file`, `cert_file`,
-            # `key_file`, `tls_auth_file` und `tls_crypt_file` tragen
-            # DATEINAMEN; die Dateien liegen unter ~/.config/openvpn,
-            # 0600 vom ersten Byte, Verzeichnis 0700 - siehe
-            # src/vpn.py::store_openvpn_blobs(). Das Passwort steht
-            # ueberhaupt nicht auf der Platte: es geht beim Verbinden
-            # ueber eine 0600-Datei im Laufzeitverzeichnis an
-            # `nmcli ... passwd-file` und wird danach geloescht.
-            #
-            # `extra` traegt die Direktiven, fuer die es kein eigenes
-            # Feld gibt - aus einer ERLAUBNISLISTE
-            # (OVPN_CARRIED_EXTRA), nie eine Durchreiche. Die achtzehn
-            # ausfuehrenden Direktiven sind lange vorher abgelehnt.
-            "openvpn": {
-                "remote": "",
-                "port": 0,
-                "proto": "udp",
-                "dev": "tun",
-                "dev_type": "",
-                "connection_type": "tls",
-                "username": "",
-                "remote_cert_tls": "",
-                "cipher": "",
-                "auth": "",
-                "comp_lzo": "",
-                "tunnel_mtu": 0,
-                "reneg_seconds": -1,
-                "ta_dir": "",
-                "ca_file": "",
-                "cert_file": "",
-                "key_file": "",
-                "tls_auth_file": "",
-                "tls_crypt_file": "",
-                "pkcs12_file": "",
-                "extra": [],
-            },
-        },
+        # DER VPN-ABSCHNITT IST SEIT DEM 22.08.2026 EINE LISTE
+        #
+        #     "kann ich auch zwei wireguard verbindungen hinzufuegen,
+        #      sodass ich immer die nutze, die ich brauche?" - und
+        #      danach: "das gleiche gilt uebrigens fuer die anderen vpn
+        #      verbindungen auch!!!"
+        #
+        #     Bis hierher trug `vpn` GENAU EINE Verbindung: ein `kind`,
+        #     ein `server`, ein `connection_name`. Wer WireGuard
+        #     einstellte, verlor damit seinen IPsec-Zugang, ohne dass
+        #     ihn jemand gefragt haette.
+        #
+        #     `active` traegt die KENNUNG der gewaehlten Verbindung,
+        #     nicht ihren Namen: der Name ist das, was NetworkManager
+        #     und swanctl sehen, und er darf sich jederzeit aendern.
+        #     Haenge die Auswahl am Namen, dann zeigt ein Umbenennen den
+        #     Schalter, den Waechter und die Schluesseldateien ins
+        #     Leere. Siehe src/vpn.py::connection().
+        #
+        #     EINE Kennung und keine Liste von Kennungen - zwei Tunnel
+        #     nebeneinander sind technisch moeglich und hier trotzdem
+        #     ausgeschlossen. Die Begruendung steht bei
+        #     vpn.only_one_at_a_time in src/vpn.py; die kuerzeste davon
+        #     ist die Zustandsdatei $XDG_RUNTIME_DIR/vpn-active: EINE
+        #     Datei mit EINEM Verbindungsnamen, an der vier rechtelose
+        #     Leser haengen.
+        #
+        #     LEER auf einer frischen Installation, und nicht "eine
+        #     leere Verbindung". Der Unterschied ist derselbe wie bei
+        #     shipped_bar() weiter unten: keine Verbindung ist etwas
+        #     anderes als eine unausgefuellte, und nur das erste ist
+        #     wahr, bevor jemand etwas eingetragen hat.
+        "vpn": {"active": "", "connections": []},
         "weather": {"location": ""},
         # Extra clocks beside the local time, by IANA timezone name. The
         # origin had two templates with one country each written into
@@ -348,11 +465,78 @@ def load(path: Path | None = None) -> dict[str, Any]:
         )
 
     version = data.get("schema_version")
+    if version == MIGRATABLE_VERSION:
+        return migrate(data)
     if version != SCHEMA_VERSION:
         raise UnusableSettings(
             f"unsupported schema_version {version}, expected {SCHEMA_VERSION}"
         )
     return data
+
+
+def migrate_vpn(section: Any) -> dict[str, Any]:
+    """Aus EINER VPN-Verbindung wird eine Liste mit EINER darin.
+
+    DER GANZE ABSCHNITT, NICHT SEINE BEKANNTEN SCHLUESSEL - UND DAS IST
+    HIER GEMESSEN WORDEN, NICHT ANGENOMMEN
+        GEPRUEFT am 22.08.2026 an einer echten, benutzten
+        Einstellungsdatei (nur die SCHLUESSELNAMEN gelesen, kein Wert,
+        kein Server, kein Geheimnis): sie traegt
+
+            debug, remember_username, username, xauth_enabled,
+            phase1, phase2 - und in phase2 ein `child_sas`
+
+        `phase2.child_sas` steht in KEINER der beiden Vorgabentabellen
+        dieses Baums, weder in default_connection() hier noch in
+        DEFAULT_SETTINGS in src/user_settings.py. Eine Wanderung, die
+        den Eintrag aus einer bekannten Schluesselliste NEU BAUT, haette
+        ihn still fallen lassen - und der Tunnel des Nutzers haette sich
+        danach anders verhalten, ohne dass irgendwo etwas dazu stuende.
+
+        `{**section, "id": MIGRATED_ID}` uebernimmt darum jeden
+        Schluessel, den die Datei traegt, auch die, die dieser Baum
+        nicht kennt. Nachgewiesen in
+        tests/src/test_vpn_liste.py::test_die_wanderung_verliert_keinen_
+        schluessel.
+
+    SCHON GEWANDERT HEISST UNVERAENDERT
+        Ein Abschnitt, der `connections` bereits traegt, geht
+        unberuehrt zurueck. migrate() laeuft bei jedem Lesen, und eine
+        Wanderung, die sich selbst noch einmal wandert, haette die
+        Liste bei jedem Lesen eine Ebene tiefer gelegt.
+    """
+    if not isinstance(section, dict):
+        # Kein Abschnitt ist etwas anderes als ein leerer - aber beide
+        # ergeben dieselbe leere Liste, und nur so kann der Aufrufer
+        # ohne Fallunterscheidung weiterarbeiten.
+        return {"active": "", "connections": []}
+    if VPN_CONNECTIONS in section:
+        return section
+    if not section:
+        return {"active": "", "connections": []}
+    return {"active": MIGRATED_ID,
+            "connections": [{**section, "id": MIGRATED_ID}]}
+
+
+def migrate(document: dict[str, Any]) -> dict[str, Any]:
+    """Ein Dokument der Fassung 1 als Fassung 2 - IM SPEICHER.
+
+    Geschrieben wird hier nichts. Die gewanderte Fassung landet erst
+    dann auf der Platte, wenn ohnehin jemand speichert (save()/merge()),
+    und bis dahin bleibt die Datei des Nutzers Byte fuer Byte die, die
+    er hat. Ein Absturz zwischendrin hinterlaesst damit keine halb
+    gewanderte Datei - denselben Grund nennt save() fuer sein
+    os.replace().
+
+    Nur der `vpn`-Abschnitt bewegt sich. Jeder andere Abschnitt geht
+    unangetastet durch, einschliesslich der, die dieser Baum nicht
+    kennt: eine Einstellungsdatei ist das Dokument des Nutzers und
+    nicht die Summe dessen, was wir davon verstehen.
+    """
+    gewandert = dict(document)
+    gewandert["vpn"] = migrate_vpn(document.get("vpn"))
+    gewandert["schema_version"] = SCHEMA_VERSION
+    return gewandert
 
 
 def save(data: dict[str, Any], path: Path | None = None) -> None:

@@ -1791,6 +1791,35 @@ msgstr "Nein"
 msgid "Yes"
 msgstr "Ja"
 
+# --------------------------------------------------------------------
+# Aus einer VPN-Verbindung wird eine Liste (22.08.2026)
+# --------------------------------------------------------------------
+# Die Liste mit den Schaltern - auf der Schalenseite und im
+# Einstellungsfenster. Die uebrigen 162 Beschriftungen der beiden
+# VPN-Vorlagen sind unveraendert geblieben; nachgewiesen in
+# tests/src/test_vpn_liste.py.
+
+msgid "VPN connections"
+msgstr "VPN-Verbindungen"
+
+msgid "Add connection"
+msgstr "Verbindung hinzufügen"
+
+msgid "Delete connection"
+msgstr "Verbindung löschen"
+
+msgid "New connection"
+msgstr "Neue Verbindung"
+
+msgid "No connection configured yet - add one."
+msgstr "Noch keine Verbindung eingerichtet – bitte eine hinzufügen."
+
+msgid "Only one VPN can be connected at a time - {name} is being disconnected."
+msgstr "Es kann nur eine VPN-Verbindung stehen – {name} wird zuerst getrennt."
+
+msgid "Really delete {name}? Its keys and certificates are deleted with it."
+msgstr "{name} wirklich löschen? Ihre Schlüssel und Zertifikate werden mitgelöscht."
+
 #~ msgid "IKE version"
 #~ msgstr "IKE Version"
 

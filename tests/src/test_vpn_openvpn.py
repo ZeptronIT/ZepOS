@@ -56,6 +56,7 @@ import pytest
 from src import vpn
 from src.settings import SCHEMA_VERSION
 from src.settings import defaults as settings_defaults
+from src.settings import default_connection as settings_default_connection
 from src.vpn import (
     OVPN_CARRIED_EXTRA,
     OVPN_ENABLING,
@@ -80,7 +81,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
 
-def _user_settings_defaults() -> dict:
+def _user_settings_connection() -> dict:
     """DEFAULT_SETTINGS, geladen wie /usr/share/zepos es laedt.
 
     Derselbe Kniff und dieselbe Begruendung wie in
@@ -92,7 +93,10 @@ def _user_settings_defaults() -> dict:
     sys.path.insert(0, str(SRC))
     try:
         import user_settings
-        return user_settings.DEFAULT_SETTINGS
+        # DEFAULT_CONNECTION und nicht mehr DEFAULT_SETTINGS["vpn"]:
+        # der VPN-Abschnitt traegt seit dem 22.08.2026 eine Liste, die
+        # Vorgaben EINER Verbindung stehen eine Ebene tiefer.
+        return user_settings.DEFAULT_CONNECTION
     finally:
         sys.path.remove(str(SRC))
 
@@ -259,8 +263,8 @@ def test_the_old_configuration_produces_the_very_same_swanctl_file():
 
     nachher_dokument = json.loads(json.dumps(LEGACY))
     nachher_dokument["vpn"]["kind"] = "ipsec"
-    nachher_dokument["vpn"]["wireguard"] = settings_defaults()["vpn"]["wireguard"]
-    nachher_dokument["vpn"]["openvpn"] = settings_defaults()["vpn"]["openvpn"]
+    nachher_dokument["vpn"]["wireguard"] = settings_default_connection()["wireguard"]
+    nachher_dokument["vpn"]["openvpn"] = settings_default_connection()["openvpn"]
     nachher = swanctl_config(nachher_dokument)
 
     assert vorher == nachher, (
@@ -289,13 +293,15 @@ def test_both_default_tables_carry_the_same_openvpn_keys():
     Schluessel, der nur in einer steht, ist ein Pfad, den die
     Oberflaeche schreiben kann und das Kommandozeilenwerkzeug ablehnt.
     """
-    eins = settings_defaults()["vpn"]["openvpn"]
-    zwei = _user_settings_defaults()["vpn"]["openvpn"]
+    # Eine Ebene tiefer seit dem 22.08.2026 - siehe die Begruendung
+    # in test_vpn_wireguard.py bei demselben Test.
+    eins = settings_default_connection()["openvpn"]
+    zwei = _user_settings_connection()["openvpn"]
     assert set(eins) == set(zwei), (
         f"only in settings.py: {set(eins) - set(zwei)}; "
         f"only in user_settings.py: {set(zwei) - set(eins)}")
     assert eins == zwei
-    assert settings_defaults()["vpn"]["kind"] == "ipsec"
+    assert settings_default_connection()["kind"] == "ipsec"
 
 
 # --------------------------------------------------------------------
