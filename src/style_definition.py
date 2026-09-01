@@ -1715,6 +1715,34 @@ _FIXED_STYLE_VARIABLES = {
     "STYLE_GTK4_ERROR_BG": THEME.RED_DEEP,
     "STYLE_GTK4_ON_STATE_FG": THEME.INK,
 
+    # DIE EINZIGE ZAHL IN DIESER DATEI, DIE KEINE FARBE IST - und sie
+    # steht hier, weil das, was sie entscheidet, eine Farbe IST.
+    #
+    # GEMELDET am 01.09.2026: "die schrift ist so blass, man kann sie
+    # kaum sehen". libadwaita 1.9.3 malt jede Nebenzeile mit
+    # `opacity: var(--dim-opacity)` und liest `@define-color
+    # dimmed_color` dafuer NIE; bei seinen 55 % misst der Fenstergrund
+    # 4,15:1 unter ZeptronIT und 3,95:1 unter Tageslicht, beide unter
+    # den 4,5:1 aus WCAG 2.1 SC 1.4.3. Die ganze Messung und die
+    # Ableitung stehen bei brand.dim_opacity().
+    #
+    # DREI FARBEN UND NICHT ZWEI: die dritte ist der GRUND, und der
+    # Fenstergrund ist der schlechteste der sechs, die diese Datei setzt
+    # (Kopfleiste, Popover und Rueckfrage tragen denselben Wert, die
+    # Ansicht und die Karte liegen darueber). Wer den schlechtesten
+    # bestehen laesst, hat die anderen mit.
+    #
+    # Ueber THEME und nicht ueber `brand`, wie jeder andere Zugriff in
+    # dieser Datei: Palette.__getattr__ faellt auf src/brand.py zurueck.
+    # Gerechnet wird sie HIER und nicht in Palette.__init__ - anders als
+    # GLASS_SOLO_ALPHA haengt sie an den Farben des NUTZERS und nicht an
+    # den Feldern des Themas, und die drei sind ueber `zepos-settings set
+    # colors.overlay_text` verstellbar.
+    "STYLE_GTK4_DIM_OPACITY": THEME.dim_opacity(
+        get_user_color("overlay_text"),
+        get_user_color("overlay_surface"),
+        get_user_color("overlay_subtext")),
+
     # ============================================================================
     # SPECIAL VALUES (fixed - NOT scaled)
     # ============================================================================
@@ -2646,8 +2674,25 @@ GLASS_PLATES = {
     # beiden sich keinen Wahlausdruck teilen.
     "zepos-starter": GlassPlate(_BAR, "#starter-button", ("dock_icon",),
                                 None),
-    "notifications": GlassPlate(_AGS, ".notif-card", ("overlay_subtext",),
-                                None),
+    # DREI ROLLEN SEIT DEM 01.09.2026, VORHER EINE
+    #     Der Seitenstreifen der Karte ist an diesem Tag gefallen
+    #     (bestellt: "entferne bitte diese daemlichen seitenlinien"), und
+    #     die Dringlichkeit steht seither in der FARBE DER KOPFZEILE -
+    #     `.notif-low .notif-summary` in ags-style.template, wo die
+    #     ganze Begruendung steht. Damit schreiben auf dieser Platte zwei
+    #     Farben, die vorher nur mako gesehen hat, und mako ist
+    #     maskiert; sie waren also bis heute unsichtbar und ungeprueft.
+    #
+    #     overlay_subtext bleibt in der Liste: Rumpf, Anwendungsname und
+    #     Zeit schreiben unveraendert damit. notification_critical_text
+    #     steht ABSICHTLICH NICHT darin - die kritische Karte behaelt
+    #     ihre volle Kopfzeilenfarbe, weil RED auf ihrem getoenten Grund
+    #     4.44:1 (ZeptronIT) bzw. 4.33:1 (Tageslicht) misst und damit
+    #     unter die 4.5:1 faellt. Die Rechnung steht bei "WARUM DIE
+    #     SCHRIFT DER KRITISCHEN MELDUNG NICHT ROT IST".
+    "notifications": GlassPlate(_AGS, ".notif-card",
+                                ("overlay_subtext", "notification_low_text",
+                                 "notification_text"), None),
     # Das Zentrum kommt vollstaendig aus createOverlayWindow() und traegt
     # deshalb dieselbe Platte wie die anderen elf - `.overlay-outer`.
     # Die Karten des Verlaufs liegen DARAUF (`.notif-card`), also ist

@@ -306,6 +306,68 @@ def test_the_dimmed_workspace_still_clears_the_threshold(palette):
                     "an empty workspace at 0.6 opacity")
 
 
+# Die Gruende, auf denen ein fremdes GTK4-Fenster eine Nebenzeile malt.
+# ROLLEN und keine Hexwerte, weil der Nutzer sie verstellen kann - und
+# genau die drei, die gtk4-colors-config.template als --window-bg-color,
+# --view-bg-color und --card-bg-color setzt. Kopfleiste, Aufklapper und
+# Rueckfrage tragen dieselbe Farbe wie der Fenstergrund.
+GTK4_DIM_GROUNDS = ("overlay_surface", "overlay_bg", "overlay_item_hover")
+
+
+def _blend(foreground: str, alpha: float, ground: str) -> str:
+    """Was man sieht, wenn `foreground` mit `alpha` auf `ground` liegt."""
+    top, bottom = foreground.lstrip("#"), ground.lstrip("#")
+    return "#" + "".join(
+        "%02X" % round(alpha * int(top[i:i + 2], 16)
+                       + (1 - alpha) * int(bottom[i:i + 2], 16))
+        for i in (0, 2, 4))
+
+
+def test_the_dimmed_line_of_a_foreign_gtk4_window_stays_readable(palette):
+    """Die Nebenzeile jedes GTK4-Fensters, gerechnet statt geglaubt.
+
+    GEMELDET am 01.09.2026: "die einstellungen sind irgendwie verbuggt,
+    die schrift ist so blass, man kann sie kaum sehen".
+
+    libadwaita 1.9.3 malt `.dimmed`, `row label.subtitle`, `.dim-label`,
+    `headerbar .subtitle` und die Platzhalter der Eingabefelder mit
+    `opacity: var(--dim-opacity)` und liest `@define-color dimmed_color`
+    dafuer NIE. Bei seinen 55 % misst der Fenstergrund 4.15:1 unter
+    ZeptronIT und eine Listenzeile 3.95:1 unter Tageslicht - beide unter
+    AA. brand.dim_opacity() rechnet stattdessen die Deckkraft aus, bei
+    der die Vordergrundfarbe genau die zweite Textstufe DIESER Palette
+    ergibt, und gtk4-colors-config.template setzt sie in :root.
+
+    Diese Zusicherung ist die Gegenrechnung dazu. Ohne sie waere die
+    Ableitung eine Behauptung: eine Palette, deren Vorder- und
+    Hintergrundfarbe naeher aneinanderruecken, kann sie unter die Linie
+    ziehen, ohne dass ein anderer Test etwas merkt.
+    """
+    text = palette.COLORS["overlay_text"]
+    surface = palette.COLORS["overlay_surface"]
+    dimmed = palette.COLORS["overlay_subtext"]
+
+    prozent = palette.dim_opacity(text, surface, dimmed)
+    assert prozent.endswith("%"), (
+        f"--dim-opacity ist {prozent!r} und damit kein Prozentwert - "
+        "libadwaita reicht dieselbe Variable an color-mix() weiter, und "
+        "das nimmt nur Prozent; ein blosser Bruch laesst die ganze "
+        "Deklaration lautlos fallen")
+    alpha = int(prozent.rstrip("%")) / 100
+
+    for role in GTK4_DIM_GROUNDS:
+        ground = palette.COLORS[role]
+        assert_readable(_blend(text, alpha, ground), ground,
+                        f"eine Nebenzeile auf {role} bei {prozent}")
+
+    # Die Gegenprobe: eine Deckkraft, die nichts mehr daempft, waere
+    # keine zweite Textstufe, sondern dieselbe wie die erste.
+    assert alpha < 1.0, (
+        "--dim-opacity steht auf 100 % - dann sieht eine Nebenzeile aus "
+        "wie ihre Zeile, und die Stufe, die sie tragen soll, gibt es "
+        "nicht mehr")
+
+
 def test_the_terminals_active_tab_reads_both_ways(palette):
     """The one place the two brand colours meet at full strength."""
     assert_readable(palette.COLORS["terminal_active_tab_fg"],

@@ -289,6 +289,50 @@
     --overview-bg-color: {{STYLE_GTK4_VIEW_BG}};
     --overview-fg-color: {{STYLE_GTK4_WINDOW_FG}};
 
+    /* DIE DECKKRAFT, MIT DER JEDE NEBENZEILE GEMALT WIRD
+     *
+     * GEMELDET am 01.09.2026: "die einstellungen sind irgendwie
+     * verbuggt, die schrift ist so blass, man kann sie kaum sehen". Es
+     * ist nicht das Einstellungsfenster - es ist jedes GTK4-Fenster auf
+     * diesem Rechner, und der Grund steht weiter oben schon seit dem
+     * 12.08.2026: `--dimmed-color` gibt es nicht, 1.9 blendet mit
+     * `--dim-opacity` ab. Das `@define-color dimmed_color` oben wird
+     * fuer diese Knoten also NIE gelesen. Dieser Absatz ist die
+     * Folgerung daraus, die bis heute niemand gezogen hat.
+     *
+     * GEMESSEN am 01.09.2026 an libadwaita 1.9.3, aus dem Blatt, das
+     * `gresource extract /usr/lib/libadwaita-1.so.0
+     *  /org/gnome/Adwaita/styles/gtk.css` herausholt:
+     *
+     *     :root { --dim-opacity: 55%; }
+     *     .dimmed, row label.subtitle, .dim-label, headerbar .subtitle,
+     *     windowtitle .subtitle, entry > text > placeholder,
+     *     label.separator { opacity: var(--dim-opacity); }
+     *
+     * Und was diese 55 % auf DIESER Palette ergeben, WCAG 2.1 SC 1.4.3
+     * verlangt 4,5:1 fuer Fliesstext:
+     *
+     *     Grund                       dimmed_color   libadwaitas 55 %
+     *     Fenster/Kopfleiste/Popover      6,57:1           4,15:1
+     *     Zeile einer boxed-list          7,48:1           4,52:1
+     *     Ansicht (view_bg)               8,81:1           4,96:1
+     *
+     * Die linke Spalte ist, was ZepOS gemeint hat; die rechte, was
+     * ankommt. Im Thema "Tageslicht" faellt jede der drei Zeilen durch
+     * (4,17 / 3,95 / 4,07).
+     *
+     * Der Wert hier ist ABGELEITET und nicht gewaehlt: es ist die
+     * Deckkraft, bei der die Vordergrundfarbe auf dem Fenstergrund genau
+     * dimmed_color ergibt - dieselbe zweite Textstufe, mit der jede
+     * AGS-Flaeche ihre Nebenzeilen schreibt. Die Rechnung, die drei
+     * Kanaele und die Gegenprobe stehen bei brand.dim_opacity().
+     *
+     * NICHT MITGEHOBEN: --disabled-opacity (50 %) und --border-opacity
+     * (15 %). Ein abgeschaltetes Bedienelement soll abgeschaltet
+     * aussehen - WCAG 1.4.3 nimmt es woertlich aus -, und eine
+     * Trennlinie zwischen zwei Zeilen traegt keine Auskunft. */
+    --dim-opacity: {{STYLE_GTK4_DIM_OPACITY}};
+
     /* UND DIE RECHENVORSCHRIFT SELBST
      * Die fuenf Zeilen oben setzen die Zustandsfarben fest, und damit
      * ist der haeufigste Fall erledigt. libadwaita rechnet sie an vier

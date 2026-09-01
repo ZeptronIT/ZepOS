@@ -88,10 +88,18 @@
 //
 // Beide Haelften sind am 12.08.2026 gegangen, und der Grund ist nicht
 // die Doppelung, sondern was sie tat: `.notif-app-*` setzte
-// border-left-color, dieselbe Eigenschaft, mit der die Dringlichkeit
-// geschrieben wird, bei gleicher Spezifitaet und weiter unten im Blatt.
-// Eine kritische Meldung aus Firefox trug damit Orange statt Rot. Die
-// ganze Messung steht dort, wo der Block stand.
+// border-left-color, damals dieselbe Eigenschaft, mit der die
+// Dringlichkeit geschrieben wurde, bei gleicher Spezifitaet und weiter
+// unten im Blatt. Eine kritische Meldung aus Firefox trug damit Orange
+// statt Rot. Die ganze Messung steht dort, wo der Block stand.
+//
+// DEN SEITENRAND SELBST GIBT ES SEIT DEM 01.09.2026 NICHT MEHR
+//     Er ist auf Bestellung gefallen ("entferne bitte diese daemlichen
+//     seitenlinien bei den benachrichtigungen"), und die Dringlichkeit
+//     steht jetzt in der Farbe der Kopfzeile - `.notif-low
+//     .notif-summary` und die zwei Geschwister in ags-style.template.
+//     URGENCY_CLASS weiter unten ist unveraendert: die drei
+//     Klassennamen sind dieselben, nur was sie faerben ist ein anderes.
 
 import Astal from "gi://Astal?version=4.0"
 import { Gtk } from "ags/gtk4"

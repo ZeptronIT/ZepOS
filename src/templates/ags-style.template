@@ -3009,10 +3009,11 @@ modelbutton {
 // WARUM NUR DIE OBERSTE SPROSSE EINEN EIGENEN GRUND HAT
 //     Die drei Dringlichkeiten sind eine Kostenleiter, und ihr Zweck
 //     ist, dass die teuerste auffaellt. Bekaemen alle drei einen
-//     getoenten Grund, faellt keine mehr auf - dieselbe Ueberlegung,
-//     aus der der Rand LINKS drei Farben hat und die Karte nur eine.
-//     Niedrig und normal stehen auf der neutralen Platte und
-//     unterscheiden sich an ihrem Rand.
+//     getoenten Grund, faellt keine mehr auf. Niedrig und normal
+//     stehen deshalb auf der neutralen Platte und unterscheiden sich
+//     an der HELLIGKEIT IHRER KOPFZEILE - der Seitenstreifen, der das
+//     bis zum 01.09.2026 getan hat, ist gefallen; die Bestellung, die
+//     Begruendung und die Messung stehen unten bei `.notif-low`.
 //
 // WARUM DIE SCHRIFT DER KRITISCHEN MELDUNG NICHT ROT IST
 //     GEMESSEN am 12.08.2026: brand.RED auf STATE_CRITICAL_BG kommt
@@ -3020,8 +3021,17 @@ modelbutton {
 //     4.33:1 und faellt unter die 4.5:1, die WCAG 2.1 fuer Fliesstext
 //     verlangt. Die drei Zustandsgruende sind gegen einen DECKENDEN
 //     Grund gerechnet; unter Glas bleibt davon nicht genug. Das Rot
-//     steht deshalb am RAND, wo WCAG 1.4.11 drei zu eins verlangt und
-//     wo dieselben 4.33:1 reichlich sind.
+//     steht deshalb am RAHMEN der Karte, wo WCAG 1.4.11 drei zu eins
+//     verlangt und wo dieselben 4.33:1 reichlich sind.
+//
+//     NACHGERECHNET am 01.09.2026, weil mit dem Seitenstreifen die
+//     Frage neu aufkam, ob die Dringlichkeit nicht doch in die Schrift
+//     gehoert: RED (#FF8A8A) auf `.notif-critical` misst ueber der
+//     schlechtesten denkbaren Tapete 4.44:1 im Thema ZeptronIT und
+//     4.33:1 unter Tageslicht. Die Zahl von damals steht also
+//     unveraendert, und die Antwort auch: die kritische Karte behaelt
+//     ihre volle Kopfzeilenfarbe, ihr Rot traegt der Rahmen und der
+//     getoente Grund.
 //
 // UND DIE SCHRIFTFAMILIE, NACHGETRAGEN am 20.08.2026 (Aufgabe 50)
 //     Sie stand im Bericht zu Aufgabe 47 als zweiter von zwei Befunden,
@@ -3077,20 +3087,101 @@ modelbutton {
   border-radius: {{STYLE_RADIUS_PANEL}};
   padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_12}};
   margin-bottom: {{STYLE_SPACE_8}};
-  border-left: 3px solid $accent;
   font-family: {{STYLE_FONT_FAMILY}};
 }
 
-.notif-low {
-  border-left-color: {{STYLE_COLOR_NOTIFICATION_LOW_BORDER}};
+// ---------------------------------------------------------------------
+// DIE DRINGLICHKEIT, UND WARUM SIE SEIT DEM 01.09.2026 IN DER SCHRIFT
+// STEHT UND NICHT MEHR AM RAND
+// ---------------------------------------------------------------------
+//
+// BESTELLT, woertlich: "entferne bitte diese daemlichen seitenlinien bei
+// den benachrichtigungen, die sehen auch so schon gut aus". Hier stand
+// `border-left: 3px solid $accent` an der Karte und darunter drei
+// Faelle, die nur seine Farbe austauschten.
+//
+// DER STREIFEN HAT ETWAS GETRAGEN, UND ZWAR ALLEIN
+//     GEMESSEN am 01.09.2026 an genau diesen vier Regeln: bei NIEDRIG
+//     und NORMAL war die Streifenfarbe der EINZIGE Unterschied - Grund,
+//     Rahmen, Rundung, Abstand und jede Schriftfarbe waren Zeichen fuer
+//     Zeichen gleich. Nur KRITISCH trug zusaetzlich `border-color` und
+//     `background`. Waere der Streifen ersatzlos gefallen, saehen zwei
+//     der drei Stufen identisch aus. Der Nutzer hat die Warnung gehoert
+//     und entschieden: ganz weg, Dringlichkeit anders zeigen.
+//
+// DAS NEUE MERKMAL IST DIE FARBE DER KOPFZEILE
+//     Also `.notif-summary`, die eine Zeile, die JEDE Meldung hat - ein
+//     Rumpf kann fehlen (ags-notifications.template haengt
+//     `.notif-body` nur an, wenn `body` etwas enthaelt), eine
+//     Zusammenfassung nicht.
+//
+//     KEIN FESTER WERT: die drei Namen fuehrt src/brand.py in der
+//     Gruppe "Benachrichtigungen" seit jeher -
+//     notification_low_text (TEXT_DIM), notification_text (TEXT),
+//     notification_critical_text (RED). Sie standen bis heute nur in
+//     mako-config.template, und generate_config.sh MASKIERT mako
+//     ("AGS handles notifications"): der Nutzer konnte diese Farben in
+//     den Einstellungen verstellen, ohne dass ein sichtbares Byte sich
+//     bewegte. Das ist derselbe Fehler, den der Kopf von
+//     tests/settings/test_settings_bridge.py mit den neunundzwanzig
+//     Farben des Stil-Editors beschreibt. Sie bekommen hier ihren
+//     ersten Leser, der wirklich auf dem Schirm landet.
+//
+// WARUM NICHT DER RAHMEN DER GANZEN KARTE
+//     Er waere derselbe Streifen, nur einmal herum - mehr Zierat statt
+//     weniger, und bestellt war weniger. Und er traegt die Auskunft
+//     nicht: GERECHNET am 01.09.2026 misst notification_low_border
+//     (SHADE_1 #214F59) auf dieser Platte 1.14:1 im Thema ZeptronIT und
+//     1.03:1 unter Tageslicht. WCAG 2.1 SC 1.4.11 verlangt 3:1 fuer
+//     einen Umriss, der etwas bedeutet. Ein Rand, den man nicht sieht,
+//     ist kein Merkmal.
+//
+// DIE KONTRASTE, gerechnet wie tests/src/test_glass.py rechnet:
+// Schrift auf der Glasplatte der Karte, ueber der hellsten UND der
+// dunkelsten denkbaren Tapete, der schlechtere Wert zaehlt.
+//
+//     Stufe      Rolle                        ZeptronIT  Tageslicht
+//     niedrig    notification_low_text          5.73       5.42
+//     normal     notification_text              8.64      12.06
+//     kritisch   notification_text (s. o.)      8.43      10.97
+//
+// Alle drei ueber den 4.5:1, die WCAG 2.1 SC 1.4.3 fuer Fliesstext
+// verlangt. Die zwei Rollen, die neu auf dieser Platte schreiben,
+// stehen jetzt in GLASS_PLATES["notifications"].text - damit rechnet
+// test_glass.py sie bei jedem Lauf und ueber jedes Thema nach, statt
+// dass diese Tabelle das letzte Wort waere.
+//
+// DER UNTERSCHIED ZWISCHEN NIEDRIG UND NORMAL IST DER, DEN DIESER
+// SCHREIBTISCH UEBERALL BENUTZT: TEXT_DIM gegen TEXT, dieselbe Stufe,
+// mit der jede Nebenzeile sich von ihrem Wert abhebt. Eine niedrige
+// Meldung ist damit durchgehend gedaempft (Kopfzeile, Rumpf, Name und
+// Zeit tragen dieselbe Farbe), eine normale hat wieder eine helle
+// Kopfzeile ueber gedaempftem Rumpf.
+.notif-low .notif-summary {
+  color: {{STYLE_COLOR_NOTIFICATION_LOW_TEXT}};
 }
 
-.notif-normal {
-  border-left-color: {{STYLE_COLOR_NOTIFICATION_BORDER}};
+.notif-normal .notif-summary {
+  color: {{STYLE_COLOR_NOTIFICATION_TEXT}};
+}
+
+// DIE KRITISCHE KARTE STEHT HIER, OBWOHL SIE HEUTE NICHTS AENDERT
+//     Ohne diese Regel erbt sie `.notif-summary` weiter unten, und das
+//     ist `$text` - also `overlay_text`, heute Byte fuer Byte derselbe
+//     Wert wie `notification_text`. Sie steht trotzdem da, weil das
+//     ZWEI Farben des Nutzers sind: wer in den Einstellungen die Gruppe
+//     "Benachrichtigungen" umfaerbt, soll ALLE DREI Karten bewegen und
+//     nicht zwei. Eine Stufe, die als einzige aus einer anderen Gruppe
+//     liest, ist genau der Regler, der spaeter nichts tut.
+//
+//     Zwei Klassennamen schlagen den einen von `.notif-summary` in
+//     jeder Reihenfolge - deshalb braucht dieser Block keine bestimmte
+//     Stelle im Blatt, und deshalb steht er bei seinen Geschwistern.
+.notif-critical .notif-summary {
+  color: {{STYLE_COLOR_NOTIFICATION_TEXT}};
 }
 
 .notif-critical {
-  border-left-color: {{STYLE_COLOR_NOTIFICATION_CRITICAL_BORDER}};
   border-color: {{STYLE_COLOR_NOTIFICATION_CRITICAL_BORDER}};
   background: {{STYLE_GLASS_NOTIFICATION_CRITICAL}};
 }
@@ -3127,8 +3218,17 @@ modelbutton {
 //
 // `.notif-app-firefox { border-left-color: #ff7139 }` und acht
 // Geschwister, alle auf border-left-color - also auf GENAU der
-// Eigenschaft, mit der drei Zeilen weiter oben die Dringlichkeit
-// geschrieben wird.
+// Eigenschaft, mit der weiter oben damals die Dringlichkeit
+// geschrieben wurde.
+//
+// GEPRUEFT am 01.09.2026, bevor der Seitenrand fiel, ob dieser Block
+// noch irgendwo BENUTZT wird: `grep -rn "notif-app" src/ tests/ out/`
+// findet ausser "notif-app-name" (der Anwendungsname als Text, eine
+// andere Klasse) nur diesen Grabstein und seinen Zwilling in
+// ags-notifications.template. Es gibt keine Klasse `.notif-app-<name>`,
+// die jemand vergibt, und keine Tabelle, aus der sie kaeme - APP_COLORS
+// ist am 12.08.2026 mitgegangen. Mit dem Seitenrand faellt also nichts
+// mit, was noch in Gebrauch waere.
 //
 // DAS WAR KEIN GESCHMACKSFEHLER, SONDERN EINE UEBERSCHREIBUNG
 //     `.notif-critical` und `.notif-app-firefox` sind beide EIN
@@ -3150,9 +3250,11 @@ modelbutton {
 //     "volume", "battery" und "screenshot" sind ohnehin keine
 //     Anwendungen, sondern eigene Meldungen dieses Systems.
 //
-// Ein Kanal, eine Aussage: der Rand links sagt, wie dringend es ist.
-// Die Tabelle APP_COLORS in ags-notifications.template, aus der die
-// Klassennamen kamen, ist mitgegangen.
+// Ein Kanal, eine Aussage - seit dem 01.09.2026 ist dieser Kanal die
+// Farbe der Kopfzeile und nicht mehr der Rand links, der Kanal selbst
+// ist derselbe geblieben. Die Tabelle APP_COLORS in
+// ags-notifications.template, aus der die Klassennamen kamen, ist
+// mitgegangen.
 
 // ===== SESSION (die Sitzungsmaske, Aufgabe 26, 19.08.2026) =====
 //

@@ -372,6 +372,120 @@ def glass_ignore_alpha(panel: float) -> float:
     return round(panel / 2, 2)
 
 
+# DIE DECKKRAFT, MIT DER FREMDE GTK4-FENSTER IHRE NEBENZEILEN MALEN
+#
+# GEMELDET am 01.09.2026, woertlich: "die einstellungen sind irgendwie
+# verbuggt, die schrift ist so blass, man kann sie kaum sehen".
+#
+# WAS WIRKLICH PASSIERT, GEMESSEN AM SELBEN TAG
+#     Nicht die Palette ist blass. libadwaita 1.9.3 malt jede Nebenzeile
+#     mit einer DECKKRAFT und nicht mit einer Farbe. Aus seinem eigenen
+#     Blatt, geholt mit
+#
+#         gresource extract /usr/lib/libadwaita-1.so.0 \
+#           /org/gnome/Adwaita/styles/gtk.css
+#
+#         :root { --border-opacity: 15%; --dim-opacity: 55%;
+#                 --disabled-opacity: 50%; }
+#
+#         .dimmed, row label.subtitle, .dim-label, headerbar .subtitle,
+#         windowtitle .subtitle, entry > text > placeholder,
+#         label.separator { opacity: var(--dim-opacity); }
+#
+#     `@define-color dimmed_color` wird fuer diese Knoten NIE gelesen -
+#     der Kopf von gtk4-colors-config.template sagt das seit dem
+#     12.08.2026 ("`--dimmed-color` gibt es ueberhaupt nicht; 1.9 blendet
+#     mit `--dim-opacity` ab"), nur hat bis heute niemand daraus etwas
+#     gefolgert.
+#
+#     Was 55 % auf DIESER Palette ergeben, WCAG 2.1 SC 1.4.3 verlangt
+#     4.5:1 fuer Fliesstext:
+#
+#         Grund                        ZeptronIT   Tageslicht
+#         Fenster / Kopfleiste / Popover   4.15        4.17
+#         Zeile einer boxed-list           4.52        3.95
+#         Ansicht (view_bg)                4.96        4.07
+#
+#     Fuenf von sechs Zeilen unter der Linie. Der Nutzer hat recht, und
+#     es ist kein Fehler SEINES Fensters: es trifft jedes GTK4-Fenster
+#     auf diesem Rechner, weil diese Zahl in libadwaitas :root steht und
+#     nicht in unserem.
+#
+# ABGELEITET UND NICHT GEWAEHLT
+#     Dieser Schreibtisch HAT eine zweite Textstufe, und sie ist
+#     gerechnet: TEXT_DIM, dieselbe, mit der jede Nebenzeile jeder
+#     AGS-Flaeche schreibt (6.57:1 auf Petrol). Die richtige Deckkraft
+#     ist deshalb nicht "die kleinste, die 4.5 gerade noch traegt" -
+#     das waere 59 % bzw. 60 % und damit ein Wert, der auf der Linie
+#     BALANCIERT (4.53:1 und 4.63:1, ohne Luft) - sondern die, bei der
+#     die Vordergrundfarbe auf dem Grund GENAU DIESE zweite Stufe
+#     ergibt.
+#
+#     Dann ist die Nebenzeile eines fremden GTK4-Fensters dieselbe
+#     Nebenzeile wie ueberall sonst, und sie kann nicht unter die Linie
+#     rutschen, solange TEXT_DIM darueber liegt - was
+#     tests/src/test_brand.py ohnehin haelt.
+#
+#     Die Rechnung ist eine Alphamischung, nach Kanal umgestellt:
+#
+#         dimmed = a * vorder + (1 - a) * grund
+#         a      = (dimmed - grund) / (vorder - grund)
+#
+#     Die drei Kanaele ergeben nicht genau dasselbe a, weil TEXT_DIM ein
+#     eigener Farbton ist und keine Mischung dieser beiden - gemessen
+#     0.754 / 0.774 / 0.786 unter ZeptronIT und 0.804 / 0.730 / 0.710
+#     unter Tageslicht. Der Mittelwert ist die beste Mischung, die es
+#     gibt; die Streuung ist mit drei bzw. neun Hundertsteln klein genug,
+#     dass kein Kanal ausreisst.
+#
+#     GEMESSEN, was dabei herauskommt - schlechtester Grund je Thema:
+#
+#         ZeptronIT    77 %   6.56:1   (statt 4.15:1)
+#         Tageslicht   75 %   7.60:1   (statt 3.95:1)
+#
+#     tests/src/test_brand.py rechnet beide Zeilen nach, ueber jedes
+#     Thema und ueber jeden Grund, den gtk4-colors-config.template setzt.
+#
+# WAS AUSDRUECKLICH NICHT MITGEHOBEN WIRD
+#     `--disabled-opacity` (50 %, also 3.70:1 auf dem Fenstergrund) und
+#     `--border-opacity` (15 %). Ein abgeschaltetes Bedienelement SOLL
+#     abgeschaltet aussehen, und WCAG 2.1 nimmt es unter 1.4.3 woertlich
+#     aus ("inactive user interface components ... have no contrast
+#     requirement"). Eine Trennlinie zwischen zwei Zeilen ist Zierat und
+#     traegt keine Auskunft; 1.4.11 gilt fuer sie nicht. Sie zu heben
+#     hiesse, den Unterschied zwischen "aus" und "an" einzuebnen, um
+#     eine Regel zu erfuellen, die dafuer nicht geschrieben ist.
+#
+# EINE FUNKTION, aus demselben Grund wie glass_solo_alpha() weiter oben:
+# jedes Thema bringt seine eigenen drei Farben mit, und eine Konstante
+# hier haette fuer das zweite Thema den falschen Wert.
+def dim_opacity(foreground: str, ground: str, dimmed: str) -> str:
+    """Die Deckkraft, bei der `foreground` auf `ground` wie `dimmed`
+    aussieht - als CSS-Prozentzahl.
+
+    PROZENT UND KEIN BRUCH, und das ist keine Kosmetik: libadwaita liest
+    diese Variable an zwei Stellen, und eine davon ist
+    `color-mix(in srgb, currentColor var(--dim-opacity), transparent)`.
+    color-mix nimmt in seinem zweiten Argument NUR einen Prozentwert; ein
+    blosses `0.77` laesst die ganze Deklaration ungueltig werden, und
+    zwar lautlos.
+    """
+    def channels(colour: str) -> tuple[int, int, int]:
+        value = colour.lstrip("#")
+        return tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
+
+    oben, unten, ziel = (channels(c) for c in (foreground, ground, dimmed))
+    anteile = [(ziel[index] - unten[index]) / (oben[index] - unten[index])
+               for index in range(3) if oben[index] != unten[index]]
+    # Ein Grund, der dem Vordergrund auf allen drei Kanaelen gleicht, ist
+    # keine Flaeche, auf der man lesen kann - dann gibt es auch keine
+    # Deckkraft, die etwas rettet, und libadwaitas eigener Wert bleibt.
+    if not anteile:
+        return "55%"
+    mittel = sum(anteile) / len(anteile)
+    return f"{round(max(0.0, min(1.0, mittel)) * 100)}%"
+
+
 def rgba(colour: str, alpha: float) -> str:
     """A brand colour as a CSS rgba(), for the surfaces that are glass.
 
