@@ -1023,7 +1023,7 @@ def empty_home(config: Path) -> None:
         einen echten Rest verstecken koennen; ein unbeteiligtes Fenster
         leer zu lassen kann das nicht.
 
-        Dass das Home ueberhaupt zeichnet, misst tests/render/test_home.py
+        Dass das Home ueberhaupt zeichnet, misst tests/render/test_home_flaeche.py
         - dort mit Symbolen, und dort gehoert es hin.
 
     Geschrieben wird die ECHTE Einstellungsdatei an der Stelle, an der

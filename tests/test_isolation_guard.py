@@ -743,3 +743,53 @@ def test_the_conftest_the_suite_imports_by_name_is_the_isolation_guard():
         f"`import conftest` hat {loaded} geladen und nicht {expected}")
     assert hasattr(conftest, "PROTECTED_PREFIXES")
     assert hasattr(conftest, "_is_protected")
+
+
+def test_kein_testmodul_traegt_den_namen_eines_anderen():
+    """Zwei gleich benannte Testdateien teilen die Sammlung in zwei.
+
+    WAS GEMESSEN WURDE, 22.08.2026
+        `pytest` ohne Argumente brach beim Sammeln ab:
+
+            import file mismatch:
+            imported module 'test_home' has this __file__ attribute:
+              tests/render/test_home.py
+            which is not the same as the test file we want to collect:
+              tests/src/test_home.py
+
+        Kein Verzeichnis unter tests/ traegt eine __init__.py - das ist
+        Absicht, weil sonst jede Datei ueber einen Paketpfad importiert
+        wuerde -, und ohne sie ist der MODULNAME einer Testdatei ihr
+        blosser Dateiname. Zwei davon koennen nicht gleichzeitig im
+        Interpreter stehen.
+
+        Die Folge war nicht ein Fehler, sondern eine geteilte Sammlung:
+        die Anleitung dieses Baums beschrieb zwei Aufrufe und eine
+        Addition von Hand, damit ueberhaupt jede Datei einmal laeuft. Ein
+        Lauf, den man addieren muss, ist ein Lauf, bei dem jemand eines
+        Tages die zweite Haelfte vergisst.
+
+    Behoben wurde es durch Umbenennen (tests/render/test_home.py heisst
+    jetzt test_home_flaeche.py, nach dem, was sie misst); dieser Test ist
+    die Sperre dagegen, dass es wiederkommt. Er zaehlt Dateien und
+    braucht dafuer keine Sammlung - er faellt also auch dann, wenn der
+    Zusammenstoss den Sammellauf gerade wieder abbricht.
+    """
+    tests = pathlib.Path(__file__).resolve().parent
+
+    nach_namen: dict[str, list[str]] = {}
+    for path in sorted(tests.rglob("test_*.py")):
+        nach_namen.setdefault(path.stem, []).append(
+            path.relative_to(tests).as_posix())
+
+    doppelt = {name: pfade for name, pfade in nach_namen.items()
+               if len(pfade) > 1}
+
+    assert doppelt == {}, (
+        "diese Testdateien tragen denselben Namen wie eine andere: "
+        + "; ".join(f"{name}: {', '.join(pfade)}"
+                    for name, pfade in sorted(doppelt.items()))
+        + ". Ohne __init__.py ist der Dateiname der Modulname, und pytest "
+        "bricht das Sammeln mit 'import file mismatch' ab - die Sammlung "
+        "laesst sich dann nur noch in zwei Aufrufen abdecken. Eine der "
+        "beiden umbenennen, nach dem, was sie misst.")

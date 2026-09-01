@@ -682,10 +682,6 @@ nothing found while writing this file was left out.
   stylesheet never resets — is structurally invisible to it. The white ring the
   system theme drew around the dock icons was the first one found that way, and
   it was found by a person looking at a screen.
-- **The suite cannot be collected in one call.** `tests/render/test_home.py` and
-  `tests/src/test_home.py` share a basename, and pytest imports test modules by
-  basename, so the second one it reaches is an import mismatch. Counting the
-  suite needs two commands — see [Tests](#tests). Open since 0.1.8.
 - **A Home that has been emptied completely keeps its last picture** until
   something else redraws it. Open since 0.1.8.
 - **The gap between icon and text in the three right-click menus visibly varies
@@ -699,17 +695,28 @@ nothing found while writing this file was left out.
   modules and its own notifications are switched off because they reach for the
   same adapter as the bar. A ZepOS pairing agent as an AGS window is in
   progress; until it lands, one surface on this desktop is somebody else's.
-- **The state of the suite as of 24.08.2026**, so that a green run is not
-  assumed: 3254 passed, 13 skipped, and eight that are not green.
-  `test_no_program_opens_a_layer_shell_window_without_a_rule` fails on a *build
-  leftover* under `iso/work/` rather than on source — the guard reads the whole
-  tree, and an unclean `iso/work/` puts a second copy of `zepos-menu` in front
-  of it. `tests/src/test_home.py` is the collection error above. The remaining
-  six are `tests/render/test_schale_stil.py`, whose module fixture waits up to
-  45 s for the control-centre surface and sometimes does not get it; the file
-  itself records the measurement and names the suspect (an unconditional
-  `grab_focus()` on the VPN page that fires whenever the shell opens, whichever
-  page is showing).
+- **The state of the suite as of 22.08.2026**, so that a green run is not
+  assumed: 3521 passed, 3 skipped, 5 failed, collected and run in one call.
+  - `tests/render/test_menue.py::test_das_menue_traegt_die_drei_punkte_einer_anheftung`
+    — known since 0.1.11, the dock menu of a pinned application.
+  - `tests/packaging/test_recipes.py::test_no_private_key_material_is_in_the_working_tree_outside_the_ignored_directory`
+    — a **false positive**, and an instructive one. The offender is a report
+    under `.superpowers/` that names the header line of an OpenVPN static key
+    while *describing the guard*. The guard searches for the bare header, not
+    for the five-dash PEM delimiters an actual key file carries, so any document
+    that names a key format trips it. No key material is in the tree. Left
+    alone deliberately: a guard is not softened to make it quiet.
+  - Three more come from an **unfinished bar module in the working tree**
+    (`src/templates/bar-vpn-config.template`, untracked) and not from committed
+    source: both template counters (`test_inventory.py`,
+    `test_new_templates.py`, 91 where 90 is written down) and
+    `test_naming.py::test_no_artifact_defaults_the_system_root_to_a_guess`,
+    which matches `/usr/share/zepos` in the very comment explaining why that
+    path must not be used — the same class of false positive as the one above.
+  - `tests/render/test_schale_stil.py` is *flaky*, not red: its module fixture
+    waits up to 45 s for the control-centre surface and sometimes does not get
+    it (six errors in one run on this machine, none in the next). The file
+    records the measurement and names the suspect.
 
 ### What no test covers
 
@@ -968,23 +975,23 @@ python -m venv .venv
 .venv/bin/python -m pytest
 ```
 
-**3303 tests in 132 files**, counted 24.08.2026. They need nothing but Python
-and pytest; tests that would need QEMU, OVMF, a built package repository or a
-real Hyprland skip themselves when those are absent.
+**3529 tests in 141 files**, counted 22.08.2026 in a single
+`pytest --collect-only -q` on the committed tree. Many of them are parametrised
+over `src/templates/`, so an unfinished template lying in the working tree
+moves the total. They need nothing but Python and pytest; tests that
+would need QEMU, OVMF, a built package repository or a real Hyprland skip
+themselves when those are absent.
 
-Counting them takes two commands rather than one, and that is a bug, not a
-style: `tests/render/test_home.py` and `tests/src/test_home.py` share a
-basename, so a single `pytest --collect-only` stops with an import mismatch
-after 3274 of them. Until one of the two is renamed:
+One call collects all of them, since 22.08.2026. It used to take two:
+`tests/render/test_home.py` and `tests/src/test_home.py` shared a basename, and
+without an `__init__.py` a test file's module name is its bare filename, so the
+second one pytest reached was an import mismatch. The render half is now
+`tests/render/test_home_flaeche.py`, after what it measures, and
+`tests/test_isolation_guard.py::test_kein_testmodul_traegt_den_namen_eines_anderen`
+refuses a second duplicate.
 
-```bash
-.venv/bin/python -m pytest --collect-only -q --continue-on-collection-errors  # 3274
-.venv/bin/python -m pytest --collect-only -q tests/src/test_home.py           # +29
-```
-
-A full run on 24.08.2026 took **11 min 55 s** and ended 3254 passed, 13
-skipped, 1 failed, 7 errors — see [Known limits](#known-limits) for what those
-eight are.
+A full run on 22.08.2026 took **12 min 33 s** and ended 3521 passed, 3 skipped,
+5 failed — see [Known limits](#known-limits) for what those five are.
 
 **There is no CI.** `.github/` holds issue and pull-request templates and no
 workflows. Nothing runs these tests unless a person runs them, which is exactly
@@ -1105,7 +1112,7 @@ four days, and they are marked below.
 
 | Number | How it was obtained |
 |---|---|
-| 3303 tests, 132 files ← *was 3121 / 121* | `pytest --collect-only -q --continue-on-collection-errors` (3274) **plus** the same on `tests/src/test_home.py` (29), because those two cannot be collected in one call; `find tests -name 'test_*.py' \| wc -l` |
+| 3529 tests, 141 files ← *was 3303 / 132* | `pytest --collect-only -q` in **one** call, since the duplicate basename was renamed away on 22.08.2026; `find tests -name 'test_*.py' \| wc -l` |
 | 19 recipes, 24 packages | every `pkgname=` in `packaging/*/PKGBUILD`; the published `manifest.txt` lists 24 |
 | 88 templates, 8 stylesheet templates ← *was 85 / 7* | `ls src/templates \| wc -l`, `ls src/styles \| wc -l` |
 | 98 generation targets ← *was 94* | `zepos-generate --help \| grep -c '^  -[a-z]'` |
@@ -1119,6 +1126,6 @@ four days, and they are marked below.
 | 3.45:1 and 6.04:1 | `src/brand.py`, recomputed by the tests on every run |
 | ~40 ms for a pin to arrive everywhere | measured for release 0.1.8, in all three directions |
 | Published 0.1.9, 24 packages, key, build time ← *was 0.1.3* | fetched from `https://zeptronit.github.io/ZepOS/manifest.txt` |
-| 3254 passed / 13 skipped / 1 failed / 7 errors in 11 min 55 s | `.venv/bin/python -m pytest -q --continue-on-collection-errors`, 24.08.2026 |
+| 3521 passed / 3 skipped / 5 failed in 12 min 33 s | `.venv/bin/python -m pytest -q` — one call, no `--continue-on-collection-errors` needed any more, 22.08.2026 |
 | 28 pictures, 4 995 994 bytes = 4.76 MiB | `du -cb docs/bilder/*.webp docs/bilder/*.gif`; of these **16 recordings** (15 animated WebP, 3 352 374 bytes, plus `dateien-finden.gif`, 806 856 bytes) and **12 stills** (836 764 bytes). Three show a whole 1920×1080 desktop, one a whole 1366×768 one, four are 1280×800 out of QEMU, the rest are cropped to the window they show — `magick identify` on the committed files, not on the setting that produced them |
 | Every conversion to WebP lossless | `magick compare -metric AE` printed `0` for every picture converted whole |

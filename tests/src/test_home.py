@@ -9,7 +9,7 @@ WAS HIER GEPRUEFT WIRD UND WAS NICHT
     Die andere Haelfte - liegt die Flaeche wirklich auf `bottom`,
     scheint die Tapete wirklich hindurch, bleibt ein Klick auf ein
     Fenster wirklich beim Fenster - laesst sich nur an einem laufenden
-    Compositor messen und steht in tests/render/test_home.py.
+    Compositor messen und steht in tests/render/test_home_flaeche.py.
 
 WARUM DIE REGELN UEBERHAUPT IN PYTHON STEHEN UND NICHT IM WIDGET
     Weil das Dock dieselbe Frage stellt ("gehoert dieser Name auf diese
@@ -48,7 +48,7 @@ def _document(icons=None, baseline=None):
 # Die drei Werte, an denen die Bedienbarkeit der Sitzung haengt
 # --------------------------------------------------------------------
 #
-# WARUM SIE HIER STEHEN UND NICHT NUR IN tests/render/test_home.py
+# WARUM SIE HIER STEHEN UND NICHT NUR IN tests/render/test_home_flaeche.py
 #     Der Render-Test misst sie am laufenden Compositor und ist die
 #     staerkere Aussage - er braucht aber Hyprland, swaybg und grim und
 #     wird auf einer Maschine ohne sie UEBERSPRUNGEN. Ein uebersprungener

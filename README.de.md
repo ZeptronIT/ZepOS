@@ -715,11 +715,6 @@ und nichts, was beim Schreiben dieser Datei gefunden wurde, ist weggelassen.
   unsichtbar. Der weiße Ring, den das Systemthema um die Dock-Symbole malte, war
   der erste Fund dieser Art, und gefunden hat ihn ein Mensch vor einem
   Bildschirm.
-- **Die Suite lässt sich nicht in einem Aufruf sammeln.**
-  `tests/render/test_home.py` und `tests/src/test_home.py` tragen denselben
-  Basisnamen, und pytest importiert Testdateien über ihren Basisnamen – die
-  zweite, die es erreicht, ist ein Import-Konflikt. Zählen braucht zwei
-  Befehle, siehe [Tests](#tests). Offen seit 0.1.8.
 - **Ein vollständig geleertes Home behält sein letztes Bild**, bis etwas
   anderes es neu zeichnet. Offen seit 0.1.8.
 - **Der Abstand zwischen Symbol und Text schwankt in den drei
@@ -734,18 +729,31 @@ und nichts, was beim Schreiben dieser Datei gefunden wurde, ist weggelassen.
   sind abgeschaltet, weil sie denselben Adapter anfassen wie die Leiste. Ein
   eigener Kopplungsagent als AGS-Fenster ist in Arbeit; bis dahin gehört eine
   Fläche auf diesem Schreibtisch jemand anderem.
-- **Der Stand der Suite am 24.08.2026**, damit ein grüner Lauf nicht
-  vorausgesetzt wird: 3254 bestanden, 13 übersprungen und acht, die nicht grün
-  sind. `test_no_program_opens_a_layer_shell_window_without_a_rule` fällt über
-  einen *Bauabfall* unter `iso/work/` und nicht über Quelltext – der Wächter
-  liest den ganzen Baum, und ein unaufgeräumtes `iso/work/` legt ihm eine
-  zweite Kopie von `zepos-menu` vor. `tests/src/test_home.py` ist der
-  Sammelfehler von oben. Die restlichen sechs sind
-  `tests/render/test_schale_stil.py`, dessen Modulvorrichtung bis zu 45 s auf
-  die Fläche des Kontrollzentrums wartet und sie manchmal nicht bekommt; die
-  Datei selbst hält die Messung fest und benennt den Verdächtigen (ein
-  bedingungsloses `grab_focus()` auf der VPN-Seite, das bei jedem Öffnen der
-  Schale feuert, welche Seite auch immer gerade sichtbar ist).
+- **Der Stand der Suite am 22.08.2026**, damit ein grüner Lauf nicht
+  vorausgesetzt wird: 3521 bestanden, 3 übersprungen, 5 fehlgeschlagen, in
+  einem Aufruf gesammelt und gefahren.
+  - `tests/render/test_menue.py::test_das_menue_traegt_die_drei_punkte_einer_anheftung`
+    – bekannt seit 0.1.11, das Fußmenü einer angehefteten Anwendung.
+  - `tests/packaging/test_recipes.py::test_no_private_key_material_is_in_the_working_tree_outside_the_ignored_directory`
+    – ein **Fehlalarm**, und ein lehrreicher. Der Anstoß ist ein Bericht unter
+    `.superpowers/`, der die Kopfzeile eines statischen OpenVPN-Schlüssels
+    nennt, *während er den Wächter beschreibt*. Der Wächter sucht nach der
+    bloßen Kopfzeile und nicht nach den fünf Bindestrichen, die eine echte
+    Schlüsseldatei trägt – also fällt jedes Dokument darauf, das ein
+    Schlüsselformat benennt. Es liegt kein Schlüsselmaterial im Baum. Bewusst
+    nicht angefasst: ein Wächter wird nicht aufgeweicht, damit er schweigt.
+  - Drei weitere kommen aus einem **unfertigen Leisten-Modul im Arbeitsbaum**
+    (`src/templates/bar-vpn-config.template`, unvorgemerkt) und nicht aus
+    eingechecktem Quelltext: beide Vorlagenzähler (`test_inventory.py`,
+    `test_new_templates.py`, 91 wo 90 aufgeschrieben steht) und
+    `test_naming.py::test_no_artifact_defaults_the_system_root_to_a_guess`,
+    das `/usr/share/zepos` ausgerechnet in dem Kommentar findet, der erklärt,
+    warum dieser Pfad dort nicht stehen darf – derselbe Fehlalarm-Typ wie oben.
+  - `tests/render/test_schale_stil.py` ist *unstet*, nicht rot: seine
+    Modulvorrichtung wartet bis zu 45 s auf die Fläche des Kontrollzentrums und
+    bekommt sie manchmal nicht (sechs Fehler in einem Lauf auf dieser Maschine,
+    keiner im nächsten). Die Datei hält die Messung fest und benennt den
+    Verdächtigen.
 
 ### Was kein Test abdeckt
 
@@ -1023,24 +1031,25 @@ python -m venv .venv
 .venv/bin/python -m pytest
 ```
 
-**3303 Tests in 132 Dateien**, gezählt am 24.08.2026. Sie brauchen nichts außer
-Python und pytest; Tests, die QEMU, OVMF, ein gebautes Paketrepository oder ein
-echtes Hyprland bräuchten, überspringen sich selbst, wenn das fehlt.
+**3529 Tests in 141 Dateien**, am 22.08.2026 in einem einzigen
+`pytest --collect-only -q` über den eingecheckten Baum gezählt. Viele davon
+sind über `src/templates/` parametrisiert – eine unfertige Vorlage im
+Arbeitsbaum verschiebt die Summe. Sie brauchen nichts außer Python und
+pytest; Tests, die QEMU, OVMF, ein gebautes Paketrepository oder ein echtes
+Hyprland bräuchten, überspringen sich selbst, wenn das fehlt.
 
-Sie zu zählen braucht zwei Befehle statt einen, und das ist ein Fehler und
-keine Marotte: `tests/render/test_home.py` und `tests/src/test_home.py` tragen
-denselben Basisnamen, und ein einzelnes `pytest --collect-only` bricht deshalb
-nach 3274 davon mit einem Import-Konflikt ab. Bis eine der beiden umbenannt
-ist:
+Ein Aufruf sammelt alle, seit dem 22.08.2026. Es waren zwei:
+`tests/render/test_home.py` und `tests/src/test_home.py` trugen denselben
+Basisnamen, und ohne `__init__.py` ist der Modulname einer Testdatei ihr bloßer
+Dateiname – die zweite, die pytest erreichte, war ein Import-Konflikt. Die
+Bildhälfte heißt jetzt `tests/render/test_home_flaeche.py`, nach dem, was sie
+misst, und
+`tests/test_isolation_guard.py::test_kein_testmodul_traegt_den_namen_eines_anderen`
+weist eine zweite Doppelung ab.
 
-```bash
-.venv/bin/python -m pytest --collect-only -q --continue-on-collection-errors  # 3274
-.venv/bin/python -m pytest --collect-only -q tests/src/test_home.py           # +29
-```
-
-Ein vollständiger Lauf am 24.08.2026 dauerte **11 min 55 s** und endete mit
-3254 bestanden, 13 übersprungen, 1 fehlgeschlagen, 7 Fehler – was diese acht
-sind, steht unter [Was heute nicht geht](#was-heute-nicht-geht).
+Ein vollständiger Lauf am 22.08.2026 dauerte **12 min 33 s** und endete mit
+3521 bestanden, 3 übersprungen, 5 fehlgeschlagen – was diese fünf sind, steht
+unter [Was heute nicht geht](#was-heute-nicht-geht).
 
 **Es gibt kein CI.** `.github/` enthält Vorlagen für Issues und Pull Requests
 und keine Workflows. Diese Tests laufen nur, wenn ein Mensch sie startet – und
@@ -1169,7 +1178,7 @@ vier Tage später überholt, und sie sind unten gekennzeichnet.
 
 | Zahl | Wie sie zustande kam |
 |---|---|
-| 3303 Tests, 132 Dateien ← *war 3121 / 121* | `pytest --collect-only -q --continue-on-collection-errors` (3274) **plus** derselbe Aufruf auf `tests/src/test_home.py` (29), weil die beiden sich nicht zusammen sammeln lassen; `find tests -name 'test_*.py' \| wc -l` |
+| 3529 Tests, 141 Dateien ← *war 3303 / 132* | `pytest --collect-only -q` in **einem** Aufruf, seit der doppelte Basisname am 22.08.2026 weg ist; `find tests -name 'test_*.py' \| wc -l` |
 | 19 Rezepte, 24 Pakete | jede `pkgname=`-Zeile in `packaging/*/PKGBUILD`; die veröffentlichte `manifest.txt` listet 24 |
 | 88 Vorlagen, 8 Stilvorlagen ← *war 85 / 7* | `ls src/templates \| wc -l`, `ls src/styles \| wc -l` |
 | 98 Erzeugungsziele ← *war 94* | `zepos-generate --help \| grep -c '^  -[a-z]'` |
@@ -1183,6 +1192,6 @@ vier Tage später überholt, und sie sind unten gekennzeichnet.
 | 3,45:1 und 6,04:1 | `src/brand.py`, von den Tests bei jedem Lauf neu gerechnet |
 | rund 40 ms, bis eine Anheftung überall ankommt | für Freigabe 0.1.8 gemessen, in allen drei Richtungen |
 | Veröffentlicht 0.1.9, 24 Pakete, Schlüssel, Bauzeit ← *war 0.1.3* | abgefragt bei `https://zeptronit.github.io/ZepOS/manifest.txt` |
-| 3254 bestanden / 13 übersprungen / 1 fehlgeschlagen / 7 Fehler in 11 min 55 s | `.venv/bin/python -m pytest -q --continue-on-collection-errors`, 24.08.2026 |
+| 3521 bestanden / 3 übersprungen / 5 fehlgeschlagen in 12 min 33 s | `.venv/bin/python -m pytest -q` — ein Aufruf, `--continue-on-collection-errors` ist nicht mehr nötig, 22.08.2026 |
 | 28 Bilder, 4 995 994 Byte = 4,76 MiB | `du -cb docs/bilder/*.webp docs/bilder/*.gif`; davon **16 Aufnahmen** (15 animiertes WebP, 3 352 374 Byte, plus `dateien-finden.gif`, 806 856 Byte) und **12 Standbilder** (836 764 Byte). Drei zeigen einen ganzen Schreibtisch in 1920×1080, einer einen in 1366×768, vier sind 1280×800 aus QEMU, die übrigen sind auf das gezeigte Fenster zugeschnitten – `magick identify` auf den eingecheckten Dateien, nicht auf der Einstellung, die sie erzeugt hat |
 | Jede Umwandlung nach WebP verlustfrei | `magick compare -metric AE` gab für jedes ganz umgewandelte Bild `0` |
