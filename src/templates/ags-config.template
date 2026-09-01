@@ -29,7 +29,11 @@ import DiskUsage from "./widget/DiskUsage"
 import ControlCenter from "./widget/ControlCenter"
 import WallpaperSelector from "./widget/WallpaperSelector"
 import StyleEditor from "./widget/StyleEditor"
-import VpnSettings from "./widget/VpnSettings"
+// oeffneVerbindung seit dem 01.09.2026: "ags request vpn-settings:<id>"
+// sagt dem Fenster, WELCHE Verbindung es zeigen soll - siehe den Zweig
+// im requestHandler unten und die Begruendung bei gewuenschteKennung in
+// ags-vpn-settings.template.
+import VpnSettings, { oeffneVerbindung } from "./widget/VpnSettings"
 // Die Einstellungen als eigenes AGS-Fenster - Aufgabe 32 (19.08.2026),
 // bestellt am 18.08.2026 ("ich will auch fuer unsere einstellungen ein
 // komplett eigenes ags fenster"). ASYNCHRON, als einziges der zwoelf:
@@ -501,7 +505,34 @@ app.start({
     } else if (reqStr.includes("style")) {
       toggleWidget(widgets.style).then(r => res(r))
     } else if (reqStr.includes("vpn-settings")) {
-      toggleWidget(widgets.vpnSettings).then(r => res(r))
+      // "vpn-settings:<kennung>" - derselbe Doppelpunkt wie bei
+      // "settings:<seite>" weiter oben, und aus demselben Grund: eine
+      // Anfrage von aussen ist eine ZEICHENKETTE, kein Funktionsaufruf.
+      //
+      //     Gemeldet am 01.09.2026: "sobald ich auf eine vpn gehe dann
+      //     auf icon einstellung will ich direkt dort landen". Ohne die
+      //     Kennung fing das Fenster immer auf seiner Liste an - eine
+      //     Stufe zu hoch. Die Herleitung steht bei gewuenschteKennung
+      //     in ags-vpn-settings.template.
+      //
+      // Die Kennung wird VOR dem Aufgehen gesetzt, weil onShow() sie
+      // liest. Ohne Doppelpunkt bleibt alles, wie es war: die
+      // Tastenbindung und der Dock-Weg meinen keine Verbindung.
+      const marke = "vpn-settings:"
+      const stelle = reqStr.indexOf(marke)
+      if (stelle >= 0) {
+        oeffneVerbindung(reqStr.slice(stelle + marke.length).trim())
+        // AUFGEHEN UND NICHT TOGGELN, wenn eine Verbindung genannt ist:
+        // "zeig mir diese Verbindung" kann nie "mach das Fenster zu"
+        // heissen. Steht es schon offen, muss es trotzdem umblaettern -
+        // also erst zu, dann auf, damit onShow() laeuft.
+        const fenster = widgets.vpnSettings as OverlayWidget | null
+        if (fenster?.window.visible) fenster.hide()
+        void fenster?.show().then(() => res("shown"))
+        if (!fenster) res("widget not found")
+      } else {
+        toggleWidget(widgets.vpnSettings).then(r => res(r))
+      }
     } else if (reqStr.includes("settings")) {
       // NACH "vpn-settings" und NICHT davor: "vpn-settings" enthaelt
       // "settings", also faenge dieser Zweig das andere Fenster mit ab,

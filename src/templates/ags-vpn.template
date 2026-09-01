@@ -297,8 +297,32 @@ function vpnConnections(data: any): VpnEintrag[] {
     // eingestellt, und ihr eine leere Verbindung vorzuspiegeln waere
     // schlimmer als eine leere Liste.
     : (Object.keys(section).length ? [section] : [])
-  return roh.filter((e: any) => e && typeof e === "object").map((e: any) => ({
-    id: String(e.id ?? ""),
+  return roh.filter((e: any) => e && typeof e === "object").map((e: any, i: number) => ({
+    // EINE KENNUNG, DIE ES IMMER GIBT - NACHGETRAGEN am 01.09.2026
+    //
+    //     Hier stand `String(e.id ?? "")`. Ein Eintrag ohne `id` wurde
+    //     damit zur LEEREN Zeichenkette - und zwei Eintraege ohne `id`
+    //     zu zwei GLEICHEN Kennungen. Alles, was danach `find(e.id ===
+    //     ...)` fragt, bekam dann den ersten Eintrag, egal welche Zeile
+    //     angeklickt war. Der Nutzer hat genau das gemeldet: "ich komme
+    //     in die einstellung nicht mehr rein" - er kam hinein, nur
+    //     immer in dieselbe.
+    //
+    //     Eintraege ohne `id` sind kein Sonderfall: die Vorlagen lesen
+    //     user-settings.json ROH (GLib.file_get_contents + JSON.parse)
+    //     und laufen nie durch settings.py::migrate_vpn(), das die
+    //     Kennung "c1" nachtraegt. Wer die Datei von Hand bearbeitet
+    //     oder `settings.py merge` von der Kommandozeile ruft, hat
+    //     keine.
+    //
+    //     "#0", "#1", ... aus der POSITION und nicht aus dem Namen:
+    //     zwei Verbindungen duerfen gleich heissen, zwei Positionen
+    //     koennen es nicht. Und aus derselben Regel wie in
+    //     ags-vpn-settings.template::verbindungAus() - beide Fenster
+    //     lesen dieselbe Datei, also muessen sie zur selben Zeile
+    //     dieselbe Kennung sagen, sonst zeigt das eine, worauf im
+    //     anderen nicht geklickt wurde.
+    id: String(e.id || `#${i}`),
     name: String(e.connection_name || "work"),
     kind: vpnKind(e),
     ziel: vpnZiel(e),
@@ -407,10 +431,29 @@ function loadVpnSettings() {
       // nicht mehr gibt.
       const gewaehlt = vpnListe.length
         ? (vpnListe.find((e) => e.id === gewaehlteId) || vpnListe[0]) : null
-      const alle = vpnSection(data).connections
-      data.vpn = Array.isArray(alle)
-        ? (alle.find((e: any) => e && e.id === (gewaehlt ? gewaehlt.id : ""))
-           || vpnActive(data))
+      // UEBER DIE POSITION UND NICHT UEBER DIE ROHE KENNUNG -
+      // BERICHTIGT am 01.09.2026
+      //
+      //     Hier stand `alle.find(e => e.id === gewaehlt.id)`. `alle`
+      //     sind die ROHEN Eintraege aus der Datei; `gewaehlt.id` kommt
+      //     aus vpnConnections() oben und ist bei einem Eintrag ohne
+      //     `id` seit heute "#0". Roh und aufbereitet konnten sich also
+      //     nie treffen, find() schlug fehl, und der Ruecksturz
+      //     vpnActive() lieferte den ERSTEN Eintrag - fuer jede Zeile
+      //     denselben. Genau der stille Fehlgriff, ueber den der Nutzer
+      //     geklagt hat.
+      //
+      //     vpnConnections() filtert in derselben Reihenfolge wie diese
+      //     Zeile (`e && typeof e === "object"`), die Position ist also
+      //     dieselbe - und sie ist die einzige Auskunft, die BEIDE
+      //     Listen sicher teilen.
+      const alle = Array.isArray(vpnSection(data).connections)
+        ? vpnSection(data).connections.filter(
+            (e: any) => e && typeof e === "object")
+        : null
+      const stelle = gewaehlt ? vpnListe.indexOf(gewaehlt) : -1
+      data.vpn = alle
+        ? (stelle >= 0 && stelle < alle.length ? alle[stelle] : vpnActive(data))
         : data.vpn
       if (data.vpn) {
         const peers = data.vpn.wireguard?.peers ?? []
@@ -834,8 +877,10 @@ export const vpnSeite: ShellSeite = {
       const psk = loadPsk()
       if (!psk) {
         errorLabel.set_text(_("PSK not found! Please save it in the VPN settings."))
-        // Open settings
-        openVpnSettings()
+        // Open settings - und zwar die DIESER Verbindung: der fehlende
+        // PSK gehoert zu ihr, nicht zu irgendeiner aus der Liste
+        // (01.09.2026).
+        openVpnSettings(gewaehlteId)
         return
       }
 
@@ -997,8 +1042,30 @@ export const vpnSeite: ShellSeite = {
     // `toggleWidget(widgets.vpnSettings)` ruft - widgets.vpnSettings
     // existiert weiterhin, unabhaengig davon, dass VPN selbst jetzt eine
     // Seite ist.
-    function openVpnSettings() {
-      execAsync("ags request vpn-settings")
+    //
+    // MIT DER KENNUNG DER GEMEINTEN VERBINDUNG - NACHGETRAGEN am
+    // 01.09.2026
+    //
+    //     GEMELDET, woertlich: "ich muss mich voll komisch durchklicken
+    //     sobald ich auf eine vpn gehe dann auf icon einstellung will
+    //     ich direkt dort landen". Hier stand `ags request vpn-settings`
+    //     ohne jede Angabe. Das Einstellungsfenster fing daraufhin immer
+    //     auf seiner LISTE an und waehlte `vpn.active` aus der Datei -
+    //     also die zuletzt gespeicherte Verbindung, nie die angeklickte.
+    //     Wer auf einer Zeile das Zahnrad drueckte, landete eine Stufe
+    //     zu hoch und musste dieselbe Zeile dort noch einmal suchen.
+    //
+    //     Der Doppelpunkt ist dasselbe Trennzeichen wie bei
+    //     "settings:<seite>"; zerlegt wird er im requestHandler von
+    //     ags-config.template, die Kennung landet dort ueber
+    //     oeffneVerbindung() im Einstellungsfenster.
+    //
+    //     OHNE Kennung bleibt alles, wie es war, und das ist der Fall
+    //     des Knopfes "Neue Verbindung" unten: dort ist keine Verbindung
+    //     gemeint, also gehoert die Liste ans Ziel.
+    function openVpnSettings(kennung?: string) {
+      execAsync(kennung ? `ags request vpn-settings:${kennung}`
+                        : "ags request vpn-settings")
       schliessen()
     }
 
@@ -1051,7 +1118,10 @@ export const vpnSeite: ShellSeite = {
 
     // Settings button. Rolle still: oeffnet ein anderes Fenster, reine
     // Navigation (dieselbe Einordnung wie netBtn/vpnBtn, Task D).
-    const connectedSettingsBtn = zepButton(ICONS.settings, "still", openVpnSettings)
+    const connectedSettingsBtn = zepButton(ICONS.settings, "still",
+      // Die Einzelheiten DIESER Verbindung, nicht die Liste - siehe
+      // openVpnSettings() oben (01.09.2026).
+      () => openVpnSettings(gewaehlteId))
 
     connectedView.append(connectedIcon)
     connectedView.append(connectedStatusLabel)
@@ -1208,7 +1278,8 @@ export const vpnSeite: ShellSeite = {
     disconnectedLabel = new Gtk.Label({ label: _("Not connected"), xalign: 0 })
     disconnectedLabel.add_css_class("vpn-status-label")
 
-    const formSettingsBtn = zepButton(ICONS.settings, "still", openVpnSettings)
+    const formSettingsBtn = zepButton(ICONS.settings, "still",
+      () => openVpnSettings(gewaehlteId))
 
     statusRow.append(disconnectedIcon)
     statusRow.append(disconnectedLabel)
@@ -1452,8 +1523,13 @@ export const vpnSeite: ShellSeite = {
     const listenAktionen = new Gtk.Box({ spacing: 12, halign: Gtk.Align.END })
     listenAktionen.add_css_class("vpn-actions")
     listenAktionen.append(
+      // `() => openVpnSettings()` und NICHT `openVpnSettings`: zepButton
+      // haengt die Funktion an "clicked", und GTK reicht dort den Knopf
+      // selbst als erstes Argument herein - der waere seit dem
+      // 01.09.2026 die "Kennung". Hier ist ausserdem keine bestehende
+      // Verbindung gemeint, also gehoert die Liste ans Ziel.
       zepButton(`${ICONS.settings} ${_("New connection")}`, "umrandet",
-                openVpnSettings))
+                () => openVpnSettings()))
     listenAnsicht.append(listenAktionen)
 
     detailAnsicht = new Gtk.Box({

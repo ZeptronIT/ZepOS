@@ -714,6 +714,95 @@ MEASURE_PROSE = 66
 #     Tabelle von LAENGEN; ein Anteil gehoert nicht hinein.
 MEASURE_MODAL_SHARE = 0.5
 
+# =====================================================================
+# UND SENKRECHT DERSELBE ANTEIL MAL 1,5 - NACHGETRAGEN am 01.09.2026
+# =====================================================================
+#
+# WAS GEMELDET WURDE, ZWEIMAL
+#     "kannst du die vpn ags fenster deutlich hoeher machen 1,5 ungefaehr
+#      also nochmal hoeher"
+#     "die vpn ags fenster hoeher das ist zu gequetscht alles"
+#
+#     "Nochmal hoeher" heisst: es ist schon einmal erhoeht worden. Das
+#     stimmt - und es hat nichts geaendert, und der Grund steht eine
+#     Zeile weiter oben.
+#
+# WORAN ES LAG - GEZAEHLT im Quelltext, nicht vermutet
+#     Die Hoehe eines Aufklappfensters entsteht in getOverlayPosition()
+#     (src/templates/ags-overlay-utils.template) aus drei Grenzen:
+#
+#         effectiveH = min(Wunsch, Schirmhoehe * ANTEIL,
+#                          nutzbare Hoehe - 2 * EDGE_GAP)
+#
+#     Der Wunsch der Schale steht dort als `SHELL_HEIGHT = 900`, und der
+#     Kommentar daneben sagt selbst, dass er keiner ist: "die Hoehe ist
+#     ein WUNSCH, kein Versprechen - MEASURE_MODAL_SHARE deckelt ohnehin
+#     auf die halbe Bildschirmhoehe". Auf dem Schirm des Nutzers
+#     (1920x1200) sind das 600. Das Fenster bekam also 600, ob dort 600,
+#     900 oder 2000 stand. Jede Erhoehung des Wunsches war wirkungslos;
+#     es war immer der Deckel, der antwortete.
+#
+# WARUM SENKRECHT NICHT DIESELBE HAELFTE GILT WIE WAAGERECHT
+#     Die Begruendung von MEASURE_MODAL_SHARE oben ist eine ueber
+#     VERDECKUNG: "der Sinn eines Suchfensters ist, dass man dahinter
+#     noch sieht, WORAN man war". Verdeckt wird eine FLAECHE, und eine
+#     Flaeche ist Breite mal Hoehe. Derselbe Anteil auf beiden Achsen
+#     laesst 3/4 des Schirms frei - ein Viertel ist verdeckt. Mit 0,5
+#     waagerecht und 0,75 senkrecht sind es 3/8, es bleiben 5/8 frei.
+#     Die Regel "ein Fenster, das sich vor die Arbeit stellt, nimmt nicht
+#     den Schirm" bleibt damit gewahrt; sie wird nur nicht mehr auf jeder
+#     Achse einzeln so streng gelesen, dass ein Formular mit acht Zeilen
+#     nicht mehr hineinpasst.
+#
+#     Dass es senkrecht enger zugeht als waagerecht, ist ausserdem
+#     GEMESSEN und keine Meinung: die Fenster dieses Baums melden
+#     Wuensche von 900 (Schale), 680 (Kuerzel), 678 (Kalender), 657
+#     (Batterie) und 650 (Stileditor) an. Auf 1080 bekamen sie alle 540.
+#     Waagerecht liegt die groesste Sprosse bei 880 und der Deckel bei
+#     960 - dort ist Luft, senkrecht war keine.
+#
+# WARUM GENAU 1,5 UND KEINE ANDERE ZAHL
+#     Weil sie die Bestellung ist, nicht weil sie schoen aussieht: "1,5
+#     ungefaehr". Auf seinem 1200er Schirm wird aus 600 damit 900 - und
+#     900 ist zugleich der Wunsch, der in der Schale ohnehin schon steht
+#     (MODAL_HEIGHT unten). Die beiden Zahlen treffen sich, statt
+#     einander zu ueberschreiben.
+#
+#         Schirm   bisher   jetzt   nachgemessen in
+#         1080      540      810    tests/render/test_vpn_liste_platz.py
+#         1200      600      900
+#         1440      720     1080
+#
+# WARUM EIN FAKTOR UND NICHT EIN ZWEITER ANTEIL (0,75)
+#     Beides ergibt dieselbe Zahl. Ein zweiter Anteil waere aber eine
+#     zweite REGEL: dann stuenden zwei Groessen nebeneinander, die
+#     dasselbe sagen, und niemand saehe mehr, dass die eine von der
+#     anderen abweicht. Als Faktor bleibt MEASURE_MODAL_SHARE die Regel,
+#     und die Abweichung von ihr ist das, was hier begruendet werden
+#     muss - genau das soll sie auch.
+#
+#     Es haelt ausserdem tests/src/test_modal_rule.py am Werk: dort
+#     steht `"src/templates/ags-overlay-utils.template": "mh *
+#     MODAL_SHARE"` als Beleg, dass der Anteil mit etwas GEMESSENEM
+#     multipliziert wird. Die Rechnung in der Vorlage lautet
+#     `mh * MODAL_SHARE * MODAL_HEIGHT_FACTOR` und enthaelt diesen
+#     Ausdruck weiterhin - die Zusicherung musste fuer diese Aenderung
+#     nicht angefasst werden.
+#
+# DER HARTE PLATZ BLEIBT DIE LETZTE GRENZE
+#     `nutzbare Hoehe - 2 * EDGE_GAP` steht unveraendert daneben und
+#     bindet weiterhin zuerst. Ein Fenster kann damit auch mit diesem
+#     Faktor NIE hoeher werden als der Schirm, auf dem es liegt - das
+#     war die Zusage, die MEASURE_MODAL_SHARE am 12.08.2026 gebracht hat,
+#     und sie bleibt.
+#
+# NUR DIE AGS-FABRIK LIEST IHN
+#     Das Suchfenster (menu/zepos_menu/window.py) und die beiden
+#     C++-Programme bleiben bei der blossen Haelfte: ueber sie hat
+#     niemand geklagt, und eine Zahl mitzuaendern, weil sie danebensteht,
+#     ist genau die Sorte Aenderung, die dieser Baum nicht macht.
+MEASURE_MODAL_HEIGHT_FACTOR = 1.5
+
 
 # =====================================================================
 # DIE BREITENLEITER - drei Sprossen fuer alle Aufklappfenster
@@ -784,6 +873,46 @@ MODAL_WIDTHS = {
     "M": 660,
     "L": 880,
 }
+
+# =====================================================================
+# UND EINE HOEHE, ABER KEINE HOEHENLEITER
+# =====================================================================
+#
+# NACHGETRAGEN am 01.09.2026, aus derselben Meldung wie
+# MEASURE_MODAL_HEIGHT_FACTOR weiter oben ("das ist zu gequetscht alles").
+#
+# WARUM EINE ZAHL UND NICHT DREI SPROSSEN
+#     Die Breitenleiter hat drei, weil acht Fenster sich auf sie
+#     verteilen und ihre Breite SICHTBAR verschieden ist - ein
+#     Abmeldefenster neben einem VPN-Formular. Senkrecht ist das nicht
+#     so: die Hoehe eines Aufklappfensters ist hier ein WUNSCH, und
+#     entschieden wird sie vom Deckel (MEASURE_MODAL_HEIGHT_FACTOR) und
+#     vom Inhalt (die Fabrik misst ihn und nimmt das Kleinere). Drei
+#     Sprossen waeren drei Zahlen, von denen zwei nie jemand liest.
+#
+#     Dieser Baum hat genau diesen Fehler schon einmal geraeumt: die
+#     Spezifikation nannte vier Breitensprossen, MODAL_WIDTHS fuehrt drei,
+#     und die Begruendung darueber lautet "eine leere Sprosse ist eine
+#     geratene Zahl mit besserem Namen". Sie gilt hier genauso.
+#
+# WOHER DIE 900 KOMMT
+#     Sie stand schon da. `SHELL_HEIGHT = 900` in
+#     src/templates/ags-overlay-utils.template ist seit dem 18.08.2026 der
+#     Wunsch des Kontrollzentrums, und der Kommentar dort rechnet ihn vor
+#     ("Netzwerk 600, Bluetooth 600, VPN-Einstellungen 600, mit Luft fuer
+#     den Zustandskopf obendrauf"). Neu ist nur, dass er ab heute
+#     ankommt: mit dem Anteil 0,5 hat ihn der Deckel auf einem 1200er
+#     Schirm auf 600 gestutzt, mit 0,75 sind es genau 900.
+#
+#     Die zweite Leserin ist ags-vpn-settings.template. Dort stand
+#     `height: 600` als getippte Zahl - dieselbe 600, die der Deckel
+#     ohnehin erzwang, also eine Zahl, die nichts entschied und beim
+#     naechsten Deckel falsch gewesen waere.
+#
+# KEINE EINHEIT, aus demselben Grund wie bei MODAL_WIDTHS: die Leser
+# stehen in TypeScript-Zahlenkontext (`const WIN_HEIGHT = ...`, dann
+# `height: WIN_HEIGHT` gegen `height: number`).
+MODAL_HEIGHT = 900
 
 
 def MODAL_WIDTH(sprosse):

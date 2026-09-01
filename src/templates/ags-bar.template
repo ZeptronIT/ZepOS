@@ -1617,6 +1617,45 @@ const OVERFLOW_ICON = "{{ICON_LIST}}"
 // style_definition.py).
 const KEYBOARD_ICON = "{{ICON_KEYBOARD}}"
 
+// MODULE, DIE ZULETZT EINGEKLAPPT WERDEN - EGAL, WO SIE STEHEN
+//
+// NACHGETRAGEN am 01.09.2026. BESTELLT, woertlich: "das schild symbol in
+// der waybar soll neben dem wlan symbol sein nicht rechts".
+//
+// WARUM ES DIESE LISTE UEBERHAUPT GIBT
+//     Bis heute war die Einklappreihenfolge genau die Reihenfolge, in
+//     der die Module dastehen (siehe `order` weiter unten). Das war
+//     richtig, solange beide dasselbe wollten: was aussen steht, ist
+//     wichtiger, also klappt es spaeter ein. Genau daran hing der Platz
+//     des VPN-Schildes am aeusseren Ende der Zustandsgruppe - die ganze
+//     Rechnung steht bei _modules_right in src/style_definition.py.
+//
+//     Mit dieser Bestellung fallen die beiden auseinander: das Schild
+//     soll NEBEN dem Netz stehen (die naheliegende Nachbarschaft - beide
+//     sagen, wie dieser Rechner am Netz haengt) und trotzdem das letzte
+//     sein, das geht. Ort und Rang sind ab hier zwei Fragen, also
+//     brauchen sie zwei Antworten.
+//
+// WARUM AUSGERECHNET DIESES MODUL
+//     Weil "Laeuft mein Verkehr durch den Tunnel?" sonst NIRGENDS auf
+//     dem Bildschirm steht. Feldstaerke, Ladestand und Lautstaerke
+//     stehen alle auch im Kontrollzentrum und kosten nichts, wenn man
+//     sie eine Minute spaeter liest; wer die VPN-Frage falsch
+//     beantwortet, hat schon gesendet. Die Begruendung ist nicht neu -
+//     sie stand am 22.08.2026 schon in style_definition.py und trug
+//     dort den PLATZ. Jetzt traegt sie den RANG.
+//
+// GEMESSEN am 01.09.2026 mit tests/src/test_bar_headless.py
+// (Vorgabegroesse, zehn Arbeitsbereiche, echte Zeichen), 1366 px:
+// ohne diese Liste klappte das Schild neben dem Netz als DRITTES ein
+// (custom-disk, network, custom-vpn, bluetooth, pulseaudio) - genau der
+// Zustand, den der Platz vom 22.08.2026 vermeiden sollte. Mit ihr steht
+// es dort.
+//
+// Die Namen sind die der Widgets (`box.set_name(name.replace("/", "-"))`
+// weiter oben), also "custom-vpn" und nicht "custom/vpn".
+const SPAET_EINKLAPPEN = ["custom-vpn"]
+
 /** Ein Modul, das eingeklappt werden kann, und wo es hingehoert. */
 interface Foldable {
   widget: Gtk.Widget
@@ -2373,9 +2412,10 @@ export function BarContent(monitorName: string,
 
   // DIE REIHENFOLGE, IN DER EINGEKLAPPT WIRD
   //     Erst der rechte Kasten von innen nach aussen, dann der linke von
-  //     innen nach aussen. Keine eigene Rangliste: das ist genau die
-  //     Reihenfolge, in der die Module ohnehin schon dastehen, einmal
-  //     von der Mitte weg gelesen.
+  //     innen nach aussen. Fast keine eigene Rangliste: das ist genau
+  //     die Reihenfolge, in der die Module ohnehin schon dastehen,
+  //     einmal von der Mitte weg gelesen. Die eine Ausnahme steht bei
+  //     SPAET_EINKLAPPEN weiter oben.
   //
   //     Sie faellt richtig aus, und das ist nachrechenbar statt
   //     behauptet. Zuletzt gehen die beiden Enden - links das Datum,
@@ -2385,9 +2425,16 @@ export function BarContent(monitorName: string,
   //     Leiste, stehen seit dem 12.08.2026 in der MITTE und gehen damit
   //     ueberhaupt nicht mehr - die Mitte wird gemessen und nie
   //     eingeklappt.
-  const order = [
+  const roh = [
     ...foldable.filter(entry => entry.box === right),
     ...foldable.filter(entry => entry.box === left).reverse(),
+  ]
+  // Die Ausnahme ans Ende - siehe SPAET_EINKLAPPEN. Ein STABILER
+  // Umbau und kein sort(): unter den uebrigen bleibt die Reihenfolge
+  // Zeichen fuer Zeichen dieselbe, die sie vorher war.
+  const order = [
+    ...roh.filter(entry => !SPAET_EINKLAPPEN.includes(entry.widget.get_name())),
+    ...roh.filter(entry => SPAET_EINKLAPPEN.includes(entry.widget.get_name())),
   ]
   const folding = foldingOf(bar, overflow, overflowTray, order, fixed)
   // Nicht die ganze Schirmbreite: die Platte haelt links und rechts

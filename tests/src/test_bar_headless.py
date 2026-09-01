@@ -432,16 +432,23 @@ BAR_EVERYTHING = {"bar": {
                      "custom/keyboard", "hyprland/window"],
     #
     #     UND AM 22.08.2026 IST EIN MODUL DAZUGEKOMMEN (Aufgabe 69):
-    #     custom/vpn, das VPN-Schild, am aeusseren Ende der
-    #     Zustandsgruppe - in derselben Nachbarschaft wie in der Vorgabe.
-    #     Warum hinter dem Akku und nicht neben dem Netz, steht bei
-    #     _modules_right in src/style_definition.py, mit der Messung.
+    #     custom/vpn, das VPN-Schild - in derselben Nachbarschaft wie in
+    #     der Vorgabe.
+    #
+    #     SEIT DEM 01.09.2026 STEHT ES NEBEN DEM NETZ. Bestellt,
+    #     woertlich: "das schild symbol in der waybar soll neben dem wlan
+    #     symbol sein nicht rechts". Diese Liste ist die ABSCHRIFT der
+    #     Vorgabe (test_die_nachbarschaft_ist_die_der_vorgabe haelt beide
+    #     gegeneinander) - sie zieht nach, sie entscheidet nichts. Die
+    #     Begruendung des Umzugs und die zweite Aenderung, die dazu
+    #     gehoert (SPAET_EINKLAPPEN in ags-bar.template, damit das Schild
+    #     an seinem neuen Platz nicht als drittes einklappt), stehen bei
+    #     _modules_right in src/style_definition.py.
     "modules_right": ["custom/media", "tray",
                       "custom/floating-layouts", "custom/helpers",
                       "custom/disk", "custom/wallpaper",
-                      "network", "bluetooth",
+                      "network", "custom/vpn", "bluetooth",
                       "pulseaudio", "pulseaudio#microphone", "battery",
-                      "custom/vpn",
                       "custom/privacy", "custom/updates",
                       "custom/theme", "custom/system"],
 }}
@@ -1169,16 +1176,24 @@ def test_the_bar_builds_every_module_in_its_place(run):
         # "hardware monitor icon soll nach links recht neben die zeit
         # anzeige".
         "custom-disk", "custom-wallpaper",
-        "network", "bluetooth",
+        # custom-vpn STEHT SEIT DEM 01.09.2026 NEBEN DEM NETZ.
+        #
+        #     Bestellt, woertlich: "das schild symbol in der waybar soll
+        #     neben dem wlan symbol sein nicht rechts". Bis dahin stand
+        #     es hinter dem Akku, am aeusseren Ende der Zustandsgruppe,
+        #     und der Grund dafuer war gemessen: neben dem Netz klappt
+        #     das Schild auf einem 1366er Notebook als DRITTES ein und
+        #     ist damit ausgerechnet dort weg, wo ein VPN benutzt wird.
+        #
+        #     Die Messung gilt unveraendert, die Folge nicht mehr: die
+        #     Einklappreihenfolge ist seit demselben Tag NICHT mehr
+        #     einfach die Reihenfolge dieser Liste - SPAET_EINKLAPPEN in
+        #     ags-bar.template zieht "custom-vpn" ans Ende, egal wo es
+        #     steht. Ort und Rang sind damit zwei Fragen mit zwei
+        #     Antworten. Dass es weiterhin nicht einklappt, haelt
+        #     FOLDED_ON_COMMON_NOTEBOOK fest.
+        "network", "custom-vpn", "bluetooth",
         "pulseaudio", "pulseaudio#microphone", "battery",
-        # custom-vpn steht seit dem 22.08.2026 am aeusseren Ende der
-        # Zustandsgruppe, also hinter dem Akku (Aufgabe 69). Neben dem
-        # Netz - der naheliegenden Nachbarschaft - waere das Schild auf
-        # einem 1366er Notebook als drittes eingeklappt und damit
-        # ausgerechnet dort unsichtbar, wo ein VPN benutzt wird. Die
-        # Messung dazu steht bei FOLDED_ON_COMMON_NOTEBOOK, die
-        # Begruendung bei _modules_right in src/style_definition.py.
-        "custom-vpn",
         "custom-privacy", "custom-updates",
         # custom-theme steht zwischen den beiden bedingten Modulen und
         # dem Kontrollzentrum, also GANZ AUSSEN und damit als vorletztes

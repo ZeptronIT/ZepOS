@@ -550,6 +550,53 @@ def test_the_share_is_multiplied_by_something_measured(path, rule):
         f"{path} multipliziert den Anteil nicht mehr mit {rule}")
 
 
+# Die AGS-Fabrik weicht senkrecht von der Haelfte ab, und zwar um einen
+# FAKTOR. Er steht in derselben Groessentabelle wie der Anteil selbst.
+HOEHENFAKTOR = "src/templates/ags-overlay-utils.template"
+
+
+def test_die_ags_fabrik_fuehrt_den_hoehenfaktor_aus_der_groessentabelle():
+    """Der senkrechte Deckel weicht ab - aber nur um eine begruendete Zahl.
+
+    NACHGETRAGEN am 01.09.2026, und zwar als ERWEITERUNG der beiden
+    Zusicherungen darueber, nicht als Ausnahme von ihnen.
+
+    GEMELDET, zweimal: "kannst du die vpn ags fenster deutlich hoeher
+    machen 1,5 ungefaehr also nochmal hoeher" und "die vpn ags fenster
+    hoeher das ist zu gequetscht alles". Die Erhoehung des WUNSCHES hatte
+    nie eine Wirkung, weil der Deckel antwortete - die Herleitung steht
+    bei MEASURE_MODAL_HEIGHT_FACTOR in src/sizes.py.
+
+    WARUM DAS HIER STEHEN MUSS
+        Ohne diese Zusicherung waere die 1,5 in der Vorlage eine getippte
+        Zahl neben einer Zahl aus der Tabelle - genau der Zustand, gegen
+        den die beiden Zusicherungen darueber gebaut wurden. Der Anteil
+        selbst bleibt dabei unangetastet: die Rechnung in der Vorlage
+        lautet `mh * MODAL_SHARE * MODAL_HEIGHT_FACTOR`, und
+        test_the_share_is_multiplied_by_something_measured findet sein
+        `mh * MODAL_SHARE` darin unveraendert wieder.
+
+    NUR EIN PROGRAMM UND NICHT VIER
+        Das Suchfenster und die beiden C++-Programme bleiben bei der
+        blossen Haelfte. Ueber sie hat niemand geklagt; sie tragen den
+        Faktor deshalb nicht, und dass sie ihn nicht tragen, ist kein
+        Mangel, den diese Datei melden soll.
+    """
+    quelle = _read_source(HOEHENFAKTOR)
+    gefunden = re.search(r"^const MODAL_HEIGHT_FACTOR = ([0-9.]+)$",
+                         quelle, re.M)
+    assert gefunden, (
+        f"{HOEHENFAKTOR} kennt keinen MODAL_HEIGHT_FACTOR mehr - dann "
+        "deckelt die Hoehe wieder auf die halbe Schirmhoehe, und die "
+        "Meldung 'das ist zu gequetscht alles' ist zurueck.")
+    assert float(gefunden.group(1)) == sizes.MEASURE_MODAL_HEIGHT_FACTOR, (
+        f"{HOEHENFAKTOR} rechnet mit {gefunden.group(1)}, die "
+        f"Groessentabelle sagt {sizes.MEASURE_MODAL_HEIGHT_FACTOR}")
+    assert "mh * MODAL_SHARE * MODAL_HEIGHT_FACTOR" in quelle, (
+        f"{HOEHENFAKTOR} wendet den Faktor nicht mehr auf den GEMESSENEN "
+        "Schirm an")
+
+
 # Wonach im Baum gesucht wird, um ein Programm zu finden, das eine
 # Layer-Shell-Flaeche aufzieht. Beide Bindungen, weil zwei Sprachen im
 # Spiel sind.

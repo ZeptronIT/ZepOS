@@ -191,6 +191,37 @@ def _lauf(bau: Path) -> dict:
         ergebnis["fenster"] = _oeffne(sitzung, FENSTER, FENSTER)
         ergebnis["bild_fenster"] = sitzung.shoot(
             bau / "vpn-einstellungen-liste-1920x1200.png")
+
+        # UND DASSELBE FENSTER IN DEN EINZELHEITEN - NACHGETRAGEN am
+        # 01.09.2026
+        #
+        #     Bis hierher hat diese Datei (und test_vpn_breite.py daneben)
+        #     nur die LISTE gemessen: `onShow` faengt dort an, und ein
+        #     Klick laesst sich unter Hyprland nicht erzeugen. Die
+        #     Einzelheiten - Reiterleiste, Formular, die vierteilige
+        #     Fusszeile, an der die ganze Breitenrechnung dieses Fensters
+        #     haengt - waren dabei `visible: false`, und ein unsichtbares
+        #     Widget zaehlt in GTK4 nicht in die Messung seines Elterns.
+        #     Gemessen wurde also genau die Ansicht, ueber die niemand
+        #     geklagt hat.
+        #
+        #     Seit dem 01.09.2026 gibt es einen Weg dorthin OHNE Klick:
+        #     `ags request vpn-settings:<kennung>` (siehe
+        #     gewuenschteKennung in ags-vpn-settings.template). Er ist
+        #     fuer den Nutzer gebaut worden - er benutzt ihn, wenn er auf
+        #     einer Zeile das Zahnrad drueckt -, und er macht diese
+        #     Messung nebenbei erst moeglich.
+        sitzung.request(FENSTER)
+        frist = time.monotonic() + 15.0
+        while time.monotonic() < frist:
+            if not sitzung.layers().get(FENSTER):
+                break
+            time.sleep(0.3)
+        time.sleep(1.0)
+        ergebnis["fenster_detail"] = _oeffne(sitzung, f"{FENSTER}:c1", FENSTER)
+        ergebnis["bild_detail"] = sitzung.shoot(
+            bau / "vpn-einstellungen-detail-1920x1200.png")
+
         ergebnis["protokoll"] = sitzung.read_shell_log()
     return ergebnis
 
@@ -244,6 +275,129 @@ def test_beide_flaechen_passen_auf_den_schirm(messung):
             f"{name} reicht bis {x + breite}, der Schirm ist {BREITE} breit")
         assert y + hoehe <= HOEHE, (
             f"{name} reicht bis {y + hoehe}, der Schirm ist {HOEHE} hoch")
+
+
+def _aus_sizes(name: str):
+    """Einen Wert aus der Groessentabelle holen, ohne ihn abzuschreiben.
+
+    Dieselbe Begruendung wie bei _sprosse() oben: eine abgeschriebene
+    Erwartung misst die Abschrift.
+    """
+    sys.path.insert(0, str(ROOT / "src"))
+    try:
+        import sizes
+        return getattr(sizes, name)
+    finally:
+        sys.path.remove(str(ROOT / "src"))
+
+
+def _hoehendeckel() -> int:
+    """Was der Deckel auf DIESEM Schirm hoechstens zulaesst.
+
+    Der harte Platz (nutzbare Hoehe minus zweimal Rand) bleibt aussen
+    vor: er haengt an der Dicke der Leiste, die ihrerseits am
+    Groessenregler haengt, und auf 1200 bindet er nicht. Er ist die
+    Grenze fuer kleine Schirme, und ueber die klagt hier niemand.
+    """
+    anteil = (_aus_sizes("MEASURE_MODAL_SHARE")
+              * _aus_sizes("MEASURE_MODAL_HEIGHT_FACTOR"))
+    return min(int(_aus_sizes("MODAL_HEIGHT")), int(HOEHE * anteil))
+
+
+def test_die_schale_ist_nicht_mehr_auf_die_halbe_schirmhoehe_gedeckelt(messung):
+    """Die Hoehe, um die der Nutzer ZWEIMAL gebeten hat.
+
+    WOERTLICH
+        "kannst du die vpn ags fenster deutlich hoeher machen 1,5
+         ungefaehr also nochmal hoeher"
+        "die vpn ags fenster hoeher das ist zu gequetscht alles"
+
+    "Nochmal hoeher" heisst, dass es schon einmal versucht wurde - und
+    genau das erklaert, warum nichts passierte: erhoeht wurde der WUNSCH
+    (SHELL_HEIGHT = 900 seit dem 18.08.2026), geantwortet hat der DECKEL.
+    Der stand auf der halben Schirmhoehe, auf 1200 also auf 600, und war
+    damit immer der kleinere der beiden.
+
+    GEMESSEN am 01.09.2026 auf 1920x1200:
+
+        vorher (Anteil 0,5)             600
+        jetzt  (Anteil 0,5 mal 1,5)     900
+
+    Und 900 ist zugleich sizes.MODAL_HEIGHT: Wunsch und Deckel treffen
+    sich auf diesem Schirm. Genau daran ist zu sehen, dass der Wunsch
+    ankommt - stuende hier wieder 600, waere der Faktor weg.
+
+    WARUM DIESE ZUSICHERUNG HIER STEHT UND NICHT IN tests/src/
+        Eine Rechnung ueber die Zahlen in den Vorlagen haette die 900
+        gelesen und Erfolg gemeldet. Auf dem Schirm standen 600. Der
+        Unterschied zwischen Wunsch und Wirklichkeit IST dieser Fehler.
+    """
+    x, y, breite, hoehe = messung["schale"]
+    erwartet = _hoehendeckel()
+    print(f"\nDie Schale auf {BREITE}x{HOEHE}: {breite}x{hoehe} an {x},{y} "
+          f"(Hoehendeckel = {erwartet})")
+    assert hoehe == erwartet, (
+        f"die Schale steht {hoehe} Punkte hoch, erlaubt und gewuenscht "
+        f"sind {erwartet}. Sind es "
+        f"{int(HOEHE * _aus_sizes('MEASURE_MODAL_SHARE'))}, deckelt wieder "
+        f"die halbe Schirmhoehe - siehe MEASURE_MODAL_HEIGHT_FACTOR in "
+        f"src/sizes.py.")
+
+
+def test_das_einstellungsfenster_oeffnet_die_angeklickte_verbindung(messung):
+    """`ags request vpn-settings:c1` fuehrt in DIESE Verbindung.
+
+    GEMELDET, woertlich: "ich muss mich voll komisch durchklicken sobald
+    ich auf eine vpn gehe dann auf icon einstellung will ich direkt dort
+    landen". Bis zum 01.09.2026 ging von der VPN-Seite nur
+    `ags request vpn-settings` los - ohne jede Angabe, welche Verbindung
+    gemeint ist. Das Fenster fing daraufhin immer auf seiner Liste an.
+
+    WAS HIER ZUGESICHERT WIRD UND WAS NICHT
+        Dass die Anfrage MIT Kennung angenommen wird und ein Fenster
+        entsteht. Dass darin die richtige Verbindung steht, sagt das Bild
+        (bild_detail) und keine Zusicherung: der Inhalt einer Layer-
+        Flaeche ist von aussen nicht auszulesen, und ein Bildvergleich
+        haenge daran, welche Schrift die Maschine gerade hat. Das ist
+        eine Luecke, und sie soll dastehen.
+    """
+    assert messung["fenster_detail"] is not None, (
+        "keine Flaeche nach `ags request vpn-settings:c1`:\n"
+        + messung["protokoll"][-2000:])
+    bild = messung["bild_detail"]
+    assert bild.is_file() and bild.stat().st_size > 0, bild
+    print(f"\nBildbeweis der Einzelheiten: {bild}")
+
+
+def test_die_einzelheiten_bekommen_mehr_als_die_halbe_schirmhoehe(messung):
+    """Und das Formular selbst ist nicht mehr auf 600 gedeckelt.
+
+    Es trug sein `height: 600` bis zum 01.09.2026 als getippte Zahl. Sie
+    war zufaellig genau der Deckel dieses Schirms, also war nie zu sehen,
+    welche der beiden Grenzen antwortete.
+
+    DIE SCHRANKE IST EINE UNTERE UND KEINE GLEICHHEIT: wie hoch das
+    Fenster wirklich wird, entscheidet daneben der INHALT - die Fabrik
+    nimmt `min(natuerliche Hoehe, Deckel)`. Eine Gleichheit waere eine
+    Zusicherung ueber die Zeilenzahl dieses Formulars und nicht ueber den
+    Deckel.
+    """
+    x, y, breite, hoehe = messung["fenster_detail"]
+    alter_deckel = int(HOEHE * _aus_sizes("MEASURE_MODAL_SHARE"))
+    print(f"\nDie Einzelheiten auf {BREITE}x{HOEHE}: {breite}x{hoehe} "
+          f"an {x},{y} (alter Deckel = {alter_deckel})")
+    assert hoehe > alter_deckel, (
+        f"das Einstellungsfenster steht {hoehe} Punkte hoch und damit "
+        f"nicht hoeher als der alte Deckel ({alter_deckel}). Entweder "
+        f"greift der Faktor nicht, oder der Inhalt ist kuerzer als der "
+        f"Deckel - im zweiten Fall ist nicht die Hoehe das Problem, "
+        f"sondern der senkrechte Rhythmus darin.")
+    assert hoehe <= _hoehendeckel(), (
+        f"das Einstellungsfenster steht {hoehe} Punkte hoch und damit "
+        f"ueber dem Deckel von {_hoehendeckel()}")
+    assert y + hoehe <= HOEHE, (
+        f"die Einzelheiten reichen bis {y + hoehe}, der Schirm ist "
+        f"{HOEHE} hoch")
 
 
 def test_es_gibt_ein_bild_von_der_liste(messung):

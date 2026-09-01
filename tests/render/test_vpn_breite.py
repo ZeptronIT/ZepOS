@@ -209,6 +209,35 @@ def _lauf(bau, kind: str) -> str:
         # den Dateikopf: sie erscheint in einem Teil der Laeufe nicht,
         # die Messung der Fabrik aber immer.
         time.sleep(6.0)
+
+        # UND DIE EINZELHEITEN DAZU - NACHGETRAGEN am 01.09.2026
+        #
+        #     Bis hierher hat diese Datei nur die LISTE gemessen, und das
+        #     war eine Luecke, die kein Fehlschlag je gezeigt hat: seit
+        #     dem 01.09.2026 hat dieses Fenster zwei Ansichten, `onShow`
+        #     faengt auf der Liste an, und die Einzelheiten stehen dabei
+        #     auf `visible: false`. Ein unsichtbares Widget zaehlt in
+        #     GTK4 nicht in die Messung seines Elterns - gemessen wurde
+        #     also gerade NICHT die Ansicht, an der die ganze
+        #     Breitenrechnung dieses Fensters haengt (Reiterleiste,
+        #     Formular, vierteilige Fusszeile).
+        #
+        #     Ein Klick laesst sich unter Hyprland nicht erzeugen. Seit
+        #     dem 01.09.2026 braucht es keinen: `ags request
+        #     vpn-settings:<kennung>` fuehrt direkt in die Einzelheiten
+        #     einer Verbindung (siehe gewuenschteKennung in
+        #     ags-vpn-settings.template). Er ist fuer den Nutzer gebaut
+        #     worden und macht diese Messung nebenbei erst moeglich.
+        #
+        #     Kein eigener Compositor dafuer: die Fabrik meldet jeden
+        #     Ueberhang in DASSELBE Protokoll, und _pruefe_ueberhang()
+        #     unten prueft ohnehin JEDE Meldung, nicht nur die letzte.
+        sitzung.request(NAMESPACE)
+        time.sleep(3.0)
+        antwort = sitzung.request(f"{NAMESPACE}:c1")
+        assert "shown" in antwort or "toggled" in antwort, (
+            f"ags request {NAMESPACE}:c1 antwortete {antwort!r}")
+        time.sleep(6.0)
         return sitzung.read_shell_log()
 
 
