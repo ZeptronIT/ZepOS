@@ -63,7 +63,7 @@ from . import model  # noqa: E402
 # Was der Knopf zum Zuruecksetzen an seiner Zeile sagt. Im Wortlaut und
 # an einer Stelle, weil er dreimal dasteht - einmal je Haelfte - und
 # drei Wortlaute fuer eine Handlung wie drei Handlungen lesen.
-RESET_LABEL = "Zuruecksetzen"
+RESET_LABEL = "Zurücksetzen"
 RESET_TITLE = "Wie ausgeliefert"
 
 
@@ -315,10 +315,10 @@ class BarPage(Adw.PreferencesPage):
             # und der Weg heraus steht unten in der Gruppe: der
             # Zuruecksetzen-Knopf schreibt null und repariert damit
             # genau diesen Schluessel.
-            return [], (f"{problem}. Bis das gerade gerueckt ist, zeigt "
-                        f"diese Seite dafuer nichts an - "
-                        f"\"{RESET_TITLE}\" unten setzt den Schluessel "
-                        f"auf die Auslieferung zurueck.")
+            return [], (f"{problem}. Bis das gerade gerückt ist, zeigt "
+                        f"diese Seite dafür nichts an - "
+                        f"\"{RESET_TITLE}\" unten setzt den Schlüssel "
+                        f"auf die Auslieferung zurück.")
 
         # acceptable_in() und nicht placeable_in(): angeboten wird auf
         # dieser Seite die Auslieferung, angenommen wird jede Anwendung
@@ -399,10 +399,10 @@ class BarPage(Adw.PreferencesPage):
         kann, weshalb er nicht verschwiegen, sondern unten benannt wird.
         """
         missing = self.missing[key]
-        row = Adw.ComboRow(title="Wieder hinzufuegen",
+        row = Adw.ComboRow(title="Wieder hinzufügen",
                            model=Gtk.StringList.new(missing))
 
-        button = Gtk.Button(label="Hinzufuegen", valign=Gtk.Align.CENTER)
+        button = Gtk.Button(label="Hinzufügen", valign=Gtk.Align.CENTER)
         button.connect("clicked", self._on_add, key)
         row.add_suffix(button)
 
@@ -414,8 +414,8 @@ class BarPage(Adw.PreferencesPage):
             # die eine Oberflaeche unfertig aussehen laesst, ohne dass
             # jemand sagen koennte, woran es liegt.
             said = [("Ein Eintrag steht nicht da" if len(missing) == 1
-                     else f"{len(missing)} Eintraege stehen nicht da")
-                    + " - was hier gewaehlt wird, kommt ans Ende."]
+                     else f"{len(missing)} Einträge stehen nicht da")
+                    + " - was hier gewählt wird, kommt ans Ende."]
         else:
             # "was das Dock anheften kann" und nicht "was ZepOS
             # ausliefert": ausgeliefert wird auch, was es nie anheften
@@ -455,8 +455,8 @@ class BarPage(Adw.PreferencesPage):
         row = Adw.ActionRow(
             title=RESET_TITLE,
             title_lines=0,
-            subtitle=("Gibt diese Haelfte an die Auslieferung zurueck - "
-                      "auch jedes Modul, das ZepOS spaeter hinzufuegt."
+            subtitle=("Gibt diese Hälfte an die Auslieferung zurück - "
+                      "auch jedes Modul, das ZepOS später hinzufügt."
                       if own else
                       "Hier ist nichts eingestellt; es steht schon die "
                       "ausgelieferte Reihenfolge da."))

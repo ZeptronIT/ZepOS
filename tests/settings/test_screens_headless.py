@@ -365,7 +365,7 @@ def test_a_countdown_that_runs_out_gives_it_back_by_itself(tmp_path):
     assert len(run.applied) == 2, run.report
     assert "3440x0,1" in run.applied[1], run.report
     assert written(run) == "", run.report
-    assert "Zurueckgenommen" in one(run, "screens-report"), run.report
+    assert "Zurückgenommen" in one(run, "screens-report"), run.report
 
 
 @pytest.mark.allow_subprocess
@@ -430,7 +430,7 @@ def test_a_screen_dragged_onto_another_does_not_end_up_on_top_of_it(tmp_path):
     orte = {name: wert.split(":")[0] for name, wert in stand.items()}
     assert orte["DP-1"] != orte["eDP-1"], (
         f"beide Schirme stehen auf {orte['DP-1']}:\n" + run.report)
-    assert "uebereinander" not in one(run, "screens-hint"), run.report
+    assert "übereinander" not in one(run, "screens-hint"), run.report
     assert run.applied == [], run.report
 
 
@@ -440,7 +440,7 @@ def test_an_overlap_that_is_already_there_is_named_under_the_drawing(tmp_path):
     aus einer Aufloesung. Dann wird sie gesagt."""
     run = run_screens(tmp_path, "screen:eDP-1", monitors=UEBEREINANDER)
 
-    assert "uebereinander" in one(run, "screens-hint"), run.report
+    assert "übereinander" in one(run, "screens-hint"), run.report
     # UND DER KNOPF BLEIBT LEBENDIG, sobald sich etwas geaendert hat.
     # Eine Oberflaeche, die eine bestehende Ueberlappung nicht mehr
     # anwenden laesst, ist die einzige, mit der man sie aufloesen wollte.
@@ -461,8 +461,8 @@ def test_the_question_names_the_overlap_before_the_countdown(tmp_path):
                       monitors=UEBEREINANDER)
 
     koerper = one(run, "dialog-body")
-    assert "uebereinander" in koerper, run.report
-    assert koerper.index("uebereinander") < koerper.index("Sekunden"), (
+    assert "übereinander" in koerper, run.report
+    assert koerper.index("übereinander") < koerper.index("Sekunden"), (
         "die Warnung steht hinter dem Zaehler - dann liest sie niemand:\n"
         + run.report)
     # GEMELDET UND NICHT VERWEIGERT: der Compositor hat die Anordnung

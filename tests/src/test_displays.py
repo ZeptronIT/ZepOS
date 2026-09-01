@@ -531,7 +531,7 @@ def test_two_screens_on_the_same_spot_are_reported():
     layout[1] = displays.replace(layout[1], x=0)
 
     assert displays.overlaps(layout) == [("DP-1", "eDP-1")]
-    assert "uebereinander" in displays.problems(layout)[0]
+    assert "übereinander" in displays.problems(layout)[0]
 
 
 def test_screens_that_merely_touch_do_not_overlap():
@@ -552,7 +552,7 @@ def test_an_overlap_is_a_remark_and_not_a_blocker():
 
     assert displays.blockers(layout) == []
     assert len(displays.remarks(layout)) == 1
-    assert "uebereinander" in displays.remarks(layout)[0]
+    assert "übereinander" in displays.remarks(layout)[0]
     assert displays.problems(layout) == displays.remarks(layout)
 
 

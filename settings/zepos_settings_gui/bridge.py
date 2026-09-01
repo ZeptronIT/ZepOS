@@ -388,12 +388,12 @@ def _page_bildschirme(*, runner=None) -> dict:
          for place in layout],
         scope=DESKTOP, immediate=True, writable=False,
         reason=reason or (
-            f"Diese Anordnung geht nicht durch `set`: sie wird ueber "
+            f"Diese Anordnung geht nicht durch `set`: sie wird über "
             f"{displays.GUARD_NAME} angewandt, der "
-            f"{displays.CONFIRM_SECONDS} Sekunden auf eine Bestaetigung "
-            f"wartet und sonst zuruecknimmt. Ein Befehl, der mit seiner "
-            f"Ausgabe endet, koennte den Waechter nicht halten - "
-            f"angewandt wird deshalb ueber `{OPTION} arm` aus einem "
+            f"{displays.CONFIRM_SECONDS} Sekunden auf eine Bestätigung "
+            f"wartet und sonst zurücknimmt. Ein Befehl, der mit seiner "
+            f"Ausgabe endet, könnte den Wächter nicht halten - "
+            f"angewandt wird deshalb über `{OPTION} arm` aus einem "
             f"Programm, das laufen bleibt."),
         available=available,
         armable=available and _guard_found(),
@@ -464,8 +464,8 @@ def _page_thema() -> dict:
                   "note": model.theme_description(name)} for name in names],
         scope=MACHINE, immediate=True, writable=writable,
         reason="" if writable else (
-            "Das Thema gehoert der Maschine und nicht diesem Konto, weil "
-            "der Anmeldebildschirm dazugehoert. Beim Wechseln wird nach "
+            "Das Thema gehört der Maschine und nicht diesem Konto, weil "
+            "der Anmeldebildschirm dazugehört. Beim Wechseln wird nach "
             "Rechten gefragt."),
         command=model.theme_elevated_command(theme.DEFAULT)[:-1])
     return _page("thema", [control],
@@ -512,8 +512,8 @@ def _page_aktualisierung() -> dict:
 
     writable = model.update_writable()
     reason = "" if writable else (
-        "Diese Einstellung gehoert der Maschine und nicht diesem Konto: "
-        "der Dienst laeuft, bevor sich jemand angemeldet hat. Beim "
+        "Diese Einstellung gehört der Maschine und nicht diesem Konto: "
+        "der Dienst läuft, bevor sich jemand angemeldet hat. Beim "
         "Verstellen wird nach Rechten gefragt.")
     shipped = update.defaults()
 
@@ -661,9 +661,9 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
             dial = dials.get(name)
             if dial is None:
                 problems.append(
-                    f"{key}: diese Oberflaeche bietet nur "
-                    f"{', '.join(sorted(dials))} an. Die uebrigen "
-                    f"{len(sizes.TABLE) - len(dials)} Groessen stehen in "
+                    f"{key}: diese Oberfläche bietet nur "
+                    f"{', '.join(sorted(dials))} an. Die übrigen "
+                    f"{len(sizes.TABLE) - len(dials)} Größen stehen in "
                     f"`zepos-settings get sizes` und `user_settings.py "
                     f"list-sizes`.")
             elif value is None:
@@ -713,7 +713,7 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
 
         else:
             problems.append(
-                f"{key}: kein Schluessel dieser Oberflaeche. `--json get` "
+                f"{key}: kein Schlüssel dieser Oberfläche. `--json get` "
                 f"nennt jeden, den es gibt.")
 
     return machine
@@ -740,7 +740,7 @@ def _plan_bar(half: str, key: str, value: Any, draft: model.Draft,
         return
     if not isinstance(value, list) or any(not isinstance(n, str) for n in value):
         problems.append(
-            f"{key}: erwartet wird eine Liste von Namen oder null fuer "
+            f"{key}: erwartet wird eine Liste von Namen oder null für "
             f"die ausgelieferte Reihenfolge")
         return
 
@@ -770,9 +770,9 @@ def _plan_update(name: str, key: str, value: Any,
     labels = UPDATE_CHOICES.get(name)
     if labels is None:
         problems.append(
-            f"{key}: diese Oberflaeche bietet "
+            f"{key}: diese Oberfläche bietet "
             f"{', '.join(UPDATE_PREFIX + n for n in [model.UPDATE_ENABLED, *UPDATE_CHOICES])} "
-            f"an. `zepos-update --help` nennt die uebrigen.")
+            f"an. `zepos-update --help` nennt die übrigen.")
     elif value not in labels:
         problems.append(f"{key}: {value!r} ist keins von "
                         f"{', '.join(labels)}")
@@ -891,7 +891,7 @@ def _arm_plan(document: Any, desk, problems: list[str]) -> None:
         unknown = sorted(set(screen) - set(ARM_FIELDS) - {"name"})
         if unknown:
             problems.append(
-                f"{name}: {', '.join(unknown)} kennt diese Oberflaeche "
+                f"{name}: {', '.join(unknown)} kennt diese Oberfläche "
                 f"nicht. Einstellbar sind {', '.join(ARM_FIELDS)}.")
             continue
         if fields:
@@ -1011,7 +1011,7 @@ def arm(*, runner=None, stdin=None, stdout=None) -> int:
         # dem Schirm steht die alte Anordnung, also wird auch keine neue
         # geschrieben. Wortgleich zu screens.py, _settle().
         say({"schema": SCHEMA, "ok": False, "armed": False, "kept": False,
-             "problems": ["Der Waechter hatte schon zurueckgestellt: "
+             "problems": ["Der Wächter hatte schon zurückgestellt: "
                           + outcome.report],
              "written": [], "report": outcome.report})
         return 1
@@ -1021,7 +1021,7 @@ def arm(*, runner=None, stdin=None, stdout=None) -> int:
     except OSError as problem:
         say({"schema": SCHEMA, "ok": False, "armed": False, "kept": True,
              "problems": [f"Angewandt, aber nicht geschrieben: {problem}. "
-                          f"Die Anordnung steht bis zum naechsten "
+                          f"Die Anordnung steht bis zum nächsten "
                           f"Anmelden."],
              "written": [], "report": outcome.report})
         return 1
@@ -1109,7 +1109,7 @@ def main(arguments: list[str], *, runner=None, stdin=None) -> int:
     if not isinstance(changes, dict):
         print(json.dumps(
             {"schema": SCHEMA, "ok": False,
-             "problems": [f"erwartet wird ein Objekt {{schluessel: wert}}, "
+             "problems": [f"erwartet wird ein Objekt {{schlüssel: wert}}, "
                           f"nicht ein JSON {_kind(changes)}"]},
             ensure_ascii=False, indent=2))
         return 1

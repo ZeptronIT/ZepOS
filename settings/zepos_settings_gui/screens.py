@@ -393,7 +393,7 @@ class ScreensPage(Gtk.Box):
             self.report = "Kein Bildschirm gemeldet"
             self.append(_notice(
                 "Kein Bildschirm gemeldet",
-                "Der Compositor laeuft und zaehlt keinen einzigen Ausgang "
+                "Der Compositor läuft und zählt keinen einzigen Ausgang "
                 "auf. Eine Anordnung liesse sich darauf nicht schreiben."))
             return
 
@@ -414,7 +414,7 @@ class ScreensPage(Gtk.Box):
         self.hint = Gtk.Label(wrap=True, xalign=0.0)
         self.append(self.hint)
 
-        group = Adw.PreferencesGroup(title="Der gewaehlte Bildschirm")
+        group = Adw.PreferencesGroup(title="Der gewählte Bildschirm")
 
         self.chooser = Adw.ComboRow(
             title="Bildschirm",
@@ -427,23 +427,23 @@ class ScreensPage(Gtk.Box):
 
         self.rows["enabled"] = Adw.SwitchRow(
             title="Eingeschaltet",
-            subtitle="Aus heisst: der Ausgang wird abgeschaltet, und "
+            subtitle="Aus heißt: der Ausgang wird abgeschaltet, und "
                      "Fenster darauf wandern auf einen anderen Schirm.")
         self.rows["enabled"].connect("notify::active", self._on_enabled)
         group.add(self.rows["enabled"])
 
         self.rows["mode"] = Adw.ComboRow(
-            title="Aufloesung und Bildrate",
+            title="Auflösung und Bildrate",
             subtitle="Was dieser Bildschirm laut seinem EDID kann.",
             model=Gtk.StringList.new([]))
         self.rows["mode"].connect("notify::selected", self._on_mode)
         group.add(self.rows["mode"])
 
         self.rows["scale"] = Adw.ComboRow(
-            title="Massstab",
-            subtitle="Teilt die Aufloesung. Hyprland lehnt einen Massstab "
+            title="Maßstab",
+            subtitle="Teilt die Auflösung. Hyprland lehnt einen Maßstab "
                      "ab, bei dem sie nicht ganzzahlig aufgeht - dann nimmt "
-                     "der Waechter die Anordnung wieder zurueck.",
+                     "der Wächter die Anordnung wieder zurück.",
             model=Gtk.StringList.new([]))
         self.rows["scale"].connect("notify::selected", self._on_scale)
         group.add(self.rows["scale"])
@@ -619,13 +619,13 @@ class ScreensPage(Gtk.Box):
         profile = displays.current_profile()
         if len(where) > 1:
             return (f"{where[0]} und das aktive Profil \"{profile}\" "
-                    f"({where[1]}). Ohne die zweite waere die Anordnung bei "
-                    "der naechsten Anmeldung wieder weg: start-hyprland "
-                    "kopiert das Profil darueber.")
+                    f"({where[1]}). Ohne die zweite wäre die Anordnung bei "
+                    "der nächsten Anmeldung wieder weg: start-hyprland "
+                    "kopiert das Profil darüber.")
         if profile:
             return (f"{where[0]}. Das Profil \"{profile}\" hat kein "
                     f"Verzeichnis - `save-profile {profile}` legt eins an, "
-                    "und die Anordnung ueberlebt dann die naechste "
+                    "und die Anordnung überlebt dann die nächste "
                     "Anmeldung.")
         return (f"{where[0]}. Kein Profil ist aktiv; `save-profile` mit "
                 "einem Namen macht aus dieser Anordnung eine, die "
@@ -722,7 +722,7 @@ class ScreensPage(Gtk.Box):
         self.countdown = displays.CONFIRM_SECONDS
         dialog = Adw.AlertDialog(heading="Diese Anordnung behalten?",
                                  body=self._countdown_text())
-        dialog.add_response("zurueck", "Zuruecknehmen")
+        dialog.add_response("zurueck", "Zurücknehmen")
         dialog.add_response("behalten", "Behalten")
         dialog.set_response_appearance("behalten",
                                        Adw.ResponseAppearance.SUGGESTED)
@@ -763,7 +763,7 @@ class ScreensPage(Gtk.Box):
             + f"Ohne Antwort wird in {self.countdown} Sekunden die alte "
             "Anordnung wiederhergestellt.\n\n"
             "Das passiert auch dann, wenn dieses Fenster in der "
-            "Zwischenzeit abstuerzt: der Rueckweg laeuft in einem eigenen "
+            "Zwischenzeit abstürzt: der Rückweg läuft in einem eigenen "
             "Prozess.")
 
     def _tick(self) -> bool:
@@ -837,7 +837,7 @@ class ScreensPage(Gtk.Box):
         if not keep:
             outcome = attempt.revert()
             self.desk.placements = list(self.desk.original)
-            self._say(f"Zurueckgenommen. {outcome.report}".strip())
+            self._say(f"Zurückgenommen. {outcome.report}".strip())
             self._on_desk_changed()
             return
 
@@ -849,7 +849,7 @@ class ScreensPage(Gtk.Box):
             # Absicht - auf dem Schirm steht die alte Anordnung, also
             # wird auch die alte geschrieben, naemlich keine.
             self.desk.placements = list(self.desk.original)
-            self._say("Der Waechter hatte schon zurueckgestellt: "
+            self._say("Der Wächter hatte schon zurückgestellt: "
                       + outcome.report)
             self._on_desk_changed()
             return
@@ -858,7 +858,7 @@ class ScreensPage(Gtk.Box):
             written = displays.write(self.desk.placements)
         except OSError as problem:
             self._say(f"Angewandt, aber nicht geschrieben: {problem}. Die "
-                      "Anordnung steht bis zum naechsten Anmelden.")
+                      "Anordnung steht bis zum nächsten Anmelden.")
             self._on_desk_changed()
             return
 

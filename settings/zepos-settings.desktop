@@ -25,7 +25,7 @@
 #     neben allen anderen im Starter steht und als einziges nicht aus
 #     demselben Satz kommt.
 Name=Systemeinstellungen
-Comment=Groesse, Bildschirme, Leiste, Farben, Wetter und Aktualisierung von ZepOS
+Comment=Größe, Bildschirme, Leiste, Farben, Wetter und Aktualisierung von ZepOS
 Exec=/usr/bin/zepos-settings-gui
 TryExec=/usr/bin/zepos-settings-gui
 Icon=preferences-system
@@ -71,7 +71,7 @@ StartupWMClass=de.zeptronit.zepos.Settings
 Actions=groesse;bildschirme;leiste;thema;farben;wetter;aktualisierung;
 
 [Desktop Action groesse]
-Name=Groesse
+Name=Größe
 Exec=/usr/bin/zepos-settings-gui --page groesse
 Icon=preferences-desktop-font-symbolic
 

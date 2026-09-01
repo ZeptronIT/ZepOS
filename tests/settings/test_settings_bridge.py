@@ -489,7 +489,7 @@ def test_ein_stummer_compositor_ist_eine_meldung_und_kein_absturz(bridge,
     ({"update.report_base": True}, "zepos-update --help"),
     ({"weather.location": 5}, "ist kein Ortsname"),
     ({"bar.modules_oben": []}, "es gibt"),
-    ({"quatsch": 1}, "kein Schluessel dieser Oberflaeche"),
+    ({"quatsch": 1}, "kein Schlüssel dieser Oberfläche"),
 ])
 def test_ungueltige_eingabe_wird_abgelehnt(bridge, capsys, tmp_path,
                                            changes, expected):
@@ -1089,12 +1089,12 @@ def test_ein_waechter_der_schon_zurueckstellte_schlaegt_die_absicht(
     assert code == 1
     assert zeilen[-1]["kept"] is False
     assert not displays.config_path().exists()
-    assert "zurueckgestellt" in zeilen[-1]["problems"][0]
+    assert "zurückgestellt" in zeilen[-1]["problems"][0]
 
 
 @pytest.mark.parametrize("dokument, erwartet", [
     ({"layout": [{"name": "gibt-es-nicht"}]}, "gibt es hier nicht"),
-    ({"layout": [{"name": "eDP-1", "quatsch": 1}]}, "kennt diese Oberflaeche"),
+    ({"layout": [{"name": "eDP-1", "quatsch": 1}]}, "kennt diese Oberfläche"),
     ({"layout": [{"name": "eDP-1", "scale": "gross"}]}, "ist keine Zahl"),
     ({"layout": [{"name": "eDP-1", "enabled": 1}]}, "ist kein Schalter"),
     ({"layout": [{"enabled": True}]}, "braucht seinen `name`"),
@@ -1160,7 +1160,7 @@ def test_eine_ueberlappung_wird_gemeldet_und_nicht_verweigert(
     scharf = [zeile for zeile in zeilen if zeile.get("armed")]
     assert scharf, f"es wurde gar nicht erst scharfgemacht: {zeilen}"
     assert scharf[0]["problems"] == []
-    assert any("uebereinander" in satz for satz in scharf[0]["warnings"]), (
+    assert any("übereinander" in satz for satz in scharf[0]["warnings"]), (
         f"die Warnung fehlt in {scharf[0]}")
     assert gesehen, "es wurde trotz der Warnung kein Waechter scharfgemacht"
     assert code == 0

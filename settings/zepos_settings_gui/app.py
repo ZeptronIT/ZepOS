@@ -166,11 +166,11 @@ class SettingsWindow(Adw.ApplicationWindow):
         self.scale_row.connect("notify::value", self._on_scale)
         group.add(self.scale_row)
 
-        reset = Gtk.Button(label="Auf den ausgelieferten Massstab",
+        reset = Gtk.Button(label="Auf den ausgelieferten Maßstab",
                            valign=Gtk.Align.CENTER)
         reset.connect("clicked", self._on_scale_reset)
         shipped = Adw.ActionRow(
-            title="Zuruecksetzen", subtitle=model.NOTE_SCALE_RESET)
+            title="Zurücksetzen", subtitle=model.NOTE_SCALE_RESET)
         shipped.add_suffix(reset)
         group.add(shipped)
         page.add(group)
@@ -208,7 +208,7 @@ class SettingsWindow(Adw.ApplicationWindow):
 
         back = Gtk.Button(icon_name="edit-undo-symbolic",
                           valign=Gtk.Align.CENTER,
-                          tooltip_text="Wieder dem Massstab ueberlassen")
+                          tooltip_text="Wieder dem Maßstab überlassen")
         back.add_css_class("flat")
         back.connect("clicked", self._on_dial_reset, dial)
         row.add_suffix(back)
@@ -389,7 +389,7 @@ class SettingsWindow(Adw.ApplicationWindow):
             self.banner.set_button_label("Jetzt anwenden")
             self.banner.set_title(
                 f"Thema {model.theme_label(name)} gesetzt. "
-                "Der Anmeldebildschirm zeigt es beim naechsten Mal; der "
+                "Der Anmeldebildschirm zeigt es beim nächsten Mal; der "
                 "Schreibtisch nach einem Erzeugungslauf.")
         else:
             self.banner.set_button_label("")
@@ -467,7 +467,7 @@ class SettingsWindow(Adw.ApplicationWindow):
             # Fensters etwas anderes einstellt, ist kein Anzeigen.
             options = [current, *options]
             row.set_model(Gtk.StringList.new(
-                [f"{current} (unveraendert)",
+                [f"{current} (unverändert)",
                  *[labels[name] for name in options[1:]]]))
             row.set_selected(0)
         self.update_options[key] = options
@@ -595,7 +595,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         self._refresh_save()
 
         self.banner.set_title(
-            "Gespeichert. Wirksam mit der naechsten Anmeldung - oder "
+            "Gespeichert. Wirksam mit der nächsten Anmeldung - oder "
             "jetzt.")
         self.banner.set_button_label("Jetzt anwenden")
         self.banner.set_revealed(True)
@@ -604,7 +604,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         dialog = Adw.AlertDialog(
             heading="Jetzt anwenden?",
             body=model.GENERATE_COST)
-        dialog.add_response("nein", "Spaeter")
+        dialog.add_response("nein", "Später")
         dialog.add_response("ja", "Anwenden")
         dialog.set_response_appearance("ja", Adw.ResponseAppearance.SUGGESTED)
         dialog.set_default_response("nein")
@@ -631,7 +631,7 @@ class SettingsWindow(Adw.ApplicationWindow):
             self.banner.set_title(
                 f"Der Generator endete mit {completed.returncode}. Die "
                 "Einstellungen sind gespeichert und werden bei der "
-                "naechsten Anmeldung noch einmal versucht.")
+                "nächsten Anmeldung noch einmal versucht.")
         self.banner.set_button_label("")
         self.banner.set_revealed(True)
         return completed.returncode

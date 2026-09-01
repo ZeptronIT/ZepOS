@@ -340,7 +340,7 @@ def test_a_rollback_leaves_a_line_that_survives_the_crash(bench):
            / "displays-guard.log")
     assert log.is_file(), "der Waechter hat nichts hinterlassen"
     text = log.read_text(encoding="utf-8")
-    assert "Keine Bestaetigung" in text
+    assert "Keine Bestätigung" in text
     assert "wiederhergestellt" in text
 
 

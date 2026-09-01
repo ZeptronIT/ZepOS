@@ -272,7 +272,7 @@ DIALS: tuple[Dial, ...] = (
         "Schrift im Terminal",
         "In Punkt, weil kitty nur Punkt entgegennimmt. Folgt sonst dem "
         "Regler oben - hier stand einmal eine 7.0, also 9 Pixel, in "
-        "einem Schreibtisch, der ueberall sonst 24 zeigte.",
+        "einem Schreibtisch, der überall sonst 24 zeigte.",
         6, 40),
     Dial(
         "STYLE_BAR_THICKNESS",
@@ -285,7 +285,7 @@ DIALS: tuple[Dial, ...] = (
         "STYLE_DOCK_ICON_SIZE",
         "Symbole im Dock",
         "Normalerweise abgeleitet: der Fuss ist genauso hoch wie die "
-        "Leiste, und das Symbol fuellt ihn aus. Wer hier eine Zahl "
+        "Leiste, und das Symbol füllt ihn aus. Wer hier eine Zahl "
         "nennt, hat danach zwei verschieden hohe Streifen.",
         16, 128),
     Dial(
@@ -294,7 +294,7 @@ DIALS: tuple[Dial, ...] = (
         "Zwischen zwei Fenstern wird das Doppelte davon sichtbar, weil "
         "Hyprland den inneren Abstand an JEDE Seite legt; zum Schirmrand "
         "und um die Leiste herum ebenfalls das Doppelte. So ist der "
-        "Abstand ueberall derselbe.",
+        "Abstand überall derselbe.",
         0, 32),
     Dial(
         "STYLE_WINDOW_ROUNDING",
@@ -360,7 +360,7 @@ def size_text(name: str, value: float) -> str:
 #     hebt sie einzeln hierher - eine Zeile, die nichts als ihren Ort
 #     aendert." Genau das ist am selben Tag (Aufgabe 32, das AGS-Fenster)
 #     passiert - siehe NOTE_* weiter unten.
-LABEL_SCALE = "Groesse des Schreibtischs"
+LABEL_SCALE = "Größe des Schreibtischs"
 LABEL_MOTION = "Bewegung zeigen"
 LABEL_WEATHER = "Ort"
 LABEL_THEME = "Thema dieses Rechners"
@@ -425,7 +425,7 @@ SCALES = (1.0, 1.25, 1.5, 1.75, 2.0, 3.0)
 # darunter: das AGS-Fenster setzt dieselben Ueberschriften ueber
 # dieselben Regler (zepSectionLabel, ags-kit.template), und eine
 # Ueberschrift, die in app.py steht, waere dort abgeschrieben.
-GROUP_SCALE = "Massstab"
+GROUP_SCALE = "Maßstab"
 GROUP_DIALS = "Ausnahmen"
 GROUP_MOTION = "Bewegung"
 GROUP_THEME = "Thema"
@@ -434,19 +434,19 @@ GROUP_UPDATE = "Selbstaktualisierung"
 
 NOTE_SCALE_GROUP = (
     "Ein Faktor auf alles, was Text ist oder Text umschliesst: "
-    "die Schrift, die Zeilenhoehen, die Dicke der Leiste. "
-    f"{sizes.SCALE_DEFAULT:.4g} ist die ausgelieferte Groesse - "
+    "die Schrift, die Zeilenhöhen, die Dicke der Leiste. "
+    f"{sizes.SCALE_DEFAULT:.4g} ist die ausgelieferte Größe - "
     "dieselbe, in der das Startmenue schreibt. 1 ist die "
-    "Groesse davor.")
+    "Größe davor.")
 
 NOTE_SCALE_RESET = (
     f"Stellt den Faktor auf {sizes.SCALE_DEFAULT:.4g} und gibt jede "
-    "Ausnahme unten wieder an ihn zurueck.")
+    "Ausnahme unten wieder an ihn zurück.")
 
 NOTE_DIALS_GROUP = (
-    "Fuenf Groessen mit einem eigenen Grund, vom Faktor abzuweichen. "
+    "Fünf Größen mit einem eigenen Grund, vom Faktor abzuweichen. "
     "Wer hier eine Zahl nennt, sagt, was auf dem Schirm stehen soll - "
-    "der Faktor gilt fuer sie dann nicht mehr.")
+    "der Faktor gilt für sie dann nicht mehr.")
 
 # Die drei Dauern werden GELESEN und nicht genannt: sie stehen in
 # sizes.py, und eine abgeschriebene Millisekundenzahl hier waere beim
@@ -456,15 +456,15 @@ NOTE_MOTION_GROUP = (
     + ", ".join(sizes.value_of(f"{sizes.MOTION_PREFIX}{role}", {})
                 for role, _ in sizes.MOTION_ROLES)
     + ". Sie folgen dem Faktor NICHT: wer die Schrift verdoppelt, "
-      "will groesser lesen und nicht laenger warten.")
+      "will größer lesen und nicht länger warten.")
 
 NOTE_MOTION = (
-    "Aus heisst wirklich aus - der Compositor und die fremden "
-    "GTK4-Fenster gehen mit. Bewegte Flaechen loesen bei einer "
-    "vestibulaeren Stoerung Schwindel aus; das ist der Grund "
-    "fuer diesen Schalter und kein Geschmack.")
+    "Aus heißt wirklich aus - der Compositor und die fremden "
+    "GTK4-Fenster gehen mit. Bewegte Flächen lösen bei einer "
+    "vestibulären Störung Schwindel aus; das ist der Grund "
+    "für diesen Schalter und kein Geschmack.")
 
-NOTE_SIZES_REST_TITLE = "Die uebrigen Groessen"
+NOTE_SIZES_REST_TITLE = "Die übrigen Größen"
 
 NOTE_SIZES_REST = (
     f"Einstellbar sind {len(sizes.TABLE)}. Die anderen "
@@ -472,22 +472,22 @@ NOTE_SIZES_REST = (
     "vier Leitern - Schrift, Symbol, Rundung, Abstand -, die "
     "der Regler oben IM VERHAELTNIS bewegt, und Innenmasse "
     "von Fenstern, die nach dem Platzhalter heissen, den sie "
-    "setzen. Einzeln angeboten waeren sie wieder der Katalog, "
-    "den die Leitern abgeloest haben. "
+    "setzen. Einzeln angeboten wären sie wieder der Katalog, "
+    "den die Leitern abgelöst haben. "
     "`zepos-settings get sizes` zeigt, was gesetzt ist, "
     "`user_settings.py list-sizes` alle mit ihrem aktuellen Wert.")
 
 NOTE_WEATHER_GROUP = (
     "Ein Ortsname, eine Postleitzahl oder ein Flughafencode. "
-    "Leer heisst: das Modul bleibt leer und fragt niemanden - "
-    "und nur dann erfaehrt wttr.in nicht, wo diese Maschine "
+    "Leer heißt: das Modul bleibt leer und fragt niemanden - "
+    "und nur dann erfährt wttr.in nicht, wo diese Maschine "
     "steht. Der Ort geht bei jeder Auffrischung dorthin.")
 
 NOTE_UPDATE_ENABLED = (
-    "Aus heisst: systemd haelt den Zeitgeber gar nicht erst.")
+    "Aus heißt: systemd hält den Zeitgeber gar nicht erst.")
 
 NOTE_UPDATE_SCOPE = (
-    "Nur ZepOS laesst die Arch-Basis in Ruhe. Ein "
+    "Nur ZepOS lässt die Arch-Basis in Ruhe. Ein "
     "unbeaufsichtigtes Vollupgrade auf einem Rolling Release ist "
     "ein Rechner, der eines Morgens nicht mehr startet.")
 
@@ -496,20 +496,20 @@ NOTE_UPDATE_NOTIFY = (
     "abgelehnte Unterschrift darf nicht wie \"schon eine Weile "
     "nichts Neues\" aussehen.")
 
-NOTE_UPDATE_REST_TITLE = "Die uebrigen Einstellungen"
+NOTE_UPDATE_REST_TITLE = "Die übrigen Einstellungen"
 
 NOTE_UPDATE_REST = (
-    "Verzoegerung nach dem Start, zufaellige Streuung, Nachholen und "
-    "die Meldung ueber die Arch-Basis stehen in `zepos-update --help`.")
+    "Verzögerung nach dem Start, zufällige Streuung, Nachholen und "
+    "die Meldung über die Arch-Basis stehen in `zepos-update --help`.")
 
 
 def theme_note(writable: bool) -> str:
     """Die Beschreibung der Themenseite - mit dem Satz, der misst."""
     return (
         "Die Palette, unter der die eigenen Farben liegen: was "
-        "auf der Seite \"Farben\" eingestellt ist, ueberlebt "
+        "auf der Seite \"Farben\" eingestellt ist, überlebt "
         "jeden Wechsel.\n\n"
-        "Das Thema gehoert der MASCHINE und nicht diesem Konto - "
+        "Das Thema gehört der MASCHINE und nicht diesem Konto - "
         "der Anmeldebildschirm steht vor jedem Konto und soll "
         "dasselbe zeigen. "
         + ("Dieses Konto darf es schreiben." if writable else
@@ -519,11 +519,11 @@ def theme_note(writable: bool) -> str:
 def update_note(writable: bool) -> str:
     """Dieselbe Form fuer die Aktualisierung."""
     return (
-        "Diese Einstellungen gehoeren der MASCHINE und nicht "
-        "diesem Konto: der Dienst laeuft, bevor sich jemand "
+        "Diese Einstellungen gehören der MASCHINE und nicht "
+        "diesem Konto: der Dienst läuft, bevor sich jemand "
         "angemeldet hat. Sie werden sofort geschrieben - "
         + ("dieses Konto darf das." if writable else
-           "und dafuer wird nach Rechten gefragt."))
+           "und dafür wird nach Rechten gefragt."))
 
 
 # Die Seiten dieses Fensters, in der Reihenfolge, in der sie im
@@ -550,7 +550,7 @@ def update_note(writable: bool) -> str:
 #     auseinanderlaufen koennen, steht die Liste hier EINMAL, und
 #     tests/settings/test_settings_model.py haelt die Datei dagegen.
 PAGES: tuple[tuple[str, str, str], ...] = (
-    ("groesse", "Groesse", "preferences-desktop-font-symbolic"),
+    ("groesse", "Größe", "preferences-desktop-font-symbolic"),
     # Die Bildschirme direkt hinter der Groesse, weil beide dieselbe
     # Frage beantworten - "wie gross ist das hier eigentlich" -, und
     # VOR dem Thema, weil eine Anordnung der Grund ist, aus dem jemand
@@ -676,15 +676,15 @@ def hex_of(red: float, green: float, blue: float) -> str:
 # Schirm von links nach rechts und dann darunter stehen.
 BAR_SIDES: tuple[tuple[str, str, str], ...] = (
     (settings_file.BAR_LEFT, "Links in der Leiste",
-     "Das linke Ende der oberen Leiste, von aussen nach innen gelesen: "
+     "Das linke Ende der oberen Leiste, von außen nach innen gelesen: "
      "der oberste Eintrag steht am weitesten links."),
     (settings_file.BAR_RIGHT, "Rechts in der Leiste",
-     "Das rechte Ende, von innen nach aussen: der oberste Eintrag steht "
-     "der Fenstertitelmitte am naechsten, der unterste ganz aussen."),
+     "Das rechte Ende, von innen nach außen: der oberste Eintrag steht "
+     "der Fenstertitelmitte am nächsten, der unterste ganz außen."),
     (settings_file.BAR_PINS, "Im Dock angeheftet",
      "Die Anwendungen im Fuss, von links nach rechts. Ein offenes "
      "Fenster erscheint dort ohnehin; hier steht, was auch ohne "
-     "geoeffnetes Fenster dableibt."),
+     "geöffnetes Fenster dableibt."),
 )
 
 
@@ -862,7 +862,7 @@ def shipped_bar() -> tuple[dict[str, list[str] | None], dict[str, str], str]:
                 f"ausliefert "
                 f"({paths.system_root() / settings_file.SHIPPED_BAR} "
                 f"fehlt). Was hier steht, ist deshalb das, was in den "
-                f"Einstellungen steht - hinzufuegen laesst sich nichts. "
+                f"Einstellungen steht - hinzufügen lässt sich nichts. "
                 f"Die Datei bringt das Paket zepos-config mit; ein "
                 f"Checkout ohne installiertes Paket hat sie nicht.")
 
@@ -1206,9 +1206,9 @@ GENERATE_COMMAND = ("zepos-generate", "--all")
 # zwei Sekunden warten, `pkill -9 -f "gjs.*ags"`, neu starten.
 GENERATE_COST = (
     "Die Leiste, das Dock und alle Ueberlagerungsfenster werden dabei "
-    "beendet und neu gestartet - sie sind fuer wenige Sekunden weg. "
-    "Bereits geoeffnete Terminals behalten ihre alte Schriftgroesse, "
-    "bis sie neu geoeffnet werden."
+    "beendet und neu gestartet - sie sind für wenige Sekunden weg. "
+    "Bereits geöffnete Terminals behalten ihre alte Schriftgröße, "
+    "bis sie neu geöffnet werden."
 )
 
 
@@ -1286,8 +1286,8 @@ UPDATE_SCOPE_LABELS = {
 }
 
 UPDATE_NOTIFY_LABELS = {
-    update.NOTIFY_CHANGES: "Wenn sich etwas geaendert hat",
-    update.NOTIFY_FAILURES: "Nur bei Fehlschlaegen",
+    update.NOTIFY_CHANGES: "Wenn sich etwas geändert hat",
+    update.NOTIFY_FAILURES: "Nur bei Fehlschlägen",
     update.NOTIFY_NEVER: "Nie",
 }
 
@@ -1296,8 +1296,8 @@ UPDATE_NOTIFY_LABELS = {
 # und eine Aktualisierung, die stuendlich nach Paketen fragt, ist keine
 # Einstellung, sondern ein Fehler mit einem Namen.
 UPDATE_INTERVAL_LABELS = {
-    "daily": "Taeglich",
-    "weekly": "Woechentlich",
+    "daily": "Täglich",
+    "weekly": "Wöchentlich",
     "monthly": "Monatlich",
 }
 
@@ -1380,8 +1380,8 @@ def set_theme(name: str, *, runner: Runner | None = None) -> UpdateOutcome:
     if not lifting:
         return UpdateOutcome(
             False,
-            "Das Thema gehoert der Maschine und nicht diesem Konto, weil "
-            "der Anmeldebildschirm dazugehoert. Auf diesem System ist "
+            "Das Thema gehört der Maschine und nicht diesem Konto, weil "
+            "der Anmeldebildschirm dazugehört. Auf diesem System ist "
             "kein pkexec vorhanden, also geht es nur so:\n    sudo "
             + " ".join(command),
             command)
@@ -1414,10 +1414,10 @@ def set_theme(name: str, *, runner: Runner | None = None) -> UpdateOutcome:
 #                 Terminals behalten ihre Farben, bis sie neu geoeffnet
 #                 werden: kitty liest kitty.conf einmal.
 THEME_TIMING = (
-    "Der Anmeldebildschirm zeigt das neue Thema sofort - beim naechsten "
+    "Der Anmeldebildschirm zeigt das neue Thema sofort - beim nächsten "
     "Mal, ohne dass etwas erzeugt werden muss. Der Schreibtisch braucht "
     "einen Erzeugungslauf. Fensterrahmen und schon offene Terminals "
-    "folgen erst nach `hyprctl reload` beziehungsweise beim naechsten "
+    "folgen erst nach `hyprctl reload` beziehungsweise beim nächsten "
     "Oeffnen."
 )
 
@@ -1522,7 +1522,7 @@ def set_update_value(key: str, value: Any, *,
     if not lifting:
         return UpdateOutcome(
             False,
-            "Diese Einstellung gehoert der Maschine und nicht diesem "
+            "Diese Einstellung gehört der Maschine und nicht diesem "
             "Konto. Auf diesem System ist kein pkexec vorhanden, also "
             "geht es nur so:\n    sudo " + " ".join(command),
             command)

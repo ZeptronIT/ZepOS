@@ -892,9 +892,9 @@ def blockers(placements: Iterable[Placement]) -> list[str]:
     """
     if any(item.enabled for item in placements):
         return []
-    return ["Kein Bildschirm bleibt an. Es gibt keinen Rueckweg aus einem "
+    return ["Kein Bildschirm bleibt an. Es gibt keinen Rückweg aus einem "
             "Schreibtisch ohne Bild: die Frage, ob man ihn behalten will, "
-            "stuende auf keinem Schirm mehr."]
+            "stünde auf keinem Schirm mehr."]
 
 
 def remarks(placements: Iterable[Placement]) -> list[str]:
@@ -904,7 +904,7 @@ def remarks(placements: Iterable[Placement]) -> list[str]:
     overlaps() steht: eine Ueberlappung ist fast immer ein Versehen,
     aber sie ist eine Anordnung, die man SIEHT und zuruecknehmen kann.
     """
-    return [f"{first} und {second} liegen uebereinander. Fenster gehen "
+    return [f"{first} und {second} liegen übereinander. Fenster gehen "
             "dann auf einem Schirm auf, der teilweise verdeckt ist."
             for first, second in overlaps(placements)]
 
@@ -1086,7 +1086,7 @@ def guard_command() -> list[str]:
         return [sys.executable, str(local)]
     raise FileNotFoundError(
         f"{GUARD_NAME} ist weder auf PATH noch unter {local} zu finden. "
-        "Ohne den Waechter gibt es keinen Rueckfall, und ohne Rueckfall "
+        "Ohne den Wächter gibt es keinen Rückfall, und ohne Rückfall "
         "wird hier nichts angewandt.")
 
 
@@ -1235,7 +1235,7 @@ def arm_and_apply(new: Iterable[Placement], previous: Iterable[Placement], *,
         process.communicate()
         raise GuardRefused(
             f"{GUARD_NAME} meldete {ready!r} statt {GUARD_READY!r}. Ohne "
-            "einen bereiten Waechter wird nichts angewandt.")
+            "einen bereiten Wächter wird nichts angewandt.")
 
     attempt = Attempt(guard=process, applied=apply_it,
                       placements=tuple(new))
@@ -1247,7 +1247,7 @@ def arm_and_apply(new: Iterable[Placement], previous: Iterable[Placement], *,
         raise ApplyFailed(
             f"hyprctl endete mit {completed.returncode}: "
             f"{(completed.stderr or '').strip()}\n"
-            f"Zurueckgenommen: {outcome.report}")
+            f"Zurückgenommen: {outcome.report}")
     return attempt
 
 
@@ -1373,7 +1373,7 @@ def _tell_the_user(reason: str) -> None:
     try:
         subprocess.run(
             [found, "--urgency=critical", "--app-name=ZepOS",
-             "Bildschirme zurueckgestellt", reason],
+             "Bildschirme zurückgestellt", reason],
             capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         pass
@@ -1463,19 +1463,19 @@ def guard_main(argv: list[str] | None = None) -> int:
         if answer is None:
             return _revert(
                 command, EXIT_REVERTED_DEADLINE,
-                f"Keine Bestaetigung binnen {number(seconds)} Sekunden")
+                f"Keine Bestätigung binnen {number(seconds)} Sekunden")
         if answer == "":
             return _revert(
                 command, EXIT_REVERTED_BROKEN_PIPE,
                 "Die Einstellungen sind beendet worden, bevor die "
-                "Anordnung bestaetigt war")
+                "Anordnung bestätigt war")
         answer = answer.strip()
         if answer == GUARD_KEEP:
             _say(GUARD_KEEP)
             return EXIT_KEPT
         if answer == GUARD_REVERT:
             return _revert(command, EXIT_REVERTED_ON_REQUEST,
-                           "Auf Wunsch zurueckgenommen")
+                           "Auf Wunsch zurückgenommen")
         # Eine Zeile, die keins von beidem ist, wird ueberlesen. Ein
         # Waechter, der bei einem Tippfehler auf der Pipe zurueckstellt,
         # macht aus einem Verstaendigungsfehler einen Moduswechsel.

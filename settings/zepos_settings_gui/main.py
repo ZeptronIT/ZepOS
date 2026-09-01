@@ -88,7 +88,7 @@ def page_of(arguments: list[str]) -> str | None:
         f"`{' '.join(arguments)}` ist keiner der Schalter dieser "
         f"Anwendung.\n"
         f"Seiten: {', '.join(model.PAGE_NAMES)}\n"
-        f"Fuer die Kommandozeile: zepos-settings --help")
+        f"Für die Kommandozeile: zepos-settings --help")
 
 
 def main(argv: list[str] | None = None, *,

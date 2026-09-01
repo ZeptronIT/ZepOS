@@ -1150,7 +1150,7 @@ def test_saving_asks_the_next_login_to_regenerate(tmp_path):
     marker = tmp_path / "state" / "zepos" / "regenerate-required"
     assert marker.exists(), run.report
     assert run.after("save", "marker") == "True", run.report
-    assert "naechsten Anmeldung" in run.after("save", "banner"), run.report
+    assert "nächsten Anmeldung" in run.after("save", "banner"), run.report
 
 
 @pytest.mark.allow_subprocess

@@ -341,7 +341,7 @@ dialog.alert {{
    --------------------------------------------------------------- */
 
 /* EINE Rundung fuer jeden Knopf, gleich welcher Rolle - dieselbe
-   Sprache wie "EINE Hoehe, EIN Radius, vier Rollen" im Kommentar von
+   Sprache wie "EINE Höhe, EIN Radius, vier Rollen" im Kommentar von
    zepButton (ags-kit.template Zeile 22). */
 button {{
     border-radius: {radius_control(section)};
