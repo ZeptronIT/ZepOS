@@ -533,8 +533,15 @@ def test_wireguard_needs_no_new_privileged_command():
         assert verboten not in text, f"{verboten} became a privileged command"
 
 
-def test_the_dialog_offers_three_choices_and_no_second_switch_for_one_value():
-    """Die dreiteilige Auswahl - und der alte Umschalter ist WEG.
+def test_the_dialog_offers_its_choices_and_no_second_switch_for_one_value():
+    """Die Bauart-Auswahl - und der alte Umschalter ist WEG.
+
+    HIESS bis zum 22.08.2026 "..._three_choices_...". Seit OpenVPN sind
+    es vier, und ein Testname, der eine Zahl nennt, die nicht mehr
+    stimmt, ist genau die Abschrift, die dieses Projekt an anderer
+    Stelle schon bezahlt hat. Die Zahl steht jetzt nirgends; geprueft
+    wird, dass die Eintraege DA sind - der vierte in
+    tests/src/test_vpn_openvpn.py::test_the_dialog_offers_openvpn_as_a_fourth_choice.
 
     Zwei Bedienelemente fuer phase1.version waeren zwei Stellen, an
     denen etwas Verschiedenes stehen kann, und die, die niemand findet,

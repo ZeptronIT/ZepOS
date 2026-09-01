@@ -217,6 +217,45 @@ DEFAULT_SETTINGS = {
             "public_key": "",
             "peers": [],
         },
+        # OpenVPN, seit dem 22.08.2026 die dritte Bauart. Rein
+        # ADDITIV wie WireGuard, `schema_version` bleibt 1.
+        #
+        # KEIN GEHEIMNIS STEHT HIER. `ca_file`, `cert_file`,
+        # `key_file`, `tls_auth_file` und `tls_crypt_file` tragen
+        # DATEINAMEN; die Dateien liegen unter ~/.config/openvpn,
+        # 0600 vom ersten Byte, Verzeichnis 0700 - siehe
+        # src/vpn.py::store_openvpn_blobs(). Das Passwort steht
+        # ueberhaupt nicht auf der Platte: es geht beim Verbinden
+        # ueber eine 0600-Datei im Laufzeitverzeichnis an
+        # `nmcli ... passwd-file` und wird danach geloescht.
+        #
+        # `extra` traegt die Direktiven, fuer die es kein eigenes
+        # Feld gibt - aus einer ERLAUBNISLISTE
+        # (OVPN_CARRIED_EXTRA), nie eine Durchreiche. Die achtzehn
+        # ausfuehrenden Direktiven sind lange vorher abgelehnt.
+        "openvpn": {
+            "remote": "",
+            "port": 0,
+            "proto": "udp",
+            "dev": "tun",
+            "dev_type": "",
+            "connection_type": "tls",
+            "username": "",
+            "remote_cert_tls": "",
+            "cipher": "",
+            "auth": "",
+            "comp_lzo": "",
+            "tunnel_mtu": 0,
+            "reneg_seconds": -1,
+            "ta_dir": "",
+            "ca_file": "",
+            "cert_file": "",
+            "key_file": "",
+            "tls_auth_file": "",
+            "tls_crypt_file": "",
+            "pkcs12_file": "",
+            "extra": [],
+        },
         "xauth_enabled": False,
         "debug": False
     },

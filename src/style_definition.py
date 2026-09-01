@@ -352,6 +352,24 @@ def vpn_wireguard_block():
         block = settings_module.defaults()["vpn"]["wireguard"]
     return json.dumps(block)
 
+def vpn_openvpn_block():
+    """Der OpenVPN-Abschnitt, als JSON-Text fuer die Vorlage.
+
+    EIN Platzhalter statt einundzwanzig, aus genau dem Grund, den
+    vpn_wireguard_block() darueber nennt: das Einstellungsfenster baut
+    seine Vorgaben aus Platzhaltern, und ein Speichern ohne Bearbeitung
+    schreibt sie zurueck. Zwei Mengen von Schluesseln in Erzeuger und
+    Dialog heissen, dass beim naechsten hinzugefuegten Feld genau eine
+    davon hinten runterfaellt.
+
+    Traegt KEIN Geheimnis - nur Dateinamen, den Endpunkt und die
+    ausgehandelten Verfahren.
+    """
+    block = get_user_vpn_setting("openvpn", None)
+    if not isinstance(block, dict):
+        block = settings_module.defaults()["vpn"]["openvpn"]
+    return json.dumps(block)
+
 def vpn_children_block():
     """
     Build the swanctl children block from the configured routed networks.
@@ -1736,6 +1754,11 @@ _FIXED_STYLE_VARIABLES = {
     # Dateinamen, den eigenen oeffentlichen Schluessel, Endpunkte und
     # erlaubte Netze.
     "STYLE_VPN_WIREGUARD": vpn_wireguard_block(),
+    # Der ganze OpenVPN-Abschnitt als JSON-Text, siehe
+    # vpn_openvpn_block() oben. Ebenfalls ohne Geheimnis - die
+    # Zertifikate und der private Schluessel liegen als Dateien unter
+    # ~/.config/openvpn, hier stehen nur ihre Namen.
+    "STYLE_VPN_OPENVPN": vpn_openvpn_block(),
     "STYLE_VPN_SERVER": get_user_vpn_setting("server", ""),
     "STYLE_VPN_USERNAME": get_user_vpn_setting("username", ""),
     "STYLE_VPN_CONNECTION_NAME": get_user_vpn_setting("connection_name", "work"),

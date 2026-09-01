@@ -132,10 +132,50 @@ const ICONS = {
   copy: "{{ICON_COPY}}",
 }
 
-// Die zwei Bauarten. Als Zeichenketten-Vereinigung und nicht als
+// Die drei Bauarten. Als Zeichenketten-Vereinigung und nicht als
 // `string`, damit ein Tippfehler beim Uebersetzen auffaellt und nicht
 // erst an einem Fenster, das leere Reiter zeigt.
-type VpnKind = "ipsec" | "wireguard"
+type VpnKind = "ipsec" | "wireguard" | "openvpn"
+
+// OpenVPN, seit dem 22.08.2026. Einundzwanzig Werte, und KEINER davon
+// ist ein Geheimnis: die fuenf `*_file` tragen DATEINAMEN unter
+// ~/.config/openvpn (0600, Verzeichnis 0700), das Passwort steht
+// ueberhaupt nicht auf der Platte - es wird auf der VPN-Seite getippt
+// und geht von dort ueber eine 0600-Datei im Laufzeitverzeichnis an
+// `nmcli ... passwd-file`.
+interface OvpnSettings {
+  remote: string
+  port: number
+  proto: string
+  dev: string
+  dev_type: string
+  // "tls" (nur Zertifikate) | "password" (nur Anmeldung) |
+  // "password-tls" (beides). Daran haengt, ob die VPN-Seite
+  // Anmeldefelder zeigt - und ob die Verbindung ohne Zutun
+  // wiederhergestellt werden kann, siehe den Hinweis im Reiter
+  // "Allgemein".
+  connection_type: string
+  username: string
+  remote_cert_tls: string
+  cipher: string
+  auth: string
+  comp_lzo: string
+  tunnel_mtu: number
+  reneg_seconds: number
+  ta_dir: string
+  ca_file: string
+  cert_file: string
+  key_file: string
+  tls_auth_file: string
+  tls_crypt_file: string
+  pkcs12_file: string
+  // Direktiven ohne eigenes Bedienelement, aus einer ERLAUBNISLISTE in
+  // src/vpn.py (OVPN_CARRIED_EXTRA) - nie eine Durchreiche. Sie werden
+  // hier nur GEZEIGT, nicht bearbeitet: achtzehn weitere Felder waeren
+  // genau die Breitenrechnung, die dieses Fenster schon einmal um 42
+  // Punkte gesprengt hat.
+  extra: string[][]
+}
 
 interface WgPeer {
   public_key: string
@@ -218,6 +258,7 @@ interface VpnSettings {
   xauth_enabled: boolean
   debug: boolean
   wireguard: WgSettings
+  openvpn: OvpnSettings
 }
 
 // The SSOT stores the booleans below as the strings strongSwan expects,
@@ -283,7 +324,11 @@ const DEFAULT_VPN_SETTINGS: VpnSettings = {
   // und ein Speichern ohne Bearbeitung schreibt die luecken- hafte
   // zurueck. Bei Phase 1 ist genau das schon einmal passiert, siehe
   // den Absatz ueber dieser Tabelle.
-  wireguard: {{STYLE_VPN_WIREGUARD}}
+  wireguard: {{STYLE_VPN_WIREGUARD}},
+  // Ebenso EIN Platzhalter, aus demselben Grund - hier waeren es
+  // einundzwanzig gewesen (vpn_openvpn_block() in
+  // src/style_definition.py).
+  openvpn: {{STYLE_VPN_OPENVPN}}
 }
 
 // A fresh copy every time, nested values included. A shallow spread of
@@ -339,6 +384,19 @@ function tabsForKind(): TabSpec[] {
       { id: "general", label: _("General"), build: buildGeneralTab },
       { id: "wgiface", label: _("Interface"), build: buildWgInterfaceTab },
       { id: "wgpeers", label: _("Peers"), build: buildWgPeersTab },
+      { id: "dns", label: _("DNS"), build: buildDnsTab },
+    ]
+  }
+  if (currentSettings.kind === "openvpn") {
+    // Auch hier VIER Knoepfe und kein fuenfter - dieselbe Bedingung
+    // der Breitenrechnung wie bei WireGuard. Die Zertifikate bekommen
+    // einen eigenen Reiter, weil es bis zu fuenf Dateien sind und sie
+    // in "Verbindung" die Zeile gesprengt haetten, an der die
+    // Fusszeile haengt.
+    return [
+      { id: "general", label: _("General"), build: buildGeneralTab },
+      { id: "ovpnconn", label: _("Connection"), build: buildOvpnConnectionTab },
+      { id: "ovpncerts", label: _("Certificates"), build: buildOvpnCertificatesTab },
       { id: "dns", label: _("DNS"), build: buildDnsTab },
     ]
   }
@@ -530,6 +588,35 @@ async function saveSettings() {
         try {
           await execAsync(['notify-send', '-u', 'critical', '-i', 'dialog-error',
                            _("WireGuard"),
+                           format(_("The connection was not set up: {error}"),
+                                  { error: String(e) })])
+        } catch { }
+      }
+    }
+
+    // UND DASSELBE FUER OPENVPN, aus demselben Grund: gespeicherte
+    // Einstellungen, die niemand nachzieht, sind ein Zwischenspeicher
+    // ohne Verfall.
+    //
+    //     `--ovpn-apply` schreibt eine .ovpn 0600 ins
+    //     Laufzeitverzeichnis, laesst NetworkManager sie einlesen und
+    //     loescht sie wieder. Sie traegt kein Geheimnis - die
+    //     Zertifikate stehen als PFAD darin, und das Passwort steht
+    //     ueberhaupt nicht auf der Platte.
+    //
+    //     Der Befehl PRUEFT ausserdem nach, ob NetworkManager den
+    //     Nutzernamen behalten hat, und scheitert sonst mit einer
+    //     Meldung: der Eigenschaftsname `username` liess sich am
+    //     22.08.2026 nicht direkt messen, und ein falscher Name faellt
+    //     ohne diese Pruefung erst auf, wenn die Anmeldung schiefgeht.
+    if (currentSettings.kind === "openvpn") {
+      try {
+        await execAsync([...VPN_TOOL, "--ovpn-apply"])
+      } catch (e) {
+        console.error("Failed to apply the OpenVPN connection:", e)
+        try {
+          await execAsync(['notify-send', '-u', 'critical', '-i', 'dialog-error',
+                           _("OpenVPN"),
                            format(_("The connection was not set up: {error}"),
                                   { error: String(e) })])
         } catch { }
@@ -855,18 +942,29 @@ function createCheckbox(label: string, checked: boolean, onChange: (checked: boo
 // UND phase1.version BLEIBT BEI "WireGuard" UNBERUEHRT, absichtlich:
 // wer von IPsec kommt und zurueckschaltet, findet seine IKE-Version
 // vor, wie er sie verlassen hat.
+//
+// UND SEIT DEM 22.08.2026 EIN VIERTER EINTRAG: OpenVPN.
+//
+//     Bestellt: "ausserdem will ich, dass wir bei vpn auch openvpn
+//     format unterstuetzen - das brauchen wir auch". Dasselbe Muster,
+//     kein zweites: kind=openvpn, phase1 bleibt unberuehrt, die Reiter
+//     werden getauscht statt angehaengt.
 const KIND_IPSEC_V1 = "ipsec1"
 const KIND_IPSEC_V2 = "ipsec2"
 const KIND_WIREGUARD = "wireguard"
+const KIND_OPENVPN = "openvpn"
 
 function currentKindChoice(): string {
   if (currentSettings.kind === "wireguard") return KIND_WIREGUARD
+  if (currentSettings.kind === "openvpn") return KIND_OPENVPN
   return currentSettings.phase1.version === 1 ? KIND_IPSEC_V1 : KIND_IPSEC_V2
 }
 
 function applyKindChoice(choice: string) {
   if (choice === KIND_WIREGUARD) {
     currentSettings.kind = "wireguard"
+  } else if (choice === KIND_OPENVPN) {
+    currentSettings.kind = "openvpn"
   } else {
     currentSettings.kind = "ipsec"
     currentSettings.phase1.version = choice === KIND_IPSEC_V1 ? 1 : 2
@@ -905,15 +1003,60 @@ function buildGeneralTab(): Gtk.Box {
   box.append(createToggleGroup(_("Connection kind"), [
     { label: _("IPsec (IKEv1)"), value: KIND_IPSEC_V1 },
     { label: _("IPsec (IKEv2)"), value: KIND_IPSEC_V2 },
-    { label: _("WireGuard"), value: KIND_WIREGUARD }
+    { label: _("WireGuard"), value: KIND_WIREGUARD },
+    { label: _("OpenVPN"), value: KIND_OPENVPN }
   ], currentKindChoice(), applyKindChoice))
+
+  // DER SATZ UEBER DEN UNBEAUFSICHTIGTEN WIEDERAUFBAU - HIER UND
+  // NICHT ERST BEIM SCHEITERN
+  //
+  //     GEMESSEN am 22.08.2026 an NetworkManagers eigenem Einleser:
+  //     eine .ovpn mit `auth-user-pass` ergibt `password-flags = 1`
+  //     (agentengehalten, NICHT gespeichert), eine reine
+  //     Zertifikatsdatei ergibt gar keine Geheimnisflagge. Und
+  //     nm-openvpn-service erfragt `cert-pass`, wenn der private
+  //     Schluessel verschluesselt ist.
+  //
+  //     Folge: nach einem Netzwechsel oder dem Aufwachen kommt eine
+  //     reine Zertifikatsverbindung von selbst zurueck, eine mit
+  //     Anmeldung nicht. Das ist ein Unterschied zur IPsec-Seite, wo
+  //     strongSwan das Geheimnis in seiner eigenen Konfiguration
+  //     haelt - und ein Unterschied, den der Nutzer sonst als Fehler
+  //     erlebt, ohne ihn mit OpenVPN in Verbindung zu bringen.
+  //
+  //     Gefragt wird vpn.py und nicht der connection_type allein: die
+  //     Passphrase des privaten Schluessels steht in der
+  //     Schluesseldatei und nicht in den Einstellungen, und zwei
+  //     Herleitungen fuer eine Antwort waeren zwei Stellen, an denen
+  //     etwas Verschiedenes stehen kann.
+  if (currentSettings.kind === "openvpn") {
+    const unattended = new Gtk.Label({ label: "", xalign: 0, wrap: true })
+    unattended.add_css_class("vpn-psk-status")
+    box.append(unattended)
+    execAsync([...VPN_TOOL, "--ovpn-unattended"]).then((answer) => {
+      if (String(answer).trim() === "yes") {
+        unattended.set_text(_("Certificates only - this connection comes back on its own after a network change or resume."))
+        unattended.remove_css_class("warning")
+        unattended.add_css_class("success")
+      } else {
+        unattended.set_text(_("This connection needs a password every time. After a network change or resume it stays down until you connect again."))
+        unattended.remove_css_class("success")
+        unattended.add_css_class("warning")
+      }
+    }).catch(() => { })
+  }
 
   // Beide Bauarten. Der Name benennt die swanctl-Verbindung bzw. das
   // NetworkManager-Profil - EIN Name, damit vpn-control.sh und die
   // Leiste dieselbe Sache meinen.
   box.append(createEntryField(_("Connection name"), currentSettings.connection_name, (val) => { currentSettings.connection_name = val }))
 
-  if (currentSettings.kind !== "wireguard") {
+  // NUR IPsec. OpenVPN traegt seinen Endpunkt in `openvpn.remote` und
+  // seinen Nutzernamen in `openvpn.username` (Reiter "Verbindung") -
+  // zwei Felder fuer denselben Wert waeren zwei Stellen, an denen
+  // etwas Verschiedenes stehen kann. Dieselbe Regel, aus der der alte
+  // IKE-Umschalter im dritten Reiter gefallen ist.
+  if (currentSettings.kind === "ipsec") {
     box.append(createEntryField(_("VPN server"), currentSettings.server, (val) => { currentSettings.server = val }))
     box.append(createEntryField(_("Default username"), currentSettings.username, (val) => { currentSettings.username = val }))
   }
@@ -924,7 +1067,7 @@ function buildGeneralTab(): Gtk.Box {
   // nichts traegt, sieht von aussen genauso aus.
   box.append(createEntryField(_("Test host (optional)"), currentSettings.test_host ?? "", (val) => { currentSettings.test_host = val }))
 
-  if (currentSettings.kind !== "wireguard") {
+  if (currentSettings.kind === "ipsec") {
     // XAuth Toggle
     const xauthRow = new Gtk.Box({ spacing: 12 })
     xauthRow.add_css_class("vpn-field")
@@ -940,6 +1083,11 @@ function buildGeneralTab(): Gtk.Box {
 
   if (currentSettings.kind === "wireguard") {
     box.append(buildWgImportSection())
+    return box
+  }
+
+  if (currentSettings.kind === "openvpn") {
+    box.append(buildOvpnImportSection())
     return box
   }
 
@@ -1471,6 +1619,288 @@ function buildWgPeersTab(): Gtk.Box {
 
   rebuildPeerList()
   box.append(list)
+  return box
+}
+
+// ============================================================================
+// OPENVPN
+// ============================================================================
+//
+// Eine .ovpn einlesen - und warum das NICHT NetworkManager tut.
+//
+// Der Einleser sitzt in src/vpn.py, aus demselben Grund wie bei
+// WireGuard (eine zweite Umsetzung in GJS ist die Doppelung, die
+// dieses Fenster schon einmal teuer bezahlt hat) - und hier kommt ein
+// zweiter Grund dazu, der gemessen ist:
+//
+//     NetworkManager BRINGT einen .ovpn-Einleser mit, und er
+//     VERSCHLUCKT die gefaehrlichen Zeilen SPURLOS. GEMESSEN am
+//     22.08.2026, indem er ausgefuehrt wurde (reiner
+//     Bibliotheksaufruf, ohne D-Bus): eine Datei mit script-security,
+//     up, down, route-up, ipchange, tls-verify und plugin kam ohne
+//     eine einzige dieser Zeilen und ohne jede Meldung durch,
+//     Rueckgabewert 0. Eine frei erfundene Direktive ebenso.
+//
+//     Ausgefuehrt wird davon nichts (nm-openvpn-service baut openvpns
+//     Befehlszeile aus einer geschlossenen Liste und kennt kein
+//     --config) - aber der Nutzer erfaehrt nie, dass die Zeile, die
+//     seinen Verkehr eingegrenzt haette, verschwunden ist. Genau das
+//     macht unser Einleser anders: benannt, mit Zeilennummer, und mit
+//     einem eigenen Rueckgabewert.
+const OVPN_KEY_DISPLAY_DIR = "~/.config/openvpn"
+
+// Als Funktion und nicht als Template-Literal an der Einsetzstelle -
+// dieselbe Begruendung wie bei wgKeyDisplayPath() weiter oben
+// (test_ags_i18n.py verfolgt Ausdruecke bis in den Setzer).
+function ovpnFileDisplayPath(name: string): string {
+  return name.startsWith("/") ? name : `${OVPN_KEY_DISPLAY_DIR}/${name}`
+}
+
+// Dieselbe Huelle wie bei WireGuard, aus demselben Grund: `vpn.py
+// --ovpn-import` endet mit 3, wenn Zeilen abgelehnt wurden, und
+// execAsync wuerde bei jedem Wert ungleich 0 die Standardausgabe
+// verwerfen - also genau die eingelesenen Werte. Der Programmtext ist
+// eine KONSTANTE, alles Veraenderliche steht als Argument dahinter.
+const OVPN_IMPORT_SHELL =
+  'out=$("$@"); rc=$?; if [ "$rc" = 0 ] || [ "$rc" = 3 ]; then printf %s "$out"; exit 0; fi; exit "$rc"'
+
+function buildOvpnImportSection(): Gtk.Box {
+  const section = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+  section.add_css_class("vpn-field")
+
+  const title = new Gtk.Label({ label: _("OpenVPN configuration"), xalign: 0 })
+  title.add_css_class("vpn-field-label")
+
+  const row = new Gtk.Box({ spacing: 8 })
+  row.add_css_class("vpn-entry-row")
+
+  const pathEntry = new Gtk.Entry({ hexpand: true, placeholder_text: _("Path to an .ovpn file ...") })
+  pathEntry.add_css_class("vpn-entry")
+
+  const status = new Gtk.Label({ label: "", xalign: 0, wrap: true })
+  status.add_css_class("vpn-psk-status")
+
+  // Die zweite, leisere Zeile: bekannte Direktiven, die nichts an der
+  // Verbindung aendern, weil NetworkManager sein eigenes Gegenstueck
+  // setzt. Sie bekommen KEINEN eigenen Rueckgabewert - aber sie werden
+  // gezeigt, weil "still verworfen" genau der Vorwurf ist, den dieser
+  // Einleser gegen NetworkManagers eigenen erhebt.
+  const ignoredLabel = new Gtk.Label({ label: "", xalign: 0, wrap: true })
+  ignoredLabel.add_css_class("vpn-psk-status")
+
+  const browseBtn = zepButton(ICONS.folder, "still", () => {
+    try {
+      const chooser = new (Gtk as any).FileDialog({
+        title: _("Choose an OpenVPN configuration"),
+      })
+      chooser.open(parentWindow, null, (_source: any, result: any) => {
+        try {
+          const file = chooser.open_finish(result)
+          if (file) pathEntry.set_text(file.get_path() ?? "")
+        } catch (e) {
+          // Abgebrochen ist kein Fehler und bekommt keine Meldung.
+        }
+      })
+    } catch (e) {
+      status.set_text(_("No file chooser available - please type the path."))
+      status.add_css_class("warning")
+    }
+  })
+  browseBtn.set_tooltip_text(_("Choose an OpenVPN configuration"))
+
+  row.append(pathEntry)
+  row.append(browseBtn)
+
+  const importBtn = zepButton(_("Import"), "umrandet", async () => {
+    const path = pathEntry.get_text().trim()
+    if (!path) return
+    try {
+      const answer = await execAsync(["bash", "-c", OVPN_IMPORT_SHELL,
+                                      "zepos-ovpn-import", ...VPN_TOOL,
+                                      "--ovpn-import", path])
+      const payload = JSON.parse(answer)
+      currentSettings.openvpn = payload.openvpn
+      // DNS und Netzliste sind DIESELBEN Reiter wie bei IPsec und
+      // WireGuard. `dhcp-option DNS` gehoert dorthin, `route` gehoert
+      // in `routed_networks` - nicht in einen zweiten Reiter, der
+      // dasselbe noch einmal sagt.
+      if (payload.dns) currentSettings.dns = payload.dns
+      if (payload.routed_networks?.length) {
+        currentSettings.routed_networks = payload.routed_networks
+      }
+
+      const refused: [number, string][] = payload.refused ?? []
+      if (refused.length) {
+        status.set_text(format(
+          _("Imported. These lines were NOT taken over, because they run commands: {lines}"),
+          { lines: refused.map(([line, key]) => `${key} (${line})`).join(", ") }))
+        status.remove_css_class("success")
+        status.add_css_class("warning")
+      } else {
+        status.set_text(_("Imported"))
+        status.remove_css_class("warning")
+        status.add_css_class("success")
+      }
+
+      const ignored: [number, string][] = payload.ignored ?? []
+      ignoredLabel.set_text(ignored.length ? format(
+        _("These lines have no effect here, because NetworkManager sets its own: {lines}"),
+        { lines: ignored.map(([line, key]) => `${key} (${line})`).join(", ") }) : "")
+
+      try {
+        await execAsync(['notify-send', '-i', 'network-vpn', _("OpenVPN"),
+                         format(_("The certificates and the key were stored privately. The original {path} still contains them in clear text - you may want to delete it."),
+                                { path })])
+      } catch { }
+      rebuildTabs()
+    } catch (e) {
+      status.set_text(format(_("Not imported: {error}"), { error: String(e) }))
+      status.remove_css_class("success")
+      status.add_css_class("warning")
+    }
+  })
+
+  const actions = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
+  actions.append(importBtn)
+
+  section.append(title)
+  section.append(row)
+  section.append(actions)
+  section.append(status)
+  section.append(ignoredLabel)
+  return section
+}
+
+// Build OpenVPN Connection Tab
+function buildOvpnConnectionTab(): Gtk.Box {
+  const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
+  const ovpn = currentSettings.openvpn
+
+  const sectionTitle = new Gtk.Label({ label: _("Connection settings"), xalign: 0 })
+  sectionTitle.add_css_class("vpn-section-title")
+  box.append(sectionTitle)
+
+  box.append(createEntryField(_("Server"), ovpn.remote ?? "",
+                              (val) => { ovpn.remote = val }))
+  box.append(createNumericField(_("Port (0 = 1194)"), ovpn.port ?? 0,
+                                (val) => { ovpn.port = val }))
+  box.append(createToggleGroup(_("Protocol"), [
+    { label: _("UDP"), value: "udp" },
+    { label: _("TCP"), value: "tcp" }
+  ], (ovpn.proto ?? "udp").startsWith("tcp") ? "tcp" : "udp",
+     (val) => { ovpn.proto = val }))
+  box.append(createToggleGroup(_("Device"), [
+    { label: _("tun (routed)"), value: "tun" },
+    { label: _("tap (bridged)"), value: "tap" }
+  ], (ovpn.dev ?? "tun") === "tap" ? "tap" : "tun",
+     (val) => { ovpn.dev = val }))
+
+  // WIE SICH DIE VERBINDUNG AUSWEIST - UND WARUM DAS HIER STEHT
+  //     Der Wert entscheidet zweierlei: ob die VPN-Seite Anmeldefelder
+  //     zeigt, und ob die Verbindung nach dem Aufwachen von selbst
+  //     zurueckkommt (siehe den Hinweis im Reiter "Allgemein").
+  //     Deshalb ist er ein Bedienelement und keine stille Ableitung -
+  //     der Einleser setzt ihn aus der Datei, aber wer eine Verbindung
+  //     von Hand anlegt, muss ihn sehen.
+  box.append(createToggleGroup(_("Authentication"), [
+    { label: _("Certificates"), value: "tls" },
+    { label: _("Username and password"), value: "password" },
+    { label: _("Both"), value: "password-tls" }
+  ], ovpn.connection_type ?? "tls", (val) => {
+    ovpn.connection_type = val
+    rebuildTabs()
+  }))
+
+  if (ovpn.connection_type !== "tls") {
+    box.append(createEntryField(_("Username"), ovpn.username ?? "",
+                                (val) => { ovpn.username = val }))
+    const note = new Gtk.Label({
+      label: _("The password is not stored. It is typed on the VPN page and handed to NetworkManager in a file that is deleted again."),
+      xalign: 0, wrap: true,
+    })
+    note.add_css_class("vpn-psk-status")
+    box.append(note)
+  }
+
+  box.append(createEntryField(_("Verify server certificate (remote-cert-tls)"),
+                              ovpn.remote_cert_tls ?? "",
+                              (val) => { ovpn.remote_cert_tls = val }))
+  box.append(createEntryField(_("Cipher"), ovpn.cipher ?? "",
+                              (val) => { ovpn.cipher = val }))
+  box.append(createEntryField(_("HMAC authentication"), ovpn.auth ?? "",
+                              (val) => { ovpn.auth = val }))
+
+  // Die mitgenommenen Direktiven ohne eigenes Feld. NUR GEZEIGT: sie
+  // stammen aus einer Erlaubnisliste in src/vpn.py, nicht aus einer
+  // Durchreiche, und wer sie aendern will, aendert die .ovpn und liest
+  // sie neu ein. Achtzehn weitere Eingabefelder waeren genau die
+  // Breitenrechnung, die dieses Fenster schon einmal gesprengt hat.
+  const extra = ovpn.extra ?? []
+  if (extra.length) {
+    const extraLabel = new Gtk.Label({
+      label: format(_("{count} further options were taken over from the file: {options}"),
+                    { count: String(extra.length),
+                      options: extra.map((entry) => entry.join(" ")).join(", ") }),
+      xalign: 0, wrap: true,
+    })
+    extraLabel.add_css_class("vpn-psk-status")
+    box.append(extraLabel)
+  }
+
+  return box
+}
+
+// Build OpenVPN Certificates Tab
+function buildOvpnCertificatesTab(): Gtk.Box {
+  const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
+  const ovpn = currentSettings.openvpn
+
+  const sectionTitle = new Gtk.Label({ label: _("Certificates and keys"), xalign: 0 })
+  sectionTitle.add_css_class("vpn-section-title")
+  box.append(sectionTitle)
+
+  const hint = new Gtk.Label({
+    label: _("Blocks embedded in the .ovpn file were unpacked into ~/.config/openvpn, readable only by you (0600). Only their file names are stored in the settings."),
+    xalign: 0, wrap: true,
+  })
+  hint.add_css_class("vpn-psk-status")
+  box.append(hint)
+
+  // Fuenf Zeilen, EINE Schleife. Fuenf abgeschriebene Bloecke waeren
+  // fuenf Stellen, an denen der naechste Dateityp vergessen wird -
+  // dieselbe Begruendung wie bei buildStringList weiter oben.
+  const files: [string, string, (value: string) => void][] = [
+    [_("CA certificate"), ovpn.ca_file ?? "", (val) => { ovpn.ca_file = val }],
+    [_("Own certificate"), ovpn.cert_file ?? "", (val) => { ovpn.cert_file = val }],
+    [_("Own private key"), ovpn.key_file ?? "", (val) => { ovpn.key_file = val }],
+    [_("TLS auth key"), ovpn.tls_auth_file ?? "", (val) => { ovpn.tls_auth_file = val }],
+    [_("TLS crypt key"), ovpn.tls_crypt_file ?? "", (val) => { ovpn.tls_crypt_file = val }],
+  ]
+  for (const [label, value, setter] of files) {
+    const field = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+    field.add_css_class("vpn-field")
+    const caption = new Gtk.Label({ label, xalign: 0 })
+    caption.add_css_class("vpn-field-label")
+    const entry = new Gtk.Entry({ hexpand: true, text: value,
+                                  placeholder_text: _("File name or absolute path ...") })
+    entry.add_css_class("vpn-entry")
+    entry.connect("changed", () => setter(entry.get_text()))
+    const where = new Gtk.Label({
+      label: value ? format(_("Present in {path}"), { path: ovpnFileDisplayPath(value) })
+                   : _("Not set"),
+      xalign: 0, wrap: true,
+    })
+    where.add_css_class("vpn-psk-status")
+    if (value) where.add_css_class("success")
+    field.append(caption)
+    field.append(entry)
+    field.append(where)
+    box.append(field)
+  }
+
+  box.append(createEntryField(_("TLS auth key direction (0, 1 or empty)"),
+                              ovpn.ta_dir ?? "", (val) => { ovpn.ta_dir = val }))
+
   return box
 }
 

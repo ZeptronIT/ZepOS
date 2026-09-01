@@ -161,6 +161,10 @@
 import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
+// Fuer die Zugangsdaten auf der STANDARDEINGABE. execAsync kann keine
+// Eingabe reichen, und ein Argument scheidet aus: /proc/<pid>/cmdline
+// ist fuer jedes Konto der Maschine lesbar. Siehe connectOpenvpn().
+import Gio from "gi://Gio"
 // `import type`, nicht `import`: ShellSeite ist ausschliesslich ein Typ
 // (siehe ags-overlay-utils.template) - dieselbe Begruendung wie
 // ags-bluetooth.template (Aufgabe 7) und ags-network.template
@@ -245,12 +249,24 @@ function loadVpnSettings() {
           // durchgereicht - dieselbe Zurueckhaltung wie
           // src/vpn.py::vpn_kind(). Eine vertippte Bauart darf nicht in
           // eine Verbindung fuehren, die niemand gemeint hat.
-          kind: data.vpn.kind === "wireguard" ? "wireguard" : "ipsec",
+          kind: (data.vpn.kind === "wireguard" || data.vpn.kind === "openvpn")
+            ? data.vpn.kind : "ipsec",
           server: data.vpn.server || "{{STYLE_VPN_SERVER}}",
           // Was in der verbundenen Ansicht als Gegenstelle steht, wenn
-          // es kein IPsec-Gateway gibt.
-          endpoint: peers.length ? (peers[0].endpoint || "") : "",
-          username: data.vpn.username || "{{STYLE_VPN_USERNAME}}",
+          // es kein IPsec-Gateway gibt. OpenVPN nennt seinen Endpunkt
+          // `remote` - dieselbe Zeile, ein dritter Begriff, und nicht
+          // eine dritte Zeile, die bei zweien leer bliebe.
+          endpoint: data.vpn.kind === "openvpn"
+            ? (data.vpn.openvpn?.remote || "")
+            : (peers.length ? (peers[0].endpoint || "") : ""),
+          // Wie OpenVPN sich ausweist. "tls" heisst: nur Zertifikate,
+          // also KEINE Anmeldefelder - genau wie bei WireGuard. Ein
+          // unbekannter Wert wird zu "tls" und nicht durchgereicht.
+          ovpnAuth: ["password", "password-tls"].includes(
+            data.vpn.openvpn?.connection_type) ? data.vpn.openvpn.connection_type : "tls",
+          username: (data.vpn.kind === "openvpn"
+            ? data.vpn.openvpn?.username : data.vpn.username)
+            || "{{STYLE_VPN_USERNAME}}",
           connection_name: data.vpn.connection_name || "{{STYLE_VPN_CONNECTION_NAME}}",
           debug: data.vpn.debug === true
         }
@@ -261,9 +277,11 @@ function loadVpnSettings() {
   }
   // Fallback to defaults
   return {
-    kind: "{{STYLE_VPN_KIND}}" === "wireguard" ? "wireguard" : "ipsec",
+    kind: ("{{STYLE_VPN_KIND}}" === "wireguard" || "{{STYLE_VPN_KIND}}" === "openvpn")
+      ? "{{STYLE_VPN_KIND}}" : "ipsec",
     server: "{{STYLE_VPN_SERVER}}",
     endpoint: "",
+    ovpnAuth: "tls",
     username: "{{STYLE_VPN_USERNAME}}",
     connection_name: "{{STYLE_VPN_CONNECTION_NAME}}",
     debug: false
@@ -331,6 +349,7 @@ let connectBtn: Gtk.Button
 let credentialsBox: Gtk.Box
 let wgNoteBox: Gtk.Box
 let wgPeerLabel: Gtk.Label
+let wgNote: Gtk.Label
 
 // State
 let rememberUsername = true
@@ -441,9 +460,9 @@ async function updateStatusDisplay() {
     // Ein WireGuard-Tunnel hat kein Gateway, er hat eine Gegenstelle.
     // Dieselbe Zeile, ein anderer Begriff - und NICHT eine zweite Zeile
     // darunter, die bei IPsec leer bliebe.
-    connectedServerLabel.set_text(vpnSettings.kind === "wireguard"
-      ? format(_("Peer: {endpoint}"), { endpoint: vpnSettings.endpoint || "--" })
-      : format(_("Server: {server}"), { server: vpnSettings.server }))
+    connectedServerLabel.set_text(vpnSettings.kind === "ipsec"
+      ? format(_("Server: {server}"), { server: vpnSettings.server })
+      : format(_("Peer: {endpoint}"), { endpoint: vpnSettings.endpoint || "--" }))
     connectedNameLabel.set_text(format(_("Connection: {connection}"), { connection: currentStatus.connectionName ?? vpnSettings.connection_name }))
     if (!isDisconnecting) {
       disconnectBtn.set_child(new Gtk.Label({ label: _("Disconnect") }))
@@ -544,9 +563,82 @@ export const vpnSeite: ShellSeite = {
       }
     }
 
+    // OPENVPN VERBINDEN - DAS PASSWORT GEHT UEBER DIE STANDARDEINGABE
+    //
+    //     Die IPsec-Seite unten reicht Nutzername, Passwort und
+    //     Einmal-Kennwort bis heute als ARGUMENTE an vpn-connect.sh
+    //     ($1, $2, $4). /proc/<pid>/cmdline ist fuer jedes Konto der
+    //     Maschine lesbar - hier wird das nicht wiederholt.
+    //
+    //     execAsync kann keine Eingabe reichen, deshalb Gio.Subprocess
+    //     mit STDIN_PIPE. `vpn.py --ovpn-up` liest dort ein
+    //     JSON-Objekt, schreibt daraus eine 0600-Datei ins
+    //     Laufzeitverzeichnis, gibt sie `nmcli ... passwd-file` und
+    //     loescht sie im `finally` wieder - auch wenn nmcli scheitert.
+    //
+    //     Bei reinen Zertifikatsverbindungen bleibt das Objekt leer.
+    //     Dann braucht die Verbindung ueberhaupt kein Geheimnis, und
+    //     genau das ist der Fall, in dem sie nach einem Netzwechsel
+    //     von selbst zurueckkommt (GEMESSEN, siehe der Hinweis im
+    //     Einstellungsfenster).
+    async function connectOpenvpn() {
+      const needsLogin = vpnSettings.ovpnAuth !== "tls"
+      const username = usernameEntry.get_text()
+      const password = passwordEntry.get_text()
+      const token = tokenEntry.get_text()
+
+      if (needsLogin && !username) {
+        errorLabel.set_text(_("Username required"))
+        return
+      }
+      if (needsLogin && !password) {
+        errorLabel.set_text(_("Password required"))
+        return
+      }
+
+      errorLabel.set_text("")
+      disconnectedIcon.set_text(ICONS.vpn)
+      disconnectedIcon.remove_css_class("connected")
+      disconnectedIcon.remove_css_class("disconnected")
+      disconnectedIcon.remove_css_class("error")
+      disconnectedIcon.add_css_class("connecting")
+      disconnectedLabel.set_text(_("Connecting ..."))
+      connectBtn.set_sensitive(false)
+
+      if (rememberUsername && username) saveLastUsername(username)
+
+      try {
+        const child = Gio.Subprocess.new(
+          [...VPN_TOOL, "--ovpn-up"],
+          Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
+        // Nur was wirklich gebraucht wird. Ein leeres Objekt bei einer
+        // Zertifikatsverbindung ist kein Sonderfall, sondern der
+        // Normalfall dieser Bauart.
+        const payload = needsLogin
+          ? JSON.stringify({ password, token })
+          : "{}"
+        const [, stderr] = child.communicate_utf8(payload, null)
+        if (!child.get_successful()) {
+          throw new Error(String(stderr ?? "").trim() || _("Connection failed"))
+        }
+        schliessen()
+        setTimeout(async () => { await updateStatusDisplay() }, 3000)
+      } catch (e) {
+        console.error("Failed to bring up the OpenVPN connection:", e)
+        errorLabel.set_text(_("Connection failed"))
+        disconnectedIcon.add_css_class("error")
+        disconnectedIcon.remove_css_class("connecting")
+        connectBtn.set_sensitive(true)
+      }
+    }
+
     async function connectVpn() {
       if (vpnSettings.kind === "wireguard") {
         await connectWireguard()
+        return
+      }
+      if (vpnSettings.kind === "openvpn") {
+        await connectOpenvpn()
         return
       }
 
@@ -699,6 +791,8 @@ export const vpnSeite: ShellSeite = {
         // NetworkManager-Profil, das eine Schnittstelle wieder abbaut.
         if (vpnSettings.kind === "wireguard") {
           await execAsync([...VPN_TOOL, "--wg-down"])
+        } else if (vpnSettings.kind === "openvpn") {
+          await execAsync([...VPN_TOOL, "--ovpn-down"])
         } else {
           await execAsync([SCRIPTS.vpnControl, "disconnect"])
         }
@@ -937,7 +1031,10 @@ export const vpnSeite: ShellSeite = {
 
     wgNoteBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
     wgNoteBox.add_css_class("vpn-field")
-    const wgNote = new Gtk.Label({
+    // Der Text wird in applyVpnKind() gesetzt, weil er von der Bauart
+    // abhaengt - hier steht die WireGuard-Fassung als Anfangswert, damit
+    // das Etikett nie leer gebaut wird.
+    wgNote = new Gtk.Label({
       label: _("WireGuard identifies itself with keys - there is nothing to type here."),
       xalign: 0, wrap: true,
     })
@@ -968,11 +1065,28 @@ export const vpnSeite: ShellSeite = {
     // Sichtbarwerden der Schale, weil die Bauart im
     // Einstellungsfenster geaendert werden kann, waehrend diese Seite
     // schon gebaut ist.
+    //
+    // ERWEITERT am 22.08.2026 um OpenVPN, und die Weiche ist NICHT
+    // "welche Bauart", sondern "verlangt sie eine Anmeldung":
+    //
+    //     WireGuard verlangt nie eine (Schluessel), IPsec immer
+    //     (XAuth), OpenVPN je nach `connection_type` - eine reine
+    //     Zertifikatsverbindung hat genauso wenig zu tippen wie
+    //     WireGuard. Nach der Bauart zu fragen haette bei OpenVPN in
+    //     der Haelfte der Faelle nach einem Passwort gefragt, das es
+    //     nicht gibt.
+    //
+    //     Die Notizhaelfte bekommt deshalb auch ihren Text von der
+    //     Bauart und nicht mehr nur von WireGuard.
     function applyVpnKind() {
-      const wireguard = vpnSettings.kind === "wireguard"
-      credentialsBox.set_visible(!wireguard)
-      wgNoteBox.set_visible(wireguard)
-      if (wireguard) {
+      const asksForLogin = vpnSettings.kind === "ipsec"
+        || (vpnSettings.kind === "openvpn" && vpnSettings.ovpnAuth !== "tls")
+      credentialsBox.set_visible(asksForLogin)
+      wgNoteBox.set_visible(!asksForLogin)
+      if (!asksForLogin) {
+        wgNote.set_text(vpnSettings.kind === "openvpn"
+          ? _("This OpenVPN connection identifies itself with certificates - there is nothing to type here.")
+          : _("WireGuard identifies itself with keys - there is nothing to type here."))
         wgPeerLabel.set_text(vpnSettings.endpoint
           ? format(_("Peer: {endpoint}"), { endpoint: vpnSettings.endpoint })
           : _("No peer configured yet - open the settings."))
@@ -1061,11 +1175,14 @@ export const vpnSeite: ShellSeite = {
       vpnSettings = loadVpnSettings()
       applyVpnKind()
       updateStatusDisplay()
-      // NUR BEI IPsec: die drei Felder gibt es unter WireGuard nicht zu
-      // sehen, und nach der Tastatur zu greifen, wo kein Feld steht,
-      // ist genau der Fehler, den der Absatz darueber am 19.08.2026
-      // fuer die falsche Seite behoben hat - nur eine Ebene tiefer.
-      if (vpnSettings.kind !== "wireguard") {
+      // NUR WO ES DIE FELDER GIBT. Unter WireGuard - und unter einer
+      // reinen Zertifikatsverbindung von OpenVPN - stehen sie nicht da,
+      // und nach der Tastatur zu greifen, wo kein Feld ist, ist genau
+      // der Fehler, den der Absatz darueber am 19.08.2026 fuer die
+      // falsche Seite behoben hat, nur eine Ebene tiefer. Dieselbe
+      // Bedingung wie in applyVpnKind(), damit es nicht zwei geben kann.
+      if (vpnSettings.kind === "ipsec"
+          || (vpnSettings.kind === "openvpn" && vpnSettings.ovpnAuth !== "tls")) {
         const lastUser = loadLastUsername()
         usernameEntry.set_text(lastUser || vpnSettings.username)
         if (lastUser) {

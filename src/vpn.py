@@ -56,6 +56,7 @@ WHAT ANSWERS "WHICH ADDRESS IS THE TUNNEL'S"
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
@@ -690,7 +691,12 @@ def tunnel_status(path: Path | None = None,
 
 WG_KIND = "wireguard"
 IPSEC_KIND = "ipsec"
-VPN_KINDS = (IPSEC_KIND, WG_KIND)
+# OpenVPN, seit dem 22.08.2026 die dritte Bauart. Der ganze Teil dazu
+# steht weiter unten unter "OpenVPN"; hier steht nur der Name, weil
+# vpn_kind() EINE Liste braucht und zwei Listen an zwei Stellen genau
+# die Krankheit sind, die der Kopf von src/brand.py beschreibt.
+OVPN_KIND = "openvpn"
+VPN_KINDS = (IPSEC_KIND, WG_KIND, OVPN_KIND)
 
 # Die Zeilen, die `wg-quick` als Shell ausfuehren wuerde. Sie werden
 # NICHT still verworfen: parse_wg_conf() sammelt sie mit ihrer
@@ -977,7 +983,19 @@ def write_wireguard_secret(name: str, secret: str,
     liegen mehrere Schluessel, und ihre blossen NAMEN verraten schon,
     welche Gegenstellen es gibt.
     """
-    directory = wireguard_key_dir(config_home)
+    return write_private_secret(wireguard_key_dir(config_home), name, secret)
+
+
+def write_private_secret(directory: Path, name: str, secret: str) -> Path:
+    """Der EINE Schreiber fuer jedes Geheimnis auf Platte.
+
+    Herausgezogen am 22.08.2026, als OpenVPN als dritte Bauart dazukam:
+    seine bis zu vier Zertifikats- und Schluesseldateien brauchen Byte
+    fuer Byte dieselbe Sorgfalt wie ein WireGuard-Schluessel, und eine
+    zweite Kopie dieser zehn Zeilen waere die Stelle, an der beim
+    naechsten Mal eine von beiden ihr O_EXCL verliert. Die Begruendung
+    fuer jede einzelne Zeile steht im Kopf von write_wireguard_secret().
+    """
     directory.mkdir(parents=True, exist_ok=True)
     os.chmod(directory, 0o700)
     target = directory / name
@@ -1036,12 +1054,830 @@ def public_wireguard_key(private_key: str,
 
 
 # --------------------------------------------------------------------
+# OpenVPN - die dritte Bauart
+# --------------------------------------------------------------------
+#
+# BESTELLT am 22.08.2026: "ausserdem will ich, dass wir bei vpn auch
+# openvpn format unterstuetzen - das brauchen wir auch".
+#
+# DIE GEFAHR IST GROESSER ALS BEI WIREGUARD, UND SIE IST GEMESSEN
+#     `wg-quick` fuehrt fuenf Zeilen als Root aus. OpenVPN fuehrt
+#     ACHTZEHN aus, und eine davon (`plugin`) laedt eine gemeinsame
+#     Bibliothek in den eigenen Prozess, ohne dass ueberhaupt ein
+#     Skript im Spiel waere. Die Liste steht in OVPN_EXECUTING und
+#     stammt aus `openvpn --help` und der Handbuchseite openvpn(8) der
+#     INSTALLIERTEN Fassung 2.7.6 - abgezaehlt am 22.08.2026, nicht aus
+#     dem Gedaechtnis.
+#
+# WAS NETWORKMANAGER DAMIT MACHT - ZWEIMAL GEMESSEN, EINMAL WIDERLEGT
+#     Der WireGuard-Teil oben hat an der Zeichenkettentabelle von
+#     libnm.so.0 gemessen. Hier taugt diese Methode NICHT: `up` und
+#     `key` sind Endstuecke von `group` und `static-key`, und der
+#     Uebersetzer legt solche Zeichenketten uebereinander. `grep -cx up`
+#     antwortet 0, obwohl `group` in der Tabelle steht - ein Fehlen ist
+#     dort also kein Beweis. Blind dieselbe Methode zu wiederholen
+#     haette hier ein falsches Ergebnis geliefert.
+#
+#     Stattdessen wurde der Einleser AUSGEFUEHRT: als reiner
+#     Bibliotheksaufruf (NM.VpnEditorPlugin.import_() ueber
+#     python-gobject), ohne NM.Client, also ohne eine einzige
+#     D-Bus-Nachricht an den NetworkManager, gegen eine Datei in einem
+#     Wegwerfverzeichnis mit umgebogenem XDG_DATA_HOME. Vorgelegt:
+#     script-security, up, down, route-up, ipchange, tls-verify und
+#     plugin. Angekommen: KEINE davon. Gemeldet: NICHTS - Rueckgabewert
+#     0, keine Warnung, keine Zeilennummer. Dasselbe bei einer frei
+#     erfundenen Direktive, und `config <datei>` wird nicht verfolgt.
+#
+#     ZWEITE SPERRE, unabhaengig von der ersten: /usr/lib/nm-openvpn-service
+#     baut die Befehlszeile fuer /usr/sbin/openvpn aus einer
+#     GESCHLOSSENEN Liste benannter Eigenschaften. `--config` steht
+#     nicht darin (`grep -cx -- --config` = 0) - OpenVPN bekommt unter
+#     NetworkManager also NIE eine .ovpn zu lesen. Ebenso fehlen
+#     --plugin, --down, --route-up, --ipchange, --client-connect,
+#     --tls-verify, --auth-user-pass-verify, --dns-updown, --iproute
+#     und --setenv. Das einzige --up ist NMs eigener Helfer
+#     (/usr/lib/nm-openvpn-service-openvpn-helper), und eine
+#     durchgerutschte Eigenschaft wuerde nicht ignoriert, sondern
+#     abgelehnt ("property %s invalid or not supported").
+#
+# WARUM ES TROTZDEM EINEN EIGENEN EINLESER GIBT
+#     Weil NMs Einleser SCHWEIGT. Der Nutzer legt die Datei seines
+#     Anbieters hin, alles scheint zu klappen, und dass die Zeile, die
+#     den Verkehr eingegrenzt haette, verschwunden ist, erfaehrt er
+#     nie. Genau diese Haltung schliesst nonblank_entries() weiter oben
+#     aus ("refuse rather than guess"). Hier wird deshalb benannt,
+#     abgelehnt und mit einem eigenen Rueckgabewert geendet - und die
+#     .ovpn, die NetworkManager zu sehen bekommt, ist AUS UNSEREN
+#     EINSTELLUNGEN gebaut, nie die fremde weitergereicht.
+#
+# WO DIE GEHEIMNISSE LIEGEN
+#     Eine .ovpn traegt Zertifikate und den privaten Schluessel im
+#     KLARTEXT in der Datei (<ca>, <cert>, <key>, <tls-auth>,
+#     <tls-crypt>). NetworkManagers Einleser packt sie selbst aus, nach
+#     $XDG_DATA_HOME/networkmanagement/certificates/nm-openvpn/ -
+#     GEMESSEN am 22.08.2026 mit umask 022: die Dateien 0600, das
+#     VERZEICHNIS aber 0755. Wir packen darum selbst aus, nach
+#     ~/.config/openvpn: Dateien 0600 vom ersten Byte, Verzeichnis
+#     0700, ueber write_private_secret(). In user-settings.json stehen
+#     nur DATEINAMEN.
+#
+#     Anders als bei WireGuard uebernimmt NetworkManager den privaten
+#     Schluessel NICHT in sein Verbindungsprofil - die Verbindung traegt
+#     den PFAD. Unsere Kopie bleibt damit die einzige Quelle.
+#
+# WARUM DAS PASSWORT UEBER EINE DATEI GEHT UND NICHT UEBER argv
+#     Die IPsec-Seite reicht Nutzername, Passwort und Einmal-Token heute
+#     als ARGUMENTE an vpn-connect.sh ($1, $2, $4). /proc/<pid>/cmdline
+#     ist fuer jedes Konto der Maschine lesbar - das wird hier nicht
+#     wiederholt. `nmcli connection up <name> passwd-file <datei>`
+#     nimmt eine Datei mit `vpn.secrets.<name>:<wert>`-Zeilen
+#     (GEMESSEN aus `nmcli connection up --help` und nmcli(1)); sie
+#     liegt 0600 im Laufzeitverzeichnis und wird danach geloescht.
+#
+# WAS DER WAECHTER KANN UND WAS NICHT - GEMESSEN am 22.08.2026
+#     NMs Einleser setzt aus `auth-user-pass` selbstaendig
+#     `password-flags = 1` (agentengehalten): das Passwort wird NICHT
+#     gespeichert und bei jedem Hochfahren neu erfragt. Eine reine
+#     Zertifikatsverbindung (`connection-type = tls`) bekommt dagegen
+#     GAR KEINE Geheimnisflagge - gemessen an vier eingelesenen
+#     Dateien (nur Zertifikate / Zertifikate mit verschluesseltem
+#     Schluessel / nur Anmeldung / beides).
+#
+#     Folge, und sie steht auch in der Oberflaeche: eine reine
+#     Zertifikatsverbindung mit UNverschluesseltem Schluessel stellt
+#     der Waechter unbeaufsichtigt wieder her; eine mit Nutzername und
+#     Passwort - und ebenso eine mit verschluesseltem Schluessel, fuer
+#     die nm-openvpn-service `cert-pass` erfragt - nicht. Das ist ein
+#     Unterschied zur IPsec-Seite, wo strongSwan das Geheimnis in
+#     seiner eigenen Konfiguration haelt, und er wird angesagt statt
+#     spaeter entdeckt.
+
+# DIE ACHTZEHN, DIE EINEN BEFEHL AUSFUEHREN.
+#
+#     Abgezaehlt am 22.08.2026 aus `openvpn --help` und openvpn(8) der
+#     Fassung 2.7.6. `script-security` steht dabei, obwohl es selbst
+#     nichts startet: es ist der Schalter, der die anderen siebzehn
+#     ueberhaupt erst freigibt, und eine Datei, die ihn setzt, will
+#     genau das.
+OVPN_EXECUTING = (
+    "up", "down", "down-pre", "up-restart",
+    "route-up", "route-pre-down", "ipchange",
+    "client-connect", "client-disconnect", "client-crresponse",
+    "learn-address", "tls-verify", "auth-user-pass-verify",
+    "tls-crypt-v2-verify", "dns-updown", "iproute", "plugin",
+    "script-security",
+)
+
+# DIE, DIE AUSFUEHRUNG WEITERREICHEN, OHNE SELBST ZU STARTEN.
+#
+#     `config` zieht eine WEITERE Datei herein und mit ihr die ganze
+#     Liste darueber - deshalb steht es hier und wird nicht verfolgt.
+#     `setenv` fuellt die Umgebung, in der die achtzehn laufen. Die
+#     management-Familie uebergibt die Steuerung von openvpn an einen
+#     fremden Prozess ueber einen Sockel. Und `daemon`, `cd`, `chroot`,
+#     `tmp-dir`, `tls-export-cert` und `client-config-dir` verschieben,
+#     WO und ALS WER alles laeuft bzw. wohin openvpn schreiben darf.
+OVPN_ENABLING = (
+    "config", "setenv", "setenv-safe",
+    "management", "management-client", "management-client-auth",
+    "management-client-user", "management-client-group",
+    "management-client-pf", "management-query-passwords",
+    "management-query-proxy", "management-query-remote",
+    "management-external-key", "management-external-cert",
+    "management-up-down", "management-hold", "management-signal",
+    "management-forget-disconnect", "management-log-cache",
+    "daemon", "cd", "chroot", "tmp-dir",
+    "tls-export-cert", "client-config-dir",
+)
+
+OVPN_REFUSED_KEYS = OVPN_EXECUTING + OVPN_ENABLING
+
+# Bloecke, die als Datei bei uns landen. Alles davon ist PEM-Text.
+#
+#     `key-direction` gehoert begrifflich zu tls-auth und wird als
+#     eigene Direktive gelesen; die Datei selbst traegt es nicht.
+OVPN_BLOB_FILES = {
+    "ca": "ca.pem",
+    "cert": "cert.pem",
+    "key": "key.pem",
+    "tls-auth": "tls-auth.key",
+    "tls-crypt": "tls-crypt.key",
+    "tls-crypt-v2": "tls-crypt-v2.key",
+    "extra-certs": "extra-certs.pem",
+    "crl-verify": "crl.pem",
+}
+
+# Bloecke, die es gibt, die aber NICHT als eingebetteter Text bei uns
+# ankommen duerfen.
+#
+#     <auth-user-pass> traegt Nutzername und Passwort im Klartext. Es
+#     abzulegen hiesse, ein Passwort auf die Platte zu schreiben, das
+#     heute nirgends auf der Platte steht - schlechter als der Zustand
+#     vorher, und darum abgelehnt statt uebernommen. Getippt wird es auf
+#     der VPN-Seite, und von dort geht es ueber passwd-file.
+#
+#     <pkcs12> und <secret> sind base64 bzw. eine statische
+#     Schluesseldatei; beide gehoeren als PFAD in die Datei, nicht als
+#     Block. <dh> ist serverseitig und hat in einer Client-Datei nichts
+#     zu suchen.
+OVPN_BLOB_REFUSED = {
+    "auth-user-pass":
+        "it carries a username and password in clear text - type them on "
+        "the VPN page instead, they never touch the disk",
+    "pkcs12": "a PKCS#12 block is base64-encoded binary - point at the "
+              ".p12 file instead",
+    "secret": "static key mode is not a client configuration - point at "
+              "the key file instead",
+    "dh": "Diffie-Hellman parameters are server-side",
+    "peer-fingerprint": "peer fingerprints are not carried by "
+                        "NetworkManager's OpenVPN plugin",
+    "verify-hash": "certificate hash pinning is not carried by "
+                   "NetworkManager's OpenVPN plugin",
+    "http-proxy-user-pass": "it carries proxy credentials in clear text",
+    "auth-gen-token-secret": "it is a server-side token secret",
+}
+
+OVPN_INLINE_TAGS = tuple(OVPN_BLOB_FILES) + tuple(OVPN_BLOB_REFUSED)
+
+# Direktiven, die wir in EIGENE Einstellungsfelder uebernehmen und im
+# Fenster zeigen.
+OVPN_FIRST_CLASS = (
+    "remote", "port", "rport", "proto", "dev", "dev-type",
+    "auth-user-pass", "remote-cert-tls", "cipher", "auth",
+    "key-direction", "comp-lzo", "tun-mtu", "tunnel-mtu", "reneg-sec",
+    "pkcs12",
+) + tuple(OVPN_BLOB_FILES)
+
+# Direktiven, die wir MITNEHMEN, ohne ein eigenes Feld dafuer zu bauen.
+#
+#     Sie landen als Paar (Name, Argumente) in `openvpn.extra` und
+#     werden von ovpn_conf_text() woertlich wieder ausgegeben, damit die
+#     Verbindung das aushandelt, was der Anbieter vorgesehen hat. Das
+#     ist eine ERLAUBNISLISTE und keine Durchreiche: was nicht hier
+#     steht, kommt nicht hindurch, und die achtzehn oben sind lange
+#     vorher abgelehnt.
+#
+#     Achtzehn Bedienelemente fuer Werte, die niemand von Hand aendert,
+#     waeren ausserdem genau die Breitenrechnung, die dieses Fenster
+#     schon einmal um 42 Punkte gesprengt hat.
+OVPN_CARRIED_EXTRA = (
+    "data-ciphers", "data-ciphers-fallback", "tls-cipher",
+    "tls-version-min", "tls-version-max", "ns-cert-type",
+    "verify-x509-name", "tls-remote", "remote-cert-ku", "remote-cert-eku",
+    "compress", "allow-compression", "keysize", "mssfix", "fragment",
+    "mtu-disc", "keepalive", "ping", "ping-exit", "ping-restart",
+    "connect-timeout", "server-poll-timeout", "float", "max-routes",
+    "remote-random", "remote-random-hostname", "push-peer-info",
+    "tun-ipv6", "allow-pull-fqdn", "route-nopull", "redirect-gateway",
+    "http-proxy", "http-proxy-retry", "socks-proxy", "socks-proxy-retry",
+    "static-challenge", "auth-retry", "auth-token",
+)
+
+# Direktiven, die es gibt, die aber nichts an der Verbindung aendern,
+# die NetworkManager herstellt - er setzt sein eigenes Gegenstueck.
+#
+#     Sie werden trotzdem GEMELDET (als `ignored`, ohne eigenen
+#     Rueckgabewert), weil "still verworfen" genau der Vorwurf ist, den
+#     dieser Einleser gegen NetworkManagers eigenen erhebt. Der
+#     Unterschied zu OVPN_REFUSED_KEYS ist die Schwere: hier aendert
+#     sich nichts am Verkehr, dort haette etwas ausgefuehrt werden
+#     koennen.
+OVPN_IGNORED_KEYS = (
+    "client", "tls-client", "pull", "nobind", "persist-key",
+    "persist-tun", "persist-local-ip", "persist-remote-ip",
+    "resolv-retry", "verb", "mute", "mute-replay-warnings",
+    "explicit-exit-notify", "auth-nocache", "topology", "user", "group",
+    "nice", "log", "log-append", "status", "writepid", "syslog",
+    "disable-occ", "ifconfig-nowarn", "ncp-disable", "dh",
+    "allow-recursive-routing", "askpass", "route-delay", "route-metric",
+    "ignore-unknown-option", "machine-readable-output", "suppress-timestamps",
+    "block-outside-dns", "register-dns", "ip-win32", "route-method",
+    "win-sys", "pause-exit", "service", "dhcp-release", "dhcp-renew",
+    "show-net-up", "allow-nonadmin", "tap-sleep", "windows-driver",
+)
+
+
+class UnreadableOpenVpnConfig(ValueError):
+    """Diese .ovpn wird nicht halb eingelesen.
+
+    Dieselbe Haltung wie UnreadableWireGuardConfig, und aus demselben
+    Grund: was still verschwindet, ist genau die Zeile, die den Verkehr
+    eingegrenzt haette. Bei OpenVPN kommt dazu, dass NetworkManagers
+    eigener Einleser GENAU DAS TUT (gemessen, siehe oben) - eine
+    Fehlermeldung mit Datei und Zeilennummer ist hier also nicht nur
+    besser als Schweigen, sie ist der ganze Unterschied.
+    """
+
+
+@dataclass
+class OpenVpnConf:
+    """Was in einer .ovpn stand - und was davon abgelehnt wurde."""
+
+    # (Zeilennummer, Direktive, Argumente) in der Reihenfolge der Datei.
+    directives: list[tuple[int, str, list[str]]]
+    # Eingebettete Bloecke, Name -> Text, ohne die <tag>-Zeilen.
+    blobs: dict[str, str]
+    # (Zeilennummer, Name) je ausfuehrender oder ausfuehrung-
+    # ermoeglichender Zeile. Leer ist der Normalfall.
+    refused: list[tuple[int, str]]
+    # (Zeilennummer, Name) je bekannter, aber folgenloser Zeile.
+    ignored: list[tuple[int, str]]
+
+
+def _ovpn_tokens(line: str, *, source: str, number: int) -> list[str]:
+    """Eine Zeile in Direktive und Argumente zerlegen.
+
+    OpenVPN kennt einfache und doppelte Anfuehrungszeichen und
+    Rueckstrich-Maskierung (openvpn(8), Abschnitt OPTIONS: "OpenVPN 2.0
+    and higher performs backslash-based shell escaping for characters
+    not in single quotations"). Ein Pfad mit Leerzeichen steht in
+    Anfuehrungszeichen, und ein `split()` haette daraus zwei Argumente
+    gemacht - also einen Zertifikatspfad, den es nicht gibt.
+
+    KOMMENTARE WERDEN NICHT MITTEN IN DER ZEILE ABGESCHNITTEN, anders
+    als bei wg-quick: openvpn(8) sagt ausdruecklich `"#" or ";"
+    characters IN THE FIRST COLUMN can be used to denote comments`.
+    Ein `#` in einem Zertifikatsnamen oder in einem Passwortfeld ist
+    also Inhalt, und wer es abschneidet, zerteilt einen Wert.
+    """
+    tokens: list[str] = []
+    current = ""
+    started = False
+    quote = ""
+    index = 0
+    while index < len(line):
+        char = line[index]
+        if quote:
+            if char == "\\" and quote == '"' and index + 1 < len(line):
+                index += 1
+                current += line[index]
+            elif char == quote:
+                quote = ""
+            else:
+                current += char
+        elif char in "\"'":
+            quote = char
+            started = True
+        elif char == "\\" and index + 1 < len(line):
+            index += 1
+            current += line[index]
+            started = True
+        elif char.isspace():
+            if started:
+                tokens.append(current)
+            current, started = "", False
+        else:
+            current += char
+            started = True
+        index += 1
+    if quote:
+        raise UnreadableOpenVpnConfig(
+            f"{source}:{number}: unterminated {quote} quote")
+    if started:
+        tokens.append(current)
+    return tokens
+
+
+def parse_ovpn(text: str, source: str = "<eingabe>") -> OpenVpnConf:
+    """Eine .ovpn, Zeile fuer Zeile, ohne zu raten.
+
+    Vier Ausgaenge, und jeder ist sichtbar:
+
+      * eine ausfuehrende Direktive wird BENANNT abgelehnt und faehrt
+        mit Zeilennummer in `refused` - der Aufrufer endet dann mit
+        OVPN_IMPORT_REFUSED statt mit 0;
+      * eine bekannte, folgenlose Direktive faehrt in `ignored`;
+      * eine getragene faehrt in `directives`;
+      * alles andere BRICHT AB, mit Datei, Zeile und Namen.
+    """
+    conf = OpenVpnConf(directives=[], blobs={}, refused=[], ignored=[])
+    tag = ""
+    tag_line = 0
+    collected: list[str] = []
+
+    for number, raw in enumerate(text.splitlines(), start=1):
+        stripped = raw.strip()
+
+        if tag:
+            if stripped == f"</{tag}>":
+                if tag in conf.blobs:
+                    raise UnreadableOpenVpnConfig(
+                        f"{source}:{tag_line}: <{tag}> appears twice")
+                conf.blobs[tag] = "\n".join(collected).strip() + "\n"
+                tag, collected = "", []
+            else:
+                collected.append(raw.rstrip())
+            continue
+
+        if not stripped:
+            continue
+        # Nur in der ersten Spalte, siehe _ovpn_tokens().
+        if stripped[0] in "#;":
+            continue
+
+        if stripped.startswith("<") and stripped.endswith(">"):
+            name = stripped[1:-1].strip()
+            if name.startswith("/"):
+                raise UnreadableOpenVpnConfig(
+                    f"{source}:{number}: {stripped} closes a block that was "
+                    f"never opened")
+            if name not in OVPN_INLINE_TAGS:
+                raise UnreadableOpenVpnConfig(
+                    f"{source}:{number}: unknown inline block <{name}>. "
+                    f"Nothing was imported - a configuration that is read by "
+                    f"halves is worse than one that is refused")
+            if name in OVPN_BLOB_REFUSED:
+                raise UnreadableOpenVpnConfig(
+                    f"{source}:{number}: <{name}> was NOT taken over - "
+                    f"{OVPN_BLOB_REFUSED[name]}")
+            tag, tag_line, collected = name, number, []
+            continue
+
+        tokens = _ovpn_tokens(stripped, source=source, number=number)
+        if not tokens:
+            continue
+        # Eine fuehrende `--` ist erlaubt: viele Anbieter schreiben ihre
+        # Dateien aus einer Befehlszeile heraus.
+        name = tokens[0][2:] if tokens[0].startswith("--") else tokens[0]
+        name = name.lower()
+        arguments = tokens[1:]
+
+        if name in OVPN_REFUSED_KEYS:
+            conf.refused.append((number, name))
+            continue
+        if name in OVPN_IGNORED_KEYS:
+            conf.ignored.append((number, name))
+            continue
+        if name in OVPN_FIRST_CLASS or name in OVPN_CARRIED_EXTRA \
+                or name in ("route", "dhcp-option"):
+            conf.directives.append((number, name, arguments))
+            continue
+
+        raise UnreadableOpenVpnConfig(
+            f"{source}:{number}: unknown directive {name!r}. Nothing was "
+            f"imported - a configuration that is read by halves is worse "
+            f"than one that is refused")
+
+    if tag:
+        raise UnreadableOpenVpnConfig(
+            f"{source}:{tag_line}: <{tag}> is never closed")
+    return conf
+
+
+def openvpn_key_dir(config_home: str | None = None) -> Path:
+    """~/.config/openvpn - 0700, siehe write_private_secret().
+
+    Nicht /etc/openvpn: dort liegen Systemverbindungen, dort braucht das
+    Schreiben Rechte, und der Nutzer soll seine eigenen Zertifikate
+    ansehen und loeschen koennen, ohne dafuer jemanden zu fragen.
+    """
+    root = (config_home or os.environ.get("XDG_CONFIG_HOME")
+            or f"{os.path.expanduser('~')}/.config")
+    return Path(root) / "openvpn"
+
+
+def store_openvpn_blobs(conf: OpenVpnConf, name: str,
+                        config_home: str | None = None) -> dict[str, str]:
+    """Die eingebetteten Bloecke auspacken - 0600, Verzeichnis 0700.
+
+    Gibt zurueck, unter welchem DATEINAMEN was liegt. Nur diese Namen
+    stehen spaeter in user-settings.json; der Inhalt steht dort nie.
+    """
+    stored: dict[str, str] = {}
+    for tag, suffix in OVPN_BLOB_FILES.items():
+        text = conf.blobs.get(tag)
+        if not text:
+            continue
+        stored[tag] = write_private_secret(openvpn_key_dir(config_home),
+                                           f"{name}-{suffix}", text).name
+    return stored
+
+
+def _ovpn_first(conf: OpenVpnConf, name: str) -> list[str]:
+    for _number, key, arguments in conf.directives:
+        if key == name:
+            return arguments
+    return []
+
+
+def _ovpn_route_cidr(arguments: Sequence[str]) -> str:
+    """`route 10.0.0.0 255.0.0.0` als `10.0.0.0/8`.
+
+    Die Netzliste dieses Projekts fuehrt CIDR - `routed_networks` treibt
+    bei IPsec die Child-SAs und bei WireGuard die AllowedIPs, und eine
+    vierte Schreibweise waere eine vierte Stelle, an der etwas anderes
+    stehen kann. Eine Maske, die keine ist, faellt weg statt zu raten.
+    """
+    if not arguments:
+        return ""
+    network = arguments[0]
+    mask = arguments[1] if len(arguments) > 1 else "255.255.255.255"
+    if mask in ("vpn_gateway", "net_gateway", "remote_host"):
+        mask = "255.255.255.255"
+    try:
+        return str(ipaddress.ip_network(f"{network}/{mask}", strict=False))
+    except ValueError:
+        return ""
+
+
+def openvpn_document(conf: OpenVpnConf, *, stored_files: dict[str, str] | None = None,
+                     ) -> dict[str, Any]:
+    """Der Abschnitt, der in user-settings.json darf - OHNE Geheimnisse.
+
+    Getragen werden Dateinamen, kein Zertifikat und kein Schluessel.
+    Dieselbe Trennung wie bei wireguard_document(), aus demselben Grund:
+    dieses Dokument liest der Stil-Erzeuger, gibt `zepos-settings` aus
+    und fasst der Doktor an.
+    """
+    files = dict(stored_files or {})
+    for _number, key, arguments in conf.directives:
+        # Ein PFAD in der Datei (statt eines Blocks) bleibt ein Pfad -
+        # er gehoert dem Nutzer, und ihn zu kopieren hiesse, ein
+        # Geheimnis zu verdoppeln.
+        if key in OVPN_BLOB_FILES and key not in files and arguments:
+            files[key] = arguments[0]
+
+    remote = _ovpn_first(conf, "remote")
+    port = ""
+    proto = ""
+    if len(remote) > 1:
+        port = remote[1]
+    if len(remote) > 2:
+        proto = remote[2]
+    for key in ("port", "rport"):
+        arguments = _ovpn_first(conf, key)
+        if arguments:
+            port = arguments[0]
+    arguments = _ovpn_first(conf, "proto")
+    if arguments:
+        proto = arguments[0]
+
+    device = _ovpn_first(conf, "dev")
+    device_type = _ovpn_first(conf, "dev-type")
+
+    has_certificate = bool(files.get("cert") and files.get("key")) \
+        or bool(files.get("pkcs12"))
+    wants_login = any(key == "auth-user-pass"
+                      for _number, key, _arguments in conf.directives)
+    if has_certificate and wants_login:
+        connection_type = "password-tls"
+    elif has_certificate:
+        connection_type = "tls"
+    elif wants_login:
+        connection_type = "password"
+    else:
+        # Weder Zertifikat noch Anmeldung: NetworkManagers Einleser
+        # verlangt mindestens ein --ca, und ohne beides gibt es nichts
+        # auszuweisen. "tls" ist die Antwort, die das Fenster dann als
+        # unvollstaendig zeigt, statt hier zu raten.
+        connection_type = "tls"
+
+    extra: list[list[str]] = []
+    for _number, key, arguments in conf.directives:
+        if key in OVPN_CARRIED_EXTRA:
+            extra.append([key, *arguments])
+
+    single = {}
+    for key, field in (("cipher", "cipher"), ("auth", "auth"),
+                       ("remote-cert-tls", "remote_cert_tls"),
+                       ("comp-lzo", "comp_lzo")):
+        arguments = _ovpn_first(conf, key)
+        if arguments or key in ("comp-lzo",) and any(
+                item == key for _n, item, _a in conf.directives):
+            single[field] = arguments[0] if arguments else "yes"
+
+    mtu = _ovpn_first(conf, "tun-mtu") or _ovpn_first(conf, "tunnel-mtu")
+    reneg = _ovpn_first(conf, "reneg-sec")
+    direction = _ovpn_first(conf, "key-direction")
+
+    return {
+        "remote": remote[0] if remote else "",
+        "port": int(port) if str(port).isdigit() else 0,
+        "proto": proto or "udp",
+        "dev": device[0] if device else "tun",
+        "dev_type": device_type[0] if device_type else "",
+        "connection_type": connection_type,
+        "username": "",
+        "remote_cert_tls": single.get("remote_cert_tls", ""),
+        "cipher": single.get("cipher", ""),
+        "auth": single.get("auth", ""),
+        "comp_lzo": single.get("comp_lzo", ""),
+        "tunnel_mtu": int(mtu[0]) if mtu and mtu[0].isdigit() else 0,
+        "reneg_seconds": int(reneg[0]) if reneg and reneg[0].isdigit() else -1,
+        "ta_dir": direction[0] if direction else "",
+        "ca_file": files.get("ca", ""),
+        "cert_file": files.get("cert", ""),
+        "key_file": files.get("key", ""),
+        "tls_auth_file": files.get("tls-auth", ""),
+        "tls_crypt_file": files.get("tls-crypt", ""),
+        "pkcs12_file": files.get("pkcs12", ""),
+        "extra": extra,
+    }
+
+
+def openvpn_dns(conf: OpenVpnConf) -> dict[str, Any]:
+    """Was `dhcp-option DNS/DOMAIN` in den BESTEHENDEN DNS-Reiter bringt.
+
+    Denselben Reiter benutzt WireGuards `DNS =` und benutzen die
+    IPsec-Server. Ein zweiter waere derselbe Reiter zweimal.
+    """
+    servers, domains = [], []
+    for _number, key, arguments in conf.directives:
+        if key != "dhcp-option" or len(arguments) < 2:
+            continue
+        head = arguments[0].upper()
+        if head == "DNS":
+            servers.append(arguments[1])
+        elif head in ("DOMAIN", "DOMAIN-SEARCH", "ADAPTER_DOMAIN_SUFFIX"):
+            domains.append(arguments[1])
+    return {"servers": servers, "search_domain": " ".join(domains)}
+
+
+def openvpn_routes(conf: OpenVpnConf) -> list[str]:
+    """`route`-Zeilen in die BESTEHENDE Netzliste (routed_networks)."""
+    networks = []
+    for _number, key, arguments in conf.directives:
+        if key != "route":
+            continue
+        cidr = _ovpn_route_cidr(arguments)
+        if cidr and cidr not in networks:
+            networks.append(cidr)
+    return networks
+
+
+def ovpn_conf_text(document: dict[str, Any],
+                   dns: dict[str, Any] | None = None,
+                   routed_networks: Sequence[str] | None = None,
+                   key_dir: Path | None = None) -> str:
+    """Unsere Einstellungen zurueck in .ovpn-Syntax.
+
+    Das ist die Datei, die `nmcli connection import type openvpn`
+    bekommt - und sie ist UNSERE. Was an ausfuehrenden Zeilen in der
+    fremden Datei stand, ist beim Einlesen abgelehnt worden und kommt
+    hier nicht wieder heraus: dieser Text wird aus dem
+    Einstellungsdokument gebaut, und in das Dokument kommt nur, was
+    OVPN_FIRST_CLASS und OVPN_CARRIED_EXTRA erlauben.
+
+    Die Pfade zeigen auf ~/.config/openvpn - unsere eigenen Dateien,
+    0600. NetworkManager uebernimmt bei OpenVPN nur den PFAD in sein
+    Profil, nicht den Inhalt; unsere Kopie bleibt damit die Quelle.
+    """
+    directory = key_dir or openvpn_key_dir()
+
+    def path_of(value: str) -> str:
+        # Ein Dateiname ist einer von unseren, ein absoluter Pfad ist
+        # der des Nutzers und bleibt, wo er ist.
+        return value if value.startswith("/") else str(directory / value)
+
+    lines = ["client"]
+    device = str(document.get("dev") or "tun")
+    lines.append(f"dev {device}")
+    if document.get("dev_type"):
+        lines.append(f"dev-type {document['dev_type']}")
+    lines.append(f"proto {document.get('proto') or 'udp'}")
+    remote = str(document.get("remote") or "")
+    port = document.get("port") or 0
+    if remote:
+        lines.append(f"remote {remote} {port}" if port else f"remote {remote}")
+
+    for field, directive in (("ca_file", "ca"), ("cert_file", "cert"),
+                             ("key_file", "key"), ("pkcs12_file", "pkcs12")):
+        value = str(document.get(field) or "")
+        if value:
+            lines.append(f"{directive} {path_of(value)}")
+
+    tls_auth = str(document.get("tls_auth_file") or "")
+    if tls_auth:
+        direction = str(document.get("ta_dir") or "")
+        lines.append(f"tls-auth {path_of(tls_auth)} {direction}".strip())
+    tls_crypt = str(document.get("tls_crypt_file") or "")
+    if tls_crypt:
+        lines.append(f"tls-crypt {path_of(tls_crypt)}")
+
+    if document.get("connection_type") in ("password", "password-tls"):
+        # OHNE Dateinamen dahinter, und das ist der Punkt: eine
+        # Zugangsdatendatei waere ein Passwort auf der Platte. Der Wert
+        # kommt beim Verbinden ueber `nmcli ... passwd-file`.
+        lines.append("auth-user-pass")
+
+    for field, directive in (("remote_cert_tls", "remote-cert-tls"),
+                             ("cipher", "cipher"), ("auth", "auth"),
+                             ("comp_lzo", "comp-lzo")):
+        value = str(document.get(field) or "")
+        if value:
+            lines.append(f"{directive} {value}")
+    if document.get("tunnel_mtu"):
+        lines.append(f"tun-mtu {document['tunnel_mtu']}")
+    if int(document.get("reneg_seconds", -1) or -1) >= 0:
+        lines.append(f"reneg-sec {document['reneg_seconds']}")
+
+    for entry in document.get("extra") or []:
+        if not entry:
+            continue
+        lines.append(" ".join(str(piece) for piece in entry))
+
+    for network in routed_networks or []:
+        try:
+            parsed = ipaddress.ip_network(str(network), strict=False)
+        except ValueError:
+            continue
+        if parsed.version == 4:
+            lines.append(f"route {parsed.network_address} {parsed.netmask}")
+
+    entries = list((dns or {}).get("servers") or [])
+    for server in entries:
+        lines.append(f"dhcp-option DNS {server}")
+    domain = str((dns or {}).get("search_domain") or "").strip()
+    for piece in domain.split():
+        lines.append(f"dhcp-option DOMAIN {piece}")
+
+    return "\n".join(lines) + "\n"
+
+
+def openvpn_needs_a_secret(document: dict[str, Any]) -> bool:
+    """Ob diese Verbindung ohne Zutun des Nutzers hochkommen kann.
+
+    GEMESSEN am 22.08.2026 an NetworkManagers eigenem Einleser: eine
+    Datei mit `auth-user-pass` ergibt `password-flags = 1`
+    (agentengehalten, nicht gespeichert); eine reine Zertifikatsdatei
+    ergibt gar keine Geheimnisflagge. Und nm-openvpn-service erfragt
+    `cert-pass`, wenn der private Schluessel verschluesselt ist - seine
+    Zeichenkettentabelle fuehrt dafuer eigens
+    `-----BEGIN ENCRYPTED PRIVATE KEY-----` und `Proc-Type: 4,ENCRYPTED`.
+
+    Daran haengt, ob vpn-watcher.sh die Verbindung nach einem Netzwechsel
+    oder dem Aufwachen von selbst wiederherstellen kann - und die Antwort
+    steht deshalb auch im Fenster, statt dass der Nutzer sie an einer
+    Verbindung erlebt, die weg bleibt.
+    """
+    if document.get("connection_type") in ("password", "password-tls"):
+        return True
+    return openvpn_key_is_encrypted(document)
+
+
+def openvpn_key_is_encrypted(document: dict[str, Any],
+                             key_dir: Path | None = None) -> bool:
+    """Ob der private Schluessel eine Passphrase traegt.
+
+    Gelesen wird nur der KOPF der Datei und nur nach den beiden Markern,
+    die openssl und openvpn selbst schreiben. Ein unlesbarer oder
+    fehlender Schluessel antwortet False: eine Verbindung, die es nicht
+    gibt, verlangt keine Passphrase, und ein Traceback an dieser Stelle
+    haette das Fenster angehalten.
+    """
+    value = str(document.get("key_file") or "")
+    if not value:
+        return False
+    directory = key_dir or openvpn_key_dir()
+    path = Path(value) if value.startswith("/") else directory / value
+    try:
+        head = path.read_text(encoding="utf-8", errors="replace")[:4096]
+    except OSError:
+        return False
+    return ("ENCRYPTED PRIVATE KEY" in head
+            or "Proc-Type: 4,ENCRYPTED" in head)
+
+
+# --------------------------------------------------------------------
 # NetworkManager: anlegen und abfragen
 # --------------------------------------------------------------------
 
-def nm_import_argv(conf_file: str) -> list[str]:
-    """Der Einlesebefehl. Ein PFAD, kein Schluessel."""
-    return ["nmcli", "connection", "import", "type", WG_KIND, "file", conf_file]
+def nm_import_argv(conf_file: str, kind: str = WG_KIND) -> list[str]:
+    """Der Einlesebefehl. Ein PFAD, kein Schluessel.
+
+    `kind` ist der NetworkManager-Typ und heisst zufaellig genauso wie
+    unsere Bauart ("wireguard" bzw. "openvpn"). Er steht trotzdem als
+    Parameter da und nicht als Verzweigung im Rumpf: der Aufrufer weiss,
+    welche Datei er geschrieben hat, und ein Einlesen mit dem falschen
+    Typ waere eine Verbindung, die sich anlegen laesst und nie zustande
+    kommt.
+    """
+    return ["nmcli", "connection", "import", "type", kind, "file", conf_file]
+
+
+def nm_username_argv(connection: str, username: str) -> list[str]:
+    """Den Nutzernamen an die OpenVPN-Verbindung schreiben.
+
+    KEIN GEHEIMNIS - deshalb darf er hier als Argument stehen, und nur
+    er. Das Passwort und das Einmal-Kennwort gehen ueber `passwd-file`,
+    aus dem Grund, der im Kopf des OpenVPN-Teils steht.
+
+    Der Schluessel heisst `username` in `vpn.data`. Das ist die EINE
+    Stelle dieser Aufgabe, die am 22.08.2026 NICHT direkt gemessen
+    werden konnte: `username` ist im Stringtable von
+    libnm-vpn-plugin-openvpn.so als Endstueck von `http-proxy-username`
+    zusammengelegt und dort nicht einzeln nachweisbar. Deshalb prueft
+    _ovpn_apply() nach dem Schreiben nach, ob der Wert wirklich in der
+    Verbindung steht, statt es anzunehmen - siehe nm_vpn_data_argv().
+    """
+    return ["nmcli", "connection", "modify", connection,
+            "+vpn.data", f"username={username}"]
+
+
+def nm_vpn_data_argv(connection: str) -> list[str]:
+    """Die vpn.data der Verbindung zuruecklesen - die Gegenprobe."""
+    return ["nmcli", "-t", "-f", "vpn.data", "connection", "show", connection]
+
+
+def nm_up_argv(connection: str, passwd_file: str = "") -> list[str]:
+    """`nmcli connection up`, das Passwort ueber eine DATEI.
+
+    `passwd-file` nimmt Zeilen der Form
+    `setting_name.property_name:wert` - fuer ein VPN also
+    `vpn.secrets.password:...` (GEMESSEN am 22.08.2026 aus
+    `nmcli connection up --help` und nmcli(1); nmcli fuehrt dafuer die
+    Zeichenkette `vpn.secrets.%s`). Ohne diese Datei warnt nmcli
+    ausdruecklich, dass es ohne `--ask` niemanden fragen kann - und
+    `--ask` will ein Terminal, das eine Schale nicht hat.
+    """
+    argv = ["nmcli", "connection", "up", connection]
+    if passwd_file:
+        argv += ["passwd-file", passwd_file]
+    return argv
+
+
+def openvpn_secrets_text(password: str = "", token: str = "",
+                         cert_pass: str = "") -> str:
+    """Die passwd-file fuer `nmcli connection up`.
+
+    Das Einmal-Kennwort geht als `challenge-response` mit und wird NICHT
+    an das Passwort angehaengt: OpenVPN hat fuer diesen Fall die
+    Rueckfrage-Antwort-Schiene, und nm-openvpn-service spricht sie ueber
+    seine Verwaltungsschnittstelle (`CRV1::%s::%s`, in seiner
+    Zeichenkettentabelle). Der Anmeldedialog des Zusatzpakets fuehrt das
+    Geheimnis als `x-dynamic-challenge:challenge-response` - GEMESSEN am
+    22.08.2026, indem er mit einer Wegwerf-Verbindung auf der
+    Standardeingabe im `--external-ui-mode` gestartet wurde; er nennt
+    dort genau vier Geheimnisse: password, cert-pass,
+    http-proxy-password und challenge-response.
+
+    Anhaengen waere geraten, und ein falsch geratenes Passwort ist bei
+    einem Anbieter mit Sperrzaehler teurer als eine leere Zeile.
+    """
+    lines = []
+    if password:
+        lines.append(f"vpn.secrets.password:{password}")
+    if cert_pass:
+        lines.append(f"vpn.secrets.cert-pass:{cert_pass}")
+    if token:
+        lines.append(f"vpn.secrets.challenge-response:{token}")
+    return "\n".join(lines) + "\n" if lines else ""
+
+
+def openvpn_status(connection: str,
+                   runner: Runner = subprocess.run) -> tuple[str, str]:
+    """connected | stale | disconnected - derselbe Vertrag wie ueberall.
+
+    Wortgleich zu wireguard_status(), weil dieselben vier Leser
+    (ags-vpn.template, ags-network-scripts.template, vpn-control.sh und
+    vpn-watcher.sh) dieselbe eine Zeile Text bekommen und keiner von
+    ihnen wissen muss, welche Bauart eingestellt ist. Getrennt und nicht
+    zusammengelegt, weil die beiden Bauarten verschiedene
+    NetworkManager-Typen sind und die naechste Abweichung genau hier
+    auftauchen wird - eine gemeinsame Funktion mit einem
+    Bauart-Parameter waere die Stelle, an der sie dann still verschwaende.
+    """
+    return wireguard_status(connection, runner)
 
 
 def nm_own_argv(connection: str, user: str, *,
@@ -1139,6 +1975,8 @@ USAGE = """usage: vpn.py --virtual-address | --tunnel-health
                  | --status | --address-present ADDRESS
                  | --wg-import FILE | --wg-genkey NAME
                  | --wg-apply | --wg-up | --wg-down
+                 | --ovpn-import FILE | --ovpn-apply
+                 | --ovpn-up | --ovpn-down | --ovpn-unattended
 
   --virtual-address    read `swanctl --list-sas` output on standard input
                        and print the virtual address it reports.
@@ -1160,12 +1998,33 @@ USAGE = """usage: vpn.py --virtual-address | --tunnel-health
   --wg-apply           build the NetworkManager connection from the
                        settings. The private key travels as a FILE.
   --wg-up / --wg-down  activate / deactivate that connection.
+  --ovpn-import FILE   read an OpenVPN configuration, store its embedded
+                       certificates and keys at 0600 and print the
+                       settings section as JSON. exit 0 taken over whole,
+                       3 taken over with lines refused (they are named in
+                       `refused`), 65 refused outright with file and line
+                       on stderr.
+  --ovpn-apply         build the NetworkManager connection from the
+                       settings, and check afterwards that it kept the
+                       username.
+  --ovpn-up            activate it. Credentials arrive as JSON on
+                       standard input - never as arguments - and travel
+                       to nmcli in a 0600 file that is deleted again.
+  --ovpn-down          deactivate it.
+  --ovpn-unattended    print `yes` or `no`: whether this connection can
+                       be restored without anybody typing anything.
 """
 
 # Der eigene Rueckgabewert fuer "eingelesen, aber Zeilen abgelehnt". Ein
 # Aufrufer, der die abgelehnten Haken-Zeilen uebergehen will, muss das
 # damit AKTIV tun - `exit 0` haette ihm erlaubt, sie nicht zu bemerken.
 WG_IMPORT_REFUSED = 3
+# Derselbe Wert fuer OpenVPN, und ausgeschrieben statt geteilt: die
+# beiden Bauarten lehnen aus demselben Grund ab, aber sie sind zwei
+# Befehle mit zwei Vertraegen, und ein gemeinsamer Name waere die
+# Stelle, an der eine Aenderung an der einen die andere still
+# mitnimmt.
+OVPN_IMPORT_REFUSED = 3
 
 
 def _settings_document() -> dict[str, Any]:
@@ -1255,7 +2114,7 @@ def _wg_apply(document: dict[str, Any],
         os.close(handle)
 
     try:
-        for argv in (nm_import_argv(str(conf_file)),
+        for argv in (nm_import_argv(str(conf_file), WG_KIND),
                      nm_own_argv(name, os.environ.get("USER")
                                  or str(os.getuid()))):
             completed = runner(argv, capture_output=True, text=True,
@@ -1267,6 +2126,157 @@ def _wg_apply(document: dict[str, Any],
         conf_file.unlink(missing_ok=True)
     print(name)
     return 0
+
+
+def _ovpn_section(document: dict[str, Any]) -> dict[str, Any]:
+    section = document.get("vpn") if isinstance(document, dict) else None
+    block = (section or {}).get(OVPN_KIND) if isinstance(section, dict) else None
+    return block if isinstance(block, dict) else {}
+
+
+def _ovpn_routed(document: dict[str, Any]) -> list[str]:
+    section = document.get("vpn") if isinstance(document, dict) else None
+    values = (section or {}).get("routed_networks") if isinstance(section, dict) else None
+    return [str(entry) for entry in values] if isinstance(values, list) else []
+
+
+def _runtime_dir() -> Path:
+    """Das eigene Laufzeitverzeichnis - ein tmpfs, 0700, beim Abmelden leer.
+
+    Dieselbe Wahl und dieselbe Begruendung wie in _wg_apply() und in
+    ags-vpn.template: /tmp kann jedes Konto der Maschine lesen.
+    """
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR")
+                   or f"/run/user/{os.getuid()}") / "zepos-vpn"
+    runtime.mkdir(parents=True, exist_ok=True)
+    os.chmod(runtime, 0o700)
+    return runtime
+
+
+def _write_private(path: Path, text: str) -> None:
+    """0600 vom ersten Byte, ueber O_EXCL - siehe write_private_secret()."""
+    path.unlink(missing_ok=True)
+    handle = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        os.write(handle, text.encode("utf-8"))
+    finally:
+        os.close(handle)
+
+
+def _ovpn_apply(document: dict[str, Any],
+                runner: Runner = subprocess.run) -> int:
+    """Die OpenVPN-Verbindung aus den Einstellungen bauen.
+
+    Die .ovpn liegt 0600 im Laufzeitverzeichnis und wird danach
+    GELOESCHT - auch wenn `nmcli` scheitert. Sie traegt zwar kein
+    Geheimnis (die Zertifikate stehen als Pfad darin), aber sie ist die
+    Datei, aus der die Verbindung entsteht, und eine liegengebliebene
+    Kopie ist eine zweite Wahrheit.
+    """
+    block = _ovpn_section(document)
+    name = _wg_connection_name(document)
+    if not block.get("remote"):
+        sys.stderr.write("no OpenVPN server is configured\n")
+        return 1
+
+    conf_file = _runtime_dir() / f"{name}.ovpn"
+    _write_private(conf_file, ovpn_conf_text(block, _wg_dns(document),
+                                             _ovpn_routed(document)))
+    try:
+        for argv in (nm_import_argv(str(conf_file), OVPN_KIND),
+                     nm_own_argv(name, os.environ.get("USER")
+                                 or str(os.getuid()))):
+            completed = runner(argv, capture_output=True, text=True,
+                               timeout=30)
+            if completed.returncode != 0:
+                sys.stderr.write((completed.stderr or "").strip() + "\n")
+                return 1
+    finally:
+        conf_file.unlink(missing_ok=True)
+
+    username = str(block.get("username") or "")
+    if username:
+        completed = runner(nm_username_argv(name, username),
+                           capture_output=True, text=True, timeout=30)
+        if completed.returncode != 0:
+            sys.stderr.write((completed.stderr or "").strip() + "\n")
+            return 1
+        # DIE GEGENPROBE, und sie ist kein Luxus: der Eigenschaftsname
+        # `username` liess sich am 22.08.2026 nicht direkt messen (er
+        # ist im Stringtable als Endstueck von `http-proxy-username`
+        # zusammengelegt). Ein falscher Name faellt ohne diese Zeilen
+        # erst auf, wenn der Nutzer sich anzumelden versucht - und dann
+        # sagt ihm niemand, woran es lag.
+        report = _run(runner, nm_vpn_data_argv(name))
+        if f"username = {username}" not in report \
+                and f"username={username}" not in report:
+            sys.stderr.write(
+                f"NetworkManager did not keep the username: `nmcli "
+                f"connection show {name}` reports no `username = "
+                f"{username}` in vpn.data. The connection exists but "
+                f"will ask for a user it does not have.\n")
+            return 1
+    print(name)
+    return 0
+
+
+def _ovpn_credentials() -> dict[str, str]:
+    """Zugangsdaten von der STANDARDEINGABE, nie aus argv.
+
+    /proc/<pid>/cmdline ist fuer jedes Konto der Maschine lesbar; die
+    IPsec-Seite reicht Nutzername, Passwort und Token bis heute als
+    Argumente durch, und genau das wird hier nicht wiederholt.
+
+    Ein Terminal wird NICHT gelesen: eine reine Zertifikatsverbindung
+    braucht kein Geheimnis, und ein `vpn.py --ovpn-up` von Hand oder aus
+    einem Waechter heraus soll dort nicht haengen bleiben, wo es nichts
+    zu lesen gibt.
+    """
+    try:
+        if sys.stdin is None or sys.stdin.isatty():
+            return {}
+        raw = sys.stdin.read().strip()
+    except (OSError, ValueError):
+        return {}
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        return {}
+    return {key: str(value) for key, value in payload.items()
+            if isinstance(payload, dict) and value}
+
+
+def _ovpn_up(document: dict[str, Any],
+             credentials: dict[str, str] | None = None,
+             runner: Runner = subprocess.run) -> int:
+    """Hochfahren - das Passwort ueber eine Datei, nie ueber argv.
+
+    Die passwd-file liegt 0600 im Laufzeitverzeichnis und wird im
+    `finally` geloescht, auch wenn `nmcli` scheitert oder eine Ausnahme
+    fliegt. Bleibt sie liegen, ist ein Passwort auf der Platte, das
+    vorher nirgends auf der Platte stand.
+    """
+    name = _wg_connection_name(document)
+    given = credentials or {}
+    text = openvpn_secrets_text(password=given.get("password", ""),
+                                token=given.get("token", ""),
+                                cert_pass=given.get("cert_pass", ""))
+    secrets_file = None
+    try:
+        if text:
+            secrets_file = _runtime_dir() / f"{name}.secrets"
+            _write_private(secrets_file, text)
+        completed = runner(nm_up_argv(name, str(secrets_file) if secrets_file
+                                      else ""),
+                           capture_output=True, text=True, timeout=90)
+    finally:
+        if secrets_file is not None:
+            secrets_file.unlink(missing_ok=True)
+    if completed.returncode != 0:
+        sys.stderr.write((completed.stderr or "").strip() + "\n")
+    return completed.returncode
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1300,8 +2310,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         # in beiden Faellen derselbe: ein Wort, und dahinter, wenn es
         # eine gibt, die Adresse.
         document = _settings_document()
-        if vpn_kind(document) == WG_KIND:
+        kind = vpn_kind(document)
+        if kind == WG_KIND:
             state, address = wireguard_status(_wg_connection_name(document))
+        elif kind == OVPN_KIND:
+            state, address = openvpn_status(_wg_connection_name(document))
         else:
             state, address = tunnel_status()
         print(state if not address else f"{state} {address}")
@@ -1382,6 +2395,79 @@ def main(argv: Sequence[str] | None = None) -> int:
         if completed.returncode != 0:
             sys.stderr.write((completed.stderr or "").strip() + "\n")
         return completed.returncode
+
+    if query == "--ovpn-import":
+        if len(arguments) < 2:
+            sys.stderr.write(USAGE)
+            return 64
+        source = arguments[1]
+        try:
+            conf = parse_ovpn(Path(source).read_text(encoding="utf-8"), source)
+        except OSError as exc:
+            sys.stderr.write(f"{source}: {exc}\n")
+            return 65
+        except UnreadableOpenVpnConfig as exc:
+            sys.stderr.write(f"{exc}\n")
+            return 65
+
+        document = _settings_document()
+        name = _wg_connection_name(document)
+        stored = store_openvpn_blobs(conf, name)
+        block = openvpn_document(conf, stored_files=stored)
+        # Der Nutzername aus den bestehenden Einstellungen bleibt
+        # stehen: eine .ovpn traegt keinen (gemessen - NetworkManagers
+        # Einleser liest nicht einmal die Datei hinter `auth-user-pass`),
+        # und ihn beim Einlesen zu leeren hiesse, dem Nutzer etwas
+        # wegzunehmen, das in der Datei gar nicht vorkam.
+        block["username"] = str(_ovpn_section(document).get("username")
+                                or (document.get("vpn") or {}).get("username")
+                                or "")
+        payload = {
+            "openvpn": block,
+            "dns": openvpn_dns(conf),
+            # In die BESTEHENDE Netzliste, denselben Reiter, den IPsec
+            # und WireGuard benutzen.
+            "routed_networks": openvpn_routes(conf),
+            # Beide Listen fahren mit. `refused` traegt den eigenen
+            # Rueckgabewert, `ignored` nicht - der Unterschied ist die
+            # Schwere, nicht die Sichtbarkeit: gezeigt wird beides.
+            "refused": [[number, key] for number, key in conf.refused],
+            "ignored": [[number, key] for number, key in conf.ignored],
+            # Damit das Fenster den Satz ueber den unbeaufsichtigten
+            # Wiederaufbau zeigen kann, ohne ihn selbst herzuleiten.
+            "needs_a_secret": openvpn_needs_a_secret(block),
+        }
+        print(json.dumps(payload, indent=2))
+        if conf.refused:
+            for number, key in conf.refused:
+                sys.stderr.write(
+                    f"{source}:{number}: {key} was NOT taken over - it runs "
+                    f"commands (or permits them to run), and ZepOS connects "
+                    f"through NetworkManager, which does not.\n")
+            return OVPN_IMPORT_REFUSED
+        return 0
+
+    if query == "--ovpn-apply":
+        return _ovpn_apply(_settings_document())
+
+    if query == "--ovpn-up":
+        return _ovpn_up(_settings_document(), _ovpn_credentials())
+
+    if query == "--ovpn-down":
+        name = _wg_connection_name(_settings_document())
+        completed = subprocess.run(["nmcli", "connection", "down", name],
+                                   capture_output=True, text=True, timeout=60)
+        if completed.returncode != 0:
+            sys.stderr.write((completed.stderr or "").strip() + "\n")
+        return completed.returncode
+
+    if query == "--ovpn-unattended":
+        # Ein Wort, wie `--status` eines ist. Der Aufrufer soll nicht
+        # aus connection_type und dem Kopf einer Schluesseldatei selbst
+        # herleiten muessen, was hier an EINER Stelle steht.
+        print("no" if openvpn_needs_a_secret(
+            _ovpn_section(_settings_document())) else "yes")
+        return 0
 
     if query == "--address-present":
         if len(arguments) < 2:

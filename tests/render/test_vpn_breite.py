@@ -120,23 +120,41 @@ def _modal_width_l() -> int:
         sys.path.remove(str(ROOT / "src"))
 
 
-def _shipped_settings() -> str:
+def _shipped_settings(kind: str = "ipsec") -> str:
+    """Die ausgelieferten Vorgaben, auf eine Bauart gestellt.
+
+    `kind` ist ein Parameter geworden, als OpenVPN am 22.08.2026 die
+    dritte Bauart wurde: die Reiter werden nach Bauart GETAUSCHT
+    (tabsForKind in ags-vpn-settings.template), also ist der Ueberhang
+    je Bauart eine eigene Messung. Eine Zusicherung, die nur IPsec
+    zeichnet, sagt ueber die beiden anderen nichts.
+    """
     sys.path.insert(0, str(ROOT / "src"))
     try:
         import settings
-        return json.dumps(settings.defaults(), indent=2)
+        document = settings.defaults()
+        document["vpn"]["kind"] = kind
+        if kind == "openvpn":
+            # Ein Endpunkt und ein Zertifikatsname, damit die Reiter
+            # "Verbindung" und "Zertifikate" wirklich Inhalt tragen -
+            # ein leeres Fenster misst seine eigene Leere.
+            document["vpn"]["openvpn"]["remote"] = "gateway.example.invalid"
+            document["vpn"]["openvpn"]["port"] = 1194
+            document["vpn"]["openvpn"]["connection_type"] = "password-tls"
+            document["vpn"]["openvpn"]["username"] = "jemand"
+            document["vpn"]["openvpn"]["ca_file"] = "work-ca.pem"
+            document["vpn"]["openvpn"]["cert_file"] = "work-cert.pem"
+            document["vpn"]["openvpn"]["key_file"] = "work-key.pem"
+            document["vpn"]["openvpn"]["tls_auth_file"] = "work-tls-auth.key"
+            document["vpn"]["openvpn"]["extra"] = [
+                ["data-ciphers", "AES-256-GCM:AES-128-GCM"]]
+        return json.dumps(document, indent=2)
     finally:
         sys.path.remove(str(ROOT / "src"))
 
 
-@pytest.fixture(scope="module")
-def protokoll(tmp_path_factory) -> str:
-    """Das Fenster einmal geoeffnet, und was die Schale dabei gemeldet hat."""
-    fehlt = required_tools()
-    if fehlt:
-        pytest.skip(f"fuer den Bildlauf fehlt: {', '.join(fehlt)}")
-
-    bau = tmp_path_factory.mktemp("zepvpn-bau")
+def _lauf(bau, kind: str) -> str:
+    """Das Fenster einmal oeffnen und aufschreiben, was die Schale meldet."""
     ags = render_configuration(bau)
     bundle(ags, bau)
 
@@ -145,7 +163,7 @@ def protokoll(tmp_path_factory) -> str:
     # ist richtig so, aber ein Test soll den Normalfall messen und nicht
     # den Notfall.
     (bau / "zepos").mkdir(parents=True, exist_ok=True)
-    (bau / "zepos" / "user-settings.json").write_text(_shipped_settings(),
+    (bau / "zepos" / "user-settings.json").write_text(_shipped_settings(kind),
                                                      encoding="utf-8")
 
     with Session(1920, 1080) as sitzung:
@@ -163,6 +181,47 @@ def protokoll(tmp_path_factory) -> str:
         # die Messung der Fabrik aber immer.
         time.sleep(6.0)
         return sitzung.read_shell_log()
+
+
+def _pruefe_ueberhang(protokoll: str) -> None:
+    """Der Inhalt passt in das, was Sprosse L uebriglaesst."""
+    erlaubt = _modal_width_l() - RAHMEN_UND_LEISTE
+    zu_breit = [(int(inhalt), int(sicht))
+                for name, inhalt, sicht in MELDUNG.findall(protokoll)
+                if name == NAMESPACE and int(inhalt) > erlaubt]
+    assert zu_breit == [], (
+        f"der Inhalt von '{NAMESPACE}' verlangt mehr als die {erlaubt}px, "
+        f"die Sprosse L ({_modal_width_l()}px) uebriglaesst: {zu_breit}. "
+        f"Entweder gehoert das Fenster auf eine breitere Sprosse, oder "
+        f"seine Fusszeile muss schmaler werden - siehe die Rechnung im "
+        f"Kopf von src/templates/ags-vpn-settings.template.")
+
+
+@pytest.fixture(scope="module")
+def protokoll(tmp_path_factory) -> str:
+    """Das Fenster einmal geoeffnet, und was die Schale dabei gemeldet hat."""
+    fehlt = required_tools()
+    if fehlt:
+        pytest.skip(f"fuer den Bildlauf fehlt: {', '.join(fehlt)}")
+
+    bau = tmp_path_factory.mktemp("zepvpn-bau")
+    return _lauf(bau, "ipsec")
+
+
+@pytest.fixture(scope="module")
+def protokoll_openvpn(tmp_path_factory) -> str:
+    """Dasselbe Fenster, auf OpenVPN gestellt.
+
+    EIN EIGENER LAUF und keine Wiederverwendung: die Reiter werden nach
+    Bauart getauscht, und der breiteste Reiter dieser Bauart ist ein
+    anderer. Ein zweiter Compositor kostet eine halbe Minute - eine
+    ungemessene Bauart kostet ein Fenster, das links abgeschnitten ist
+    und dessen erster Reiter sich "in" statt "Allgemein" liest.
+    """
+    fehlt = required_tools()
+    if fehlt:
+        pytest.skip(f"fuer den Bildlauf fehlt: {', '.join(fehlt)}")
+    return _lauf(tmp_path_factory.mktemp("zepvpn-ovpn"), "openvpn")
 
 
 def test_die_schale_hat_das_fenster_ueberhaupt_gebaut(protokoll):
@@ -198,15 +257,30 @@ def test_der_ueberhang_ist_null(protokoll):
     standen dem Inhalt 634 zur Verfuegung - daher die 42 Punkte, die
     dieser Test ablegt.
     """
-    erlaubt = _modal_width_l() - RAHMEN_UND_LEISTE
+    _pruefe_ueberhang(protokoll)
 
-    zu_breit = [(int(inhalt), int(sicht))
-                for name, inhalt, sicht in MELDUNG.findall(protokoll)
-                if name == NAMESPACE and int(inhalt) > erlaubt]
 
-    assert zu_breit == [], (
-        f"der Inhalt von '{NAMESPACE}' verlangt mehr als die {erlaubt}px, "
-        f"die Sprosse L ({_modal_width_l()}px) uebriglaesst: {zu_breit}. "
-        f"Entweder gehoert das Fenster auf eine breitere Sprosse, oder "
-        f"seine Fusszeile muss schmaler werden - siehe die Rechnung im "
-        f"Kopf von src/templates/ags-vpn-settings.template.")
+def test_die_schale_hat_das_openvpn_fenster_gebaut(protokoll_openvpn):
+    """Die Gegenprobe fuer die dritte Bauart.
+
+    Sie ist hier schaerfer als bei IPsec: die OpenVPN-Reiter werden von
+    zwei Funktionen gebaut, die es vor dem 22.08.2026 nicht gab, und ein
+    Fehler darin faellt sonst als AUSBLEIBENDE Meldung auf - also als
+    scheinbar bestandener Ueberhangtest.
+    """
+    assert "VpnSettings loaded successfully" in protokoll_openvpn, (
+        "im Protokoll der Schale kommt das Fenster nicht vor - gemessen "
+        f"wurde vermutlich gar nichts:\n{protokoll_openvpn[-2000:]}")
+
+
+def test_der_ueberhang_ist_auch_unter_openvpn_null(protokoll_openvpn):
+    """Die dritte Bauart sprengt die Sprosse nicht.
+
+    Der breiteste Bewohner ist weiterhin die Fusszeile mit ihren vier
+    Knoepfen (676, GEMESSEN am 21.08.2026) - die Reiter "Verbindung" und
+    "Zertifikate" tragen Eingabezeilen, und die sind dehnbar. Diese
+    Zusicherung haelt fest, dass das so BLEIBT: wer dort ein breites,
+    nicht dehnbares Bauteil einsetzt, erfaehrt es hier und nicht vom
+    Nutzer.
+    """
+    _pruefe_ueberhang(protokoll_openvpn)
