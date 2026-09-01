@@ -109,6 +109,80 @@ MOBIKE = "no"
 START_ACTION = "trap"
 
 
+def getippter_pfad(text: str) -> Path:
+    """Ein von Hand getippter Pfad, so wie eine Shell ihn verstuende.
+
+    WAS GEMELDET WURDE (01.09.2026), WOERTLICH
+        "wenn ich den pfad ~/Dokumente/FOM-VPN.conf angebe kommt auch ein
+         erno2 error kann nicht einlesen das ist voll verbuggt"
+
+    WORAN ES LAG
+        `~` wird von der SHELL aufgeloest, nicht vom Betriebssystem. Der
+        Pfad kommt hier aber nicht aus einer Shell: das
+        Einstellungsfenster reicht den Inhalt seines Eingabefeldes ueber
+        execAsync als ARGUMENTLISTE weiter (kein `bash -c`, siehe
+        VPN_TOOL in ags-vpn-settings.template - das ist dort mit Absicht
+        so und richtig). `open("~/Dokumente/...")` sucht deshalb ein
+        VERZEICHNIS namens "~" neben der Datei, und das gibt es nicht:
+        errno 2, ENOENT.
+
+        Gezaehlt am 01.09.2026: `expanduser` kam im ganzen Baum nur in
+        dieser Datei vor (Zeilen 1139, 1170, 1683), und dort nur fuer
+        Konfigurationsverzeichnisse - fuer keinen einzigen Pfad, den ein
+        Mensch tippt.
+
+    WARUM AN EINER STELLE UND NICHT IN JEDEM FORMULARFELD
+        Es gibt genau zwei Stellen, an denen ein getippter Pfad
+        hereinkommt (--wg-import und --ovpn-import), und beide fuehren
+        hierher. Eine dritte spaeter wuerde sonst denselben Fehler noch
+        einmal machen.
+
+    WARUM ZUERST DIE DATEI GEFRAGT WIRD UND DANN ERST AUFGELOEST
+        Ein Dateiname DARF mit einer Tilde anfangen ("~notizen.conf" ist
+        ein gueltiger Name, und Editoren legen genau solche Sicherungen
+        an). Existiert der Pfad woertlich, gilt er woertlich - dann ist
+        nichts zu raten. Erst wenn es ihn nicht gibt, wird ausgelegt.
+
+    WARUM NUR $HOME UND ${HOME} UND NICHT os.path.expandvars
+        expandvars ersetzt JEDE Umgebungsvariable. Ein Pfad, in dem
+        zufaellig ein `$` steht, bekaeme damit stillschweigend den Inhalt
+        irgendeiner Variablen dieses Prozesses eingesetzt - in einem
+        Netzwerkzeug ist das die falsche Richtung. Die eine Variable, die
+        ein Mensch in einem Pfad tippt, ist HOME.
+    """
+    roh = text.strip()
+    if not roh:
+        return Path(roh)
+    if Path(roh).exists():
+        return Path(roh)
+    zuhause = os.path.expanduser("~")
+    aufgeloest = roh
+    for schreibweise in ("${HOME}", "$HOME"):
+        if aufgeloest.startswith(schreibweise + "/") or aufgeloest == schreibweise:
+            aufgeloest = zuhause + aufgeloest[len(schreibweise):]
+            break
+    else:
+        aufgeloest = os.path.expanduser(aufgeloest)
+    return Path(aufgeloest)
+
+
+def _pfad_meldung(getippt: str, versucht: Path, fehler: OSError) -> str:
+    """Was schiefging - und WORAN es lag, mit beiden Pfaden.
+
+    GEMELDET am 01.09.2026: "kommt auch ein erno2 error kann nicht
+    einlesen". Mehr stand da nicht. Eine Meldung, die den gesuchten Pfad
+    nennt, haette dem Nutzer die Tilde selbst gezeigt.
+
+    BEIDE Pfade, wenn sie sich unterscheiden: getippt war einer mit
+    Tilde, gesucht wurde der aufgeloeste darunter. Nur der getippte
+    erklaerte nichts, nur der aufgeloeste saehe aus, als haette das
+    Programm sich etwas ausgedacht.
+    """
+    if str(versucht) == getippt.strip():
+        return f"{getippt}: {fehler}\n"
+    return f"{getippt} (gesucht als {versucht}): {fehler}\n"
+
+
 def nonblank_entries(values: Sequence[Any] | None, *,
                      setting: str = "the setting") -> list[str]:
     """A list of settings values with blanks and surrounding space removed.
@@ -2330,6 +2404,163 @@ def connection(document: dict[str, Any] | None,
     return entries[0]
 
 
+def secret_files_of(entry: dict[str, Any]) -> list[Path]:
+    """Jede Geheimnisdatei, die in DIESER Verbindung benannt steht.
+
+    NACHGETRAGEN am 01.09.2026. GEMELDET, woertlich: "ich kann vpn
+    verbindungen auch nicht loeschen".
+
+    WARUM DIE NAMEN GELESEN UND NICHT GERECHNET WERDEN
+        Die Dateinamen lassen sich aus der Kennung herleiten
+        (secret_prefix() + Endung), und genau das waere hier falsch. Eine
+        Verbindung, die vor dem 22.08.2026 angelegt wurde, traegt einen
+        Namen aus dem VERBINDUNGSNAMEN; eine gewanderte traegt "psk" ohne
+        jeden Namen (siehe psk_file_name()). Gerechnete Namen wuerden an
+        beiden vorbeigehen und die Geheimnisse liegen lassen - und ein
+        Loeschen, das die Zugangsdaten auf der Platte laesst, ist
+        schlimmer als keins.
+
+        Umgekehrt darf hier auch nichts stehen, was NICHT in den
+        Einstellungen genannt ist: dieses Verzeichnis gehoert dem Nutzer,
+        und ein Loeschbefehl, der darin nach Mustern sucht, trifft
+        irgendwann eine Datei, die jemand anderes dort abgelegt hat.
+
+    ES WIRD NICHTS GEPRUEFT UND NICHTS GELESEN: die Funktion baut Pfade.
+    Ob es sie gibt, entscheidet der Aufrufer ueber `exists()`; ihr INHALT
+    wird an keiner Stelle dieses Moduls fuer das Loeschen angesehen.
+    """
+    art = str(entry.get("kind") or IPSEC_KIND)
+    dateien: list[Path] = []
+
+    if art == WG_KIND:
+        block = entry.get(WG_KIND)
+        block = block if isinstance(block, dict) else {}
+        namen = [block.get("private_key_file")]
+        for peer in (block.get("peers") or []):
+            if isinstance(peer, dict):
+                namen.append(peer.get("preshared_key_file"))
+        dateien += [wireguard_key_dir() / str(n) for n in namen if n]
+    elif art == OVPN_KIND:
+        block = entry.get(OVPN_KIND)
+        block = block if isinstance(block, dict) else {}
+        namen = [block.get(feld) for feld in
+                 ("ca_file", "cert_file", "key_file", "tls_auth_file",
+                  "tls_crypt_file", "pkcs12_file")]
+        dateien += [openvpn_key_dir() / str(n) for n in namen if n]
+    else:
+        # IPsec. psk_file_name() antwortet "psk", wenn nichts eingetragen
+        # ist - der gemeinsame Name aus der Zeit vor den Listen. Genau
+        # deshalb prueft forget_connection() unten, ob eine ANDERE
+        # Verbindung denselben Namen fuehrt.
+        dateien.append(strongswan_key_dir() / psk_file_name(entry))
+
+    return dateien
+
+
+def forget_connection(document: dict[str, Any], ident: str,
+                      runner: Runner = subprocess.run) -> dict[str, Any]:
+    """Eine Verbindung aus dem SYSTEM entfernen - Tunnel, Profil, Dateien.
+
+    WAS GEMELDET WURDE (01.09.2026), WOERTLICH
+        "ich kann vpn verbindungen auch nicht loeschen"
+
+    WORAN ES LAG: es war nie gebaut. GEZAEHLT am 01.09.2026 - in
+    src/vpn.py gab es weder `--delete` noch `--remove` noch eine Funktion
+    mit del/rem/loesch im Namen, und die beiden `deleteBtn` in
+    ags-vpn-settings.template loeschen eine ZEILE innerhalb eines
+    Eintrags (ein geroutetes Netz, eine Gegenstelle), nicht die
+    Verbindung. Anlegen ging, oeffnen ging nicht, loeschen gab es nicht -
+    die Liste war praktisch schreibgeschuetzt.
+
+    WAS ALLES MIT WEG MUSS, UND IN WELCHER REIHENFOLGE
+        1. der stehende Tunnel. Ein Profil zu loeschen, waehrend die
+           Verbindung steht, laesst bei NetworkManager eine aktive
+           Verbindung ohne Profil zurueck.
+        2. das NetworkManager-Profil (WireGuard/OpenVPN). Bei IPsec gibt
+           es keines - dort ist strongSwan der Gegenpart, und der liest
+           seine Konfiguration bei jedem Start neu aus den
+           Einstellungen.
+        3. die Geheimnisse auf der Platte. Sie sind der Grund, aus dem
+           dieser Befehl ueberhaupt in vpn.py steht und nicht im
+           Fenster: ein Loeschen, das den privaten Schluessel liegen
+           laesst, ist schlimmer als keins.
+
+    WAS HIER NICHT PASSIERT
+        user-settings.json wird NICHT angefasst. Diese Datei gehoert dem
+        Einstellungsfenster (es schreibt sie ueber settings.py merge, das
+        die uebrigen Abschnitte behaelt und atomar bei 0600 schreibt).
+        Zwei Schreiber auf einer Datei waeren zwei Schreiber auf einer
+        Datei. Der Aufrufer entfernt den Eintrag, NACHDEM dieser Befehl
+        zurueck ist.
+
+    DIE EINE PRUEFUNG, DIE NICHT FEHLEN DARF
+        Eine Geheimnisdatei wird nur geloescht, wenn KEINE andere
+        Verbindung sie ebenfalls nennt. Der Fall ist real und nicht
+        theoretisch: alles, was vor dem 22.08.2026 angelegt oder von dort
+        gewandert ist, zeigt auf dieselbe Datei "psk" (siehe
+        psk_file_name()). Zwei solche Eintraege, und das Loeschen des
+        einen naehme dem anderen seinen Schluessel.
+
+    Gibt zurueck, WAS getan wurde - als Abbildung, die der Aufrufer
+    zeigen kann. Kein Ergebnis wird verschwiegen: was nicht geloescht
+    wurde, steht mit Grund darin.
+    """
+    eintraege = connections(document)
+    ziel = next((e for e in eintraege if e.get("id") == ident), None)
+    if ziel is None:
+        raise UnusableSettings(
+            f"keine Verbindung mit der Kennung {ident!r} - "
+            f"vorhanden sind: {[e.get('id') for e in eintraege]!r}")
+
+    art = str(ziel.get("kind") or IPSEC_KIND)
+    name = str(ziel.get("connection_name") or "work")
+    bericht: dict[str, Any] = {
+        "id": ident, "kind": art, "connection_name": name,
+        "getrennt": False, "profil_geloescht": False,
+        "dateien": [], "behalten": [],
+    }
+
+    if art in (WG_KIND, OVPN_KIND):
+        # `down` zuerst, und ein Fehlschlag ist KEIN Abbruch: die
+        # haeufigste Ursache ist "war gar nicht oben", und das ist genau
+        # der Zustand, den dieser Aufruf herstellen soll.
+        ab = runner(["nmcli", "connection", "down", name],
+                    capture_output=True, text=True, timeout=60)
+        bericht["getrennt"] = getattr(ab, "returncode", 1) == 0
+        weg = runner(["nmcli", "connection", "delete", name],
+                     capture_output=True, text=True, timeout=60)
+        bericht["profil_geloescht"] = getattr(weg, "returncode", 1) == 0
+
+    # Welche Namen die UEBRIGEN Verbindungen fuehren - danach entscheidet
+    # sich, ob eine Datei wirklich nur dieser einen gehoert.
+    fremde: set[Path] = set()
+    for andere in eintraege:
+        if andere.get("id") == ident:
+            continue
+        fremde.update(secret_files_of(andere))
+
+    for pfad in secret_files_of(ziel):
+        if pfad in fremde:
+            bericht["behalten"].append(
+                {"datei": pfad.name,
+                 "grund": "eine andere Verbindung nennt dieselbe Datei"})
+            continue
+        try:
+            pfad.unlink()
+        except FileNotFoundError:
+            # Kein Fehler und keine Meldung: eine Verbindung, die nie
+            # einen Schluessel bekommen hat, hat auch keinen zu
+            # loeschen.
+            continue
+        except OSError as exc:
+            bericht["behalten"].append(
+                {"datei": pfad.name, "grund": str(exc)})
+            continue
+        bericht["dateien"].append(pfad.name)
+
+    return bericht
+
+
 def vpn_kind(settings: dict[str, Any], ident: str | None = None) -> str:
     """Welche Bauart eingestellt ist - und im Zweifel IPsec.
 
@@ -2378,6 +2609,7 @@ USAGE = """usage: vpn.py --virtual-address | --tunnel-health
                  | --wg-apply | --wg-up | --wg-down
                  | --ovpn-import FILE | --ovpn-apply
                  | --ovpn-up | --ovpn-down | --ovpn-unattended
+                 | --forget KENNUNG
 
   --virtual-address    read `swanctl --list-sas` output on standard input
                        and print the virtual address it reports.
@@ -2418,6 +2650,12 @@ USAGE = """usage: vpn.py --virtual-address | --tunnel-health
   --ovpn-down          deactivate it.
   --ovpn-unattended    print `yes` or `no`: whether this connection can
                        be restored without anybody typing anything.
+  --forget KENNUNG     take down the connection with that id, delete its
+                       NetworkManager profile and every secret file that
+                       belongs to it ALONE, and print as JSON what was
+                       done. Does NOT touch user-settings.json - the
+                       dialog owns that file and removes the entry
+                       itself. exit 0 done, 65 no such id.
 """
 
 # Der eigene Rueckgabewert fuer "eingelesen, aber Zeilen abgelehnt". Ein
@@ -2761,11 +2999,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             sys.stderr.write(USAGE)
             return 64
         source = arguments[1]
+        # `~` und `$HOME` aufloesen - siehe getippter_pfad() oben. Der
+        # Pfad kommt aus einem Eingabefeld und nicht aus einer Shell.
+        pfad = getippter_pfad(source)
         try:
-            conf = parse_wg_conf(Path(source).read_text(encoding="utf-8"),
-                                 source)
+            conf = parse_wg_conf(pfad.read_text(encoding="utf-8"), str(pfad))
         except OSError as exc:
-            sys.stderr.write(f"{source}: {exc}\n")
+            # DEN VERSUCHTEN PFAD NENNEN, und wenn er vom getippten
+            # abweicht, BEIDE. Der Nutzer bekam am 01.09.2026 nur
+            # "erno2" zu sehen und musste raten, wonach gesucht wurde.
+            sys.stderr.write(_pfad_meldung(source, pfad, exc))
             return 65
         except UnreadableWireGuardConfig as exc:
             sys.stderr.write(f"{exc}\n")
@@ -2833,6 +3076,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     if query == "--wg-apply":
         return _wg_apply(_settings_document(), ident=ident)
 
+    if query == "--forget":
+        # Die Kennung ist PFLICHT und wird nicht aus `vpn.active`
+        # abgeleitet. connection() faellt bei einer unbekannten Kennung
+        # auf die ERSTE Verbindung zurueck (siehe dort, mit Grund) - fuer
+        # jeden Leser ist das richtig und fuer einen Loeschbefehl waere
+        # es das Schlimmste, was er tun kann.
+        if not ident:
+            sys.stderr.write(USAGE)
+            return 64
+        try:
+            bericht = forget_connection(_settings_document(), ident)
+        except UnusableSettings as exc:
+            sys.stderr.write(f"{exc}\n")
+            return 65
+        print(json.dumps(bericht))
+        return 0
+
     if query in ("--wg-up", "--wg-down"):
         name = _wg_connection_name(_settings_document(), ident)
         verb = "up" if query == "--wg-up" else "down"
@@ -2847,10 +3107,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             sys.stderr.write(USAGE)
             return 64
         source = arguments[1]
+        # Derselbe Weg wie bei --wg-import darueber, und aus demselben
+        # Grund: der Pfad kommt aus einem Eingabefeld.
+        pfad = getippter_pfad(source)
         try:
-            conf = parse_ovpn(Path(source).read_text(encoding="utf-8"), source)
+            conf = parse_ovpn(pfad.read_text(encoding="utf-8"), str(pfad))
         except OSError as exc:
-            sys.stderr.write(f"{source}: {exc}\n")
+            sys.stderr.write(_pfad_meldung(source, pfad, exc))
             return 65
         except UnreadableOpenVpnConfig as exc:
             sys.stderr.write(f"{exc}\n")

@@ -987,6 +987,12 @@ _FIXED_STYLE_VARIABLES = {
     **{f"STYLE_MODAL_WIDTH_{name}": str(px)
        for name, px in sizes.MODAL_WIDTHS.items()},
 
+    # Und die Hoehe, seit dem 01.09.2026 - EINE Zahl und keine Leiter,
+    # die Begruendung steht bei MODAL_HEIGHT in src/sizes.py. Ohne "px"
+    # aus demselben Grund wie die Breiten darueber: ihre Leser stehen in
+    # TypeScript-Zahlenkontext (`const WIN_HEIGHT = ...`).
+    "STYLE_MODAL_HEIGHT": str(sizes.MODAL_HEIGHT),
+
     # ============================================================================
     # DIE ABGESETZTE KANTE - der 3D-Effekt aus summer-day-and-night
     # ============================================================================
@@ -3336,8 +3342,38 @@ _modules_right += ["custom/disk"]
 #         hinter dem Knopf, das Schild als siebtes - fuer diese Breite
 #         gibt es keine Anordnung, die es rettet, und der Knopf haelt es
 #         erreichbar.
-_modules_right += ["network", "bluetooth", "pulseaudio",
-                   "pulseaudio#microphone", "battery", "custom/vpn"]
+#
+# UMGEZOGEN am 01.09.2026: DAS SCHILD STEHT JETZT NEBEN DEM NETZ
+#
+#     BESTELLT, woertlich: "das schild symbol in der waybar soll neben
+#     dem wlan symbol sein nicht rechts".
+#
+#     Der ganze Block darueber begruendet den alten Platz, und er
+#     begruendet ihn richtig - die Messung vom 22.08.2026 stimmt
+#     unveraendert: NEBEN DEM NETZ klappt das Schild auf einem 1366er
+#     Notebook als DRITTES ein. Er ist trotzdem ueberholt, weil er eine
+#     Frage beantwortet, die der Nutzer inzwischen selbst entschieden
+#     hat. Seine ausdrueckliche Ansage schlaegt eine fruehere Messung;
+#     was sie nicht schlaegt, ist die Folge, die die Messung nennt.
+#
+#     DESHALB ZWEI AENDERUNGEN UND NICHT EINE. Der Umzug allein waere
+#     buchstabengetreu und im Ergebnis schlechter als vorher: das Schild
+#     stuende neben dem Netz und waere auf genau den Geraeten weg, auf
+#     denen ein VPN benutzt wird. Die zweite Aenderung steht in
+#     src/templates/ags-bar.template unter SPAET_EINKLAPPEN und trennt
+#     ORT und RANG: die Einklappreihenfolge war bis heute die
+#     Reihenfolge dieser Liste, und ab heute steht "custom-vpn" darin
+#     ganz hinten, egal wo es hier steht.
+#
+#     Die Begruendung dafuer ist dieselbe, die oben den PLATZ getragen
+#     hat: "Laeuft mein Verkehr durch den Tunnel?" steht sonst NIRGENDS
+#     auf dem Bildschirm. Sie ist nicht verschwunden, sie ist umgezogen -
+#     vom Ort in den Rang.
+#
+#     GEMESSEN am 01.09.2026 mit tests/src/test_bar_headless.py, siehe
+#     FOLDED_ON_COMMON_NOTEBOOK dort.
+_modules_right += ["network", "custom/vpn", "bluetooth", "pulseaudio",
+                   "pulseaudio#microphone", "battery"]
 # custom/theme steht DIREKT VOR dem Kontrollzentrum, und beides ist eine
 # Entscheidung.
 #

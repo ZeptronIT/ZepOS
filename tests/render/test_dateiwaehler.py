@@ -40,6 +40,24 @@ DIE GEGENPROBE GEHOERT DAZU
     dabei auf Ebene 3 stehenbleibt. Ohne diesen Lauf waere "Ebene 1"
     eine Zahl, von der niemand weiss, ob sie etwas geaendert hat.
 
+DIESE DATEI WAR GRUEN, WAEHREND DER FEHLER OFFEN WAR - NACHGETRAGEN am
+01.09.2026, und es gehoert an den Anfang und nicht ans Ende
+    Der Nutzer hat denselben Fehler noch einmal gemeldet ("immernoch
+    sobald ich den datei icon klick ... kommt kien datei auswaehler
+    sondern alle ags sachen werden blockiert"), und die vier
+    Zusicherungen darunter standen dabei auf gruen.
+
+    Sie messen, was sie behaupten - aber sie messen einen NACHBAU: ein
+    handgebautes Astal.Window statt der Fabrik, einen Zeitgeber statt
+    eines Knopfes, einen Waehler, der IMMER abgebrochen wird, und eine
+    Sitzung OHNE xdg-desktop-portal. Alle vier Unterschiede haben je
+    einen Teil des Fehlers versteckt.
+
+    Diese Datei bleibt, weil ihre Gegenprobe (der rohe Aufruf) etwas
+    zeigt, was sonst niemand zeigt. Gemessen wird der Weg des Nutzers
+    seither in tests/render/test_dateiwaehler_echt.py - dort steht auch
+    die Aufzaehlung der vier Unterschiede mit den Zahlen dazu.
+
 WAS NICHT GEMESSEN WIRD, UND DAS SOLL DASTEHEN
     Die TASTATUR. waehleDatei() nimmt der Flaeche fuer die Dauer des
     Waehlers auch den Tastenmodus (ON_DEMAND -> NONE), damit sich ein

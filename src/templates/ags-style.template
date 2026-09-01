@@ -81,28 +81,62 @@ $overlay-border: $border;
   color: $subtext;
 }
 
+// KEIN SEITENSTREIFEN MEHR - GEAENDERT am 01.09.2026
+//
+// GEMELDET, woertlich
+//     "die seitenlinien sehe ich immernoch hier ich will keine seiten
+//      linien das wirkt unuebersichtlich"
+//
+// WAS DER STREIFEN WAR UND WAS ER TRUG
+//     Hier stand `border-left: 3px solid transparent` an JEDER Zeile und
+//     `border-left-color: $accent` an der ausgewaehlten. Der
+//     durchsichtige trug NICHTS - er hielt nur Platz frei, damit die
+//     Zeile beim Auswaehlen nicht springt. Der farbige trug genau eine
+//     Auskunft: WELCHE Zeile gewaehlt ist.
+//
+// WO DIESE AUSKUNFT JETZT STEHT
+//     Im Hintergrund, und der stand schon immer daneben
+//     (`background: rgba($accent, ...)` in derselben Regel). Die
+//     Auskunft geht nicht verloren, sie steht nur noch an EINER Stelle
+//     statt an zweien. Dasselbe Vorgehen wie bei den Benachrichtigungen
+//     (Commit ddd3d80): dort ist der border-left der .notif-card
+//     gefallen und die Dringlichkeit in die Farbe der Kopfzeile
+//     gewandert.
+//
+//     Der Hintergrund bekommt dafuer mehr Gewicht - 0,15 hat sich die
+//     Auskunft mit einer 3 Punkte breiten Vollfarbe geteilt, 0,22 traegt
+//     sie allein. Und der Titel der gewaehlten Zeile nimmt die
+//     Akzentfarbe an: eine farbliche Auskunft dort, wo das Auge ohnehin
+//     liest, statt einer Linie am Rand.
+//
+// UND ES GIBT 3 PUNKTE BREITE ZURUECK
+//     Ein `border-left` zaehlt in GTK4 ZUSAETZLICH zu Polsterung und
+//     min-width. Jede Zeile war damit 3 Punkte breiter als noetig - in
+//     Fenstern, ueber deren waagerechtes Rollen sich derselbe Nutzer in
+//     derselben Sitzung mehrfach beklagt hat.
 .zep-row {
   min-height: {{STYLE_ROW_HEIGHT}};
   padding: 0 {{STYLE_SPACE_12}};
   border-radius: {{STYLE_RADIUS_CARD}};
-  border-left: 3px solid transparent;
 
   &:hover { background: $item-hover; }
 
   // AUSGEWAEHLT, 18.08.2026: task-5 (Bluetooth) ist der erste
   // Verbraucher - das verbundene Geraet muss sich von den uebrigen
-  // abheben. Dieselbe Sprache wie .se-tab-btn.active: Farbtoenung im
-  // Hintergrund plus ein Randstreifen, aus $accent statt einem
-  // fenstereigenen Akzent, weil zepRow ein geteiltes Bauteil ist und
-  // keinem Fenster gehoert.
+  // abheben. Der Randstreifen, der hier stand, ist am 01.09.2026
+  // gefallen (siehe oben); die Farbtoenung im Hintergrund traegt die
+  // Auskunft seither allein, aus $accent statt einem fenstereigenen
+  // Akzent, weil zepRow ein geteiltes Bauteil ist und keinem Fenster
+  // gehoert.
   //
   // BERICHTIGT am 18.08.2026 (Task D): die zwei anderen hier genannten
   // Beispiele, .net-item.active (Task C) und .cc-toggle-btn.active
   // (Task D), sind inzwischen selbst entfernt - der Vergleich zeigt
   // jetzt nur noch das verbliebene .se-tab-btn.active.
   &.active {
-    background: rgba($accent, 0.15);
-    border-left-color: $accent;
+    background: rgba($accent, 0.22);
+
+    .zep-row-title { color: $accent; }
   }
 
   // NACHGETRAGEN am 19.08.2026 (Aufgabe 19): der Modifikator, den
@@ -1477,12 +1511,19 @@ modelbutton {
 .cc-row {
   padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_8}};
   background: rgba($surface, 0.2);
-  border-left: 3px solid transparent;
   margin: {{STYLE_SPACE_2}} 0;
 
+  // KEIN Seitenstreifen mehr - 01.09.2026, dieselbe Meldung und
+  // dieselbe Begruendung wie bei .zep-row oben. Diese Zeilen stehen im
+  // SELBEN Fenster wie die VPN-Seite (die Schale), der Nutzer sieht sie
+  // also beim selben Blick; sie hier stehenzulassen hiesse, die
+  // Bildsprache auf zwei Seiten desselben Fensters zu spalten.
+  //
+  // Der Streifen war hier ohnehin nur ein Zeigereffekt und trug keine
+  // Auskunft ueber den Zustand einer Zeile - der hellere Hintergrund
+  // darunter sagt dasselbe und sagt es weiterhin.
   &:hover {
     background: rgba($surface, 0.35);
-    border-left-color: rgba($control-accent, 0.4);
   }
 }
 
@@ -2784,7 +2825,16 @@ modelbutton {
   background: rgba($surface, 0.3);
   padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_12}};
   margin-bottom: {{STYLE_SPACE_8}};
-  border-left: 2px solid $vpn-accent;
+  // KEIN `border-left: 2px solid $vpn-accent` MEHR - 01.09.2026,
+  // dieselbe Meldung wie bei .zep-row oben ("ich will keine seiten
+  // linien das wirkt unuebersichtlich").
+  //
+  // Dieser Streifen trug NICHTS: er stand an JEDEM Eintrag in
+  // derselben Farbe, unterschied also keinen von einem anderen. Was
+  // die Eintraege voneinander und vom Grund abhebt, ist der eigene
+  // Hintergrund und der Abstand darunter - beides steht unveraendert
+  // darueber. Es ist damit kein Fall wie .disk-partition.warning, wo
+  // die Linie den Zustand traegt und deshalb bleibt.
 
   &:hover {
     background: rgba($surface, 0.5);

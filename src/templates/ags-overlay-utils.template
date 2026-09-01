@@ -72,6 +72,32 @@ const EDGE_GAP = {{STYLE_GAPS_OUT}}
 //     Der Kalender: angemeldet 420x480, gestanden 472x810.
 const MODAL_SHARE = 0.5
 
+// Und senkrecht derselbe Anteil mal 1,5 - NACHGETRAGEN am 01.09.2026.
+//
+// EIN FAKTOR UND KEIN ZWEITER ANTEIL, UND DAS IST DER PUNKT
+//     MODAL_SHARE darueber bleibt 0,5 und bleibt die Zahl, die
+//     tests/src/test_modal_rule.py in allen vier Programmen gegen
+//     sizes.MEASURE_MODAL_SHARE haelt - auch hier, auch senkrecht: die
+//     Rechnung unten lautet `mh * MODAL_SHARE * MODAL_HEIGHT_FACTOR`.
+//     Eine zweite Zahl daneben haette die Regel verdoppelt; ein Faktor
+//     laesst die Regel eine und macht die Abweichung von ihr sichtbar.
+//     Ihre Herleitung und die Tabelle der Schirmhoehen stehen bei
+//     MEASURE_MODAL_HEIGHT_FACTOR in src/sizes.py; hier steht nur, was
+//     sie tut.
+//
+// WAS SIE BEHEBT, IN EINER ZAHL
+//     Gemeldet: "die vpn ags fenster hoeher das ist zu gequetscht alles".
+//     Die Schale wuenscht sich seit jeher 900 Punkte (SHELL_HEIGHT weiter
+//     unten) und bekam auf dem 1200er Schirm des Nutzers 600, weil
+//     0,5 * 1200 = 600 ist. Mit dem Faktor 1,5 - der Zahl, die der
+//     Nutzer selbst genannt hat - bekommt sie ihre 900: der Wunsch und
+//     der Deckel treffen sich, statt einander zu ueberschreiben.
+//
+//     Der harte Platz (`usableH - 2 * EDGE_GAP`) steht unveraendert
+//     daneben und bindet auf kleinen Schirmen weiterhin zuerst: hoeher
+//     als der Schirm wird damit auch mit diesem Faktor kein Fenster.
+const MODAL_HEIGHT_FACTOR = 1.5
+
 // ============================================================================
 // DIE TYPEN
 // ============================================================================
@@ -262,6 +288,37 @@ interface OverlayConfig {
   //     500, Kuerzel 740 auf Sprosse 880, beide ohne Ueberhang) - fuer sie
   //     bleibt die Sprosse ein Deckel und wird kein Ziel.
   fuelltDieSprosse?: boolean
+
+  /**
+   * Dasselbe senkrecht: das Fenster wird so hoch, wie der Deckel es
+   * zulaesst, statt so hoch wie sein Inhalt.
+   *
+   * NACHGETRAGEN am 01.09.2026. GEMELDET, zweimal: "kannst du die vpn
+   * ags fenster deutlich hoeher machen 1,5 ungefaehr also nochmal
+   * hoeher" und "die vpn ags fenster hoeher das ist zu gequetscht
+   * alles".
+   *
+   * WARUM DER DECKEL DAFUER NICHT REICHT - GEMESSEN am 01.09.2026 im
+   * verschachtelten Compositor auf 1920x1200, NACHDEM der Deckel schon
+   * von 600 auf 900 angehoben war (tests/render/test_vpn_liste_platz.py):
+   *
+   *     Schale "control"        880 x 525
+   *     Fenster "vpn-settings"  604 x 558
+   *
+   * Beide standen weit unter dem Deckel: `min(naturalHeight,
+   * pos.height)` macht das Fenster so hoch wie seinen Inhalt, und der
+   * meldete 525. Ein groesserer Deckel aendert an einer Zahl, die gar
+   * nicht bindet, nichts - das ist der Grund, aus dem der erste Versuch
+   * ("nochmal hoeher") wirkungslos blieb.
+   *
+   * ES IST EINE BESTELLUNG UND KEINE REGEL FUER ALLE, genau wie
+   * fuelltDieSprosse darueber. Der Kalender und das Abmeldefenster
+   * sollen so hoch bleiben wie ihr Inhalt; bei ihnen saehe die leere
+   * Flaeche darunter aus wie ein Fehler, weil sie einer waere. Ein
+   * Fenster mit einem Formular ist der andere Fall: dort ist der Platz
+   * das, was fehlt.
+   */
+  fuelltDieHoehe?: boolean
 }
 
 // ============================================================================
@@ -352,12 +409,23 @@ async function getOverlayPosition(
         //                        Schirm, so wie src/sizes.py es sagt
         //                        ("wie viel vom Schirm") und wie
         //                        menu/zepos_menu/window.py es tut.
+        //   MODAL_HEIGHT_FACTOR  dieselbe Regel senkrecht, seit dem
+        //                        01.09.2026 mal 1,5: waagerecht war
+        //                        Luft, senkrecht war keine. Ein FAKTOR
+        //                        auf denselben Anteil und keine zweite
+        //                        Zahl daneben - die Regel bleibt eine,
+        //                        und die Abweichung von ihr steht als
+        //                        eigene, begruendete Zahl da.
+        //                        Herleitung bei
+        //                        MEASURE_MODAL_HEIGHT_FACTOR in
+        //                        src/sizes.py.
         //   usable - 2*EDGE_GAP  der harte Platz. Er bindet erst auf
         //                        kleinen Schirmen, und dann rettet er.
         const effectiveW = Math.min(winWidth, Math.floor(mw * MODAL_SHARE),
                                     usableW - 2 * EDGE_GAP)
-        const effectiveH = Math.min(winHeight, Math.floor(mh * MODAL_SHARE),
-                                    usableH - 2 * EDGE_GAP)
+        const effectiveH = Math.min(
+          winHeight, Math.floor(mh * MODAL_SHARE * MODAL_HEIGHT_FACTOR),
+          usableH - 2 * EDGE_GAP)
 
         // Waagerecht am Anhaltspunkt zentriert, senkrecht ein EDGE_GAP
         // unter der Leiste.
@@ -432,37 +500,94 @@ async function getOverlayPosition(
  *     waehrend GTK sie als Elternfenster eines MODALEN Dialogs
  *     unempfindlich gestellt hat: dort klickt man ins Leere.
  *
- * ES IST NICHT DIE PORTALZUORDNUNG VOM 01.09.2026 (52bd99c)
- *     Gemessen am selben Tag auf dieser Maschine: /etc/xdg-desktop-portal/
- *     gibt es gar nicht (das Paket zepos-config ist nicht installiert),
- *     es gilt also weiterhin `default=hyprland;gtk` aus
- *     /usr/share/xdg-desktop-portal/hyprland-portals.conf. Und
- *     hyprland-universal-config.template setzt seit jeher
- *     `env = GTK_USE_PORTAL,0` - GTK zeichnet den Waehler selbst, ein
- *     Portal wird fuer ihn nie gefragt. Die Zuordnung FileChooser=gnome
- *     kann diesen Fehler weder verursacht noch geheilt haben.
+ * DAS WAR NICHT DIE GANZE URSACHE - NACHGEMESSEN am 01.09.2026, nachdem
+ * der Nutzer denselben Fehler EIN ZWEITES MAL gemeldet hat
+ *     Woertlich: "immernoch sobald ich den datei icon klick um die datei
+ *     auszuwaehlen kommt kien datei auswaehler sondern alle ags sachen
+ *     werden blockiert irgendwie voll komisch".
  *
- * DIE REPARATUR, UND WARUM GERADE DIESE
- *     Fuer die Dauer des Waehlers sinkt die Flaeche auf BOTTOM und gibt
- *     die Tastatur frei; danach steht sie wieder da, wo sie war. GEMESSEN
- *     mit demselben Aufbau: der Waehler stand danach VOLLSTAENDIG da -
- *     Seitenleiste, Abbrechen-Knopf, Titel, Liste -, die Flaeche kam nach
- *     dem Abbruch unveraendert zurueck (hyprctl layers wieder 0,0
- *     880x600), und der Prozess lebte weiter.
+ *     Der Absatz darueber stimmt und beschreibt einen Fehler, der auch
+ *     da war. Er beschreibt aber nicht DIESEN, und der Messstand vom
+ *     Vormittag konnte ihn nicht sehen, weil in seinem verschachtelten
+ *     Compositor KEIN xdg-desktop-portal lief. Das Protokoll dieses
+ *     Laufs sagt es woertlich:
  *
- *     KEIN `win.visible = false`: das raeumt die Layer-Flaeche ab,
- *     waehrend ein modaler Dialog sie als Elternfenster fuehrt, und
- *     loest ausserdem jedes `notify::visible` der Schale aus - jede
- *     Seite laedt dann ihre Einstellungen neu und greift nach der
- *     Tastatur, waehrend der Nutzer eine Datei sucht.
+ *         Cannot get portal org.freedesktop.portal.FileChooser version:
+ *         GDBus.Error:org.freedesktop.DBus.Error.InvalidArgs:
+ *         No such interface "org.freedesktop.portal.FileChooser"
  *
- *     Der Tastenmodus geht MIT, und das ist eine Folgerung und keine
- *     eigene Messung: die Flaeche mit ON_DEMAND haelt die Tastatur,
- *     solange der Compositor sie ihr gegeben hat, und ein Dateiwaehler,
- *     in den sich kein Name tippen und keine Eingabetaste druecken
- *     laesst, ist keiner. Der Messstand kann es nicht gegenpruefen: er
- *     klickt nie, also hat die Flaeche dort nie eine Tastatur zu halten
- *     (`hyprctl activewindow` meldete in beiden Laeufen `null`).
+ *     Auf der Maschine des Nutzers gibt es das Portal
+ *     (xdg-desktop-portal 1.22.1, -gtk 1.15.3, -hyprland 1.4.1 sind
+ *     installiert). GEMESSEN am 01.09.2026 mit demselben Kind, aber mit
+ *     einem xdg-desktop-portal-gtk auf dem Bus der Testsitzung:
+ *
+ *         ohne Portal   Waehlerfenster in hyprctl clients: JA
+ *                       Prozess lebt danach:               JA
+ *         mit Portal    Waehlerfenster in hyprctl clients: NEIN
+ *                       Prozess lebt danach:               NEIN
+ *                       "Gdk-Message: Lost connection to Wayland
+ *                        compositor."
+ *
+ *     GTK holt fuer den Portalweg einen Fenstergriff des ELTERNFENSTERS
+ *     (xdg_foreign, `export_toplevel`). Eine Layer-Shell-Flaeche IST
+ *     kein xdg_toplevel - der Aufruf ist ein Protokollfehler, und der
+ *     Compositor wirft den Kunden hinaus. "Alle ags sachen" heisst
+ *     woertlich alle: Leiste, Dock, jede Ueberlagerung liegen in EINEM
+ *     gjs-Prozess, und der war weg.
+ *
+ * DIE REPARATUR, DREI TEILE, JEDER AUS EINER MESSUNG
+ *
+ *     ERSTENS: KEIN ELTERNFENSTER. `open(null, ...)` statt
+ *     `open(fenster, ...)`. Ohne Elternfenster holt GTK keinen
+ *     Fenstergriff, es gibt keinen Protokollfehler, und der Waehler geht
+ *     auf - ueber das Portal wie ohne. Was das Elternfenster sonst
+ *     leistet (der Waehler steht ueber ihm und mittig darauf), leistet
+ *     hier ohnehin nichts: eine Layer-Flaeche stapelt nicht mit
+ *     gewoehnlichen Fenstern.
+ *
+ *     ZWEITENS: `modal: false`. Gtk.FileDialog ist von Haus aus modal.
+ *     Ein modales Fenster OHNE Elternfenster ist in GTK4
+ *     anwendungsmodal - es legt jedes andere Fenster DESSELBEN
+ *     Prozesses still, und das sind hier Leiste, Dock und jede
+ *     Ueberlagerung. Der erste Teil allein haette den zweiten Fehler
+ *     also erst gebaut.
+ *
+ *     DRITTENS: EIN RUECKWEG, DER NICHT AM RUECKRUF HAENGT. Hier stand
+ *     `zurueck()` NUR im Rueckruf von open(). Feuert der nie - und beim
+ *     Protokollfehler oben feuert er nie -, bleibt die Flaeche fuer
+ *     immer auf BOTTOM ohne Tastatur. GEMESSEN am 01.09.2026
+ *     (tests/render/test_dateiwaehler.py::
+ *     test_die_flaeche_kommt_beim_naechsten_aufgehen_zurueck): Fenster
+ *     zu, Fenster wieder auf - und es kam mit `ebene=1 tastenmodus=0`
+ *     wieder, also unter jedem gewoehnlichen Fenster und ohne Tastatur.
+ *     Ein Klick auf das Zeichen vergiftete damit JEDES weitere Aufgehen
+ *     dieses Fensters fuer die Lebensdauer des Prozesses.
+ *
+ *         a) `notify::visible` holt die Flaeche zurueck, sobald sie
+ *            zugeht - der Weg, den ein Mensch nimmt, wenn nichts kommt.
+ *         b) show() in der Fabrik unten setzt Ebene und Tastenmodus bei
+ *            JEDEM Aufgehen neu. Das ist der Guertel zum Hosentraeger:
+ *            es heilt auch eine Flaeche, die auf einem Weg gesunken ist,
+ *            den diese Funktion nicht kennt.
+ *
+ * WARUM NICHT org.freedesktop.portal.FileChooser VON HAND UEBER D-BUS
+ *     Es waere derselbe Waehler. GTK geht diesen Weg bereits selbst,
+ *     sobald ein Portal auf dem Bus steht (siehe die Messung oben) - der
+ *     Fehler lag nie am WEG, sondern am Elternfenster, das GTK auf
+ *     diesem Weg exportieren wollte. Ein eigener D-Bus-Aufruf haette
+ *     dieselbe leere Elternangabe uebergeben und dasselbe Ergebnis
+ *     gebracht, dazu eine eigene Zustandsmaschine fuer Request-Pfad und
+ *     Response-Signal, einen Ruecksturz fuer Maschinen ohne Portal
+ *     (`No such interface` steht oben) und die gjs-Falle mit der
+ *     UnixFDList auf dem synchronen Pfad. Mehr Teile, dieselbe Antwort.
+ *
+ * WAS BLEIBT: die Flaeche sinkt weiterhin fuer die Dauer des Waehlers auf
+ *     BOTTOM und gibt die Tastatur frei - der Waehler ist ein
+ *     gewoehnliches Fenster und laege sonst unter einer OVERLAY-Flaeche
+ *     (die Messung ganz oben). KEIN `win.visible = false`: das raeumt
+ *     die Layer-Flaeche ab und loest jedes `notify::visible` der Schale
+ *     aus - jede Seite laedt dann ihre Einstellungen neu und greift nach
+ *     der Tastatur, waehrend der Nutzer eine Datei sucht.
  *
  *     Beide Werte werden VORHER GELESEN und nachher zurueckgeschrieben,
  *     statt hier zwei Vorgabewerte zu tippen - die Fabrik unten setzt
@@ -492,18 +617,38 @@ export function waehleDatei(
   const alteEbene = fenster.get_layer()
   const alterTastenmodus = fenster.get_keymode()
   let zurueckgeholt = false
+  // Der zweite Rueckweg (Teil drei der Reparatur oben). Die Kennung wird
+  // festgehalten, damit der Zuhoerer wieder geht: eine Ueberlagerung
+  // wird oft auf- und zugemacht, und ein Zuhoerer je Dateiwaehler waere
+  // ein Leck.
+  let sichtbarkeitsZuhoerer = 0
   const zurueck = () => {
     if (zurueckgeholt) return
     zurueckgeholt = true
+    if (sichtbarkeitsZuhoerer) {
+      fenster.disconnect(sichtbarkeitsZuhoerer)
+      sichtbarkeitsZuhoerer = 0
+    }
     fenster.set_layer(alteEbene)
     fenster.set_keymode(alterTastenmodus)
   }
 
   try {
-    const waehler = new (Gtk as any).FileDialog({ title: titel })
+    // modal: false - siehe Teil zwei der Reparatur im Blattkopf. Ein
+    // modales Fenster ohne Elternfenster legt jedes andere Fenster
+    // dieses Prozesses still, und das sind Leiste, Dock und jede
+    // Ueberlagerung.
+    const waehler = new (Gtk as any).FileDialog({ title: titel, modal: false })
     fenster.set_layer(Astal.Layer.BOTTOM)
     fenster.set_keymode(Astal.Keymode.NONE)
-    waehler.open(fenster, abbruch, (_quelle: any, ergebnis: any) => {
+    sichtbarkeitsZuhoerer = fenster.connect("notify::visible", () => {
+      if (!fenster.visible) zurueck()
+    })
+    // NULL und nicht `fenster` - siehe Teil eins der Reparatur im
+    // Blattkopf. Mit einer Layer-Flaeche als Elternfenster ist der
+    // Portalweg von GTK ein Wayland-Protokollfehler, und der Compositor
+    // wirft den ganzen Prozess hinaus.
+    waehler.open(null, abbruch, (_quelle: any, ergebnis: any) => {
       try {
         const datei = waehler.open_finish(ergebnis)
         if (datei) gewaehlt(datei.get_path() ?? "")
@@ -760,6 +905,34 @@ export function createOverlayWindow(config: OverlayConfig): OverlayWidget {
   let sizeMonitorId: ReturnType<typeof setInterval> | null = null
 
   const show = async (angeklickt?: OverlayAnchor) => {
+    // EBENE UND TASTENMODUS BEI JEDEM AUFGEHEN NEU - NACHGETRAGEN am
+    // 01.09.2026
+    //
+    //     Sie stehen oben im Konstruktor, und bis heute stand das da wie
+    //     eine einmalige Ansage. Sie sind aber VERAENDERLICH: waehleDatei()
+    //     senkt die Flaeche fuer die Dauer eines Dateiwaehlers auf BOTTOM
+    //     und nimmt ihr die Tastatur. Kommt der Rueckweg nicht zustande -
+    //     und beim Protokollfehler, den waehleDatei() beschreibt, kommt er
+    //     nicht -, dann blieb das so, ueber jedes Schliessen und jedes
+    //     Aufgehen hinweg.
+    //
+    //     GEMESSEN am 01.09.2026 im verschachtelten Compositor
+    //     (tests/render/dateiwaehler_echt_child.ts, Betriebsart
+    //     "zweitesmal"): Waehler auf, Fenster zu, Fenster wieder auf -
+    //     und das Fenster meldete `ebene=1 tastenmodus=0` statt `3` und
+    //     `2`. Ein Klick auf ein Zeichen vergiftete damit jedes weitere
+    //     Aufgehen DIESES Fensters fuer die Lebensdauer des Prozesses;
+    //     der Nutzer nannte das "alle ags sachen werden blockiert".
+    //
+    //     Zwei Zuweisungen, die im Normalfall nichts tun (GTK schreibt
+    //     einen unveraenderten Wert nicht in das Protokoll) - und im
+    //     Fehlerfall die einzige Stelle, die nicht davon abhaengt, dass
+    //     irgendein Rueckruf noch feuert. Sie stehen VOR dem
+    //     Sichtbarwerden, weil die Layer-Shell ihre Flaeche beim Anlegen
+    //     einmal nach beidem fragt.
+    win.layer = Astal.Layer.OVERLAY
+    win.keymode = Astal.Keymode.ON_DEMAND
+
     // Der Punkt des Klicks, EINMAL bestimmt. Er gilt fuer dieses
     // Aufgehen, auch fuer die Nachfuehrung unten - siehe OverlayAnchor.
     //
@@ -900,8 +1073,43 @@ export function createOverlayWindow(config: OverlayConfig): OverlayWidget {
     const [, naturalWidth] = outerBox.measure(Gtk.Orientation.HORIZONTAL, -1)
     const [, naturalHeight] = outerBox.measure(Gtk.Orientation.VERTICAL, -1)
 
-    win.set_default_size(Math.min(naturalWidth + leiste, pos.width),
-                         Math.min(naturalHeight, pos.height))
+    // UND SENKRECHT EIN BODEN FUER DIE FENSTER, DIE IHN BESTELLEN -
+    // NACHGETRAGEN am 01.09.2026
+    //
+    //     GEMELDET, zweimal: "kannst du die vpn ags fenster deutlich
+    //     hoeher machen 1,5 ungefaehr" und "die vpn ags fenster hoeher
+    //     das ist zu gequetscht alles".
+    //
+    //     DER DECKEL WAR NIE DAS PROBLEM, UND DAS IST GEMESSEN. Am
+    //     01.09.2026 im verschachtelten Compositor auf 1920x1200
+    //     (tests/render/test_vpn_liste_platz.py), NACHDEM der Deckel
+    //     schon von 600 auf 900 angehoben war:
+    //
+    //         Schale "control"        880 x 525
+    //         Fenster "vpn-settings"  604 x 558
+    //
+    //     Beide stehen weit UNTER dem Deckel. `min(naturalHeight,
+    //     pos.height)` heisst: das Fenster wird so hoch wie sein Inhalt,
+    //     und der Inhalt meldet 525. Eine Erhoehung des Deckels konnte
+    //     daran nichts aendern - und genau deshalb hat "nochmal hoeher"
+    //     beim ersten Versuch nichts gebracht.
+    //
+    //     Was fehlte, ist kein groesserer Deckel, sondern ein BODEN -
+    //     dasselbe, was `fuelltDieSprosse` waagerecht schon leistet und
+    //     was die Schale dort auf ihre 880 bringt. Ein Fenster mit
+    //     einem Formular soll den Platz nehmen, der ihm zusteht, statt
+    //     als kleiner dichter Kasten in der Mitte eines 1200 Punkte
+    //     hohen Schirms zu stehen.
+    //
+    //     ES IST EINE BESTELLUNG UND KEINE REGEL FUER ALLE. Der Kalender
+    //     und das Abmeldefenster sollen weiterhin so hoch sein wie ihr
+    //     Inhalt: ein Fenster, das seinen Deckel ausfuellt, hat unter
+    //     dem Inhalt eine leere Flaeche, und bei ihnen saehe die aus wie
+    //     ein Fehler. Wer den Boden will, sagt es (fuelltDieHoehe).
+    const hoehe = config.fuelltDieHoehe
+      ? pos.height
+      : Math.min(naturalHeight, pos.height)
+    win.set_default_size(Math.min(naturalWidth + leiste, pos.width), hoehe)
 
     // Erst sichtbar machen - die Layer-Shell-Flaeche muss angelegt sein,
     // bevor Raender ueberhaupt wirken (entscheidend beim ersten Aufgehen
@@ -1061,16 +1269,22 @@ export interface ShellWidget extends OverlayWidget {
 const SHELL_WIDTH = {{STYLE_MODAL_WIDTH_L}}
 
 // Die Hoehe ist ein WUNSCH, kein Versprechen - wie winWidth/winHeight in
-// getOverlayPosition() oben: MEASURE_MODAL_SHARE deckelt ohnehin auf die
-// halbe Bildschirmhoehe, und eine Seite, die mehr braucht, bekommt ihre
-// Bildlaufleiste von der Fabrik wie jedes andere Fenster. 900, weil
-// keines der drei Fenster, die als erste Seiten einziehen sollen
-// (Netzwerk 600, Bluetooth 600, VPN-Einstellungen 600 - je in der
-// eigenen `const WIN_HEIGHT`-Zeile nachgezaehlt), mehr braucht, mit Luft
-// fuer den Zustandskopf obendrauf. Eine spaetere Aufgabe mit echtem
-// Seiteninhalt darf diese Zahl nachmessen und aendern - "Wunsch, kein
-// Versprechen" gilt fuer sie genauso wie fuer jedes andere Fenster.
-const SHELL_HEIGHT = 900
+// getOverlayPosition() oben: der Deckel entscheidet, und eine Seite, die
+// mehr braucht, bekommt ihre Bildlaufleiste von der Fabrik wie jedes
+// andere Fenster. 900, weil keines der drei Fenster, die als erste
+// Seiten einziehen sollen (Netzwerk 600, Bluetooth 600,
+// VPN-Einstellungen 600 - je in der eigenen `const WIN_HEIGHT`-Zeile
+// nachgezaehlt), mehr braucht, mit Luft fuer den Zustandskopf obendrauf.
+//
+// SEIT DEM 01.09.2026 STEHT DIE ZAHL IN src/sizes.py UND NICHT MEHR HIER
+//     Sie hatte drei Jahre lang keine Wirkung, und das ist gemessen: mit
+//     MODAL_SHARE = 0,5 deckelte der Schirm des Nutzers (1200) auf 600,
+//     ob hier 900 oder 2000 stand. Erst mit MODAL_HEIGHT_FACTOR (1,5,
+//     siehe oben) kommt sie an. Eine Zahl, die ab heute etwas
+//     entscheidet, gehoert in die Groessentabelle und nicht in eine
+//     Vorlage - dort steht auch die Begruendung (MODAL_HEIGHT), und
+//     ags-vpn-settings.template liest DIESELBE.
+const SHELL_HEIGHT = {{STYLE_MODAL_HEIGHT}}
 
 // Die Gruppen der Seitenleiste, aus den Seiten selbst - in der
 // Reihenfolge ihres ERSTEN Auftretens in config.seiten. Keine zweite
@@ -1219,6 +1433,13 @@ export function createShellWindow(config: ShellConfig): ShellWidget {
     //     wird bei jedem Aufgehen gemessen statt getippt. Siehe
     //     OverlayConfig.fuelltDieSprosse.
     fuelltDieSprosse: true,
+    // UND SENKRECHT AUCH - NACHGETRAGEN am 01.09.2026. Die Schale ist
+    // das Fenster, in dem die VPN-Seite wohnt, ueber die der Nutzer
+    // zweimal gesagt hat, sie sei "zu gequetscht". GEMESSEN an diesem
+    // Tag auf 1920x1200: 880 x 525 - waagerecht fuellte sie ihre
+    // Sprosse laengst, senkrecht stand sie bei 525 von 900 erlaubten.
+    // Herleitung bei OverlayConfig.fuelltDieHoehe.
+    fuelltDieHoehe: true,
     // Kein Fenstertitel - siehe Funktionskopf. Die Fabrik braucht die
     // beiden Felder trotzdem (sie sind in OverlayConfig nicht optional),
     // darum leer statt mit einem Namen, der ohnehin nur EINE der

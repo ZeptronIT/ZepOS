@@ -97,6 +97,29 @@ const WINDOW_NAME = "vpn-settings"
 //         massgebliche ist.
 const WIN_WIDTH = {{STYLE_MODAL_WIDTH_L}}
 
+// DIE HOEHE, UND WARUM SIE SEIT DEM 01.09.2026 NICHT MEHR HIER STEHT
+//
+//     Unten in der Fabrik stand `height: 600` als getippte Zahl. Sie hat
+//     nie etwas entschieden: getOverlayPosition() nimmt das Kleinste aus
+//     Wunsch, Anteil des Schirms und hartem Platz, und der Anteil war
+//     0,5 - auf dem 1200er Schirm des Nutzers also ebenfalls 600. Die
+//     beiden Zahlen waren zufaellig gleich, und der Wunsch war Zierrat.
+//
+//     GEMELDET, zweimal: "kannst du die vpn ags fenster deutlich hoeher
+//     machen 1,5 ungefaehr also nochmal hoeher" und "die vpn ags fenster
+//     hoeher das ist zu gequetscht alles". "Nochmal hoeher" heisst, dass
+//     es schon einmal versucht wurde - und genau das erklaert, warum es
+//     nichts gebracht hat: erhoeht wurde der Wunsch, geantwortet hat der
+//     Deckel.
+//
+//     Seither gilt der senkrechte Deckel mal 1,5 - die Zahl, die der
+//     Nutzer selbst genannt hat (MEASURE_MODAL_HEIGHT_FACTOR in
+//     src/sizes.py, Herleitung dort) -, und der Wunsch kommt aus
+//     derselben Tabelle wie die Breite darueber. Auf 1200 sind das 900,
+//     auf 1080 sind es 810, auf 800 bindet der harte Platz und das
+//     Fenster bleibt auf dem Schirm.
+const WIN_HEIGHT = {{STYLE_MODAL_HEIGHT}}
+
 const HOME = GLib.get_home_dir()
 // The widgets run standalone under AGS and cannot import paths.py, so
 // the two roots are resolved here. GLib.getenv returns null when unset,
@@ -512,10 +535,36 @@ function neueKennung(): string {
   return s
 }
 
-function verbindungAus(roh: any): VpnSettings {
+function verbindungAus(roh: any, stelle: number): VpnSettings {
   // Deep merge to preserve nested objects (phase1, phase2, dns)
   const v = deepMerge(defaultSettings(), roh) as VpnSettings
-  if (!(v as any).id) (v as any).id = neueKennung()
+  // AUS DER POSITION UND NICHT MEHR AUS DEM ZUFALL - BERICHTIGT am
+  // 01.09.2026
+  //
+  //     Hier stand `neueKennung()`. Das war an dieser Stelle falsch,
+  //     und zwar zweimal:
+  //
+  //     ERSTENS bekam derselbe Eintrag bei JEDEM Lesen eine ANDERE
+  //     Kennung - loadSettings() laeuft in onShow(), also bei jedem
+  //     Aufgehen des Fensters. Eine Kennung, die sich beim Hinsehen
+  //     aendert, ist keine.
+  //
+  //     ZWEITENS kennt ags-vpn.template dieselbe Datei und muss zur
+  //     selben Zeile dieselbe Kennung sagen. Eine Zufallszahl konnte das
+  //     nie. Der Nutzer hat die Folge gemeldet: "ich komme in die
+  //     einstellung nicht mehr rein" - der Klick auf eine Zeile fand
+  //     seine Verbindung nicht wieder.
+  //
+  //     Das "#" davor ist Absicht: eine echte Kennung sind acht
+  //     Hexzeichen (neueKennung() oben, src/vpn.py::new_connection_id()),
+  //     eine positionsbezogene ist damit auf den ersten Blick als solche
+  //     zu erkennen - auch in den Dateinamen, die src/vpn.py::
+  //     secret_prefix() daraus bildet.
+  //
+  //     neueKennung() bleibt, wo eine Verbindung WIRKLICH neu entsteht
+  //     (der Knopf "Verbindung hinzufuegen"): dort gibt es keine
+  //     Position in einer Datei, aus der sich etwas ableiten liesse.
+  if (!(v as any).id) (v as any).id = `#${stelle}`
   return v
 }
 
@@ -538,11 +587,15 @@ function loadAllSettings(): VpnSettings[] {
         return []
       }
       if (Object.keys(section).length) {
-        // Die alte Form: EINE Verbindung. Sie bekommt hier noch keine
-        // Kennung eingetragen - settings.py vergibt beim Wandern "c1",
-        // und zwei Stellen, die Kennungen vergeben, waeren zwei
-        // verschiedene.
-        const eine = verbindungAus(section)
+        // Die alte Form: EINE Verbindung, also Position 0.
+        //
+        // HIER STAND, sie bekomme "noch keine Kennung eingetragen -
+        // settings.py vergibt beim Wandern c1". Das war schon am
+        // 01.09.2026 nicht mehr wahr: verbindungAus() vergibt in genau
+        // diesem Pfad eine, und die Vorlagen lesen die Datei roh und
+        // sehen settings.py::migrate_vpn() nie. Der Kommentar hat einen
+        // Zustand beschrieben, den es nicht gab.
+        const eine = verbindungAus(section, 0)
         gewaehlteId = (eine as any).id
         return [eine]
       }
@@ -580,6 +633,51 @@ let closeFnModule: (() => void) | null = null
 // closeFnModule darueber und wie `showMain()` in `notify::visible` von
 // ags-network.template.
 let zeigeListeModule: (() => void) | null = null
+
+// Der Weg von der Liste in EINE bestimmte Verbindung, aus buildContent()
+// heraus hinterlegt - das Gegenstueck zu zeigeListeModule darueber.
+let zeigeVerbindungModule: ((kennung: string) => boolean) | null = null
+
+// Die halb gestellte Loeschfrage vergessen - siehe loeschBtn in
+// buildContent(). Vorbelegt mit einer Funktion, die nichts tut, damit
+// jeder Aufrufer sie rufen darf, auch bevor buildContent() gelaufen ist.
+let loeschZuruecksetzen: () => void = () => { }
+
+// WELCHE VERBINDUNG DAS NAECHSTE AUFGEHEN ZEIGEN SOLL
+//
+// GEMELDET am 01.09.2026, woertlich
+//     "ich muss mich voll komisch durchklicken sobald ich auf eine vpn
+//      gehe dann auf icon einstellung will ich direkt dort landen"
+//     und, aus derselben Sitzung: "und dann habe ich das jetzt
+//     gespeichert sehe es und ich komme in die einstellung nicht mehr
+//     rein?"
+//
+// WORAN ES LAG - GELESEN, nicht vermutet
+//     ags-vpn.template rief `ags request vpn-settings` OHNE jede Angabe,
+//     welche Verbindung gemeint ist (openVpnSettings() dort, vier
+//     Aufrufer). Dieses Fenster fing daraufhin IMMER auf seiner Liste an
+//     (`onShow` -> zeigeListeModule) und waehlte `vpn.active` aus der
+//     Datei - also die zuletzt GESPEICHERTE Verbindung, nie die
+//     angeklickte. Wer auf einer Zeile das Zahnrad drueckte, landete
+//     eine Stufe zu hoch und musste dieselbe Zeile noch einmal suchen.
+//
+// WARUM EINE MODULVARIABLE UND KEIN ZWEITER FENSTERPARAMETER
+//     Der Weg von aussen in diesen Prozess ist `ags request` - eine
+//     Zeichenkette, kein Funktionsaufruf (siehe requestHandler in
+//     ags-config.template). Dort wird "vpn-settings:<kennung>" zerlegt
+//     und diese Funktion gerufen, BEVOR das Fenster aufgeht. Genau
+//     dasselbe Muster wie `zeigeSeite()` der Schale, nur dass dieses
+//     Fenster keine Schale ist und keine Seiten hat.
+//
+// Leer heisst "die Liste", und das bleibt der Normalfall: wer das
+// Fenster ueber eine Tastenbindung oeffnet, hat keine Verbindung
+// gemeint.
+let gewuenschteKennung = ""
+
+/** Beim naechsten Aufgehen direkt in diese Verbindung springen. */
+export function oeffneVerbindung(kennung: string): void {
+  gewuenschteKennung = kennung.trim()
+}
 
 async function saveSettings() {
   // Handed to settings.py rather than written here.
@@ -738,6 +836,77 @@ function resetSettings() {
   currentSettings = defaultSettings()
   ;(currentSettings as any).id = kennung
   updateAllTabs()
+}
+
+// ============================================================================
+// EINE VERBINDUNG LOESCHEN
+// ============================================================================
+//
+// WAS GEMELDET WURDE (01.09.2026), WOERTLICH
+//     "ich kann vpn verbindungen auch nicht loeschen"
+//
+// WORAN ES LAG: es war nie gebaut. GEZAEHLT am 01.09.2026 - die beiden
+// `deleteBtn` dieser Datei loeschen eine ZEILE innerhalb eines Eintrags
+// (ein geroutetes Netz, eine Gegenstelle), nicht die Verbindung, und
+// src/vpn.py kannte weder `--delete` noch `--remove` noch eine Funktion
+// mit del/rem/loesch im Namen. Zusammen mit Punkt 7 (Eintrag liess sich
+// nicht mehr oeffnen) war die Liste damit praktisch schreibgeschuetzt:
+// anlegen ging, oeffnen nicht, loeschen gab es nicht. Wer sich vertippt
+// hatte, wurde den Eintrag nie wieder los.
+//
+// ZWEI HAELFTEN, UND SIE GEHOEREN VERSCHIEDENEN
+//     Das SYSTEM (stehender Tunnel, NetworkManager-Profil, die
+//     Geheimnisdateien auf der Platte) raeumt `vpn.py --forget` weg. Die
+//     EINSTELLUNGEN (der Eintrag in der Liste, `vpn.active`) raeumt
+//     diese Funktion weg, ueber denselben settings.py-merge, den
+//     saveSettings() benutzt. Zwei Schreiber auf einer Datei waeren zwei
+//     Schreiber auf einer Datei.
+//
+//     DIE REIHENFOLGE IST NICHT BELIEBIG: erst das System, dann die
+//     Einstellungen. `--forget` LIEST die Datei, um zu erfahren, wie die
+//     Schluesseldateien dieser Verbindung heissen - waere der Eintrag
+//     schon weg, wuesste es das nicht mehr, und die Geheimnisse blieben
+//     liegen. Ein Loeschen, das die Zugangsdaten auf der Platte laesst,
+//     ist schlimmer als keins.
+//
+// UND WENN `--forget` SCHEITERT, WIRD NICHTS AUS DER LISTE GENOMMEN.
+//     Ein Eintrag, der aus den Einstellungen verschwindet, waehrend sein
+//     NetworkManager-Profil und sein Schluessel stehenbleiben, ist genau
+//     die Sorte Rest, die nie wieder jemand findet: die Oberflaeche
+//     zeigt ihn nicht mehr, und ohne Eintrag weiss auch `--forget` nicht
+//     mehr, wonach es suchen soll.
+async function loescheVerbindung(kennung: string): Promise<string> {
+  try {
+    await execAsync([...VPN_TOOL, "--forget", kennung])
+  } catch (e) {
+    console.error("Failed to forget the VPN connection:", e)
+    return format(_("Not deleted: {error}"), { error: String(e) })
+  }
+
+  const uebrig = alleVerbindungen.filter((e: any) => e.id !== kennung)
+  alleVerbindungen = uebrig
+  if (gewaehlteId === kennung) {
+    // Die erste der uebrigen wird die gewaehlte. Eine leere Liste laesst
+    // `active` leer - und NICHT auf einer Kennung stehen, die es nicht
+    // mehr gibt: vpn.py::connection() faellt bei einer unbekannten
+    // Kennung auf die ERSTE Verbindung zurueck, und das waere hier eine
+    // Verbindung, die niemand gewaehlt hat.
+    gewaehlteId = uebrig.length ? (uebrig[0] as any).id : ""
+    currentSettings = uebrig.length ? uebrig[0] : defaultSettings()
+  }
+
+  try {
+    await execAsync([...SETTINGS_WRITER, JSON.stringify({
+      vpn: { active: gewaehlteId, connections: uebrig },
+    })])
+  } catch (e) {
+    console.error("Failed to save VPN settings after deleting:", e)
+    return format(_("Not deleted: {error}"), { error: String(e) })
+  }
+
+  // Die VPN-Seite liest dieselbe Datei und zeigt dieselbe Liste.
+  try { await execAsync("ags request vpn") } catch { }
+  return ""
 }
 
 // PSK file location (user config)
@@ -1726,6 +1895,26 @@ function buildWgImportSection(): Gtk.Box {
                                       "zepos-wg-import", ...VPN_TOOL,
                                       "--wg-import", path])
       const payload = JSON.parse(answer)
+      // DIE BAUART MIT - NACHGETRAGEN am 01.09.2026
+      //
+      //     Gemeldet: "oben steht immernoch phase 1 und phase 2 warum
+      //     ??? es gibt einer dieser vpn moeglichkeiten". Phase 1 und
+      //     Phase 2 sind IPsec-Begriffe; fuer WireGuard bedeuten sie
+      //     nichts. Welche Reiter es gibt, entscheidet tabsForKind()
+      //     allein an `currentSettings.kind` - und hier stand die
+      //     Zuweisung nicht.
+      //
+      //     Heute ist dieser Einleser nur erreichbar, wenn die Bauart
+      //     schon "wireguard" ist (buildGeneralTab schaltet ihn frei),
+      //     die Zeile aendert also im Normalfall nichts. Sie steht
+      //     trotzdem: wer gerade eine wg-quick-Datei eingelesen hat, hat
+      //     eine WireGuard-Verbindung, und das darf nicht davon
+      //     abhaengen, ueber welchen Weg er hierhergekommen ist. Die
+      //     eigentliche Ursache der Meldung war eine andere und liegt
+      //     woanders (siehe gewuenschteKennung oben): das Fenster zeigte
+      //     eine ANDERE Verbindung als die angeklickte, und die war
+      //     IPsec.
+      currentSettings.kind = "wireguard"
       currentSettings.wireguard = payload.wireguard
       // Der DNS-Reiter ist derselbe wie bei IPsec, und `DNS =` aus der
       // Datei gehoert dorthin - nicht in einen zweiten.
@@ -2070,6 +2259,9 @@ function buildOvpnImportSection(): Gtk.Box {
                                       "zepos-ovpn-import", ...VPN_TOOL,
                                       "--ovpn-import", path])
       const payload = JSON.parse(answer)
+      // Die Bauart mit - dieselbe Begruendung wie im WireGuard-Einleser
+      // darueber (01.09.2026).
+      currentSettings.kind = "openvpn"
       currentSettings.openvpn = payload.openvpn
       // DNS und Netzliste sind DIESELBEN Reiter wie bei IPsec und
       // WireGuard. `dhcp-option DNS` gehoert dorthin, `route` gehoert
@@ -2351,18 +2543,48 @@ export default function VpnSettings(): OverlayWidget {
   return createOverlayWindow({
     name: "vpn-settings",
     width: WIN_WIDTH,
-    height: 600,
+    height: WIN_HEIGHT,
     cssClass: "VpnSettings",
     headerIcon: ICONS.settings,
     headerTitle: _("VPN settings"),
     accentCssClass: "vpn-accent",
+    // DIESES FENSTER FUELLT SEINE SPROSSE UND SEINE HOEHE AUS -
+    // NACHGETRAGEN am 01.09.2026
+    //
+    //     Der Dateikopf rechnet seit dem 18.08.2026 vor, warum dieses
+    //     Fenster auf Sprosse L (880) gehoert. GEMESSEN am 01.09.2026 im
+    //     verschachtelten Compositor auf 1920x1200, in den Einzelheiten
+    //     einer Verbindung: 604 x 558.
+    //
+    //     604 von 880, und 558 von 900 erlaubten. Die Sprosse war eine
+    //     Zahl, die nirgends ankam - das Fenster stand als kleiner
+    //     dichter Kasten in der Mitte eines grossen Schirms. Genau das
+    //     hat der Nutzer zweimal gemeldet ("das ist zu gequetscht
+    //     alles", "achte bitte mehr auf die UI width und hoehe der ags
+    //     fenster !!!").
+    //
+    //     Beide Felder sind BESTELLUNGEN und keine Regeln fuer alle -
+    //     siehe OverlayConfig.fuelltDieSprosse und .fuelltDieHoehe. Ein
+    //     Abmeldefenster soll klein bleiben; ein Formular mit vier
+    //     Reitern und einer vierteiligen Fusszeile nicht.
+    fuelltDieSprosse: true,
+    fuelltDieHoehe: true,
     onShow: () => {
       currentSettings = loadSettings()
 
       // Rebuild tabs with loaded settings
       rebuildTabs()
 
-      // Und immer auf der Liste anfangen - siehe zeigeListeModule.
+      // AUF DER LISTE ANFANGEN - AUSSER ES WURDE EINE VERBINDUNG
+      // GENANNT (01.09.2026, siehe gewuenschteKennung oben)
+      //
+      //     Die Kennung gilt fuer EIN Aufgehen und wird hier verbraucht.
+      //     Sonst bliebe sie stehen, und das naechste Oeffnen ueber die
+      //     Tastenbindung spraenge wieder in die Verbindung von vorhin -
+      //     ein Fenster, das sich an einen Klick von gestern erinnert.
+      const gewuenscht = gewuenschteKennung
+      gewuenschteKennung = ""
+      if (gewuenscht && zeigeVerbindungModule?.(gewuenscht)) return
       zeigeListeModule?.()
     },
     buildContent: (win, closeWindow) => {
@@ -2559,6 +2781,9 @@ export default function VpnSettings(): OverlayWidget {
 
       /** Von der Liste in die Einzelheit der gewaehlten Verbindung. */
       const zeigeDetail = () => {
+        // Auch hier: die Loeschfrage gilt immer nur fuer die Verbindung,
+        // die gerade dasteht.
+        loeschZuruecksetzen()
         ansicht = "detail"
         listenAnsicht.set_visible(false)
         detailAnsicht.set_visible(true)
@@ -2570,6 +2795,11 @@ export default function VpnSettings(): OverlayWidget {
       const zeigeListe = () => {
         alleVerbindungen = alleVerbindungen.map(
           (e: any) => (e.id === gewaehlteId ? currentSettings : e))
+        // Eine halb gestellte Loeschfrage geht mit der Ansicht - siehe
+        // loeschBtn weiter unten. Sonst stuende sie beim naechsten
+        // Oeffnen einer ANDEREN Verbindung noch da, und der naechste
+        // Klick loeschte die falsche.
+        loeschZuruecksetzen()
         ansicht = "liste"
         detailAnsicht.set_visible(false)
         listenAnsicht.set_visible(true)
@@ -2607,9 +2837,25 @@ export default function VpnSettings(): OverlayWidget {
               // ist.
               alleVerbindungen = alleVerbindungen.map(
                 (e: any) => (e.id === gewaehlteId ? currentSettings : e))
+              // KEIN `|| currentSettings` MEHR - BERICHTIGT am
+              // 01.09.2026. Fand die Kennung sich nicht, blieb die
+              // VORHER gezeigte Verbindung stehen, und zeigeDetail()
+              // unten blaetterte trotzdem um: der Nutzer sah die
+              // Einzelheiten einer anderen Verbindung als der, die er
+              // angeklickt hatte, ohne dass irgendetwas es sagte.
+              // Seit derselben Aenderung hat JEDE Zeile eine Kennung
+              // (siehe verbindungAus), der Fall kann also nicht mehr
+              // eintreten - und wenn doch, bleibt die Liste stehen,
+              // statt etwas Falsches zu zeigen.
+              //
+              // GESUCHT WIRD VOR DEM UMSCHREIBEN VON `gewaehlteId`:
+              // sonst zeigte die Liste nach einem Fehlgriff eine Zeile
+              // als ausgewaehlt an, die gar nicht geoeffnet wurde.
+              const treffer = alleVerbindungen.find(
+                (e: any) => e.id === kennung)
+              if (!treffer) return
               gewaehlteId = kennung
-              currentSettings = alleVerbindungen.find(
-                (e: any) => e.id === kennung) || currentSettings
+              currentSettings = treffer
               rebuildTabs()
               zeichneListe()
               // "bei klick auf das item einer vpn ... will ich auf die
@@ -2644,9 +2890,86 @@ export default function VpnSettings(): OverlayWidget {
       // wie `detailBackBtn` in ags-network.template, Zeichen und Wort.
       const zurueckBtn = zepButton(
         `${ICONS.back} ${_("All connections")}`, "still", zeigeListe)
-      const zurueckZeile = new Gtk.Box({ spacing: 0, halign: Gtk.Align.START })
+      const zurueckZeile = new Gtk.Box({ spacing: 0 })
       zurueckZeile.add_css_class("vpn-detail-back")
       zurueckZeile.append(zurueckBtn)
+
+      // ============================================================
+      // LOESCHEN - NACHGETRAGEN am 01.09.2026
+      // ============================================================
+      //
+      // GEMELDET, woertlich: "ich kann vpn verbindungen auch nicht
+      // loeschen". Die Herleitung steht bei loescheVerbindung() weiter
+      // oben; hier steht nur, WO der Knopf sitzt und warum dort.
+      //
+      // IN DIESER ZEILE UND NICHT IN DER FUSSZEILE
+      //     Die Fusszeile traegt vier Knoepfe, und an ihr haengt die
+      //     ganze Breitenrechnung dieses Fensters (Rechnung im
+      //     Dateikopf: 626 Punkte, gemessen). Ein fuenfter waere genau
+      //     die Rechnung, die das Fenster schon einmal um 42 Punkte
+      //     gesprengt hat.
+      //
+      // UND NICHT AN DER LISTENZEILE
+      //     zepRow haengt sein `ende` INNERHALB der Zeile ein und wickelt
+      //     die ganze Zeile dann in einen Gtk.Button (ags-kit.template).
+      //     Ein Loeschknopf dort waere ein Knopf in einem Knopf - zwei
+      //     Klickgesten ineinander, und die Zeile oeffnet ohnehin die
+      //     Einzelheiten. Hier steht er an der Stelle, an der der Nutzer
+      //     die Verbindung gerade VOR SICH hat.
+      //
+      // MIT RUECKFRAGE, UND ZWAR IM KNOPF SELBST
+      //     Ein zweites Fenster ueber einer Layer-Flaeche ist genau das,
+      //     woran der Dateiwaehler heute gescheitert ist (siehe
+      //     waehleDatei() in ags-overlay-utils.template). Der erste
+      //     Klick fragt, der zweite loescht - und die Frage steht als
+      //     Satz daneben, nicht nur als geaenderte Beschriftung: ein
+      //     Knopf, der ploetzlich anders heisst, ist keine Rueckfrage.
+      let loeschBestaetigt = false
+      const loeschHinweis = new Gtk.Label({ label: "", xalign: 0, wrap: true })
+      loeschHinweis.add_css_class("vpn-psk-status")
+
+      const loeschLuecke = new Gtk.Box({ hexpand: true })
+      const loeschBtn = zepButton(
+        `${ICONS.delete} ${_("Delete")}`, "kritisch", () => {
+          if (!loeschBestaetigt) {
+            loeschBestaetigt = true
+            loeschBtn.set_child(new Gtk.Label({ label: _("Really delete?") }))
+            loeschHinweis.set_text(format(
+              _("\"{name}\" and its stored keys will be removed. Click again to confirm."),
+              { name: currentSettings.connection_name || _("New connection") }))
+            loeschHinweis.add_css_class("warning")
+            return
+          }
+          const wen = gewaehlteId
+          loeschZuruecksetzen()
+          loeschHinweis.set_text(_("Deleting ..."))
+          void loescheVerbindung(wen).then((fehler) => {
+            if (fehler) {
+              loeschHinweis.set_text(fehler)
+              loeschHinweis.add_css_class("warning")
+              return
+            }
+            loeschHinweis.set_text("")
+            zeichneListe()
+            zeigeListe()
+          })
+        })
+      loeschBtn.set_tooltip_text(_("Delete this connection"))
+
+      /** Die Rueckfrage vergessen. Bei jedem Wechsel der Ansicht und bei
+       * jedem Wechsel der Verbindung - eine halb gestellte Frage, die an
+       * einer ANDEREN Verbindung stehenbleibt, ist die gefaehrlichste
+       * Form dieses Knopfes. */
+      loeschZuruecksetzen = () => {
+        loeschBestaetigt = false
+        loeschBtn.set_child(new Gtk.Label({
+          label: `${ICONS.delete} ${_("Delete")}` }))
+        loeschHinweis.set_text("")
+        loeschHinweis.remove_css_class("warning")
+      }
+
+      zurueckZeile.append(loeschLuecke)
+      zurueckZeile.append(loeschBtn)
 
       // ESC blaettert zuerst zurueck und schliesst erst dann. Angehaengt
       // an mainBox - das Widget, das buildContent() zurueckgibt - und
@@ -2666,6 +2989,26 @@ export default function VpnSettings(): OverlayWidget {
       // Damit onShow() (ausserhalb dieser Funktion) beim naechsten
       // Aufgehen wieder auf der Liste anfaengt.
       zeigeListeModule = zeigeListe
+
+      // Und damit es stattdessen in EINE Verbindung springen kann, wenn
+      // eine genannt wurde (01.09.2026, siehe gewuenschteKennung oben).
+      //
+      // Der Rueckgabewert ist die ganze Sicherung: `false` heisst "diese
+      // Kennung gibt es hier nicht", und onShow() zeigt dann die Liste.
+      // Ein `|| currentSettings` waere der stille Fehlgriff, ueber den
+      // der Nutzer geklagt hat - eine Ansicht, die umblaettert und die
+      // falsche Verbindung zeigt, ist schlimmer als eine, die bei der
+      // Liste bleibt.
+      zeigeVerbindungModule = (kennung: string): boolean => {
+        const treffer = alleVerbindungen.find((e: any) => e.id === kennung)
+        if (!treffer) return false
+        gewaehlteId = kennung
+        currentSettings = treffer
+        rebuildTabs()
+        zeichneListe()
+        zeigeDetail()
+        return true
+      }
 
       // Assemble
       //
@@ -2709,6 +3052,10 @@ export default function VpnSettings(): OverlayWidget {
       listenAnsicht.append(listenBox)
 
       detailAnsicht.append(zurueckZeile)
+      // Die Rueckfrage des Loeschknopfes steht UNTER seiner Zeile und
+      // nicht in ihr: sie umbricht, und eine umbrechende Beschriftung in
+      // einer Knopfzeile schiebt die Zeile auseinander.
+      detailAnsicht.append(loeschHinweis)
       detailAnsicht.append(tabBar)
       detailAnsicht.append(contentBox)
 

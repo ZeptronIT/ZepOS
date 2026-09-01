@@ -1433,6 +1433,29 @@ msgstr "Gegenstelle {number}"
 msgid "Delete peer"
 msgstr "Gegenstelle löschen"
 
+#. Eine ganze Verbindung loeschen - seit dem 01.09.2026. Gemeldet:
+#. "ich kann vpn verbindungen auch nicht loeschen". Die Rueckfrage steht
+#. im Knopf selbst (zwei Klicks) und als Satz daneben; ein zweites
+#. Fenster ueber einer Layer-Flaeche ist genau das, woran der
+#. Dateiwaehler an diesem Tag gescheitert ist.
+msgid "Delete"
+msgstr "Löschen"
+
+msgid "Really delete?"
+msgstr "Wirklich löschen?"
+
+msgid "Delete this connection"
+msgstr "Diese Verbindung löschen"
+
+msgid "\"{name}\" and its stored keys will be removed. Click again to confirm."
+msgstr "„{name}“ und die dazu gespeicherten Schlüssel werden entfernt. Zum Bestätigen noch einmal klicken."
+
+msgid "Deleting ..."
+msgstr "Wird gelöscht …"
+
+msgid "Not deleted: {error}"
+msgstr "Nicht gelöscht: {error}"
+
 #: src/templates/ags-vpn-settings.template:1849
 msgid "Public key of the peer"
 msgstr "Öffentlicher Schlüssel der Gegenstelle"
