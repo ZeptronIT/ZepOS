@@ -213,8 +213,35 @@ def _get(document: dict[str, Any], key: str | None) -> int:
         print(json.dumps(document, indent=2))
         return 0
 
-    value = document
-    for part in key.split("."):
+    # DIESELBE UMLEITUNG WIE IM SCHREIBWEG - NACHGETRAGEN 22.08.2026
+    #
+    #     Der Absatz ueber _vpn_target() sagt seit dem 22.08.2026,
+    #     `vpn.server` sei "dieselbe Auskunft, die get_vpn_setting() und
+    #     der Erzeuger geben". Fuer `set` stimmte das, fuer `get` nicht:
+    #     die Umleitung stand nur in _set(). GEMESSEN an einer Datei mit
+    #     zwei Verbindungen -
+    #
+    #         set vpn.server vpn.example.org   -> geschrieben, Rueckgabe 0
+    #         get vpn.server                   -> "no such setting: vpn.server"
+    #
+    #     - also ein Programm, das seinen eigenen Wert nicht wiederfindet.
+    #     Kein Test deckte es, weil es zu `get vpn.*` ueberhaupt keinen
+    #     gab.
+    parts = _vpn_target(document, key.split(".")) or key.split(".")
+
+    value: Any = document
+    for part in parts:
+        # Eine Ziffer laeuft in eine Liste hinein - dieselbe Regel wie in
+        # _holds() und aus demselben Grund: `vpn.connections.0.server`
+        # ist seit dem 22.08.2026 ein gueltiger Weg, und die Umleitung
+        # oben erzeugt genau so einen.
+        if isinstance(value, list) and part.isdigit():
+            index = int(part)
+            if index >= len(value):
+                print(f"no such setting: {key}", file=sys.stderr)
+                return 1
+            value = value[index]
+            continue
         if not isinstance(value, dict) or part not in value:
             print(f"no such setting: {key}", file=sys.stderr)
             return 1

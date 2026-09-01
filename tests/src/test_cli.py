@@ -527,6 +527,123 @@ def test_settings_can_configure_what_a_fresh_installation_left_out(cli, tmp_path
     assert settings.load()["plugins"] == {"enabled": True}
 
 
+def _zwei_verbindungen(settings, gewaehlt: str) -> dict:
+    """Eine Einstellungsdatei mit zwei VPN-Verbindungen.
+
+    Aus settings.default_connection() gebaut und nicht getippt - dieselbe
+    Begruendung wie ueberall in diesem Baum: eine abgeschriebene
+    Verbindung waere die zweite Fassung der Feldnamen, und sie waere die,
+    die veraltet.
+    """
+    dokument = settings.defaults()
+    zuhause = dict(settings.default_connection())
+    zuhause.update({"id": "c1", "connection_name": "home",
+                    "server": "heim.example.net"})
+    arbeit = dict(settings.default_connection())
+    arbeit.update({"id": "c2", "connection_name": "work",
+                   "server": "arbeit.example.net"})
+    dokument["vpn"] = {"active": gewaehlt, "connections": [zuhause, arbeit]}
+    return dokument
+
+
+def test_get_findet_wieder_was_set_geschrieben_hat(cli, tmp_path, monkeypatch,
+                                                   capsys):
+    """GEMELDET am 22.08.2026 bei der Durchsicht vor 0.1.11.
+
+    `vpn` traegt seit dem Umbau eine Liste, und `vpn.server` zeigt auf
+    die GEWAEHLTE Verbindung darin - so steht es im Absatz ueber
+    _vpn_target() in src/cli.py, und dort steht auch, das sei "dieselbe
+    Auskunft, die get_vpn_setting() und der Erzeuger geben".
+
+    Fuer `set` stimmte es. Die Umleitung stand aber NUR in _set():
+
+        set vpn.server vpn.example.org   -> geschrieben, Rueckgabe 0
+        get vpn.server                   -> "no such setting: vpn.server"
+
+    Ein Programm, das seinen eigenen Wert nicht wiederfindet. Kein Test
+    deckte es, weil es zu `get vpn.*` ueberhaupt keinen gab - deshalb
+    steht dieser hier.
+
+    Er misst BEIDE Richtungen an derselben Datei: erst lesen, was
+    dasteht, dann schreiben, dann wieder lesen. Ein Test, der nur nach
+    dem Schreiben liest, waere auch mit zwei Umleitungen gruen, die sich
+    beide gleich irren.
+    """
+    monkeypatch.setenv("ZEPOS_USER_ROOT", str(tmp_path))
+    monkeypatch.syspath_prepend(str(SRC))
+    import settings
+
+    settings.save(_zwei_verbindungen(settings, gewaehlt="c2"))
+
+    # GELESEN WIRD DIE GEWAEHLTE UND NICHT DIE ERSTE. Die zweite steht
+    # auf `active`, also muss ihr Server herauskommen - stuende hier die
+    # erste, waere jede Zusicherung darunter auch mit einer Umleitung
+    # gruen, die `active` gar nicht liest.
+    assert cli.settings_command(["get", "vpn.server"]) == 0
+    assert capsys.readouterr().out.strip() == "arbeit.example.net"
+
+    assert cli.settings_command(["set", "vpn.server", "vpn.example.org"]) == 0
+
+    assert cli.settings_command(["get", "vpn.server"]) == 0
+    assert capsys.readouterr().out.strip() == "vpn.example.org"
+
+    # Und die andere Verbindung ist unberuehrt geblieben: eine Umleitung,
+    # die auf die falsche Zeile zeigt, faellt sonst nirgends auf.
+    assert settings.load()["vpn"]["connections"][0]["server"] == "heim.example.net"
+
+
+def test_get_liest_die_zwei_schluessel_des_abschnitts_weiter_unverlegt(
+        cli, tmp_path, monkeypatch, capsys):
+    """`vpn.active` und `vpn.connections` gehoeren dem ABSCHNITT und
+    nicht einer Verbindung.
+
+    Sie stehen deshalb in VPN_SECTION_KEYS und duerfen von der Umleitung
+    nicht angefasst werden - `vpn.active` ist der Weg, die gewaehlte
+    Verbindung von der Befehlszeile aus zu wechseln, und eine Umleitung
+    darauf zeigte auf `vpn.connections.<i>.active`, was es nicht gibt.
+    """
+    monkeypatch.setenv("ZEPOS_USER_ROOT", str(tmp_path))
+    monkeypatch.syspath_prepend(str(SRC))
+    import settings
+
+    settings.save(_zwei_verbindungen(settings, gewaehlt="c2"))
+
+    assert cli.settings_command(["get", "vpn.active"]) == 0
+    assert capsys.readouterr().out.strip() == "c2"
+
+    assert cli.settings_command(["get", "vpn.connections"]) == 0
+    gelesen = json.loads(capsys.readouterr().out)
+    assert [eintrag["id"] for eintrag in gelesen] == ["c1", "c2"]
+
+    # Der Weg mit der Ziffer, den die Umleitung selbst benutzt, muss
+    # auch von Hand gehen - sonst waere die Umleitung ein Pfad, den das
+    # Programm erzeugt und nicht lesen kann.
+    assert cli.settings_command(["get", "vpn.connections.0.server"]) == 0
+    assert capsys.readouterr().out.strip() == "heim.example.net"
+
+
+def test_get_sagt_weiter_nein_zu_einem_pfad_den_es_nicht_gibt(
+        cli, tmp_path, monkeypatch, capsys):
+    """Die Gegenprobe zur Umleitung: sie darf nicht alles durchlassen.
+
+    Eine Umleitung, die jeden `vpn.*`-Pfad auf die gewaehlte Verbindung
+    schickt, sagte zu einem Tippfehler nicht mehr nein - sie liefe in
+    die Verbindung hinein und fande dort nichts, oder schlimmer, sie
+    fande zufaellig etwas.
+    """
+    monkeypatch.setenv("ZEPOS_USER_ROOT", str(tmp_path))
+    monkeypatch.syspath_prepend(str(SRC))
+    import settings
+
+    settings.save(_zwei_verbindungen(settings, gewaehlt="c2"))
+
+    assert cli.settings_command(["get", "vpn.serverr"]) == 1
+    assert "no such setting: vpn.serverr" in capsys.readouterr().err
+
+    assert cli.settings_command(["get", "vpn.connections.9.server"]) == 1
+    assert "no such setting" in capsys.readouterr().err
+
+
 def test_settings_says_what_is_wrong_with_a_file_it_cannot_read(cli, tmp_path,
                                                                monkeypatch,
                                                                capsys):
