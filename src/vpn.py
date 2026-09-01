@@ -163,6 +163,97 @@ def routed_networks_line(routed_networks: Sequence[Any] | None) -> str:
                                      setting="vpn.routed_networks"))
 
 
+# --------------------------------------------------------------------
+# VOLLTUNNEL: LEITET DIESE VERBINDUNG DEN GESAMTEN VERKEHR UM?
+# --------------------------------------------------------------------
+#
+# GEFRAGT am 22.08.2026: "und alle neuen vpn arten wireguard und openvpn
+# folgen dem split tunneling wie ipsec oder? kein full routing?? ich
+# meine wireguard war standard so"
+#
+# GEMESSEN am selben Tag, BEVOR hier etwas gebaut wurde: `0.0.0.0/0` kam
+# in diesem Modul GENAU EINMAL vor, und zwar in einem Kommentar (der
+# Beispielausgabe von swanctl weiter unten); in
+# ags-vpn-settings.template kam es ueberhaupt nicht vor. Es gab also
+# weder eine Erkennung noch einen Hinweis - der Nutzer haette einen
+# Volltunnel an der Geschwindigkeit gemerkt und an nichts sonst.
+#
+# Und die Frage trifft, weil die drei Bauarten zwar DIESELBE Netzliste
+# fuellen, aber aus Dateien mit sehr verschiedenen Gewohnheiten kommen:
+#
+#     IPsec       routed_networks steht von Hand da - ein Teiltunnel,
+#                 solange niemand das ganze Netz hineinschreibt.
+#     WireGuard   AllowedIPs eines Anbieters deckt fast immer alles ab.
+#     OpenVPN     `redirect-gateway` sagt dasselbe in einem Wort.
+#
+# EINE Regel fuer alle drei, und nicht drei Sonderfaelle: was gezaehlt
+# wird, ist die ABDECKUNG einer Liste von Netzen.
+#
+# WARUM GERECHNET UND NICHT VERGLICHEN
+#     "Deckt alles ab" hat mehr als eine Schreibweise. Die haeufigste
+#     zweite ist das Paar 0.0.0.0/1 + 128.0.0.0/1, und openvpn(8) nennt
+#     unter der Fahne `def1` auch den Grund: "override the default
+#     gateway by using 0.0.0.0/1 and 128.0.0.0/1 rather than 0.0.0.0/0.
+#     This has the benefit of overriding but not wiping out the original
+#     default gateway." Anbieter schreiben genau deshalb so. Ein
+#     Zeichenkettenvergleich auf das Nullnetz sieht davon nichts.
+#
+#     ipaddress.collapse_addresses() fasst benachbarte und ueberlappende
+#     Netze zusammen, solange es geht. Bleibt danach eines mit
+#     Praefixlaenge 0 uebrig, ist der ganze Adressraum gedeckt - egal, in
+#     wieviele Stuecke er zerlegt war. Zwei Haelften, vier Viertel und
+#     das Nullnetz fallen damit unter dieselbe Regel, ohne dass eine
+#     davon einzeln aufgeschrieben werden muesste.
+#
+# WAS HIER AUSDRUECKLICH NICHT PASSIERT
+#     Es aendert sich keine Vorgabe und kein Verhalten. Ein Volltunnel
+#     ist eine gueltige und oft gewollte Einstellung - bei einem
+#     Anbieter-VPN ist er der ganze Zweck. Bestellt wurde am 22.08.2026
+#     woertlich: "nein, ich will das jetzt nicht umstellen - ich will es
+#     konfigurierbar haben". Ein Einleser, der aus einem Volltunnel
+#     stillschweigend einen Teiltunnel machte, waere schlimmer als gar
+#     keine Warnung: der Nutzer glaubte sich geschuetzt und waere es
+#     nicht. Gezeigt wird, was in der Datei steht.
+FULL_TUNNEL_V4 = "ipv4"
+FULL_TUNNEL_V6 = "ipv6"
+
+# Die Reihenfolge, in der die Familien gemeldet werden. Fest, damit zwei
+# Aufrufe mit derselben Liste dieselbe Antwort geben - der Hinweis im
+# Fenster wird bei jedem Tastendruck neu gebaut, und eine Antwort, deren
+# Reihenfolge von der Eingabe abhaengt, liesse ihn flackern.
+_FULL_TUNNEL_ORDER = (FULL_TUNNEL_V4, FULL_TUNNEL_V6)
+
+
+def full_tunnel_families(networks: Sequence[Any] | None, *,
+                         setting: str = "the network list") -> list[str]:
+    """Welche Adressfamilien diese Netzliste VOLLSTAENDIG abdeckt.
+
+    `["ipv4"]`, `["ipv6"]`, beides oder nichts. Nichts heisst
+    Teiltunnel, und das ist der Normalfall.
+
+    Ein Eintrag, der kein Netz ist, wird uebergangen statt geraten: er
+    deckt nichts ab, und ihn zu MELDEN ist die Aufgabe des Einlesers,
+    der ihn mit Datei und Zeilennummer vor sich hat. Ein `str` statt
+    einer Liste faellt dagegen durch nonblank_entries() - dieselbe
+    Stelle, die schon fuer die gerouteten Netze, die umgangenen Netze
+    und die DNS-Server entscheidet, was eine unbrauchbare Liste ist.
+    """
+    per_family: dict[int, list[Any]] = {4: [], 6: []}
+    for entry in nonblank_entries(networks, setting=setting):
+        try:
+            network = ipaddress.ip_network(entry, strict=False)
+        except ValueError:
+            continue
+        per_family[network.version].append(network)
+
+    covered = set()
+    for version, family in ((4, FULL_TUNNEL_V4), (6, FULL_TUNNEL_V6)):
+        if any(block.prefixlen == 0
+               for block in ipaddress.collapse_addresses(per_family[version])):
+            covered.add(family)
+    return [family for family in _FULL_TUNNEL_ORDER if family in covered]
+
+
 def child_names(connection: str, routed_networks: Sequence[Any] | None) -> list[str]:
     """The name of each child security association, in list order.
 
@@ -895,6 +986,29 @@ def wireguard_document(conf: WireGuardConf, *, private_key_file: str = "",
         "public_key": public_key,
         "peers": peers,
     }
+
+
+def wireguard_full_tunnel(document: dict[str, Any] | None) -> list[str]:
+    """Deckt DIESE WireGuard-Verbindung den ganzen Adressraum ab?
+
+    Ueber ALLE Gegenstellen zusammen und nicht je Gegenstelle: was in
+    die Routentabelle kommt, ist die Vereinigung ihrer AllowedIPs, und
+    zwei Gegenstellen mit je einer Haelfte sind zusammen ein Volltunnel,
+    den keine von beiden allein waere.
+
+    Arbeitet auf dem EINSTELLUNGSDOKUMENT und nicht auf der .conf, damit
+    dieselbe Antwort beim Einlesen und beim Anzeigen einer bestehenden
+    Konfiguration herauskommt - eine Erkennung, die nur beim Import
+    laeuft, beschreibt einen Zustand von damals.
+    """
+    networks: list[str] = []
+    for peer in (document or {}).get("peers") or []:
+        if not isinstance(peer, dict):
+            continue
+        networks.extend(nonblank_entries(peer.get("allowed_ips"),
+                                         setting="wireguard.peers.allowed_ips"))
+    return full_tunnel_families(networks,
+                                setting="wireguard.peers.allowed_ips")
 
 
 def wireguard_dns(conf: WireGuardConf) -> dict[str, Any]:
@@ -1645,6 +1759,83 @@ def openvpn_routes(conf: OpenVpnConf) -> list[str]:
     return networks
 
 
+# `redirect-gateway` - die eine Direktive, die "alles" in ein Wort fasst.
+#
+# ABGELESEN an openvpn(8) am 22.08.2026, Abschnitt --redirect-gateway:
+# "Automatically execute routing commands to cause all outgoing IP
+# traffic to be redirected over the VPN." Von den acht Fahnen, die es
+# dafuer kennt, aendern genau ZWEI etwas am OB:
+#
+#     ipv6    "Redirect IPv6 routing into the tunnel. This works similar
+#             to the def1 flag, that is, more specific IPv6 routes are
+#             added (2000::/4, 3000::/4), covering the whole IPv6
+#             unicast space."
+#     !ipv4   "Do not redirect IPv4 traffic - typically used in the flag
+#             pair ipv6 !ipv4 to redirect IPv6-only."
+#
+# Die uebrigen sechs (local, autolocal, def1, bypass-dhcp, bypass-dns,
+# block-local) aendern das WIE. `def1` etwa nimmt 0.0.0.0/1 +
+# 128.0.0.0/1 statt 0.0.0.0/0 - dieselbe Abdeckung, andere Schreibweise,
+# und genau der Fall, fuer den full_tunnel_families() rechnet statt zu
+# vergleichen.
+#
+# `redirect-private` STEHT HIER ABSICHTLICH NICHT, und das ist abgelesen
+# und nicht vermutet: openvpn(8) sagt woertlich "Like --redirect-gateway,
+# but omit actually changing the default gateway. Useful when pushing
+# private subnets." Es leitet also gerade NICHT alles um. Es als
+# Volltunnel zu melden hiesse, die Datei zu bewarnen, die einen
+# Teiltunnel beschreibt - und ein Hinweis, der auch bei harmlosen
+# Dateien erscheint, ist nach dem dritten Mal keiner mehr.
+OVPN_REDIRECT_KEY = "redirect-gateway"
+OVPN_REDIRECT_V6 = "ipv6"
+OVPN_REDIRECT_NO_V4 = "!ipv4"
+
+
+def openvpn_redirect_families(extra: Sequence[Any] | None) -> list[str]:
+    """Welche Familien `redirect-gateway` in dieser Datei umleitet.
+
+    Gelesen wird `openvpn.extra` - die Paare (Name, Argumente) aus der
+    Erlaubnisliste OVPN_CARRIED_EXTRA, in der `redirect-gateway` schon
+    steht, seit OpenVPN als dritte Bauart dazukam. Es musste also nichts
+    Neues durchgereicht werden, damit diese Frage beantwortbar wird; die
+    Zeile war die ganze Zeit da und hat niemanden erreicht.
+    """
+    covered = set()
+    for entry in extra or []:
+        if not isinstance(entry, (list, tuple)) or not entry:
+            continue
+        if str(entry[0]).strip().lower() != OVPN_REDIRECT_KEY:
+            continue
+        flags = [str(flag).strip().lower() for flag in entry[1:]]
+        if OVPN_REDIRECT_NO_V4 not in flags:
+            covered.add(FULL_TUNNEL_V4)
+        if OVPN_REDIRECT_V6 in flags:
+            covered.add(FULL_TUNNEL_V6)
+    return [family for family in _FULL_TUNNEL_ORDER if family in covered]
+
+
+def openvpn_full_tunnel(document: dict[str, Any] | None,
+                        routed_networks: Sequence[Any] | None = None,
+                        ) -> list[str]:
+    """Beide Wege, auf denen eine .ovpn "alles" sagt, in EINER Antwort.
+
+    Die Netzliste wird gerechnet wie bei den anderen zwei Bauarten, und
+    `redirect-gateway` kommt dazu - eine Datei kann den Volltunnel auf
+    beide Weisen erklaeren, und wer nur eine liest, meldet ihn bei der
+    Haelfte der Anbieter nicht.
+
+    WAS DIESE ANTWORT NICHT WEISS, und das gehoert in den Bericht und
+    nicht in eine Fussnote: `redirect-gateway` wird bei den meisten
+    Anbietern gar nicht in der Datei stehen, sondern vom SERVER
+    GESCHOBEN (openvpn(8) fuehrt es unter den Optionen, die --push
+    kennt). Was hier nicht steht, kann hier auch nicht gefunden werden.
+    """
+    covered = set(full_tunnel_families(routed_networks,
+                                       setting="vpn.routed_networks"))
+    covered.update(openvpn_redirect_families((document or {}).get("extra")))
+    return [family for family in _FULL_TUNNEL_ORDER if family in covered]
+
+
 def ovpn_conf_text(document: dict[str, Any],
                    dns: dict[str, Any] | None = None,
                    routed_networks: Sequence[str] | None = None,
@@ -1967,12 +2158,31 @@ def vpn_kind(settings: dict[str, Any]) -> str:
     return value if value in VPN_KINDS else IPSEC_KIND
 
 
+def settings_full_tunnel(document: dict[str, Any] | None) -> list[str]:
+    """Leitet die EINGESTELLTE Verbindung den gesamten Verkehr um?
+
+    Die eine Regel fuer alle drei Bauarten, an derselben Stelle wie
+    vpn_kind() und mit derselben Vorsicht: eine unbekannte Bauart
+    antwortet wie IPsec, also aus der Netzliste. Die drei Zweige
+    unterscheiden sich nur darin, WO die Netze stehen -
+    full_tunnel_families() rechnet in allen dreien dasselbe.
+    """
+    kind = vpn_kind(document or {})
+    if kind == WG_KIND:
+        return wireguard_full_tunnel(_wg_section(document or {}))
+    if kind == OVPN_KIND:
+        return openvpn_full_tunnel(_ovpn_section(document or {}),
+                                   _routed_networks(document or {}))
+    return full_tunnel_families(_routed_networks(document or {}),
+                                setting="vpn.routed_networks")
+
+
 # --------------------------------------------------------------------
 # the command line the artifacts ask through
 # --------------------------------------------------------------------
 
 USAGE = """usage: vpn.py --virtual-address | --tunnel-health
-                 | --status | --address-present ADDRESS
+                 | --status | --full-tunnel | --address-present ADDRESS
                  | --wg-import FILE | --wg-genkey NAME
                  | --wg-apply | --wg-up | --wg-down
                  | --ovpn-import FILE | --ovpn-apply
@@ -1986,6 +2196,10 @@ USAGE = """usage: vpn.py --virtual-address | --tunnel-health
   --status             print `connected|stale|disconnected` and, when one
                        was recorded, the tunnel's address. Which half
                        answers is decided by `vpn.kind` in the settings.
+  --full-tunnel        print `ipv4`, `ipv6`, both or nothing: which
+                       address families the configured connection routes
+                       COMPLETELY through the tunnel. Reads the settings,
+                       changes nothing, always exits 0.
   --address-present A  print A's address/prefix if it is configured on an
                        interface; exit 1 if it is not.
   --wg-import FILE     read a wg-quick configuration, store its secrets
@@ -2134,7 +2348,16 @@ def _ovpn_section(document: dict[str, Any]) -> dict[str, Any]:
     return block if isinstance(block, dict) else {}
 
 
-def _ovpn_routed(document: dict[str, Any]) -> list[str]:
+def _routed_networks(document: dict[str, Any]) -> list[str]:
+    """Die Netzliste - DIESELBE fuer alle drei Bauarten.
+
+    Hiess bis zum 22.08.2026 _ovpn_routed() und hat nie etwas
+    OpenVPN-Eigenes gelesen: sie steht unter `vpn.routed_networks`, weil
+    IPsec sie in Child-SAs, WireGuard sie in AllowedIPs und OpenVPN sie
+    in `route`-Zeilen uebersetzt. Seit settings_full_tunnel() sie fuer
+    alle drei liest, waere der alte Name die Stelle, an der jemand eine
+    zweite Liste daneben anlegt.
+    """
     section = document.get("vpn") if isinstance(document, dict) else None
     values = (section or {}).get("routed_networks") if isinstance(section, dict) else None
     return [str(entry) for entry in values] if isinstance(values, list) else []
@@ -2181,7 +2404,7 @@ def _ovpn_apply(document: dict[str, Any],
 
     conf_file = _runtime_dir() / f"{name}.ovpn"
     _write_private(conf_file, ovpn_conf_text(block, _wg_dns(document),
-                                             _ovpn_routed(document)))
+                                             _routed_networks(document)))
     try:
         for argv in (nm_import_argv(str(conf_file), OVPN_KIND),
                      nm_own_argv(name, os.environ.get("USER")
@@ -2347,13 +2570,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             stored.append(write_wireguard_secret(f"{name}-peer{index}.psk",
                                                  secret).name
                           if secret else "")
+        block = wireguard_document(
+            conf, private_key_file=key_file,
+            public_key=public_wireguard_key(private_key) if private_key
+            else "",
+            preshared_key_files=stored)
         payload = {
-            "wireguard": wireguard_document(
-                conf, private_key_file=key_file,
-                public_key=public_wireguard_key(private_key) if private_key
-                else "",
-                preshared_key_files=stored),
+            "wireguard": block,
             "dns": wireguard_dns(conf),
+            # Was die Datei ueber den Umfang des Tunnels sagt - GEZEIGT,
+            # nicht geaendert. Die AllowedIPs bleiben Zeichen fuer
+            # Zeichen die der Datei; hier steht nur, was sie bedeuten.
+            "full_tunnel": wireguard_full_tunnel(block),
             # Die abgelehnten Zeilen fahren MIT. Sie sind der Grund fuer
             # den eigenen Rueckgabewert unten, und der Aufrufer zeigt
             # sie - eine Datei, die halb ankommt und deren Rest still
@@ -2422,12 +2650,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         block["username"] = str(_ovpn_section(document).get("username")
                                 or (document.get("vpn") or {}).get("username")
                                 or "")
+        routed = openvpn_routes(conf)
         payload = {
             "openvpn": block,
             "dns": openvpn_dns(conf),
             # In die BESTEHENDE Netzliste, denselben Reiter, den IPsec
             # und WireGuard benutzen.
-            "routed_networks": openvpn_routes(conf),
+            "routed_networks": routed,
+            # Beide Wege zusammen: die Netzliste UND `redirect-gateway`.
+            # Gezeigt, nicht geaendert - siehe openvpn_full_tunnel().
+            "full_tunnel": openvpn_full_tunnel(block, routed),
             # Beide Listen fahren mit. `refused` traegt den eigenen
             # Rueckgabewert, `ignored` nicht - der Unterschied ist die
             # Schwere, nicht die Sichtbarkeit: gezeigt wird beides.
@@ -2467,6 +2699,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         # herleiten muessen, was hier an EINER Stelle steht.
         print("no" if openvpn_needs_a_secret(
             _ovpn_section(_settings_document())) else "yes")
+        return 0
+
+    if query == "--full-tunnel":
+        # Fuer JEDEN Leser, der keine Einstellungen im Speicher hat -
+        # das Fenster rechnet bei jedem Tastendruck selbst (siehe
+        # fullTunnelFamilies in ags-vpn-settings.template), ein Skript
+        # oder eine Statuszeile kann es hier erfragen. Nichts wird
+        # geschrieben und nichts angefasst; die Antwort ist eine Zeile
+        # aus null, einem oder zwei Woertern.
+        families = settings_full_tunnel(_settings_document())
+        if families:
+            print(" ".join(families))
         return 0
 
     if query == "--address-present":

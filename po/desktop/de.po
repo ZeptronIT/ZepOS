@@ -1239,6 +1239,26 @@ msgstr "Netz hinzufügen"
 msgid "Routed networks"
 msgstr "Geroutete Netze"
 
+#: src/templates/ags-vpn-settings.template
+msgid "Full tunnel: these networks cover the entire IPv4 and IPv6 address space. All traffic runs through the VPN - nothing goes past it."
+msgstr "Volltunnel: Diese Netze decken den gesamten IPv4- und IPv6-Adressraum ab. Aller Verkehr läuft durch das VPN – nichts geht daran vorbei."
+
+#: src/templates/ags-vpn-settings.template
+msgid "Full tunnel: these networks cover the entire IPv6 address space. All IPv6 traffic runs through the VPN."
+msgstr "Volltunnel: Diese Netze decken den gesamten IPv6-Adressraum ab. Aller IPv6-Verkehr läuft durch das VPN."
+
+#: src/templates/ags-vpn-settings.template
+msgid "Full tunnel: these networks cover the entire IPv4 address space. All IPv4 traffic runs through the VPN."
+msgstr "Volltunnel: Diese Netze decken den gesamten IPv4-Adressraum ab. Aller IPv4-Verkehr läuft durch das VPN."
+
+#: src/templates/ags-vpn-settings.template
+msgid "Full tunnel: the file carries redirect-gateway, which sends all traffic through the tunnel - independently of this list."
+msgstr "Volltunnel: Die Datei trägt redirect-gateway, das allen Verkehr durch den Tunnel schickt – unabhängig von dieser Liste."
+
+#: src/templates/ags-vpn-settings.template
+msgid "This configuration routes all traffic through the tunnel. It was taken over exactly as the file has it - the networks can be changed in the tabs."
+msgstr "Diese Konfiguration leitet den gesamten Verkehr durch den Tunnel. Sie wurde genau so übernommen, wie sie in der Datei steht – die Netze lassen sich in den Reitern ändern."
+
 #: src/templates/ags-vpn-settings.template:1139
 #: src/templates/ags-vpn-settings.template:1465
 msgid "e.g. 10.0.0.0/8"

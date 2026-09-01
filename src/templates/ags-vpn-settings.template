@@ -809,6 +809,192 @@ function createToggleGroup(label: string, options: { label: string; value: any }
   return box
 }
 
+// ============================================================================
+// VOLLTUNNEL - DER MITLAUFENDE HINWEIS UNTER DER NETZLISTE
+// ============================================================================
+//
+// GEFRAGT am 22.08.2026: "und alle neuen vpn arten wireguard und openvpn
+// folgen dem split tunneling wie ipsec oder? kein full routing?? ich
+// meine wireguard war standard so" - und nachgesetzt: "stimmt, bei
+// wireguard bestimmt das die datei selbst. ich will, dass es
+// konfigurierbar bleibt bzw. dateiabhaengig - also schon korrekt" sowie
+// "nein, ich will das jetzt nicht umstellen - ich will es
+// konfigurierbar haben".
+//
+// Daraus folgt genau dreierlei, und nichts darueber hinaus:
+//   * es aendert sich KEINE Vorgabe. Was in der Datei stand, steht nach
+//     dem Einlesen unveraendert in der Liste.
+//   * die Liste ist BEARBEITBAR - das war sie fuer IPsec und WireGuard
+//     schon (buildStringList weiter unten), fuer OpenVPN nicht: dort
+//     wurde sie beim Einlesen gefuellt und in keinem Reiter gezeigt.
+//     Sie steht seit heute im Reiter "Verbindung".
+//   * der Hinweis LAEUFT MIT. Nimmt der Nutzer das Nullnetz heraus,
+//     verschwindet er; traegt er es wieder ein, kommt er zurueck. Ein
+//     Hinweis, der nur beim Einlesen einmal aufblitzt, beschreibt einen
+//     Zustand von damals.
+//
+// WARUM DIE RECHNUNG HIER STEHT, OBWOHL SIE IN src/vpn.py SCHON STEHT
+//     Sonst gilt in dieser Datei die Regel des Einlesers: die Arbeit
+//     macht src/vpn.py, das Fenster ruft. Hier geht das nicht - der
+//     Hinweis muss bei JEDEM Tastendruck stimmen, und ein Kindprozess je
+//     Tastendruck waere ein Kindprozess je Tastendruck.
+//
+//     Damit die beiden Fassungen nicht auseinanderlaufen, misst
+//     tests/src/test_vpn_volltunnel.py sie GEGENEINANDER: es schneidet
+//     den Block zwischen den zwei Marken unten heraus, uebersetzt ihn
+//     mit `ags bundle`, laesst ihn unter gjs ueber dieselbe Tabelle
+//     laufen wie die Python-Fassung und vergleicht Antwort fuer Antwort.
+//     Eine Kopie, die nachgemessen wird, ist etwas anderes als eine
+//     Kopie, die man findet, wenn sie schon falsch ist.
+//
+// WARUM GERECHNET UND NICHT VERGLICHEN
+//     "Deckt alles ab" hat mehr als eine Schreibweise: 0.0.0.0/1 +
+//     128.0.0.0/1 decken zusammen dasselbe ab wie 0.0.0.0/0, und
+//     Anbieter schreiben genau so, um die Standardroute zu
+//     UEBERSTIMMEN, ohne sie zu loeschen (openvpn(8) fuehrt das unter
+//     der Fahne `def1`). Ein `indexOf("0.0.0.0/0")` sieht davon nichts.
+//     Gerechnet wird deshalb ueber Intervalle: jedes Netz wird zu
+//     [Anfang, Ende], die Intervalle werden sortiert und
+//     zusammengeschoben, und gedeckt ist die Familie, wenn dabei genau
+//     ein Stueck von der ersten bis zur letzten Adresse herauskommt.
+
+// >>> VOLLTUNNEL-RECHNUNG
+const FULL_TUNNEL_V4 = "ipv4"
+const FULL_TUNNEL_V6 = "ipv6"
+
+function parseIpv4(text: string): bigint | null {
+  const parts = text.split(".")
+  if (parts.length !== 4) return null
+  let value = 0n
+  for (const part of parts) {
+    if (!/^[0-9]{1,3}$/.test(part)) return null
+    const octet = Number(part)
+    if (octet > 255) return null
+    value = (value << 8n) | BigInt(octet)
+  }
+  return value
+}
+
+function parseIpv6(text: string): bigint | null {
+  const halves = text.split("::")
+  if (halves.length > 2) return null
+  const stuecke = (piece: string): string[] => piece === "" ? [] : piece.split(":")
+  let left = stuecke(halves[0])
+  const right = halves.length === 2 ? stuecke(halves[1]) : []
+  // Eine abschliessende IPv4-Schreibweise ("::ffff:203.0.113.1") ist
+  // eine gueltige Adresse und wird zu den letzten ZWEI Gruppen.
+  const tail = right.length ? right : left
+  if (tail.length && tail[tail.length - 1].indexOf(".") >= 0) {
+    const four = parseIpv4(tail[tail.length - 1])
+    if (four === null) return null
+    tail.pop()
+    tail.push(((four >> 16n) & 0xffffn).toString(16))
+    tail.push((four & 0xffffn).toString(16))
+  }
+  if (halves.length === 2) {
+    const missing = 8 - (left.length + right.length)
+    if (missing < 0) return null
+    left = left.concat(new Array(missing).fill("0")).concat(right)
+  } else if (left.length !== 8) {
+    return null
+  }
+  let value = 0n
+  for (const group of left) {
+    if (!/^[0-9a-fA-F]{1,4}$/.test(group)) return null
+    value = (value << 16n) | BigInt(parseInt(group, 16))
+  }
+  return value
+}
+
+// [Familie, erste Adresse, letzte Adresse] - oder null, wenn die Zeile
+// kein Netz ist. Eine Zeile, die keines ist, deckt auch keines ab; sie
+// zu MELDEN ist Sache des Einlesers, der Datei und Zeilennummer hat.
+function cidrSpan(text: string): [number, bigint, bigint] | null {
+  const value = text.trim()
+  if (!value) return null
+  const slash = value.indexOf("/")
+  const head = slash < 0 ? value : value.slice(0, slash)
+  const rest = slash < 0 ? "" : value.slice(slash + 1)
+  const istV6 = head.indexOf(":") >= 0
+  const bits = istV6 ? 128 : 32
+  const address = istV6 ? parseIpv6(head) : parseIpv4(head)
+  if (address === null) return null
+  let length = bits
+  if (slash >= 0) {
+    if (!/^[0-9]{1,3}$/.test(rest)) return null
+    length = Number(rest)
+    if (length > bits) return null
+  }
+  const size = 1n << BigInt(bits - length)
+  // Wirtsbits weg, wie ipaddress.ip_network(..., strict=False):
+  // `192.0.2.9/24` ist das Netz 192.0.2.0/24 und kein Fehler.
+  const start = (address / size) * size
+  return [istV6 ? 6 : 4, start, start + size - 1n]
+}
+
+function coversEverything(spans: [bigint, bigint][], bits: number): boolean {
+  if (!spans.length) return false
+  const sorted = spans.slice().sort(
+    (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+  let reach = -1n
+  for (const [start, end] of sorted) {
+    // Eine Luecke: was danach kommt, kann sie nicht mehr fuellen, denn
+    // sortiert ist nach dem Anfang.
+    if (start > reach + 1n) return false
+    if (end > reach) reach = end
+  }
+  return reach === (1n << BigInt(bits)) - 1n
+}
+
+function fullTunnelFamilies(values: string[]): string[] {
+  const v4: [bigint, bigint][] = []
+  const v6: [bigint, bigint][] = []
+  for (const value of values ?? []) {
+    const span = cidrSpan(String(value))
+    if (span === null) continue
+    ;(span[0] === 6 ? v6 : v4).push([span[1], span[2]])
+  }
+  const families: string[] = []
+  if (coversEverything(v4, 32)) families.push(FULL_TUNNEL_V4)
+  if (coversEverything(v6, 128)) families.push(FULL_TUNNEL_V6)
+  return families
+}
+// <<< VOLLTUNNEL-RECHNUNG
+
+// Der Satz zur Antwort. KEIN Fehler und keine Ablehnung - ein
+// Volltunnel ist eine gueltige, oft gewollte Einstellung, und bei einem
+// Anbieter-VPN ist er der ganze Zweck. Er traegt trotzdem die
+// Warnfarbe des Bausatzes (.vpn-psk-status.warning, gelb), weil der
+// Unterschied zwischen Firmentunnel und Anbietertunnel derjenige ist,
+// den der Nutzer heute nur an der Geschwindigkeit merkt.
+//
+// Drei Saetze und nicht einer mit eingesetzter Familie: "IPv4 und IPv6"
+// waere ein zusammengesetztes Stueck Sprache, dessen "und" kein
+// Uebersetzer erreicht.
+function fullTunnelNote(families: string[]): string {
+  if (families.length === 2) {
+    return _("Full tunnel: these networks cover the entire IPv4 and IPv6 address space. All traffic runs through the VPN - nothing goes past it.")
+  }
+  if (families.length === 1 && families[0] === FULL_TUNNEL_V6) {
+    return _("Full tunnel: these networks cover the entire IPv6 address space. All IPv6 traffic runs through the VPN.")
+  }
+  if (families.length === 1) {
+    return _("Full tunnel: these networks cover the entire IPv4 address space. All IPv4 traffic runs through the VPN.")
+  }
+  return ""
+}
+
+// Derselbe Befund im AUGENBLICK DES EINLESENS, angehaengt an die
+// Statuszeile - beide Bauarten benutzen ihn, damit der Satz nicht
+// zweimal dasteht. Er sagt AUSDRUECKLICH, dass nichts veraendert wurde:
+// die Datei bestimmt, was gilt, und der Nutzer kann es danach in den
+// Reitern aendern. Ein Einleser, der aus einem Volltunnel still einen
+// Teiltunnel machte, waere schlimmer als gar keine Warnung.
+function importFullTunnelNote(families: string[]): string {
+  if (!families.length) return ""
+  return " " + _("This configuration routes all traffic through the tunnel. It was taken over exactly as the file has it - the networks can be changed in the tabs.")
+}
+
 // EINE LISTE VON ZEICHENKETTEN MIT HINZUFUEGEN UND LOESCHEN
 //
 //     EINGEFUEHRT am 21.08.2026, und zwar durch ZUSAMMENFASSEN und
@@ -826,14 +1012,38 @@ function createToggleGroup(label: string, options: { label: string; value: any }
 //     vier verschiedenen Stellen haengen - zwei direkt an
 //     currentSettings, eine an wireguard, eine an EINER Gegenstelle
 //     darin.
+//     `hint` kam am 22.08.2026 dazu und ist der Grund, aus dem der
+//     Volltunnel-Hinweis MITLAEUFT statt einmal aufzublitzen: er wird
+//     nach jedem Schreiben neu erfragt - beim Tippen, beim Hinzufuegen
+//     und beim Loeschen. Er gibt eine Zeichenkette zurueck oder "";
+//     leer heisst, die Zeile verschwindet ganz, statt als leerer
+//     Absatz stehen zu bleiben.
+//
+//     Er bekommt KEIN Argument, obwohl die Liste eines waere: die
+//     WireGuard-Gegenstellen fuehren VIER Listen, und ob der Tunnel
+//     alles umleitet, entscheidet ihre Vereinigung - zwei Gegenstellen
+//     mit je einer Haelfte sind zusammen ein Volltunnel, den keine von
+//     beiden allein waere. Was gerechnet wird, entscheidet deshalb die
+//     Aufrufstelle und nicht dieses Bauteil.
 function buildStringList(title: string, addTooltip: string, placeholder: string,
                          read: () => string[], write: (values: string[]) => void,
-                         titleClass: string = "vpn-field-label"): Gtk.Box {
+                         titleClass: string = "vpn-field-label",
+                         hint?: () => string): Gtk.Box {
   const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
 
   const header = new Gtk.Box({ spacing: 8 })
   const label = new Gtk.Label({ label: title, xalign: 0, hexpand: true })
   label.add_css_class(titleClass)
+
+  const note = new Gtk.Label({ label: "", xalign: 0, wrap: true })
+  note.add_css_class("vpn-psk-status")
+  note.add_css_class("warning")
+
+  function refreshNote() {
+    const text = hint ? hint() : ""
+    note.set_text(text)
+    note.set_visible(text !== "")
+  }
 
   // Rolle umrandet: eine wirkliche Handlung (Eintrag hinzufuegen),
   // keine Navigation. `rebuild` ist eine Funktionsdeklaration und damit
@@ -865,6 +1075,10 @@ function buildStringList(title: string, addTooltip: string, placeholder: string,
         const current = read()
         current[idx] = entry.get_text()
         write(current)
+        // Bei JEDEM Zeichen und nicht erst beim Verlassen des Feldes:
+        // wer `0.0.0.0/0` herausnimmt, soll den Hinweis verschwinden
+        // sehen, waehrend er es tut.
+        refreshNote()
       })
 
       // Rolle kritisch, wie vom Auftrag verlangt (loeschen ist zerstoerend).
@@ -879,11 +1093,13 @@ function buildStringList(title: string, addTooltip: string, placeholder: string,
       item.append(deleteBtn)
       list.append(item)
     }
+    refreshNote()
   }
 
   rebuild()
   box.append(header)
   box.append(list)
+  box.append(note)
   return box
 }
 
@@ -1283,11 +1499,17 @@ function buildPhase2Tab(): Gtk.Box {
   // Ueber buildStringList und nicht mehr als eigene rebuild-Schleife -
   // dieselbe Liste stand in dieser Datei zweimal und braucht sie die
   // zweite Bauart noch zweimal. Siehe die Begruendung dort.
+  //
+  // Der Volltunnel-Hinweis gilt HIER genauso wie bei den zwei anderen
+  // Bauarten: `routed_networks` kann alles enthalten, und ein IPsec-
+  // Teiltunnel ist eine Gewohnheit dieses Projekts, keine Eigenschaft
+  // von IPsec. Eine Regel fuer alle drei, nicht drei Sonderfaelle.
   box.append(buildStringList(
     _("Routed networks"), _("Add network"), _("e.g. 10.0.0.0/8"),
     () => currentSettings.routed_networks,
     (values) => { currentSettings.routed_networks = values },
-    "vpn-section-title"))
+    "vpn-section-title",
+    () => fullTunnelNote(fullTunnelFamilies(currentSettings.routed_networks))))
 
   return box
 }
@@ -1404,6 +1626,14 @@ function buildWgImportSection(): Gtk.Box {
       // Datei gehoert dorthin - nicht in einen zweiten.
       if (payload.dns) currentSettings.dns = payload.dns
 
+      // Was die Datei ueber den UMFANG des Tunnels sagt, gleich beim
+      // Einlesen - der mitlaufende Hinweis steht im Reiter
+      // "Gegenstellen", aber wer gerade eine Anbieterdatei angeheftet
+      // hat, soll es hier schon lesen. src/vpn.py rechnet es (siehe
+      // wireguard_full_tunnel), damit hier nichts zweimal gerechnet
+      // wird, was ohnehin schon im Umschlag liegt.
+      const volltunnel = importFullTunnelNote(payload.full_tunnel ?? [])
+
       const refused: [number, string][] = payload.refused ?? []
       if (refused.length) {
         // BENANNT UND ABGELEHNT, NICHT STILL VERWORFEN. Eine Datei, von
@@ -1412,13 +1642,16 @@ function buildWgImportSection(): Gtk.Box {
         // fehlt, ist genau die Zeile, die den Verkehr eingegrenzt haette.
         status.set_text(format(
           _("Imported. These lines were NOT taken over, because they run commands: {lines}"),
-          { lines: refused.map(([line, key]) => `${key} (${line})`).join(", ") }))
+          { lines: refused.map(([line, key]) => `${key} (${line})`).join(", ") }) + volltunnel)
         status.remove_css_class("success")
         status.add_css_class("warning")
       } else {
-        status.set_text(_("Imported"))
+        status.set_text(_("Imported") + volltunnel)
+        // Beide erst weg, dann eine hin: sonst bliebe die Farbe des
+        // vorigen Einlesens unter der neuen stehen.
         status.remove_css_class("warning")
-        status.add_css_class("success")
+        status.remove_css_class("success")
+        status.add_css_class(volltunnel ? "warning" : "success")
       }
       // Der Hinweis auf die Fremddatei: ANGEBOTEN, nicht getan. Sie
       // gehoert dem Nutzer, sie traegt seinen privaten Schluessel im
@@ -1545,6 +1778,18 @@ function buildWgInterfaceTab(): Gtk.Box {
   return box
 }
 
+// Welche Familien DIESE WireGuard-Verbindung ganz umleitet - ueber alle
+// Gegenstellen zusammen. Der Zwilling von src/vpn.py::
+// wireguard_full_tunnel(), und aus demselben Grund ueber die
+// Vereinigung: was routet, ist die Summe der AllowedIPs.
+function wgFullTunnel(): string[] {
+  const alle: string[] = []
+  for (const peer of currentSettings.wireguard?.peers ?? []) {
+    for (const netz of peer.allowed_ips ?? []) alle.push(netz)
+  }
+  return fullTunnelFamilies(alle)
+}
+
 // Build WireGuard Peers Tab
 function buildWgPeersTab(): Gtk.Box {
   const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
@@ -1609,9 +1854,16 @@ function buildWgPeersTab(): Gtk.Box {
                                      (val) => { peer.keepalive = val }))
       // AllowedIPs. Begrifflich dasselbe wie `routed_networks` auf der
       // IPsec-Seite, und deshalb dieselbe Listenform.
+      //
+      // Der Hinweis rechnet ueber ALLE Gegenstellen (wgFullTunnel) und
+      // nicht ueber diese eine: in die Routentabelle kommt ihre
+      // Vereinigung, und zwei Gegenstellen mit je einer Haelfte sind
+      // zusammen ein Volltunnel, den keine von beiden allein waere.
       card.append(buildStringList(
         _("Allowed networks"), _("Add network"), _("e.g. 10.0.0.0/8"),
-        () => peer.allowed_ips ?? [], (values) => { peer.allowed_ips = values }))
+        () => peer.allowed_ips ?? [], (values) => { peer.allowed_ips = values },
+        "vpn-field-label",
+        () => fullTunnelNote(wgFullTunnel())))
 
       list.append(card)
     }
@@ -1729,17 +1981,24 @@ function buildOvpnImportSection(): Gtk.Box {
         currentSettings.routed_networks = payload.routed_networks
       }
 
+      // Wie bei WireGuard: was die Datei ueber den Umfang sagt, steht
+      // schon hier. Bei OpenVPN kommen zwei Wege zusammen (die Netzliste
+      // und `redirect-gateway`) - beide rechnet openvpn_full_tunnel()
+      // in src/vpn.py, und beide liegen als `full_tunnel` im Umschlag.
+      const volltunnel = importFullTunnelNote(payload.full_tunnel ?? [])
+
       const refused: [number, string][] = payload.refused ?? []
       if (refused.length) {
         status.set_text(format(
           _("Imported. These lines were NOT taken over, because they run commands: {lines}"),
-          { lines: refused.map(([line, key]) => `${key} (${line})`).join(", ") }))
+          { lines: refused.map(([line, key]) => `${key} (${line})`).join(", ") }) + volltunnel)
         status.remove_css_class("success")
         status.add_css_class("warning")
       } else {
-        status.set_text(_("Imported"))
+        status.set_text(_("Imported") + volltunnel)
         status.remove_css_class("warning")
-        status.add_css_class("success")
+        status.remove_css_class("success")
+        status.add_css_class(volltunnel ? "warning" : "success")
       }
 
       const ignored: [number, string][] = payload.ignored ?? []
@@ -1769,6 +2028,28 @@ function buildOvpnImportSection(): Gtk.Box {
   section.append(status)
   section.append(ignoredLabel)
   return section
+}
+
+// `redirect-gateway` aus den mitgenommenen Direktiven - der Zwilling von
+// src/vpn.py::openvpn_redirect_families(). Die Fahnen, auf die es
+// ankommt, sind an openvpn(8) abgelesen und dort begruendet; `!ipv4`
+// nimmt IPv4 heraus, `ipv6` nimmt IPv6 dazu, alle uebrigen aendern nur
+// das WIE. `redirect-private` steht absichtlich nicht dabei: es laesst
+// die Standardroute in Ruhe.
+function ovpnRedirectFamilies(): string[] {
+  let v4 = false
+  let v6 = false
+  for (const entry of currentSettings.openvpn?.extra ?? []) {
+    if (!entry.length) continue
+    if (String(entry[0]).trim().toLowerCase() !== "redirect-gateway") continue
+    const flags = entry.slice(1).map((flag) => String(flag).trim().toLowerCase())
+    if (flags.indexOf("!ipv4") < 0) v4 = true
+    if (flags.indexOf("ipv6") >= 0) v6 = true
+  }
+  const families: string[] = []
+  if (v4) families.push(FULL_TUNNEL_V4)
+  if (v6) families.push(FULL_TUNNEL_V6)
+  return families
 }
 
 // Build OpenVPN Connection Tab
@@ -1829,6 +2110,41 @@ function buildOvpnConnectionTab(): Gtk.Box {
                               (val) => { ovpn.cipher = val }))
   box.append(createEntryField(_("HMAC authentication"), ovpn.auth ?? "",
                               (val) => { ovpn.auth = val }))
+
+  // DIE NETZLISTE - SEIT DEM 22.08.2026 AUCH HIER SICHTBAR
+  //
+  //     Sie wurde beim Einlesen einer .ovpn schon immer gefuellt (aus
+  //     den `route`-Zeilen, siehe openvpn_routes() in src/vpn.py) und
+  //     beim Verbinden schon immer gelesen - GEZEIGT wurde sie in
+  //     keinem der vier Reiter dieser Bauart. Der Nutzer konnte also
+  //     nicht sehen, was durch den Tunnel geht, und erst recht nichts
+  //     daran aendern; bestellt am 22.08.2026: "ich will es
+  //     konfigurierbar haben".
+  //
+  //     Sie steht in DIESEM Reiter und nicht in einem fuenften: die
+  //     Leiste bleibt bei vier Knoepfen (siehe tabsForKind), und es ist
+  //     derselbe Wert wie bei den anderen zwei Bauarten
+  //     (currentSettings.routed_networks), also dasselbe Bauteil.
+  box.append(buildStringList(
+    _("Routed networks"), _("Add network"), _("e.g. 10.0.0.0/8"),
+    () => currentSettings.routed_networks,
+    (values) => { currentSettings.routed_networks = values },
+    "vpn-field-label",
+    () => {
+      // Zwei Wege, auf denen eine .ovpn "alles" sagen kann, und zwei
+      // Saetze: die Liste deckt alles ab - oder `redirect-gateway`
+      // sagt es, ganz unabhaengig von der Liste. Ein einziger Satz
+      // haette den zweiten Fall der Liste angelastet, die ihn nicht
+      // verursacht.
+      const teile: string[] = []
+      const ausListe = fullTunnelNote(
+        fullTunnelFamilies(currentSettings.routed_networks))
+      if (ausListe) teile.push(ausListe)
+      if (ovpnRedirectFamilies().length) {
+        teile.push(_("Full tunnel: the file carries redirect-gateway, which sends all traffic through the tunnel - independently of this list."))
+      }
+      return teile.join(" ")
+    }))
 
   // Die mitgenommenen Direktiven ohne eigenes Feld. NUR GEZEIGT: sie
   // stammen aus einer Erlaubnisliste in src/vpn.py, nicht aus einer
