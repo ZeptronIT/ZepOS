@@ -109,6 +109,8 @@ SOURCE_OF = {
     # Systemdateien unter src/system/, auf der Maschine heisst sie
     # /etc/npmrc, weil npm genau diesen Pfad als globalconfig liest.
     "etc/npmrc": "src/system/npmrc",
+    "etc/xdg-desktop-portal/hyprland-portals.conf":
+        "src/system/hyprland-portals.conf",
     # Die Anmeldung, und die Namen aendern sich unterwegs. Das ist kein
     # Versehen: /etc/greetd/config.toml gehoert dem Paket greetd und
     # /etc/greetd/regreet.toml dem Paket greetd-regreet, also legt ZepOS
