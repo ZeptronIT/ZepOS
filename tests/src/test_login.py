@@ -36,6 +36,8 @@ ENV = "/usr/bin/env"
 
 GREETER = BIN / "zepos-greeter"
 SESSION = BIN / "zepos-session"
+MASKE = BIN / "zepos-greeter-maske"
+SPIEGEL = BIN / "zepos-greeter-spiegel"
 
 
 def _read(path: Path) -> str:
@@ -79,6 +81,13 @@ def test_the_package_installs_every_file_the_login_needs():
         ("login/greetd-service.conf",
          "/usr/lib/systemd/system/greetd.service.d/10-zepos.conf"),
         ("login/zepos.desktop", "/usr/share/wayland-sessions/zepos.desktop"),
+        # Seit dem 01.09.2026 die fuenfte, und sie faellt so wenig auf
+        # wie die anderen vier: fehlt sie, startet src/bin/zepos-greeter
+        # Hyprland gar nicht erst und die Anmeldung faellt auf cage
+        # zurueck - also auf EINEN Schirm, genau den Zustand, gegen den
+        # sie geschrieben wurde.
+        ("login/greeter-hyprland.conf",
+         "/etc/greetd/zepos-greeter-hyprland.conf"),
     ):
         assert (SRC / source).is_file(), f"{source} fehlt im Baum"
         assert re.search(rf"install -Dm644 {re.escape(source)} \\?\s*\n?\s*"
@@ -97,7 +106,14 @@ def test_the_two_login_commands_are_installed_executable():
     install = re.search(r'install -Dm755 -t "\$pkgdir/usr/bin"(.*?)\n\n',
                         recipe, re.S)
     assert install, "zepos-config installiert nichts mit -m755 nach /usr/bin"
-    for command in ("zepos-greeter", "zepos-session"):
+    # Die beiden hinteren seit dem 01.09.2026. Sie laufen als exec-once
+    # des Greeter-Compositors, also ueber `/bin/sh -c` - und sh antwortet
+    # auf eine nicht ausfuehrbare Datei mit "Permission denied" und sonst
+    # nichts. Bei zepos-greeter-spiegel hiesse das: die Anmeldung steht
+    # wieder nur auf einem Schirm, ohne dass irgendwo etwas gemeldet
+    # wuerde.
+    for command in ("zepos-greeter", "zepos-session",
+                    "zepos-greeter-maske", "zepos-greeter-spiegel"):
         assert f"bin/{command}" in install.group(1), (
             f"{command} wird nicht ausfuehrbar installiert")
         assert os.access(BIN / command, os.X_OK), (
@@ -270,7 +286,7 @@ def _run(command: Path, stubs: Path, *, stdin: str = "", **environment: str):
 
 
 def _greeter_root(tmp_path: Path, keymap: str = "de-latin1",
-                  *, drm: bool = True) -> Path:
+                  *, drm: bool = True, compositor_config: bool = True) -> Path:
     """Ein nachgebautes Wurzelverzeichnis fuer den Greeter.
 
     Der echte Greeter liest /etc/vconsole.conf, /usr/share/systemd/
@@ -283,6 +299,16 @@ def _greeter_root(tmp_path: Path, keymap: str = "de-latin1",
     (root / "etc").mkdir(parents=True, exist_ok=True)
     (root / "etc" / "vconsole.conf").write_text(
         f"KEYMAP={keymap}\nFONT=ter-v16n\n", encoding="utf-8")
+
+    # Die Compositor-Konfiguration der Anmeldung. Der Greeter prueft, ob
+    # er sie LESEN kann, bevor er Hyprland startet - fehlt sie, sucht
+    # sich Hyprland sonst eine in XDG_CONFIG_HOME. Hier steht deshalb die
+    # AUSGELIEFERTE Datei und keine erfundene: was der Greeter
+    # weiterreicht, soll die Datei sein, die das Paket ablegt.
+    if compositor_config:
+        (root / "etc" / "greetd").mkdir(parents=True, exist_ok=True)
+        (root / "etc" / "greetd" / "zepos-greeter-hyprland.conf").write_text(
+            _read(LOGIN / "greeter-hyprland.conf"), encoding="utf-8")
 
     (root / "usr" / "share" / "systemd").mkdir(parents=True, exist_ok=True)
     # Drei Zeilen aus der echten Tabelle des systemd-Pakets, im echten
@@ -312,23 +338,56 @@ def _runtime(tmp_path: Path) -> Path:
     return runtime
 
 
+# Ein Hyprland-Platzhalter, der sich verhaelt wie das echte, soweit es
+# dieses Skript angeht: er nimmt "-c <datei>" und schreibt die Merkdatei,
+# so wie es zepos-greeter-maske im echten Compositor taete.
+#
+# WARUM DER PLATZHALTER regreet NICHT SELBST RUFT
+#     Weil das echte Hyprland es auch nicht tut. Es startet, was in
+#     seiner Konfiguration unter exec-once steht, und das ist
+#     zepos-greeter-maske - ein eigenes Skript mit einem eigenen Test
+#     weiter unten. Ein Platzhalter, der hier regreet aufriefe, wuerde
+#     eine Verbindung nachbauen, die es so nicht gibt.
+def _hyprland_stub(evidence: Path, *, erfolg: bool = True) -> str:
+    # Der Dateiname ohne Pfad, ueber Bashs eigene Ersetzung und nicht
+    # ueber basename: das Stub-Verzeichnis IST der ganze PATH des Kindes,
+    # und was dort nicht steht, gibt es nicht.
+    zeile = (
+        f'ziel="${{2:-keine}}"\n'
+        f'printf "Hyprland(%s)" "${{ziel##*/}}" >>"{evidence}/order"\n'
+    )
+    if erfolg:
+        # Genau das, was zepos-greeter-maske tut: die Merkdatei anlegen.
+        zeile += 'printf 0 >"$ZEPOS_GREETER_RC"\nexit 0\n'
+    else:
+        zeile += "exit 1\n"
+    return zeile
+
+
 @pytest.mark.allow_subprocess
 def test_the_graphical_greeter_is_tried_first_and_the_text_one_not_at_all(tmp_path):
     """Auf einer Maschine mit funktionierendem Compositor darf der
     Textgreeter nicht anspringen. Er wuerde die grafische Maske
-    ueberschreiben, die gerade laeuft."""
+    ueberschreiben, die gerade laeuft.
+
+    SEIT DEM 01.09.2026 IST DER ERSTE VERSUCH HYPRLAND UND NICHT MEHR
+    cage. Der Grund steht im Kopf von src/bin/zepos-greeter: cage baut
+    aus allen Ausgaengen eine gemeinsame Flaeche und setzt die Maske an
+    deren Ursprung, also verschwand die Anmeldung, sobald ein zweiter
+    Monitor dazukam.
+
+    Mitgeschrieben wird der Name der Konfigurationsdatei, und das ist
+    nicht Beiwerk: ein Hyprland, das OHNE -c startet, sucht sich eine
+    Konfiguration in XDG_CONFIG_HOME - im Zweifel die eines Benutzers,
+    auf einem Bildschirm, an dem noch niemand angemeldet ist.
+    """
     root = _greeter_root(tmp_path)
     evidence = tmp_path / "evidence"
     evidence.mkdir()
     stubs = _stubs(
         tmp_path / "stubs",
-        # cage fuehrt aus, was ihm uebergeben wurde - so wie das echte.
-        # Der Renderer wird mitgeschrieben: ohne ihn saehe ein Lauf, der
-        # den ersten Versuch ueberspringt und erst mit pixman zum Ziel
-        # kommt, genauso aus wie einer, der gleich beim ersten
-        # funktioniert - eine Mutationsprobe hat das gezeigt.
-        cage=f'printf "cage(%s)" "${{WLR_RENDERER:-standard}}" >>"{evidence}/order"\n'
-             'shift 3\nexec "$@"\n',
+        Hyprland=_hyprland_stub(evidence),
+        cage=f'printf " cage" >>"{evidence}/order"\nexit 1\n',
         regreet=f'printf " regreet" >>"{evidence}/order"\nexit 0\n',
         tuigreet=f'printf " tuigreet" >>"{evidence}/order"\nexit 0\n',
     )
@@ -337,27 +396,67 @@ def test_the_graphical_greeter_is_tried_first_and_the_text_one_not_at_all(tmp_pa
     conftest.assert_no_missing_command(result, "der Greeter")
 
     order = (evidence / "order").read_text(encoding="utf-8")
-    assert order == "cage(standard) regreet", order
+    assert order == "Hyprland(zepos-greeter-hyprland.conf)", order
     assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.allow_subprocess
 def test_the_text_greeter_takes_over_when_no_compositor_comes_up(tmp_path):
     """Spec 8.5, und die Erkennung laeuft ueber den tatsaechlichen
-    Startversuch: cage scheitert zweimal - einmal mit dem gewoehnlichen
-    Renderer, einmal mit pixman - und erst dann uebernimmt tuigreet.
+    Startversuch: erst Hyprland, dann cage mit dem Software-Renderer, und
+    erst wenn auch das keine Maske hervorgebracht hat, uebernimmt
+    tuigreet.
 
     Gemessen wird an der Reihenfolge und nicht am Rueckgabewert: ein
     erfolgreicher Login sieht von aussen aus wie ein Absturz, weil greetd
     den Greeter beendet, sobald er die Sitzung anfordert.
+
+    Der Renderer wird bei cage mitgeschrieben, weil er der einzige Grund
+    ist, warum dieser zweite Versuch mehr ist als eine Wiederholung des
+    ersten - eine Mutationsprobe hat das seinerzeit gezeigt.
     """
     root = _greeter_root(tmp_path)
     evidence = tmp_path / "evidence"
     evidence.mkdir()
     stubs = _stubs(
         tmp_path / "stubs",
-        cage=f'printf "cage(%s) " "${{WLR_RENDERER:-standard}}" >>"{evidence}/order"\n'
+        Hyprland=_hyprland_stub(evidence, erfolg=False),
+        cage=f'printf " cage(%s)" "${{WLR_RENDERER:-standard}}" >>"{evidence}/order"\n'
              "exit 1\n",
+        regreet="exit 0\n",
+        tuigreet=f'printf " tuigreet" >>"{evidence}/order"\nexit 0\n',
+    )
+    result = _run(GREETER, stubs, ZEPOS_GREETER_ROOT=str(root),
+                  XDG_RUNTIME_DIR=str(_runtime(tmp_path)), HOME=str(tmp_path))
+    conftest.assert_no_missing_command(result, "der Greeter")
+
+    order = (evidence / "order").read_text(encoding="utf-8")
+    assert order == ("Hyprland(zepos-greeter-hyprland.conf)"
+                     " cage(pixman) tuigreet"), order
+
+
+@pytest.mark.allow_subprocess
+def test_without_the_compositor_configuration_hyprland_is_not_started(tmp_path):
+    """Lieber der Rueckfall als ein Compositor ohne Konfiguration.
+
+    Hyprland startet ohne "-c" nicht mit eingebauten Vorgaben, sondern
+    sucht sich eine Datei - src/config/supplementary/jeremy/Jeremy.cpp:
+    19-54 der ausgelieferten Fassung fragt der Reihe nach den Schalter,
+    HYPRLAND_CONFIG und dann XDG_CONFIG_HOME beziehungsweise /etc/xdg.
+    Auf einem Anmeldebildschirm waere das die Konfiguration irgendeines
+    Benutzers, mitsamt seiner Tastenbindungen, bevor irgendwer angemeldet
+    ist.
+
+    Fehlt die ausgelieferte Datei, wird Hyprland deshalb gar nicht erst
+    gerufen - und der naechste Versuch laeuft.
+    """
+    root = _greeter_root(tmp_path, compositor_config=False)
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    stubs = _stubs(
+        tmp_path / "stubs",
+        Hyprland=_hyprland_stub(evidence),
+        cage=f'printf "cage " >>"{evidence}/order"\nexit 1\n',
         regreet="exit 0\n",
         tuigreet=f'printf tuigreet >>"{evidence}/order"\nexit 0\n',
     )
@@ -366,7 +465,104 @@ def test_the_text_greeter_takes_over_when_no_compositor_comes_up(tmp_path):
     conftest.assert_no_missing_command(result, "der Greeter")
 
     order = (evidence / "order").read_text(encoding="utf-8")
-    assert order == "cage(standard) cage(pixman) tuigreet", order
+    assert order == "cage tuigreet", (
+        f"Hyprland wurde ohne seine Konfiguration gestartet: {order}")
+
+
+# --------------------------------------------------------------------
+# Die Maske im Compositor
+# --------------------------------------------------------------------
+
+def _maske_stubs(tmp_path: Path, evidence: Path, *, rc: int = 0) -> Path:
+    return _stubs(
+        tmp_path / "stubs",
+        regreet=f'printf "%s\\n" "$@" >>"{evidence}/regreet"\nexit {rc}\n',
+        hyprctl=f'printf "%s\\n" "$*" >>"{evidence}/hyprctl"\nexit 0\n',
+    )
+
+
+@pytest.mark.allow_subprocess
+def test_the_mask_starts_regreet_with_the_files_the_greeter_resolved(tmp_path):
+    """Thema und Sprache stehen erst zur Laufzeit fest.
+
+    /etc/greetd/zepos-greeter-hyprland.conf gehoert root und ist fuer
+    jede Anmeldung dieselbe; welches Blatt und welche regreet-Datei
+    gelten, entscheidet src/bin/zepos-greeter aus /etc/zepos/theme und
+    der Sprache dieser Maschine. Der Weg dazwischen ist die Umgebung -
+    derselbe, den XKB_DEFAULT_LAYOUT schon nimmt.
+    """
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    stubs = _maske_stubs(tmp_path, evidence)
+    rc_file = tmp_path / "zepos-greeter.rc"
+
+    result = _run(MASKE, stubs,
+                  ZEPOS_REGREET_CONFIG="/etc/greetd/zepos-regreet.toml",
+                  ZEPOS_REGREET_STYLE="/etc/greetd/zepos-greeter-tageslicht.css",
+                  ZEPOS_GREETER_RC=str(rc_file))
+    conftest.assert_no_missing_command(result, "die Maske")
+
+    argumente = (evidence / "regreet").read_text(encoding="utf-8").split("\n")
+    assert "--config" in argumente
+    assert argumente[argumente.index("--config") + 1] == \
+        "/etc/greetd/zepos-regreet.toml"
+    assert "--style" in argumente
+    assert argumente[argumente.index("--style") + 1] == \
+        "/etc/greetd/zepos-greeter-tageslicht.css"
+
+
+@pytest.mark.allow_subprocess
+def test_the_mask_leaves_the_note_that_proves_it_ran(tmp_path):
+    """Woran der Greeter "es gab eine Maske" erkennt.
+
+    Nicht am Rueckgabewert: ein GELUNGENER Login sieht von aussen aus wie
+    ein Absturz, weil greetd den Greeter beendet, sobald der die Sitzung
+    anfordert. Liegt die Merkdatei da, hat die Oberflaeche existiert und
+    ein Rueckfall auf den Textgreeter waere falsch.
+    """
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    stubs = _maske_stubs(tmp_path, evidence, rc=7)
+    rc_file = tmp_path / "zepos-greeter.rc"
+
+    result = _run(MASKE, stubs,
+                  ZEPOS_REGREET_CONFIG="/c.toml", ZEPOS_REGREET_STYLE="/s.css",
+                  ZEPOS_GREETER_RC=str(rc_file))
+    conftest.assert_no_missing_command(result, "die Maske")
+
+    assert rc_file.is_file(), "die Merkdatei fehlt - der Greeter faellt zurueck"
+    assert rc_file.read_text(encoding="utf-8") == "7"
+    assert result.returncode == 7, result.stderr
+
+
+@pytest.mark.allow_subprocess
+@pytest.mark.parametrize("rc", [0, 1])
+def test_the_mask_takes_the_compositor_with_it(tmp_path, rc):
+    """DIE ZEILE, DIE EINE EIGENSCHAFT VON cage ERSETZT.
+
+    `cage -- programm` endete, wenn das Programm endete. Hyprland tut das
+    nicht: src/main.cpp:44-52 der ausgelieferten Fassung setzt
+    SA_NOCLDWAIT, die Kinder werden also eingesammelt, ohne dass sie
+    jemand beobachtet, und in src/ steht kein waitpid auf ein exec-once.
+    Ohne "dispatch exit" bliebe nach der Anmeldung ein leerer Compositor
+    auf tty1 stehen - und greetd saehe einen Greeter, der noch laeuft.
+
+    Beide Rueckgabewerte werden geprueft: ein Compositor, der nur nach
+    einem GELUNGENEN Login verschwindet, bleibt nach einem abgebrochenen
+    stehen.
+    """
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    stubs = _maske_stubs(tmp_path, evidence, rc=rc)
+
+    result = _run(MASKE, stubs,
+                  ZEPOS_REGREET_CONFIG="/c.toml", ZEPOS_REGREET_STYLE="/s.css",
+                  ZEPOS_GREETER_RC=str(tmp_path / "rc"))
+    conftest.assert_no_missing_command(result, "die Maske")
+
+    aufrufe = (evidence / "hyprctl").read_text(encoding="utf-8")
+    assert "dispatch exit" in aufrufe, (
+        f"die Maske hat den Compositor stehen lassen: {aufrufe!r}")
 
 
 @pytest.mark.allow_subprocess
@@ -416,9 +612,17 @@ def test_the_console_keymap_reaches_the_compositor(tmp_path, keymap, layout, var
     evidence.mkdir()
     stubs = _stubs(
         tmp_path / "stubs",
-        cage=f'printf "%s|%s" "${{XKB_DEFAULT_LAYOUT:-}}" "${{XKB_DEFAULT_VARIANT:-}}"'
-             f' >"{evidence}/xkb"\n'
-             f'printf 0 >"$XDG_RUNTIME_DIR/zepos-greeter.rc"\nexit 0\n',
+        # Gemessen wird am ERSTEN Versuch, also an Hyprland. Dass die
+        # beiden Variablen dort auch ANKOMMEN - Hyprlands eigene Vorgabe
+        # fuer input:kb_layout ist "us" und wuerde sie sonst
+        # ueberstimmen -, misst
+        # tests/render/test_anmeldung_spiegel.py an einem echten
+        # Compositor. Hier steht die Frage davor: setzt der Greeter sie
+        # ueberhaupt, und zwar richtig aufgeloest?
+        Hyprland=f'printf "%s|%s" "${{XKB_DEFAULT_LAYOUT:-}}" "${{XKB_DEFAULT_VARIANT:-}}"'
+                 f' >"{evidence}/xkb"\n'
+                 f'printf 0 >"$ZEPOS_GREETER_RC"\nexit 0\n',
+        cage="exit 1\n",
         regreet="exit 0\n",
         tuigreet="exit 0\n",
     )

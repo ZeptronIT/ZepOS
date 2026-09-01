@@ -86,6 +86,12 @@ SOURCE_OF = {
     "usr/bin/zepos-doctor": "src/bin/zepos-doctor",
     "usr/bin/zepos-update": "src/bin/zepos-update",
     "usr/bin/zepos-greeter": "src/bin/zepos-greeter",
+    # Die zwei Kinder des Greeter-Compositors, seit dem 01.09.2026. Sie
+    # stehen als exec-once in /etc/greetd/zepos-greeter-hyprland.conf;
+    # ohne den Spiegel steht die Anmeldung wieder nur auf einem Schirm,
+    # ohne die Maske gar nicht.
+    "usr/bin/zepos-greeter-maske": "src/bin/zepos-greeter-maske",
+    "usr/bin/zepos-greeter-spiegel": "src/bin/zepos-greeter-spiegel",
     "usr/bin/zepos-session": "src/bin/zepos-session",
     # Der Waechter der Bildschirmseite. Ein EIGENER Prozess, und das ist
     # der ganze Grund, aus dem er hier steht: ein Rueckfall, der in der
@@ -118,6 +124,12 @@ SOURCE_OF = {
     # so ein Umbenennen hat diese Tabelle Eintraege statt einer Regel.
     "etc/greetd/zepos.toml": "src/login/greetd.toml",
     "etc/greetd/zepos-regreet.toml": "src/login/regreet.toml",
+    # Der Compositor der Anmeldung, seit dem 01.09.2026, und wieder unter
+    # einem anderen Namen als im Baum: /etc/greetd/ ist der Ort, an dem
+    # die uebrigen zepos-Dateien der Anmeldung liegen, also traegt sie
+    # dort das zepos- im Namen wie ihre Nachbarn.
+    "etc/greetd/zepos-greeter-hyprland.conf":
+        "src/login/greeter-hyprland.conf",
     # Erzeugt aus src/greeter.py, im Baum abgelegt und von dort gepackt -
     # die Datei ist hier der Vergleichsgegenstand, weil das Paket sie
     # kopiert und nicht baut. Dass sie zu ihrem Erzeuger passt, prueft

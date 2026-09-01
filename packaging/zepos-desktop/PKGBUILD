@@ -338,17 +338,32 @@ depends=(
     # ueberhaupt eine Oberflaeche zeigt. Sie stehen unter derselben Regel
     # wie alles andere in dieser Liste: die erzeugte Konfiguration
     # startet sie selbst. /etc/greetd/zepos.toml nennt zepos-greeter,
-    # zepos-greeter nennt cage, regreet und tuigreet - jedes fehlende
-    # Stueck ist ein Anmeldebildschirm, der nicht kommt.
+    # zepos-greeter nennt Hyprland, cage, regreet und tuigreet - jedes
+    # fehlende Stueck ist ein Anmeldebildschirm, der nicht kommt.
     'greetd'                  # der Dienst; translate.py aktiviert ihn
     'greetd-regreet'          # die GTK4/libadwaita-Maske, Versuch 1 und 2
     'greetd-tuigreet'         # der Textgreeter, Versuch 3
-    # cage traegt Versuch 1 und 2. regreet haengt zwar auf das virtuelle
-    # `wayland-compositor` und wuerde sich IRGENDEINEN Compositor holen -
-    # aber welchen, entschiede dann pacman, und zepos-greeter ruft
-    # namentlich `cage` auf. Ein Paket, das einen Aufruf hat und die
-    # Auswahl des Aufgerufenen dem Paketmanager ueberlaesst, hat den
-    # Aufruf nicht abgesichert. Dasselbe cage, aus demselben Grund, das
+    # DER COMPOSITOR DES ERSTEN VERSUCHS STEHT SCHON GANZ OBEN IN DIESER
+    # LISTE: 'zepos-hyprland'. Seit dem 01.09.2026 traegt er auch die
+    # Anmeldung, und der Grund ist gemessen: cage baut aus allen
+    # Ausgaengen EINE Flaeche (`-m extend`, seine Vorgabe) und setzt sein
+    # einziges Fenster an deren Ursprung - wer einen zweiten Monitor
+    # ansteckte, sah die Anmeldung nicht mehr, sondern einen schwarzen
+    # Schirm. Hyprland kann die Ausgaenge SPIEGELN, also steht die Maske
+    # auf jedem davon; src/login/greeter-hyprland.conf und
+    # src/bin/zepos-greeter-spiegel tragen den ganzen Vorgang.
+    #
+    # cage BLEIBT, und zwar als Versuch 2 mit WLR_RENDERER=pixman - dem
+    # reinen Software-Renderer, fuer Maschinen, deren EGL/GBM-Weg nicht
+    # traegt. Die Anmeldung steht dann nur auf einem Schirm, und das ist
+    # besser als auf keinem.
+    #
+    # Namentlich und nicht ueber das virtuelle `wayland-compositor`, auf
+    # das regreet haengt: welcher Compositor den Aufruf beantwortet,
+    # entschiede sonst pacman, und zepos-greeter ruft `cage`
+    # ausgeschrieben auf. Ein Paket, das einen Aufruf hat und die Auswahl
+    # des Aufgerufenen dem Paketmanager ueberlaesst, hat den Aufruf nicht
+    # abgesichert. Dasselbe cage, aus demselben Grund, das
     # iso/profile-release/packages.x86_64 fuer den Installer waehlt: 27
     # KiB, keine Konfigurationsdatei, alles im Vollbild.
     'cage'
