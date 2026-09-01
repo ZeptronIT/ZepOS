@@ -172,7 +172,7 @@ optdepends=('zepos-config: erzeugt config und style.css, ohne die das Fenster un
 source=("hyprclipx-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
         "zepos-hyprclipx.patch")
 sha256sums=('6017d78e8999129132e466591f52dca9b2040fd8a1d253e39f18907144733e6f'
-            '1d26a0b50c2937a8f68144322e3ba8fe73755c0cc980d9f4895de7f15b44a062')
+            'aa4e2950bf47390942682e05bad8d66266523d5c0a91541ec9efbdbe2f7b2a07')
 
 _src="hyprclipx-$_commit"
 _plugin_dir="usr/lib/hyprland/plugins"
