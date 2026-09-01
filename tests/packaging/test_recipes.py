@@ -396,6 +396,12 @@ def test_no_private_key_material_is_in_the_working_tree_outside_the_ignored_dire
         "BEGIN RSA PRIVATE KEY",
         "BEGIN EC PRIVATE KEY",
         "BEGIN PRIVATE KEY",
+        # GEMELDET am 22.08.2026 beim Bau der OpenVPN-Bauart:
+        # <tls-auth>/<tls-crypt> einer .ovpn sind GEMEINSAME
+        # Geheimnisse - nicht oeffentlich wie ein Zertifikat, und
+        # nicht in einem der Formate oben. Wer sie kennt, kommt an
+        # der ersten Huerde des Tunnels vorbei.
+        "BEGIN OpenVPN Static key V1",
     )
     skip = {".git", ".venv", ".pytest_cache", "__pycache__", "keys", "out", "work"}
 
