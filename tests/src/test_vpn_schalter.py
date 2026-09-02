@@ -99,7 +99,15 @@ RENDERED = {
 # LAUT scheitert, sobald jemand die Vorlage an dieser Stelle umschreibt:
 # ein Muster, das nichts mehr findet, entfernte stillschweigend nichts
 # und die Gegenprobe waere gruen, ohne etwas ausgebaut zu haben.
-SCHALTER_ZEILE = "          ende: zepToggle(steht, (an) => { void schalte(eintrag, an) }),"
+#
+# NACHGEZOGEN am 02.09.2026, und der Test hat GENAU DAS getan, wofuer er
+# gebaut ist: der Aufruf bekam ein drittes Argument (`bedienbar`, siehe
+# ags-kit.template) und steht seither auf ZWEI Zeilen. Die Gegenprobe
+# fiel sofort aus - mit ihrem eigenen Fehlschlagtext ("SCHALTER_ZEILE
+# nachziehen") -, statt still nichts mehr auszubauen.
+SCHALTER_ZEILE = (
+    "          ende: zepToggle(steht, (an) => { void schalte(eintrag, an) },\n"
+    "                          currentStatus.status !== \"unknown\"),")
 
 # Die zwei Verbindungen. Zwei BAUARTEN, weil genau das die Bestellung
 # war ("bei wireguard, weil ich dort mehrere vpns habe ... das gleiche
@@ -183,8 +191,8 @@ def _einstellungen(user_root: Path, dritte: bool = False) -> None:
         json.dumps(dokument), encoding="utf-8")
 
 
-def _stub_vpn_tool(system_root: Path) -> None:
-    """Ein vpn.py, das "disconnected" druckt und sonst nichts tut.
+def _stub_vpn_tool(system_root: Path, wort: str = "disconnected") -> None:
+    """Ein vpn.py, das EIN Wort druckt und sonst nichts tut.
 
     Die Seite fragt beim Sichtbarwerden `python3 <ZEPOS_SYSTEM_ROOT>/
     vpn.py --status` (VPN_STATUS_QUERY in ags-vpn.template). Das ECHTE
@@ -192,11 +200,17 @@ def _stub_vpn_tool(system_root: Path) -> None:
     der Maschine, an der der Entwickler gerade sitzt. Hier antwortet
     stattdessen eine Zeile, und der Zustand des Laufs haengt nicht daran,
     ob nebenan ein Tunnel steht.
+
+    `wort` ist ein Parameter geworden, als am 02.09.2026 das vierte Wort
+    des Vertrags dazukam (`unknown`, vpn.STATUS_WORDS in src/vpn.py) und
+    tests/src/test_vpn_fenster_unbekannt.py sehen musste, was das
+    FENSTER daraus macht. Die Vorgabe bleibt "disconnected", damit jeder
+    bestehende Aufrufer Zeichen fuer Zeichen derselbe bleibt.
     """
     system_root.mkdir(parents=True, exist_ok=True)
     (system_root / "vpn.py").write_text(
         "# SPDX-License-Identifier: GPL-3.0-or-later\n"
-        'print("disconnected")\n', encoding="utf-8")
+        f'print("{wort}")\n', encoding="utf-8")
 
 
 def _render(target: Path, system_root: Path) -> None:
@@ -215,7 +229,7 @@ def _render(target: Path, system_root: Path) -> None:
 
 
 def _baue(wurzel: Path, ohne_schalter: bool = False,
-          kind: Path = CHILD) -> tuple[Path, Path]:
+          kind: Path = CHILD, wort: str = "disconnected") -> tuple[Path, Path]:
     """Die uebersetzte Seite. Zurueck kommen Buendel und Systemwurzel.
 
     `kind` ist ein Parameter geworden, als am 01.09.2026 ein ZWEITES
@@ -229,7 +243,7 @@ def _baue(wurzel: Path, ohne_schalter: bool = False,
         pytest.skip("ags fehlt; es kommt mit dem Paket aylurs-gtk-shell")
 
     system_root = wurzel / "system"
-    _stub_vpn_tool(system_root)
+    _stub_vpn_tool(system_root, wort)
 
     ags = wurzel / "ags"
     ags.mkdir()
