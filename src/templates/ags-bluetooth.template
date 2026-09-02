@@ -630,19 +630,115 @@ export const bluetoothSeite: ShellSeite = {
           // Waehrend der Aufruf laeuft, sagt die Zeile es. Ein Knopf, der
           // nach dem Klick zwei Sekunden lang aussieht wie vorher, sieht
           // aus wie einer, der nichts tut.
+          // WARUM HIER KEIN EIGENER SATZ FUER DAS KOPPELN STEHT, und das
+          // ist eine offene Stelle und kein Versehen (02.09.2026)
+          //
+          //     Richtig waere waehrend des Koppelns "Koppeln …" und
+          //     nicht "Verbinde …" - der Nutzer soll in genau diesem
+          //     Moment wissen, dass jetzt sein Geraet nachfragen kann.
+          //     Ein neuer msgid braucht aber einen Eintrag in
+          //     po/desktop/de.po, und tests/src/test_ags_i18n.py haelt
+          //     das als Vertrag fest ("msgids ohne Katalogeintrag").
+          //     Der Katalog wird erzeugt (po/desktop/extract.sh) und
+          //     gehoert in dieser Sitzung einem anderen Auftrag.
+          //
+          //     Also der vorhandene Satz, bis der Katalog die drei
+          //     Saetze hat. Die FUNKTION haengt nicht daran: gekoppelt
+          //     wird unten so oder so.
           row.set_child(rowContent(
             device.connected ? _("Disconnecting …") : _("Connecting …")))
           row.set_sensitive(false)
           try {
-            // `connect`/`disconnect` warten auf die Gegenstelle. Die
-            // Frist ist hier laenger als bei einer Abfrage: ein
-            // Kopfhoerer, der aus der Tasche geholt wird, braucht mehr
-            // als drei Sekunden.
-            await execAsync(["bash", "-c",
-              `timeout 15 bluetoothctl ${device.connected ? "disconnect" : "connect"} `
-              + `${device.address}`])
+            if (device.connected) {
+              // `disconnect` wartet auf die Gegenstelle. Die Frist ist
+              // hier laenger als bei einer Abfrage: ein Kopfhoerer, der
+              // aus der Tasche geholt wird, braucht mehr als drei
+              // Sekunden.
+              await execAsync(["bash", "-c",
+                `timeout 15 bluetoothctl disconnect ${device.address}`])
+            } else {
+              // HIER STAND NUR `connect`, UND DAS WAR DIE GEMELDETE
+              // LUECKE - 02.09.2026
+              //
+              //     GEMELDET, woertlich: "nein ich finde per bluetooth
+              //     meine maus nicht egal mache erstmal weiter mit dem
+              //     rest". Die Meldung ist die aelteste offene gewesen.
+              //
+              //     NACHGEZAEHLT am 02.09.2026: `pair` kam in dieser
+              //     Datei achtmal vor, und KEIN einziges Mal als
+              //     Aufruf - als Feld (`paired: boolean`), als Abfrage
+              //     (`devices Paired`), als Beschriftung und als
+              //     Fehlertext ("Connecting failed - is it paired?").
+              //     Diese Seite konnte also nichts koppeln, und zum
+              //     Koppeln verwies sie auf blueman.
+              //
+              //     `connect` auf ein Geraet, das nicht gekoppelt ist,
+              //     schlaegt fehl. Eine neue Maus ist genau dieser
+              //     Fall: weder verbunden noch gekoppelt. Was der
+              //     Nutzer sah, war der Fehlertext - der die richtige
+              //     Frage stellte und keine Antwort anbot.
+              //
+              // DIE KETTE, DIE BlueZ FUER EIN NEUES GERAET VERLANGT,
+              // und jedes Glied hat seinen Grund:
+              //
+              //   pair     Die Kopplung selbst. ERST HIER kommt der
+              //            Agent aus ags-bluetooth-agent.template
+              //            ueberhaupt zum Zug: BlueZ ruft seine
+              //            Rueckfragen waehrend eines Kopplungs-
+              //            vorgangs, und ohne diesen Aufruf hat ihn
+              //            aus dieser Oberflaeche nie einer angestossen.
+              //
+              //   trust    Damit die Maus sich SPAETER von selbst
+              //            wieder verbindet. Ohne `trust` muesste man
+              //            nach jedem Neustart von Hand verbinden, und
+              //            fuer ein Zeigegeraet ist das derselbe
+              //            Mangel noch einmal - man braucht die Maus,
+              //            um die Maus zu verbinden.
+              //
+              //   connect  Erst danach, und erst danach kann es
+              //            klappen.
+              //
+              // NUR fuer ein Geraet, das NICHT gekoppelt ist. Ein
+              // `pair` auf ein schon gekoppeltes antwortet "Already
+              // paired" und ist ein Fehlschlag; eine Seite, die vor
+              // JEDEM Verbinden koppelt, machte jeden Kopfhoerer
+              // unbrauchbar. tests/src/test_bluetooth_kopplung.py
+              // sichert beide Richtungen zu.
+              //
+              // 30 SEKUNDEN FUER `pair` und nicht die 15 von
+              // `connect`: dazwischen liegt ein Funkgespraech mit der
+              // Gegenstelle UND, bei einem Geraet, das danach fragt,
+              // eine Rueckfrage an den Nutzer im Fenster des Agenten.
+              // Eine Frist, die ablaeuft, waehrend jemand liest, ist
+              // eine abgebrochene Kopplung.
+              if (!device.paired) {
+                await execAsync(["bash", "-c",
+                  `timeout 30 bluetoothctl pair ${device.address}`])
+                // `trust` ist eine Eigenschaft und kein Funkgespraech -
+                // es antwortet sofort. Ein Fehlschlag hier soll die
+                // schon gelungene Kopplung NICHT umwerfen: die Maus
+                // ist dann gekoppelt und verbindet nur nicht von
+                // selbst wieder, und das ist besser als ein Abbruch,
+                // der aussieht wie ein Fehlschlag der Kopplung.
+                try {
+                  await execAsync(["bash", "-c",
+                    `timeout 5 bluetoothctl trust ${device.address}`])
+                } catch (e) {
+                  console.error("Bluetooth: trust schlug fehl fuer",
+                                device.address, e)
+                }
+              }
+              await execAsync(["bash", "-c",
+                `timeout 15 bluetoothctl connect ${device.address}`])
+            }
           } catch (e) {
             console.error("Bluetooth:", device.address, e)
+            // Auch hier der vorhandene Satz und nicht der richtige -
+            // dieselbe offene Stelle wie oben, und hier tut sie mehr
+            // weh: "is it paired?" ist bei einem Geraet, das gerade
+            // eben zu koppeln VERSUCHT wurde, die falsche Frage. Der
+            // Satz, der hier hingehoert, nennt den Kopplungsknopf am
+            // Geraet. Er braucht einen Katalogeintrag.
             row.set_child(rowContent(device.connected
               ? _("Disconnecting failed")
               : _("Connecting failed - is it paired?")))
@@ -651,6 +747,9 @@ export const bluetoothSeite: ShellSeite = {
           updateDisplay()
         },
       }) as Gtk.Button
+      // Der Kurzhinweis sagt bei einem gefundenen Geraet noch
+      // "verbinden", wo "koppeln und verbinden" richtig waere - dritte
+      // Stelle derselben offenen Katalogfrage, siehe oben.
       row.set_tooltip_text(device.connected
         ? format(_("Disconnect {device}"), { device: device.name })
         : format(_("Connect to {device}"), { device: device.name }))
@@ -713,14 +812,47 @@ export const bluetoothSeite: ShellSeite = {
     const listHeader = zepSectionLabel(_("DEVICES"))
     listHeader.set_hexpand(true)
 
-    // "Geraete suchen" ist die Hauptsache dieser Zeile - die Rolle
-    // "voll" (task-5-brief, Schritt 4).
-    scanBtn = zepButton(ICONS.search, "voll", async () => {
+    // EIN SUCHLAUF, VON ZWEI STELLEN AUS ANGESTOSSEN - 02.09.2026
+    //
+    // GEMELDET, woertlich: "ausserdem habe ich irgendwie
+    // schwierigkeiten meine maus zu finden" und "nein ich finde per
+    // bluetooth meine maus nicht".
+    //
+    // NACHGEZAEHLT am 02.09.2026: `bluetoothctl scan on` stand in
+    // dieser Datei an GENAU EINER Stelle, im Rueckruf des Suchknopfes.
+    // Wer die Seite oeffnete, bekam die Datenbank von BlueZ zu sehen
+    // und keinen Suchlauf. GEMESSEN an einem laufenden Fenster
+    // (tests/src/test_bluetooth_kopplung.py): im Protokoll eines
+    // ganzen Laufs ohne Klick stand kein einziges `scan`.
+    //
+    // WARUM DAS FUER EINE MAUS DER UNTERSCHIED IST
+    //     Eine Maus funkt nur, waehrend sie im Kopplungsmodus ist -
+    //     man haelt dafuer einen Knopf an ihrer Unterseite, und der
+    //     Modus laeuft nach einer Weile aus. Mit einem Suchlauf, der
+    //     zehn Sekunden ab Knopfdruck laeuft, muss der Nutzer BEIDES
+    //     gleichzeitig treffen: den Knopf im Fenster und den Knopf an
+    //     der Maus. Ein Kopfhoerer verzeiht das, weil er lange funkt;
+    //     eine Maus nicht.
+    //
+    // WAS JETZT GILT: solange diese Seite offen und die gezeigte ist,
+    // wird gesucht. Die Bedingung steuert der Nutzer selbst, indem er
+    // das Fenster offen laesst - dieselbe Bedingung, die blueman und
+    // die GNOME-Einstellungen benutzen. Ein Suchlauf, der auch dann
+    // weiterliefe, wenn niemand hinsieht, waere der Adapter im
+    // Suchmodus auf einem Notebook, und das war der Grund fuer die
+    // zehn Sekunden.
+    const sucheAnstossen = async (sichtbar: boolean): Promise<void> => {
       if (suchtGerade) return
       suchtGerade = true
       scanBtn.set_sensitive(false)
 
-      // DIE ZEHN SEKUNDEN BEKOMMEN JETZT EINE DREHENDE SCHEIBE STATT
+      // `sichtbar` trennt die zwei Anlaesse. Der KLICK zeigt die
+      // drehende Scheibe - er ist eine Handlung und braucht eine
+      // Antwort. Der TAKT zeigt sie nicht: eine Scheibe, die sich
+      // durchgehend dreht, solange die Seite offen ist, ist keine
+      // Auskunft mehr, sondern Unruhe im Bild.
+      if (sichtbar) {
+        // DIE ZEHN SEKUNDEN BEKOMMEN EINE DREHENDE SCHEIBE STATT
       // NUR EINER ZEILE, DIE MAN LEICHT UEBERSIEHT - 20.08.2026
       // (Aufgabe 36).
       //
@@ -734,12 +866,13 @@ export const bluetoothSeite: ShellSeite = {
       //     sich anbietet, sendet sein Erkennungspaket ueber Funk, und
       //     darauf wartet man (siehe die Begruendung bei SUCHDAUER
       //     oben). Was sich aendern laesst, ist, ob man dabei etwas
-      //     sieht.
-      removeAllChildren(sucheWrap)
-      sucheWrap.append(zepBusy(format(
-        _("Searching for devices - {seconds} seconds …"),
-        { seconds: SUCHDAUER })))
-      sucheWrap.set_visible(true)
+        //     sieht.
+        removeAllChildren(sucheWrap)
+        sucheWrap.append(zepBusy(format(
+          _("Searching for devices - {seconds} seconds …"),
+          { seconds: SUCHDAUER })))
+        sucheWrap.set_visible(true)
+      }
 
       try {
         // Die aeussere Frist ist die innere plus Anlauf. Ohne sie
@@ -757,6 +890,15 @@ export const bluetoothSeite: ShellSeite = {
       removeAllChildren(sucheWrap)
       sucheWrap.set_visible(false)
       updateDisplay()
+    }
+
+    // "Geraete suchen" ist die Hauptsache dieser Zeile - die Rolle
+    // "voll" (task-5-brief, Schritt 4). Der Knopf bleibt, obwohl der
+    // Takt jetzt von selbst sucht: er ist der Weg, einen Suchlauf
+    // SOFORT anzustossen, statt auf den naechsten Takt zu warten - und
+    // er ist das, was das Suchen ueberhaupt sichtbar macht.
+    scanBtn = zepButton(ICONS.search, "voll", () => {
+      void sucheAnstossen(true)
     })
     scanBtn.set_tooltip_text(
       format(_("Search for devices for {seconds} seconds"),
@@ -880,8 +1022,32 @@ export const bluetoothSeite: ShellSeite = {
     // siehe die Begruendung dort. Vorher lief updateDisplay() (ein
     // Geraete-Suchlauf) bei jedem Oeffnen der Schale, auch wenn
     // Bluetooth gar nicht die gezeigte Seite war.
-    interval(UPDATE_INTERVAL, () => { if (win.visible && istAktiv()) updateDisplay() })
-    win.connect("notify::visible", () => { if (win.visible && istAktiv()) updateDisplay() })
+    // UND DER TAKT SUCHT MIT - 02.09.2026
+    //
+    // Dieselbe Bedingung wie beim Lesen, und das ist der Punkt: gesucht
+    // wird genau so lange, wie diese Seite offen UND die gezeigte ist.
+    // `sucheAnstossen` kehrt sofort zurueck, wenn schon ein Suchlauf
+    // laeuft (`suchtGerade`), also entsteht bei SUCHDAUER 10 und
+    // UPDATE_INTERVAL 5000 eine durchgehende Suche und kein Stapel von
+    // Prozessen - gemessen wird das in
+    // tests/src/test_bluetooth_kopplung.py, das ohne einen einzigen
+    // Klick einen Suchlauf im Protokoll findet.
+    //
+    // `void`: der Rueckruf eines interval() ist nicht async, und ein
+    // unbehandeltes Versprechen waere hier eine Warnung ohne Inhalt -
+    // `sucheAnstossen` faengt seinen Fehlschlag selbst.
+    interval(UPDATE_INTERVAL, () => {
+      if (win.visible && istAktiv()) {
+        updateDisplay()
+        void sucheAnstossen(false)
+      }
+    })
+    win.connect("notify::visible", () => {
+      if (win.visible && istAktiv()) {
+        updateDisplay()
+        void sucheAnstossen(false)
+      }
+    })
 
     // UND DER SEITENWECHSEL SELBST - NEU am 20.08.2026 (Aufgabe 36)
     //
@@ -902,7 +1068,25 @@ export const bluetoothSeite: ShellSeite = {
     //
     //     KEIN `istAktiv()` davor: gemappt wird nur die aktive Seite -
     //     das IST die Aussage des Signals.
-    container.connect("map", () => { updateDisplay() })
+    //     UND HIER SUCHT DER SEITENWECHSEL MIT - 02.09.2026.
+    //
+    //     Hier stand zuerst die Begruendung, der Takt oben laufe erst
+    //     nach UPDATE_INTERVAL (5000 ms) das erste Mal, und ohne diese
+    //     Zeile warte man fuenf Sekunden. DAS WAR FALSCH, und die
+    //     Gegenprobe in tests/src/test_bluetooth_kopplung.py hat es
+    //     widerlegt: Astals `interval` (ags/time) ruft seinen Rueckruf
+    //     SOFORT und danach im Takt. Mit ausgebautem Takt sind es null
+    //     Suchlaeufe, mit ihm einer - gemessen am 02.09.2026.
+    //
+    //     Diese Zeile bleibt trotzdem, und zwar fuer den Fall, den der
+    //     Takt NICHT sieht: den Wechsel auf diese Seite bei schon
+    //     offener Schale. `map` feuert dabei (die Messung dazu steht
+    //     ausgeschrieben ueber dieser Stelle), der Takt haette bis zu
+    //     fuenf Sekunden Verzug.
+    container.connect("map", () => {
+      updateDisplay()
+      void sucheAnstossen(false)
+    })
 
     return container
   },
