@@ -434,6 +434,40 @@ export default function ControlCenter(
   let updateSeite = ""
 
   // Alles neu einlesen
+  /** Die eine Zeilenbeschriftung dieses Fensters.
+   *
+   * Die vier Angaben gehoeren zusammen - hexpand, xalign, ellipsize,
+   * max_width_chars -, und tests/src/test_modal_second_open.py haelt
+   * fest, dass sie GENAU EINMAL ausgeschrieben stehen. Der Grund steht
+   * dort: am 17.08.2026 standen sie neunmal da und waren zweimal
+   * vollstaendig.
+   *
+   * SIE STAND BIS ZUM 02.09.2026 IN generalSeite und war damit nur der
+   * HALBEN Datei zugaenglich. Als die Geraetewahl im Tonabschnitt eine
+   * Beschriftung brauchte, konnte sie diese hier nicht rufen - andere
+   * Seite, anderer Gueltigkeitsbereich - und schrieb die vier Angaben
+   * ein zweites Mal aus. Der Test wurde rot, und er hatte recht: nicht
+   * die neue Zeile war falsch, sondern der Ort dieser Funktion.
+   *
+   * KEIN PARAMETER FUER DIE KLASSE, und das ist gemessen und nicht
+   * bequem: `.cc-label` und `.zep-row-title` sind in ags-style.template
+   * WORTGLEICH deklariert - beide `font-size: {{STYLE_FONT_BODY}};
+   * color: $text;`. Ein Parameter haette also zwei Namen fuer dieselbe
+   * Schrift eingefuehrt und obendrein die Unterschrift dieser Funktion
+   * geaendert, auf die sich der Test namentlich beruft. Laufen die
+   * beiden Klassen eines Tages auseinander, ist DAS der Moment fuer den
+   * Parameter - nicht vorher.
+   */
+  const ccLabel = (text: string): Gtk.Label => {
+    const label = new Gtk.Label({
+      label: text, hexpand: true, xalign: 0,
+      ellipsize: Pango.EllipsizeMode.END,
+      max_width_chars: {{STYLE_MEASURE_LINE}},
+    })
+    label.add_css_class("cc-label")
+    return label
+  }
+
   const updateDisplay = async () => {
     // Das Netz-Zeichen und die Bluetooth-Zeile - status.sh, EIN Aufruf
     // fuer beide, damit sie denselben Messzeitpunkt teilen (siehe
@@ -902,9 +936,7 @@ export default function ControlCenter(
        * der schon einen anderen Namen traegt.
        */
       const klappwahl = (symbol: string) => {
-        const name = new Gtk.Label({ xalign: 0, hexpand: true,
-                                     ellipsize: Pango.EllipsizeMode.END })
-        name.add_css_class("zep-row-title")
+        const name = ccLabel("")
         const symbolLabel = new Gtk.Label({ label: symbol })
         symbolLabel.add_css_class("zep-row-icon")
         const pfeil = new Gtk.Label({ label: ICONS.chevronDown })
@@ -1378,16 +1410,6 @@ export default function ControlCenter(
        *     Eine Vorsichtsmassnahme, an die sich jede neue Zeile erst
        *     erinnern muss, ist keine.
        */
-      const ccLabel = (text: string): Gtk.Label => {
-        const label = new Gtk.Label({
-          label: text, hexpand: true, xalign: 0,
-          ellipsize: Pango.EllipsizeMode.END,
-          max_width_chars: {{STYLE_MEASURE_LINE}},
-        })
-        label.add_css_class("cc-label")
-        return label
-      }
-
       // Ein Aufklappfenster dieses Prozesses. Das Kontrollzentrum geht
       // dabei ZU: zwei Aufklappfenster uebereinander sind zwei Deckel
       // auf demselben Schirm, und das zweite laege ueber dem Knopf, der
