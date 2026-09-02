@@ -691,7 +691,7 @@ diff -ruN a/include/hyprlaunch/ConfigParser.hpp b/include/hyprlaunch/ConfigParse
 diff -ruN a/include/hyprlaunch/i18n.hpp b/include/hyprlaunch/i18n.hpp
 --- a/include/hyprlaunch/i18n.hpp	1970-01-01 01:00:00.000000000 +0100
 +++ b/include/hyprlaunch/i18n.hpp	1970-01-01 01:00:00.000000000 +0100
-@@ -0,0 +1,120 @@
+@@ -0,0 +1,151 @@
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +//
 +// Der Katalog der Oberflaeche, fuer die GTK4-Haelfte des Starters.
@@ -742,6 +742,37 @@ diff -ruN a/include/hyprlaunch/i18n.hpp b/include/hyprlaunch/i18n.hpp
 +
 +#include <clocale>
 +#include <libintl.h>
++
++// DIE ZWEI ANGABEN HABEN EINEN RUECKFALL, UND DAS IST GEMESSEN
++//     Gesetzt werden sie von CMakeLists.txt
++//     (target_compile_definitions am Ziel hyprlaunch-ui). Ein Kopf, der
++//     NUR unter diesem einen Bauplan uebersetzt, ist aber ein Kopf, der
++//     jedem anderen Uebersetzer den Dienst verweigert - und es gibt
++//     einen: tests/src/test_launcher_pin.py baut src/AppDiscovery.cpp
++//     einzeln, gegen eine eigene Sonde, mit `g++ -std=c++23 -I include`
++//     und ohne ein einziges -D. Er prueft damit den ECHTEN Anheft-Code
++//     statt einer Nachbildung, und das soll er auch.
++//
++//     GEMESSEN am 02.09.2026: ohne diesen Rueckfall brach genau dieser
++//     Lauf ab - `GETTEXT_PACKAGE` war ein unbekannter Bezeichner, das
++//     _() darum ein Ausdrucksfehler, und gemeldet wurde am Ende eine
++//     Zeile, die nach einem Fehler im Rueckgabewert aussah
++//     ("konnte nicht von <brace-enclosed initializer list> nach
++//     std::vector<std::string> umgewandelt werden"). Eine Fehlermeldung,
++//     die auf die falsche Zeile zeigt, ist teurer als die zwei Zeilen
++//     hier.
++//
++//     Die Werte sind DIESELBEN, die CMake setzt, und CMake gewinnt
++//     trotzdem: -D kommt vor dieser Datei, und #ifndef laesst es
++//     stehen. Der Pfad ist hier fest, weil ein Uebersetzer ohne
++//     Bauplan auch kein CMAKE_INSTALL_PREFIX hat - und /usr ist, wohin
++//     das PKGBUILD legt.
++#ifndef GETTEXT_PACKAGE
++#define GETTEXT_PACKAGE "zepos-desktop"
++#endif
++#ifndef ZEPOS_LOCALEDIR
++#define ZEPOS_LOCALEDIR "/usr/share/locale"
++#endif
 +
 +// Der Aufruf, der im Quelltext steht.
 +//
