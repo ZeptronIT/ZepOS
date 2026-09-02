@@ -93,6 +93,20 @@ SOURCE_OF = {
     "usr/bin/zepos-greeter-maske": "src/bin/zepos-greeter-maske",
     "usr/bin/zepos-greeter-spiegel": "src/bin/zepos-greeter-spiegel",
     "usr/bin/zepos-session": "src/bin/zepos-session",
+    # Der Befehl, der Claude Code holt, seit dem 01.09.2026. Er ist das,
+    # was von packaging/zepos-claude-code/ uebrig ist: der Nutzer wollte
+    # das Programm nicht als ZepOS-Paket ausgeliefert bekommen ("ich will
+    # das packet nicht als meins verkaufen", und der Grund davor: "weil
+    # jetztz bekommt es keine updates"). Statt eines Pakets, das 87,6 MiB
+    # wog und an npm vorbei veraltete, legt zepos-config diesen Befehl
+    # ab, der es aus der npm-Registry holt.
+    "usr/bin/zepos-claude-code": "src/bin/zepos-claude-code",
+    # SUPER+V, seit dem 02.09.2026. Hyprlands fitBoxInWorkArea() klemmt
+    # ein Fenster erst nach unten und dann nach oben, ohne ein zweites
+    # max() - ein Fenster, das eben noch schwebte, stand danach mit dem
+    # Kopf hinter der Leiste. Dieser Befehl rechnet die reservierte Zone
+    # zur Laufzeit nach und rueckt nur zurecht, was nicht passt.
+    "usr/bin/zepos-float-toggle": "src/bin/zepos-float-toggle",
     # Der Waechter der Bildschirmseite. Ein EIGENER Prozess, und das ist
     # der ganze Grund, aus dem er hier steht: ein Rueckfall, der in der
     # Hauptschleife des Fensters laeuft, stirbt mit dem Fenster - genau
@@ -117,6 +131,20 @@ SOURCE_OF = {
     "etc/npmrc": "src/system/npmrc",
     "etc/xdg-desktop-portal/hyprland-portals.conf":
         "src/system/hyprland-portals.conf",
+    # Das Symbol des Claude-Code-Eintrags, in vier Groessen. Es steht
+    # einzeln hier und nicht als Praefix, weil sich der Name unterwegs
+    # aendert: im Baum heisst die Datei nach ihrer Kantenlaenge
+    # (claude-code-48.png), auf der Maschine nach dem Eintrag, zu dem sie
+    # gehoert (zepos-claude-code.png), und dazwischen liegt das
+    # hicolor-Verzeichnis, das die Groesse doppelt nennt (48x48).
+    "usr/share/icons/hicolor/48x48/apps/zepos-claude-code.png":
+        "src/system/claude-code-icons/claude-code-48.png",
+    "usr/share/icons/hicolor/64x64/apps/zepos-claude-code.png":
+        "src/system/claude-code-icons/claude-code-64.png",
+    "usr/share/icons/hicolor/128x128/apps/zepos-claude-code.png":
+        "src/system/claude-code-icons/claude-code-128.png",
+    "usr/share/icons/hicolor/256x256/apps/zepos-claude-code.png":
+        "src/system/claude-code-icons/claude-code-256.png",
     # Die Anmeldung, und die Namen aendern sich unterwegs. Das ist kein
     # Versehen: /etc/greetd/config.toml gehoert dem Paket greetd und
     # /etc/greetd/regreet.toml dem Paket greetd-regreet, also legt ZepOS
