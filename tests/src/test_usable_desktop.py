@@ -195,6 +195,18 @@ PROVIDED_BY = {
     # dazukam. tests/src/test_claude_code.py misst die andere Haelfte:
     # dass das Rezept den Befehl wirklich ablegt.
     "zepos-claude-code": "zepos-config",
+    # zepos-float-toggle, seit dem 02.09.2026, und der elfte zepos-*
+    # Befehl in zepos-config. SUPER+V war bis dahin an den Dispatcher
+    # `togglefloating` gebunden und brauchte deshalb kein Paket - jetzt
+    # ist es ein Programm, und ohne diese Zeile waere die Taste eine
+    # tote Referenz. Genau das hat dieser Test gemeldet, als sie dazukam.
+    #
+    # Warum die Taste ueberhaupt ein Programm braucht, steht in
+    # src/bin/zepos-float-toggle: Hyprlands fitBoxInWorkArea() schob den
+    # Fensterkopf 208 Punkte ueber die Arbeitsflaeche hinaus.
+    # tests/src/test_fensterkopf.py misst die andere Haelfte - dass das
+    # Rezept den Befehl wirklich ablegt.
+    "zepos-float-toggle": "zepos-config",
 }
 
 # Kommandos aus dem Grundsystem, mit dem Paket, das jedes traegt -

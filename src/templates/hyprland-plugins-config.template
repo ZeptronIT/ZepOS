@@ -58,6 +58,50 @@
 #     Das ist ein BEFUND und keine Luecke: eine Rundung, die man hier
 #     einstellen koennte, waere eine zweite Zahl neben der des Fensters,
 #     und die beiden liefen auseinander.
+
+# WARUM HIER KEIN icon_on_hover STEHT, UND WAS DIE SUCHE DANACH ERGAB
+#     GEMELDET am 01.09.2026: "fenster die schweben mit super v sieht
+#     man auf dem header oben recht bei dem x ein flackern des headers
+#     voll komisch". Der naechstliegende Verdacht war der Hover-Pfad
+#     dieses Plugins, und er ist GEMESSEN und WIDERLEGT.
+#
+#     GEMESSEN am 02.09.2026 an einem verschachtelten Hyprland 0.56.2
+#     mit diesem Plugin: Zeiger auf dem X, Animationen an, vier Sekunden
+#     lang - 0 % Rechenzeit im Compositor und keine Abweichung zwischen
+#     zwoelf aufeinanderfolgenden Aufnahmen des Kopfstreifens. Ein
+#     Zeichenpfad, der sich selbst beschaedigt, laesst den Compositor
+#     nie einschlafen; hier schlief er.
+#
+#     Die ECHTE Ursache lag nicht in diesem Plugin, sondern in Hyprlands
+#     fitBoxInWorkArea() - der Fensterkopf wurde 208 Punkte ueber die
+#     Arbeitsflaeche hinausgeschoben. src/bin/zepos-float-toggle traegt
+#     die Rechnung.
+#
+#     ZWEI STELLEN IM URSPRUNG SIND DABEI TROTZDEM AUFGEFALLEN. Keine
+#     von beiden erklaert etwas, was dieser Schreibtisch zeigt; sie
+#     stehen hier, damit die naechste Suche sie nicht ein zweites Mal
+#     finden muss.
+#
+#       barDeco.cpp 684-686, damageOnButtonHover(): `m_bButtonHovered`
+#       ist EIN Merker fuer ALLE Knoepfe. Die Schleife ueberschreibt ihn
+#       je Knopf, er pendelt darum bei jedem Mausschritt und loest zwei
+#       `damageEntire()` je Ereignis aus. Gelesen wird er zum Zeichnen
+#       NIRGENDS - nur geschrieben und verglichen (ausser 684/685 und
+#       barDeco.hpp:68 kommt er nicht vor). Die richtige Fassung waere
+#       die Bitmaske `m_iButtonHoverState`, die der Zeichenpfad daneben
+#       schon fuehrt. Diese Funktion laeuft nur bei icon_on_hover.
+#
+#       barDeco.cpp 421-427, renderBarButtonsText(): derselbe Vergleich
+#       noch einmal, diesmal mit der Bitmaske - und dieser Teil haengt
+#       NICHT an icon_on_hover, er laeuft also auch hier. Er kippt das
+#       Bit IM ZEICHENPFAD und ruft `damageEntire()`. Beruhigt sich nach
+#       einem Bild, weil das Bit danach mit `hovering` uebereinstimmt;
+#       genau das ist oben gemessen.
+#
+#     icon_on_hover bleibt trotzdem ungesetzt - Vorgabe false, main.cpp
+#     Zeile 252 -, und zwar aus dem Grund, aus dem es nie gesetzt war:
+#     Knopfzeichen, die erst beim Darueberfahren erscheinen, sind drei
+#     Knoepfe, denen man nicht ansieht, was sie tun.
 # zepos-plugin hyprbars
 plugin {
     hyprbars {
