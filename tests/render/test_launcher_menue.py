@@ -441,7 +441,7 @@ def test_das_menue_geht_auf_einer_layer_flaeche_wirklich_auf(lauf):
 
 def test_das_menue_bietet_das_anheften_an(lauf):
     """Der Punkt, der am 20.08.2026 bestellt war - woertlich."""
-    assert "Zum Dock hinzufuegen" in lauf["menue_offen"], (
+    assert "Zum Dock hinzufügen" in lauf["menue_offen"], (
         "das Menue traegt den bestellten Punkt nicht: "
         f"{lauf['menue_offen']!r}")
 
@@ -453,11 +453,37 @@ def test_das_menue_bietet_auch_das_home_an(lauf):
 
     Zwei Ziele, zwei Punkte, und beide in der Richtung, die gerade
     etwas bewirkt: in diesem Lauf liegt nichts im Fuss und nichts auf
-    dem Home, also heisst es beide Male "hinzufuegen".
+    dem Home, also heisst es beide Male "hinzufügen".
     """
-    assert "Zum Home hinzufuegen" in lauf["menue_offen"], (
+    assert "Zum Home hinzufügen" in lauf["menue_offen"], (
         "das Menue traegt den Home-Punkt nicht: "
         f"{lauf['menue_offen']!r}")
+
+
+def test_das_menue_schreibt_deutsch_und_nicht_umschrieben(lauf):
+    """Die Regel selbst, und nicht bloss zwei neue Zeichenketten.
+
+    BESTELLT am 02.09.2026, woertlich: "ausserdem steht dort
+    hinzufuegen was ich nicht gut finde bei deutsch umlaute verwenden
+    oeaeue".
+
+    Die Umschreibung ue/ae/oe gilt in diesem Haus fuer KOMMENTARE - was
+    auf dem Schirm steht, traegt den Buchstaben, den das Wort hat. Die
+    zwei Zusicherungen darueber pruefen je EINEN Punkt; diese haelt
+    fest, dass keiner der vier zurueckfaellt, auch ein spaeter
+    dazugekommener nicht.
+
+    GEMESSEN wird am gerenderten Menue und nicht am Quelltext: dieses
+    Programm laeuft an gettext VORBEI (C++, kein Katalog), also ist der
+    einzige Ort, an dem sich die Schreibweise wirklich zeigt, das
+    Fenster selbst. po/desktop/de.po fuehrt "Zum Dock hinzufügen" seit
+    jeher richtig - diese Stelle sieht den Katalog nie.
+    """
+    for falsch in ("hinzufuegen", "traegt", "waehlen", "loeschen",
+                   "schliessen", "oeffnen"):
+        assert falsch not in lauf["menue_offen"], (
+            f"das Menue schreibt {falsch!r} umschrieben statt mit "
+            f"Umlaut: {lauf['menue_offen']!r}")
 
 
 def test_escape_schliesst_das_menue_und_nicht_den_starter(lauf):
