@@ -11,7 +11,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
-"POT-Creation-Date: 2026-09-02 11:16+0200\n"
+"POT-Creation-Date: 2026-09-02 15:31+0200\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -233,50 +233,50 @@ msgstr "Geräte werden gelesen …"
 msgid "No device known - search for devices"
 msgstr "Kein Gerät bekannt - suche nach Geräten"
 
-#: src/templates/ags-bluetooth.template:634
+#: src/templates/ags-bluetooth.template:649
 msgid "Connecting …"
 msgstr "Verbinde …"
 
-#: src/templates/ags-bluetooth.template:634
+#: src/templates/ags-bluetooth.template:649
 msgid "Disconnecting …"
 msgstr "Trenne …"
 
-#: src/templates/ags-bluetooth.template:647
+#: src/templates/ags-bluetooth.template:743
 msgid "Disconnecting failed"
 msgstr "Trennen fehlgeschlagen"
 
-#: src/templates/ags-bluetooth.template:648
+#: src/templates/ags-bluetooth.template:744
 msgid "Connecting failed - is it paired?"
 msgstr "Verbinden fehlgeschlagen - gekoppelt?"
 
-#: src/templates/ags-bluetooth.template:655
+#: src/templates/ags-bluetooth.template:754
 msgid "Disconnect {device}"
 msgstr "{device} trennen"
 
-#: src/templates/ags-bluetooth.template:656
+#: src/templates/ags-bluetooth.template:755
 msgid "Connect to {device}"
 msgstr "Mit {device} verbinden"
 
-#: src/templates/ags-bluetooth.template:713
+#: src/templates/ags-bluetooth.template:812
 msgid "DEVICES"
 msgstr "GERÄTE"
 
 # Aufgabe 36, 20.08.2026: die Ansage waehrend des Suchlaufs. Die Dauer
 # steht darin, weil sie feststeht (SUCHDAUER) - wer sie kennt, wartet
 # anders als wer nicht weiss, ob ueberhaupt noch etwas kommt.
-#: src/templates/ags-bluetooth.template:740
+#: src/templates/ags-bluetooth.template:872
 msgid "Searching for devices - {seconds} seconds …"
 msgstr "Geräte werden gesucht - {seconds} Sekunden …"
 
-#: src/templates/ags-bluetooth.template:762
+#: src/templates/ags-bluetooth.template:904
 msgid "Search for devices for {seconds} seconds"
 msgstr "{seconds} Sekunden nach Geräten suchen"
 
-#: src/templates/ags-bluetooth.template:766
+#: src/templates/ags-bluetooth.template:908
 msgid "Read the list again"
 msgstr "Liste neu lesen"
 
-#: src/templates/ags-bluetooth.template:787
+#: src/templates/ags-bluetooth.template:929
 msgid "Open Blueman - pairing, sending files"
 msgstr "Blueman öffnen - Koppeln, Dateien senden"
 
@@ -722,7 +722,7 @@ msgstr "Passwort für Netzwerk"
 msgid "Enter the Wi-Fi password ..."
 msgstr "WLAN-Passwort eingeben ..."
 
-#: src/templates/ags-network.template:934 src/templates/ags-vpn.template:1564
+#: src/templates/ags-network.template:934 src/templates/ags-vpn.template:1659
 msgid "Connect"
 msgstr "Verbinden"
 
@@ -1520,7 +1520,7 @@ msgid "Both"
 msgstr "Beides"
 
 #: src/templates/ags-vpn-settings.template:2387
-#: src/templates/ags-vpn.template:1430
+#: src/templates/ags-vpn.template:1525
 msgid "Username"
 msgstr "Benutzername"
 
@@ -1628,13 +1628,13 @@ msgstr "Zurück zur VPN-Verbindung"
 # VPN-Vorlagen sind unveraendert geblieben; nachgewiesen in
 # tests/src/test_vpn_liste.py.
 #: src/templates/ags-vpn-settings.template:2817
-#: src/templates/ags-vpn.template:1332
+#: src/templates/ags-vpn.template:1357
 msgid "VPN connections"
 msgstr "VPN-Verbindungen"
 
 #: src/templates/ags-vpn-settings.template:2830
 #: src/templates/ags-vpn-settings.template:2939
-#: src/templates/ags-vpn.template:1663
+#: src/templates/ags-vpn.template:1758
 msgid "New connection"
 msgstr "Neue Verbindung"
 
@@ -1650,7 +1650,7 @@ msgstr "Verbindung hinzufügen"
 # kommen." Der Rueckweg braucht ein Wort, und es ist auf beiden
 # Flaechen dasselbe - Schalenseite wie Einstellungsfenster.
 #: src/templates/ags-vpn-settings.template:2892
-#: src/templates/ags-vpn.template:1676
+#: src/templates/ags-vpn.template:1771
 msgid "All connections"
 msgstr "Alle Verbindungen"
 
@@ -1683,7 +1683,7 @@ msgstr "IP: {ip}"
 msgid "Server: {server}"
 msgstr "Server: {server}"
 
-#: src/templates/ags-vpn.template:725 src/templates/ags-vpn.template:1597
+#: src/templates/ags-vpn.template:725 src/templates/ags-vpn.template:1692
 msgid "Peer: {endpoint}"
 msgstr "Gegenstelle: {endpoint}"
 
@@ -1703,7 +1703,7 @@ msgstr "VPN-Zustand unbekannt – NetworkManager antwortet nicht."
 msgid "Nobody knows whether your traffic is protected."
 msgstr "Niemand weiß, ob dein Verkehr geschützt ist."
 
-#: src/templates/ags-vpn.template:802 src/templates/ags-vpn.template:1410
+#: src/templates/ags-vpn.template:802 src/templates/ags-vpn.template:1501
 msgid "Not connected"
 msgstr "Nicht verbunden"
 
@@ -1731,47 +1731,51 @@ msgstr "Trenne..."
 msgid "Connected"
 msgstr "Verbunden"
 
-#: src/templates/ags-vpn.template:1289
+#: src/templates/ags-vpn.template:1314
 msgid "Only one VPN can be connected at a time - {name} is being disconnected."
 msgstr "Es kann nur eine VPN-Verbindung stehen – {name} wird zuerst getrennt."
 
-#: src/templates/ags-vpn.template:1325
+#: src/templates/ags-vpn.template:1350
 msgid "No connection configured yet - add one."
 msgstr "Noch keine Verbindung eingerichtet – bitte eine hinzufügen."
 
-#: src/templates/ags-vpn.template:1436
+#: src/templates/ags-vpn.template:1392
+msgid "Settings for {name}"
+msgstr "Einstellungen für {name}"
+
+#: src/templates/ags-vpn.template:1531
 msgid "Username ..."
 msgstr "Benutzername..."
 
-#: src/templates/ags-vpn.template:1447
+#: src/templates/ags-vpn.template:1542
 msgid "Password"
 msgstr "Passwort"
 
-#: src/templates/ags-vpn.template:1453
+#: src/templates/ags-vpn.template:1548
 msgid "Password ..."
 msgstr "Passwort..."
 
-#: src/templates/ags-vpn.template:1488
+#: src/templates/ags-vpn.template:1583
 msgid "2FA token (optional)"
 msgstr "2FA Token (optional)"
 
-#: src/templates/ags-vpn.template:1494
+#: src/templates/ags-vpn.template:1589
 msgid "6-digit code ..."
 msgstr "6-stelliger Code..."
 
-#: src/templates/ags-vpn.template:1506
+#: src/templates/ags-vpn.template:1601
 msgid "Remember username"
 msgstr "Benutzername merken"
 
-#: src/templates/ags-vpn.template:1544 src/templates/ags-vpn.template:1595
+#: src/templates/ags-vpn.template:1639 src/templates/ags-vpn.template:1690
 msgid "WireGuard identifies itself with keys - there is nothing to type here."
 msgstr "WireGuard weist sich mit Schlüsseln aus – hier ist nichts einzutippen."
 
-#: src/templates/ags-vpn.template:1594
+#: src/templates/ags-vpn.template:1689
 msgid "This OpenVPN connection identifies itself with certificates - there is nothing to type here."
 msgstr "Diese OpenVPN-Verbindung weist sich mit Zertifikaten aus – hier ist nichts einzugeben."
 
-#: src/templates/ags-vpn.template:1598
+#: src/templates/ags-vpn.template:1693
 msgid "No peer configured yet - open the settings."
 msgstr "Noch keine Gegenstelle eingestellt – bitte die Einstellungen öffnen."
 

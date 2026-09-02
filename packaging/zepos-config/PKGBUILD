@@ -337,7 +337,13 @@ assert "dock_pins" not in d, ("die Anheftungen gehoeren zepos-apps und "
     # die einzige, die auf ein Programm zeigt, das ZepOS NICHT
     # ausliefert. Sie startet Claude Code - und holt es ueber `npm i -g`,
     # wenn es fehlt. Ihr Kopf traegt die ganze Begruendung.
+    # zepos-float-toggle ist die elfte, seit dem 02.09.2026, und die
+    # einzige, die an einer Taste haengt: SUPER+V. Sie schaltet ein
+    # Fenster zwischen schwebend und gekachelt um und sieht danach nach,
+    # ob der Fensterkopf noch auf dem Schirm liegt - gemessen lag er es
+    # nicht, 208 Punkte ueber dem Rand. Ihr Kopf traegt die Rechnung.
     install -Dm755 -t "$pkgdir/usr/bin" \
+        bin/zepos-float-toggle \
         bin/zepos-generate \
         bin/zepos-settings \
         bin/zepos-doctor \
