@@ -457,10 +457,20 @@ def test_die_bildschirme_werden_gezeigt_und_nicht_angewandt(bridge, capsys):
 
 def test_ein_stummer_compositor_ist_eine_meldung_und_kein_absturz(bridge,
                                                                   capsys):
-    """Die sechs anderen Seiten duerfen nicht mit ihm untergehen.
+    """Die anderen Seiten duerfen nicht mit ihm untergehen.
 
     Ein Einstellungsfenster ohne laufendes Hyprland ist genau das
     Fenster, das man zum Reparieren braucht.
+
+    HIER STAND EINE ZAHL, und sie ist am 02.09.2026 der Tabelle
+    gewichen: `== 7`, geschrieben, als es sieben Seiten gab. Die achte
+    (Sprache und Zeit) hat sie fallen lassen, ohne dass an der ZUSAGE
+    dieses Tests etwas falsch geworden waere. Nichts ist dabei
+    aufgeweicht worden - im Gegenteil: model.PAGES ist die Liste, gegen
+    die zwanzig Zeilen weiter oben ohnehin schon jede Seite mit Namen,
+    Beschriftung und Symbol gehalten wird, und eine ausgeschriebene
+    Zahl daneben war die schwaechere der beiden Zusicherungen und die
+    erste, die veraltet.
     """
     def broken(argv, **_kwargs):
         raise OSError("hyprctl gibt es hier nicht")
@@ -470,7 +480,8 @@ def test_ein_stummer_compositor_ist_eine_meldung_und_kein_absturz(bridge,
     control = document["pages"][1]["controls"][0]
     assert control["available"] is False
     assert "hyprctl" in control["reason"]
-    assert len(document["pages"]) == 7
+    from zepos_settings_gui import model
+    assert len(document["pages"]) == len(model.PAGES)
 
 
 # --------------------------------------------------------------------

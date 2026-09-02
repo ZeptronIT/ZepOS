@@ -54,6 +54,34 @@ PAGES = model.PAGES
 PAGE_NAMES = model.PAGE_NAMES
 PAGE_OPTION = model.PAGE_OPTION
 
+# Ab wievielen Eintraegen eine Auswahlliste ein Suchfeld bekommt.
+#
+# Zwoelf, und das ist keine runde Zahl aus dem Gefuehl: die laengste
+# Auswahl dieses Fensters ausser den Zeitzonen ist der
+# Aktualisierungstakt mit vier Eintraegen, die Themenliste hat drei. Ein
+# Suchfeld ueber vier Zeilen kostet mehr Platz, als es findet. Die
+# Zeitzonen sind 598 - GEMESSEN am 02.09.2026 mit `timedatectl
+# list-timezones` -, und das ist eine Liste, in der man ohne Suche nicht
+# ankommt. Die Grenze liegt dazwischen, dort, wo eine Liste nicht mehr
+# auf einen Aufklapper passt.
+SEARCHABLE_FROM = 12
+
+
+def _enable_search(row, count: int) -> None:
+    """Einer langen Auswahlliste ihr Suchfeld geben.
+
+    Adw.ComboRow sucht nur, wenn ein Ausdruck dasteht, der einer Zeile
+    ihren TEXT entnimmt - ohne ihn bleibt enable-search wirkungslos, und
+    zwar lautlos: die Zeile sieht danach genauso aus wie vorher. Das
+    Modell ist eine Gtk.StringList, ihre Zeilen sind Gtk.StringObject,
+    und deren Eigenschaft heisst "string".
+    """
+    if count < SEARCHABLE_FROM:
+        return
+    row.set_expression(Gtk.PropertyExpression.new(Gtk.StringObject, None,
+                                                  "string"))
+    row.set_enable_search(True)
+
 
 class SettingsWindow(Adw.ApplicationWindow):
     """Das Fenster mit seinen sieben Seiten - siehe PAGES."""
@@ -122,6 +150,7 @@ class SettingsWindow(Adw.ApplicationWindow):
             "farben": self._colour_page,
             "wetter": self._weather_page,
             "aktualisierung": self._update_page,
+            "sprache": self._region_page,
         }
         self.stack = Adw.ViewStack()
         for name, title, icon in PAGES:
@@ -394,6 +423,94 @@ class SettingsWindow(Adw.ApplicationWindow):
         else:
             self.banner.set_button_label("")
             self.banner.set_title(outcome.message.splitlines()[0])
+        self.banner.set_revealed(True)
+
+    # ---- Seite: Sprache und Zeit ----------------------------------
+
+    def _region_page(self) -> Adw.PreferencesPage:
+        """Die Sprache und die Zeitzone der Maschine.
+
+        WIE DIE THEMA-SEITE UND AUS DEMSELBEN GRUND: kein Entwurf und
+        kein "Speichern". Beides gehoert der Maschine, beides geht durch
+        ein Werkzeug, das ueber Polkit nach Rechten fragt, und ein
+        Rechtefenster, das erst beim Speichern erscheint und dann fuer
+        eine Auswahl fragt, die man vor zwei Minuten getroffen hat, ist
+        keine Bestaetigung mehr, sondern eine Ueberraschung.
+
+        WARUM DIE ZONENLISTE DURCHSUCHBAR IST UND DIE SPRACHLISTE NICHT
+            GEMESSEN am 02.09.2026: `timedatectl list-timezones` nennt
+            auf dieser Maschine 598 Namen, und 598 Zeilen scrollt
+            niemand. Adw.ComboRow kann suchen, sobald ein Ausdruck
+            dasteht, der einer Zeile ihren Text entnimmt. Bei zwei
+            Sprachen waere dasselbe Suchfeld eine Zeile, die mehr Platz
+            kostet als die Liste darunter - deshalb haengt es an der
+            Laenge und nicht an der Zeile.
+        """
+        page = Adw.PreferencesPage()
+        group = Adw.PreferencesGroup(
+            title=model.GROUP_REGION, description=model.NOTE_REGION_GROUP)
+
+        self.language_codes = model.language_codes()
+        self.language_row = Adw.ComboRow(
+            title=model.LABEL_LANGUAGE,
+            subtitle=model.LANGUAGE_TIMING,
+            model=Gtk.StringList.new(
+                [model.language_label(code) for code in self.language_codes]),
+            sensitive=model.language_writable())
+        current = model.current_language()
+        if current in self.language_codes:
+            self.language_row.set_selected(self.language_codes.index(current))
+        self.language_row.connect("notify::selected", self._on_language)
+        group.add(self.language_row)
+
+        self.timezone_names = model.timezone_names()
+        self.timezone_row = Adw.ComboRow(
+            title=model.LABEL_TIMEZONE,
+            subtitle=model.TIMEZONE_TIMING,
+            model=Gtk.StringList.new(self.timezone_names),
+            sensitive=model.timezone_writable())
+        zone = model.current_timezone()
+        if zone in self.timezone_names:
+            self.timezone_row.set_selected(self.timezone_names.index(zone))
+        _enable_search(self.timezone_row, len(self.timezone_names))
+        self.timezone_row.connect("notify::selected", self._on_timezone)
+        group.add(self.timezone_row)
+
+        page.add(group)
+        return page
+
+    def _on_language(self, row, _parameter) -> None:
+        if self._quiet:
+            return
+        code = self.language_codes[row.get_selected()]
+        outcome = model.set_language(code, runner=self.runner)
+        self.update_report = outcome.message
+        if outcome.written:
+            # Die Marke liegt jetzt (bridge.write setzt sie); der Knopf
+            # im Banner ist derselbe, den ein Themenwechsel anbietet.
+            model.request_regeneration_at_login()
+            self.banner.set_button_label("Jetzt anwenden")
+            self.banner.set_title(
+                f"Sprache {model.language_label(code)}. "
+                + model.LANGUAGE_TIMING)
+        else:
+            self.banner.set_button_label("")
+            self.banner.set_title(outcome.message.splitlines()[0])
+        self.banner.set_revealed(True)
+
+    def _on_timezone(self, row, _parameter) -> None:
+        if self._quiet:
+            return
+        zone = self.timezone_names[row.get_selected()]
+        outcome = model.set_timezone(zone, runner=self.runner)
+        self.update_report = outcome.message
+        # KEIN "Jetzt anwenden": eine Zeitzone steckt in keiner erzeugten
+        # Datei, `date` liest /etc/localtime bei jedem Aufruf. Ein
+        # Erzeugungslauf waere ein Neustart der Schale fuer nichts.
+        self.banner.set_button_label("")
+        self.banner.set_title(
+            f"Zeitzone {zone}. " + model.TIMEZONE_TIMING
+            if outcome.written else outcome.message.splitlines()[0])
         self.banner.set_revealed(True)
 
     def _update_page(self) -> Adw.PreferencesPage:

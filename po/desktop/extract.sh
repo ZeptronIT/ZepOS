@@ -80,4 +80,82 @@ xgettext \
     --output="$HIER/zepos-desktop.pot" \
     "${VORLAGEN[@]}"
 
+# --------------------------------------------------------------------
+# Der Anwendungsstarter, seit dem 02.09.2026
+# --------------------------------------------------------------------
+#
+# WARUM HIER UEBERHAUPT NOCH EIN DURCHGANG STEHT
+#     hyprlaunch ist C++ und lief bis heute an gettext vorbei - seine
+#     sichtbaren Zeichenketten standen fest auf Deutsch im Quelltext,
+#     waehrend derselbe Schreibtisch daneben diesen Katalog fuehrt. Seit
+#     dem 02.09.2026 rufen sie _(), und damit muessen sie hier
+#     herauskommen.
+#
+# WARUM AUS EINEM PATCH UND NICHT AUS EINER .cpp
+#     Weil die .cpp nicht in diesem Repository liegt und nicht darf:
+#     plugins/LICENSE fuehrt aus, dass der uebernommene Baum von
+#     azzuriel ueberhaupt keine Lizenz traegt und eine geaenderte KOPIE
+#     davon hier nichts zu suchen hat. Was hier liegt, ist ZepOS'
+#     EIGENES Diff - und genau die Zeilen, die es hinzufuegt, sind die
+#     Zeilen mit den Zeichenketten. Sie zu lesen heisst also, ZepOS'
+#     eigenen Quelltext zu lesen, und nichts sonst.
+#
+# WARUM NUR DIE C++-BLOECKE
+#     GEMESSEN am 02.09.2026: nimmt man alle zugefuegten Zeilen, ist
+#     CMakeLists.txt mit dabei, und dessen Kommentare beginnen mit '#'.
+#     Fuer einen C++-Leser ist '#' keine Kommentarzeile, sondern eine
+#     Praeprozessoranweisung - ein Anfuehrungszeichen in so einem
+#     Kommentar ("Zum Dock hinzufügen" stand darin) galt damit als
+#     Beginn einer Zeichenkette, xgettext warnte zweimal
+#     "Zeichenkette nicht korrekt terminiert", und ZWEI msgids fielen
+#     still aus der Auslese. Deshalb entscheidet die Endung des Blocks.
+#
+# WARUM --add-location=file UND NICHT MEHR
+#     Die Zeilennummer der rekonstruierten Datei ist NICHT die
+#     Zeilennummer im Patch - die Bloecke werden aneinandergehaengt und
+#     die Kopfzeilen fallen weg. Eine Nummer, die nicht stimmt, ist
+#     schlechter als keine; der Dateiname allein ist wahr und fuehrt
+#     zum richtigen Ort.
+STARTER="packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch"
+POT_STARTER="$(mktemp -d)"
+trap 'rm -rf "$POT_STARTER"' EXIT
+
+# Unter GENAU dem Pfad, den der Patch im Repository hat: xgettext
+# schreibt den Dateinamen so in das '#:' des Katalogs, wie es ihn
+# bekommt. So steht dort hinterher der Ort, an dem die Zeichenkette
+# wirklich steht.
+mkdir -p "$POT_STARTER/$(dirname "$STARTER")"
+awk '
+    /^diff -ruN /    { cpp = ($NF ~ /\.(cpp|hpp)$/); next }
+    /^(---|\+\+\+) / { next }
+    cpp && /^\+/     { print substr($0, 2) }
+' "$WURZEL/$STARTER" > "$POT_STARTER/$STARTER"
+
+xgettext \
+    --no-wrap \
+    --language=C++ \
+    --from-code=UTF-8 \
+    --keyword=_ \
+    --package-name=zepos-desktop \
+    --msgid-bugs-address="https://github.com/ZeptronIT/ZepOS" \
+    --add-comments=UEBERSETZER \
+    --add-location=file \
+    --directory="$POT_STARTER" \
+    --output="$POT_STARTER/starter.pot" \
+    "$STARTER"
+
+# Eine Auslese ohne einen einzigen Treffer schreibt GAR KEINE Datei -
+# gemessen am selben Tag. Das ist kein Fehler, sondern ein Patch ohne
+# uebersetzte Zeichenkette; dann bleibt die .pot von oben, wie sie ist.
+if [ -f "$POT_STARTER/starter.pot" ]; then
+    # --use-first, damit ein msgid, den es in beiden gibt, seine
+    # Fundstelle aus den VORLAGEN behaelt. "Add to dock" ist so ein
+    # Fall: der Fuss, das Home und der Starter tragen ihn, und genau
+    # das ist der Zweck - eine Beschriftung, drei Menues.
+    msgcat --no-wrap --use-first \
+        "$HIER/zepos-desktop.pot" "$POT_STARTER/starter.pot" \
+        --output-file="$POT_STARTER/zusammen.pot"
+    mv "$POT_STARTER/zusammen.pot" "$HIER/zepos-desktop.pot"
+fi
+
 echo "geschrieben: $HIER/zepos-desktop.pot"

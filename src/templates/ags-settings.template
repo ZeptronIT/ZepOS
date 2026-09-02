@@ -60,7 +60,7 @@ import { execAsync, subprocess } from "ags/process"
 import { timeout } from "ags/time"
 import GLib from "gi://GLib"
 import { createShellWindow, ShellSeite, ShellWidget } from "../utils/overlay"
-import { _, format } from "../utils/i18n"
+import { _, format, spracheAnwenden } from "../utils/i18n"
 import {
   zepButton, zepDivider, zepRow, zepSectionLabel, zepStateHeader, zepToggle,
 } from "../utils/kit"
@@ -90,6 +90,11 @@ const SEITEN_ZEICHEN: Record<string, string> = {
   farben: "{{ICON_PALETTE}}",
   wetter: "{{ICON_WEATHER_PARTLY_CLOUDY}}",
   aktualisierung: "{{ICON_UPDATE}}",
+  // Ein Globus fuer Sprache UND Zeitzone. Beides sind Angaben darueber,
+  // WO diese Maschine steht - die eine, in welcher Sprache sie spricht,
+  // die andere, nach welcher Uhr sie geht -, und ein zweites Zeichen
+  // gaebe es nicht, weil es nur EINE Seite ist.
+  sprache: "{{ICON_GLOBE}}",
 }
 
 const ICONS = {
@@ -132,6 +137,15 @@ const AUSWAHL = "auswahl"
 const FARBE = "farbe"
 const REIHENFOLGE = "reihenfolge"
 const ANORDNUNG = "anordnung"
+
+// Der eine SCHLUESSEL, den diese Datei beim Namen kennen muss.
+//
+// Nicht weil sie ihn schreibt - das tut die Bruecke -, sondern weil ein
+// Sprachwechsel das Einzige ist, was die Sprache DIESES Prozesses
+// aendert. Alle anderen Bedienelemente werden gleich behandelt; dieses
+// eine zieht danach seinen Katalog nach. Wortgleich zu
+// bridge.LANGUAGE_KEY.
+const SPRACHE = "language"
 
 // Wie die Bruecke ihre Antworten auf `--json arm` nennt. Dieselben zwei
 // Woerter, die auch der Waechter selbst versteht (displays.GUARD_KEEP /
@@ -199,7 +213,14 @@ interface Zustand {
   settings_file: string
   elevator: string[]
   pending_regenerate: boolean
-  cost: { generate: string; theme: string }
+  // Was ein einzelner Wert kostet, nach seinem Schluessel. "generate"
+  // ist der Erzeugungslauf, die uebrigen heissen wie das
+  // Bedienelement, dessen Wirkung sie beschreiben - "theme",
+  // "language", "timezone". Deshalb eine Abbildung und keine drei
+  // benannten Felder: sofortSchreiben() schlaegt darin mit
+  // element.key nach, und ein vierter Maschinenwert braeuchte dann
+  // hier nichts.
+  cost: Record<string, string>
   pages: SeiteDaten[]
 }
 
@@ -1000,8 +1021,33 @@ export default async function Settings(): Promise<ShellWidget | null> {
     sagen(_("Writing ..."))
     const antwort = await bruecke(["set", JSON.stringify(dokument)])
     if (antwort.ok) {
-      sagen(element.key === "theme" ? zustand.cost.theme
-        : _("The machine follows this setting from now on."))
+      // DIE SPRACHE IST DER EINE WERT, DER AENDERT, WORIN DAS FENSTER
+      // DANACH SPRICHT.
+      //
+      //     localectl hat gerade /etc/locale.conf geschrieben; die
+      //     Umgebung DIESES Prozesses ist eine Abschrift derselben
+      //     Datei von der Anmeldung und damit veraltet.
+      //     spracheAnwenden() liest die Datei und stellt den Katalog um
+      //     - GEMESSEN am 02.09.2026, dgettext antwortet danach aus dem
+      //     anderen Katalog.
+      //
+      //     Das genuegt aber nur, WEIL gleich neuLaden() folgt: eine
+      //     schon gezeichnete Beschriftung folgt dem Wechsel NICHT
+      //     (dieselbe Messung, Punkt C - tests/src/test_sprachwechsel.py
+      //     haelt sie fest). Erst das Neuzeichnen baut jede Beschriftung
+      //     dieses Fensters neu, und erst dann steht die neue Sprache
+      //     wirklich da.
+      //
+      //     Was DANACH noch die alte Sprache spricht, sagt der Satz aus
+      //     zustand.cost.language: Leiste und Dock, weil die Schale sie
+      //     einmal beim Start baut.
+      if (element.key === SPRACHE) spracheAnwenden()
+      // Der Satz zu DIESEM Schluessel, wenn es einen gibt. Er kommt aus
+      // model.py und nicht von hier - drei verschiedene Wirkungen
+      // brauchen drei verschiedene Saetze, und sie stehen dort, wo die
+      // Messung dazu steht.
+      sagen(zustand.cost[element.key]
+        ?? _("The machine follows this setting from now on."))
     } else {
       sagen((antwort.problems ?? [_("failed")]).join("\n"))
     }

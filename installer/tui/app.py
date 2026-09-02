@@ -24,10 +24,11 @@ from installer.core.crypt import (
     accelerator_note, effective_layout, keyboard_note, loss_warning,
     passphrase_error, plaintext_warnings, unlock_note,
 )
+from installer.core import timezones
 from installer.core.disks import Disk, human_size
 from installer.core.disks import list_disks as _lsblk_list_disks
 from installer.core.firmware import firmware_problem
-from installer.core.i18n import _, activate
+from installer.core.i18n import _, activate, ngettext
 from installer.core.model import (
     DiskChoice, InstallConfig, MIN_DISK_MIB, UserAccount, WifiCredentials,
     ZeposOptions,
@@ -39,14 +40,27 @@ from installer.core.wifi import (
     Connection, IwctlBackend, Network, WifiBackend, associate as _iwd_associate,
 )
 
-# (language, keymap, locale, default timezone). The timezone here is
-# only a suggested default for the dedicated timezone step further down
-# - it is not applied silently, since a German-language install run from
-# a machine physically located elsewhere would otherwise get the wrong
-# clock with no chance to correct it.
-LANGUAGES: list[tuple[str, str, str, str]] = [
-    ("de", "de-latin1", "de_DE", "Europe/Berlin"),
-    ("en", "us", "en_US", "UTC"),
+# (language, keymap, locale). Identical values and identical rationale
+# to installer.gui.pages.LANGUAGE_DEFAULTS, where the whole reasoning
+# stands.
+#
+# DIE ZEITZONE STAND HIER BIS ZUM 02.09.2026 ALS VIERTER WERT, und sie
+# ist ersatzlos herausgefallen: "de" -> Europe/Berlin, "en" -> UTC, also
+# eine Ableitung von einem ORT aus einer SPRACHE - und die gibt es
+# nicht. Bemerkenswert ist, dass der Kommentar, der hier stand, den Fall
+# selbst benannte ("a German-language install run from a machine
+# physically located elsewhere would otherwise get the wrong clock") und
+# eine ABGEFRAGTE Vorbelegung fuer die Antwort darauf hielt. Sie war es
+# nicht: wer eine Vorbelegung bestaetigt, hat sie nicht geprueft, und
+# durchdruecken ist der gewoehnliche Weg durch einen Assistenten.
+#
+# An ihre Stelle tritt eine TATSACHE - timezones.running() liest, in
+# welcher Zone dieses Medium gerade laeuft. Tastaturbelegung und
+# Sprachumgebung bleiben, weil beide wirklich an der Sprache haengen und
+# nicht an einem Ort.
+LANGUAGES: list[tuple[str, str, str]] = [
+    ("de", "de-latin1", "de_DE"),
+    ("en", "us", "en_US"),
 ]
 
 DiskLister = Callable[..., Sequence[Disk]]
@@ -229,6 +243,89 @@ def _ask_hostname(io: Any) -> str:
         )
 
 
+def _ask_timezone(io: Any) -> str:
+    """Die Zeitzone - GEPRUEFT, seit dem 02.09.2026.
+
+    WAS HIER STAND UND WARUM ES WEG IST
+        Eine einzige Zeile: `io.ask(_("Timezone"), default_timezone)`.
+        Kein Rueckfragen, keine Pruefung, und die Vorbelegung aus der
+        SPRACHE. Zwei Fehler, und der zweite ist ein ausgelieferter:
+
+          die Ableitung  "en" hiess UTC. Wer auf Englisch installierte,
+                         bekam eine Uhr auf UTC - gleichgueltig, wo er
+                         sass. Die Tabelle oben fuehrt es aus.
+          die Annahme    `date` nimmt JEDEN Namen an. "Europe/Berln"
+                         wurde anstandslos installiert; danach druckt
+                         date(1) die UTC-Zeit mit "Berln" als Kuerzel,
+                         Rueckgabewert 0, leere Fehlerausgabe (die
+                         Messung steht in src/doctor.py). Ein
+                         Tippfehler bei der Installation wurde so zu
+                         einer Uhr, die still zwei Stunden falsch geht -
+                         und der Mensch merkt es fruehestens, wenn eine
+                         Verabredung verrutscht.
+
+    WARUM DIES UND NICHT io.choose() MIT DER GANZEN LISTE
+        Weil die Datenbank 598 Namen hat - GEMESSEN am 02.09.2026 -,
+        io.choose() jede Zeile ausdruckt und ein Terminal
+        herkoemmlicherweise vierundzwanzig hat. Eine numerierte Liste
+        ueber 598 Zeilen ist keine Auswahl, sondern eine Wand.
+
+        Die grafische Oberflaeche hat es leichter: ihr Auswahlfeld hat
+        ein SUCHFELD (installer/gui/app.py:_build_zeit). Hier ist
+        timezones.matching() dieses Suchfeld - dieselbe Quelle,
+        dieselbe Ablehnung, nur ohne GTK darum. Wer den Namen kennt,
+        tippt ihn; wer sich vertippt, bekommt den richtigen genannt.
+
+    DIE VIER ZUSAGEN SIND DAMIT DIESELBEN WIE IN DER GRAFISCHEN:
+        die Namen kommen aus der ECHTEN Datenbank, die Vorbelegung ist
+        die laufende Zone statt einer aus der Sprache abgeleiteten, ein
+        erfundener Name kommt NICHT durch, und man findet seinen Namen
+        auch dann, wenn man ihn nicht auswendig weiss.
+    """
+    laufend = timezones.running()
+    while True:
+        value = io.ask(_("Timezone"), laufend).strip()
+        if timezones.known(value):
+            return value
+        # Woertlich der msgid, den PageState.timezone_error() der
+        # grafischen Oberflaeche benutzt, und aus demselben Grund, aus
+        # dem _ask_hostname() sich die Meldung von validate() leiht:
+        # zwei Oberflaechen, die dieselbe Regel verschieden erklaeren,
+        # sind zwei Regeln.
+        io.say(
+            _("This machine's timezone database does not have \"{zone}\".")
+            .format(zone=value)
+        )
+        vorschlaege = timezones.matching(value)
+        if not vorschlaege:
+            # Kein Vorschlag ist auch eine Auskunft, und es ist die, bei
+            # der ein Mensch sonst dreimal dasselbe tippt. Der Befehl
+            # steht dabei, weil er der einzige Weg ist, an die Namen zu
+            # kommen, ohne den Assistenten zu verlassen.
+            # EIN Literal und nicht zwei aneinandergesetzte: die
+            # Vollstaendigkeitspruefung in tests/installer/test_i18n.py
+            # kann Pythons stille Verkettung nicht verfolgen und meldete
+            # am 02.09.2026 die erste Haelfte als msgid ohne
+            # Katalogeintrag. Dieselbe Zeile und derselbe Grund stehen in
+            # installer/core/validate.py und in netprofile.py.
+            io.say(_("`timedatectl list-timezones` names the zones this machine knows."))
+            continue
+        gezeigt = vorschlaege[:timezones.SUGGESTION_LIMIT]
+        io.say(_("Did you mean one of these?"))
+        for name in gezeigt:
+            # Ein Zonenname ist ein Name und keine natuerliche Sprache -
+            # dieselbe Behandlung wie ein Geraetepfad in der
+            # Plattenauswahl weiter unten.
+            io.say(f"  {name}")
+        uebrig = len(vorschlaege) - len(gezeigt)
+        if uebrig:
+            # GEZAEHLT und nicht abgeschnitten: eine Liste, die
+            # stillschweigend endet, sieht aus wie die ganze Antwort.
+            io.say(ngettext("{count} more name matches.",
+                            "{count} more names match.", uebrig)
+                   .format(count=uebrig))
+
+
 def _connect_wireless(
     io: Any, wifi_backend: WifiBackend, ssid: str, associate: Associator
 ) -> WifiCredentials | None:
@@ -292,7 +389,7 @@ def collect(
     # after collect() returns, so every prompt below - in this very call
     # - is already shown in the language the user just picked.
     lang_index = io.choose(_("Select language"), [_("German"), _("English")])
-    language, keymap, locale, default_timezone = LANGUAGES[lang_index]
+    language, keymap, locale = LANGUAGES[lang_index]
     activate(language)
 
     # Step 2: network. Skipped silently when no networks were offered -
@@ -358,9 +455,11 @@ def collect(
     password = _ask_password(io, _("Password"))
     root_password = _ask_password(io, _("Root password"))
 
-    # Step 5: timezone. A default is suggested from the language choice,
-    # but always asked explicitly rather than applied silently.
-    timezone = io.ask(_("Timezone"), default_timezone)
+    # Step 5: timezone. Asked explicitly, prefilled with the zone this
+    # medium is RUNNING in, and re-asked until the name is one the
+    # database actually has - see _ask_timezone(), which carries the
+    # whole reasoning and the measurement behind it.
+    timezone = _ask_timezone(io)
 
     # Step 6: ZepOS options.
     weather_location = io.ask(_("Location for the weather widget"), "")

@@ -25,14 +25,14 @@
 #     neben allen anderen im Starter steht und als einziges nicht aus
 #     demselben Satz kommt.
 Name=Systemeinstellungen
-Comment=Größe, Bildschirme, Leiste, Farben, Wetter und Aktualisierung von ZepOS
+Comment=Größe, Bildschirme, Leiste, Farben, Wetter, Aktualisierung, Sprache und Zeitzone von ZepOS
 Exec=/usr/bin/zepos-settings-gui
 TryExec=/usr/bin/zepos-settings-gui
 Icon=preferences-system
 Type=Application
 Terminal=false
 Categories=Settings;DesktopSettings;GTK;
-Keywords=zepos;einstellungen;schrift;groesse;farben;massstab;aktualisierung;settings;bildschirme;monitor;monitore;aufloesung;anordnung;displays;leiste;bar;dock;module;anheften;fuss;taskleiste;
+Keywords=zepos;einstellungen;schrift;groesse;farben;massstab;aktualisierung;settings;bildschirme;monitor;monitore;aufloesung;anordnung;displays;leiste;bar;dock;module;anheften;fuss;taskleiste;sprache;language;uebersetzung;zeit;zeitzone;uhr;uhrzeit;timezone;locale;
 StartupNotify=true
 # Die Kennung, unter der das FENSTER auftritt - GTK setzt sie unter
 # Wayland aus der Anwendungskennung, also aus app.APPLICATION_ID.
@@ -68,7 +68,7 @@ StartupWMClass=de.zeptronit.zepos.Settings
 #     Hier ist ihr zweiter Abdruck, und tests/settings/
 #     test_settings_model.py haelt beide gegeneinander: eine achte
 #     Seite, die hier fehlt, ist eine Seite, die niemand findet.
-Actions=groesse;bildschirme;leiste;thema;farben;wetter;aktualisierung;
+Actions=groesse;bildschirme;leiste;thema;farben;wetter;aktualisierung;sprache;
 
 [Desktop Action groesse]
 Name=Größe
@@ -104,3 +104,8 @@ Icon=weather-few-clouds-symbolic
 Name=Aktualisierung
 Exec=/usr/bin/zepos-settings-gui --page aktualisierung
 Icon=software-update-available-symbolic
+
+[Desktop Action sprache]
+Name=Sprache und Zeit
+Exec=/usr/bin/zepos-settings-gui --page sprache
+Icon=preferences-desktop-locale-symbolic

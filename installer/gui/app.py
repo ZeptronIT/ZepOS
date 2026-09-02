@@ -60,12 +60,13 @@ from installer.core.disks import list_disks as _lsblk_list_disks  # noqa: E402
 from installer.core.firmware import firmware_problem  # noqa: E402
 from installer.core.i18n import _, ngettext  # noqa: E402
 from installer.core.model import MIN_DISK_MIB, InstallConfig  # noqa: E402
+from installer.core import timezones  # noqa: E402
 from installer.core.runner import install as _run_install  # noqa: E402
 from installer.core.wifi import IwctlBackend, Network, WifiBackend  # noqa: E402
 
 from . import branding  # noqa: E402
 from .pages import (  # noqa: E402
-    FILESYSTEM_CHOICES, LANGUAGE_DEFAULTS, MOUNTPOINT_CHOICES, PAGE_ORDER,
+    FILESYSTEM_CHOICES, MOUNTPOINT_CHOICES, PAGE_ORDER,
     SWAP_CHOICE, InstallationOutcome, LogTail, PageState, TerminalLog,
     confirmation_body, default_log_path, discover_networks, run_installation,
     wireless_step,
@@ -1335,12 +1336,61 @@ class InstallerWindow(Adw.ApplicationWindow):
         group.add(root_password_confirm_row)
 
     def _build_zeit(self, group: Adw.PreferencesGroup) -> None:
-        row = Adw.EntryRow()
+        """Die Zeitzone - eine AUSWAHL, seit dem 02.09.2026.
+
+        WAS HIER STAND UND WARUM ES WEG IST
+            Eine Adw.EntryRow, also ein freies Textfeld, vorbelegt mit
+            einem Wert aus LANGUAGE_DEFAULTS - "en" hiess UTC. Zwei
+            Fehler in vier Zeilen:
+
+              * ein Tippfehler wurde installiert. `date` nimmt JEDEN
+                Namen an und druckt fuer einen unbekannten die UTC-Zeit
+                mit dem erfundenen Kuerzel, Rueckgabewert 0 (die Messung
+                steht in src/doctor.py). "Europe/Berln" ergab eine Uhr,
+                die still zwei Stunden falsch ging.
+              * die Vorbelegung leitete einen ORT aus einer SPRACHE ab.
+                Wer auf Englisch installierte, bekam UTC - wo auch
+                immer er sass.
+
+        WAS STATTDESSEN DASTEHT
+            Die Namen aus der Zeitzonendatenbank dieses Mediums
+            (installer/core/timezones.py), vorbelegt mit der Zone, in
+            der das Medium GERADE laeuft - eine Tatsache statt einer
+            Ableitung. pages.timezone_error() bleibt als Netz darunter,
+            fuer eine vorgeladene Konfiguration, die keine Auswahl
+            durchlaufen hat.
+
+        WARUM DIE LISTE SUCHBAR IST
+            GEMESSEN am 02.09.2026: die Datenbank nennt 598 Namen. Eine
+            Aufklappliste mit 598 Zeilen ist eine Liste, in der niemand
+            ankommt. Adw.ComboRow sucht, sobald ein Ausdruck dasteht,
+            der einer Zeile ihren Text entnimmt - ohne ihn bleibt
+            enable-search wirkungslos, und zwar lautlos.
+        """
+        row = Adw.ComboRow()
         self._tr(lambda: row.set_title(_("Timezone")))
-        _keymap, _locale, default_timezone = LANGUAGE_DEFAULTS[self.state.language]
-        row.set_text(self.state.timezone or default_timezone)
-        self.state.timezone = row.get_text()
-        self._bind_entry(row, "timezone")
+
+        self._timezone_choices = timezones.choices()
+        row.set_model(Gtk.StringList.new(self._timezone_choices))
+        row.set_expression(
+            Gtk.PropertyExpression.new(Gtk.StringObject, None, "string"))
+        row.set_enable_search(True)
+
+        current = self.state.timezone or timezones.running()
+        if current in self._timezone_choices:
+            row.set_selected(self._timezone_choices.index(current))
+        # Der Wert steht danach im Zustand, auch wenn niemand die Zeile
+        # anfasst - wortgleich zur Absicht der alten Fassung, die
+        # `self.state.timezone = row.get_text()` schrieb.
+        self.state.timezone = current
+
+        def _on_changed(widget, _pspec):
+            gewaehlt = widget.get_selected()
+            if 0 <= gewaehlt < len(self._timezone_choices):
+                self.state.timezone = self._timezone_choices[gewaehlt]
+            self._refresh_validation()
+
+        row.connect("notify::selected", _on_changed)
         group.add(row)
 
     def _build_zepos(self, group: Adw.PreferencesGroup) -> None:

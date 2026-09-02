@@ -11,7 +11,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
-"POT-Creation-Date: 2026-09-02 09:28+0200\n"
+"POT-Creation-Date: 2026-09-02 11:16+0200\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -595,7 +595,7 @@ msgstr "Analyse"
 msgid "New window"
 msgstr "Neues Fenster"
 
-#: src/templates/ags-dock.template:1238 src/templates/ags-dock.template:1356
+#: src/templates/ags-dock.template:1238 src/templates/ags-dock.template:1414
 #: src/templates/ags-home.template:893
 msgid "Remove from dock"
 msgstr "Vom Dock entfernen"
@@ -608,11 +608,11 @@ msgstr "Vom Home entfernen"
 msgid "Add to Home"
 msgstr "Zum Home hinzufügen"
 
-#: src/templates/ags-dock.template:1361 src/templates/ags-home.template:899
+#: src/templates/ags-dock.template:1419 src/templates/ags-home.template:899
 msgid "Add to dock"
 msgstr "Zum Dock hinzufügen"
 
-#: src/templates/ags-dock.template:1368
+#: src/templates/ags-dock.template:1426
 msgid "Close"
 msgstr "Schließen"
 
@@ -722,7 +722,7 @@ msgstr "Passwort für Netzwerk"
 msgid "Enter the Wi-Fi password ..."
 msgstr "WLAN-Passwort eingeben ..."
 
-#: src/templates/ags-network.template:934 src/templates/ags-vpn.template:1554
+#: src/templates/ags-network.template:934 src/templates/ags-vpn.template:1564
 msgid "Connect"
 msgstr "Verbinden"
 
@@ -818,160 +818,160 @@ msgstr "Den ganzen Verlauf löschen"
 msgid "Clear all"
 msgstr "Alle löschen"
 
-#: src/templates/ags-settings.template:263
+#: src/templates/ags-settings.template:284
 msgid "{command} did not answer."
 msgstr "{command} hat nicht geantwortet."
 
-#: src/templates/ags-settings.template:400
+#: src/templates/ags-settings.template:421
 msgid "Back to the shipped value"
 msgstr "Zurück auf den ausgelieferten Wert"
 
-#: src/templates/ags-settings.template:401
+#: src/templates/ags-settings.template:422
 msgid "Leave it to the scale factor again"
 msgstr "Wieder dem Maßstab überlassen"
 
-#: src/templates/ags-settings.template:448
+#: src/templates/ags-settings.template:469
 msgid "{value} (unchanged)"
 msgstr "{value} (unverändert)"
 
-#: src/templates/ags-settings.template:517
+#: src/templates/ags-settings.template:538
 msgid "Back to the shipped colour"
 msgstr "Zurück auf die ausgelieferte Farbe"
 
-#: src/templates/ags-settings.template:536
+#: src/templates/ags-settings.template:557
 msgid "unknown kind: {kind}"
 msgstr "unbekannte Art: {kind}"
 
-#: src/templates/ags-settings.template:589
+#: src/templates/ags-settings.template:610
 msgid "<value>"
 msgstr "<wert>"
 
-#: src/templates/ags-settings.template:631
+#: src/templates/ags-settings.template:652
 msgid "Nothing is placed on this side."
 msgstr "Auf dieser Seite steht nichts."
 
-#: src/templates/ags-settings.template:643
+#: src/templates/ags-settings.template:664
 msgid "One place further to the front"
 msgstr "Einen Platz weiter nach vorn"
 
-#: src/templates/ags-settings.template:652
+#: src/templates/ags-settings.template:673
 msgid "One place further to the back"
 msgstr "Einen Platz weiter nach hinten"
 
-#: src/templates/ags-settings.template:658
+#: src/templates/ags-settings.template:679
 msgid "Take it off the bar"
 msgstr "Von der Leiste nehmen"
 
-#: src/templates/ags-settings.template:692
+#: src/templates/ags-settings.template:713
 msgid "Put it on the bar"
 msgstr "Auf die Leiste setzen"
 
-#: src/templates/ags-settings.template:706
+#: src/templates/ags-settings.template:727
 msgid "As shipped"
 msgstr "Wie ausgeliefert"
 
-#: src/templates/ags-settings.template:763
+#: src/templates/ags-settings.template:784
 msgid "Switched on"
 msgstr "Eingeschaltet"
 
-#: src/templates/ags-settings.template:764
+#: src/templates/ags-settings.template:785
 msgid "at {x}, {y}"
 msgstr "bei {x}, {y}"
 
-#: src/templates/ags-settings.template:791
+#: src/templates/ags-settings.template:812
 msgid "Resolution"
 msgstr "Auflösung"
 
-#: src/templates/ags-settings.template:817
+#: src/templates/ags-settings.template:838
 msgid "Scale"
 msgstr "Maßstab"
 
-#: src/templates/ags-settings.template:837
+#: src/templates/ags-settings.template:858
 msgid "Rotation"
 msgstr "Drehung"
 
-#: src/templates/ags-settings.template:849
+#: src/templates/ags-settings.template:870
 msgid "Position: every screen keeps the place it has. Dragging them around each other is done in the settings application; this window sets what a single screen shows."
 msgstr "Position: jeder Schirm behält den Platz, den er hat. Gegeneinander verschoben werden sie in der Einstellungsanwendung; dieses Fenster stellt ein, was ein einzelner Schirm zeigt."
 
-#: src/templates/ags-settings.template:856
+#: src/templates/ags-settings.template:877
 #: src/templates/ags-style-editor.template:1064
 #: src/templates/ags-style-editor.template:1192
 msgid "Apply"
 msgstr "Übernehmen"
 
-#: src/templates/ags-settings.template:863
+#: src/templates/ags-settings.template:884
 msgid "Applying asks back: without an answer within {seconds} seconds the old arrangement comes back. That happens even if this surface dies in the meantime - the way back runs in its own process."
 msgstr "Das Anwenden fragt zurück: ohne Antwort steht nach {seconds} Sekunden wieder die alte Anordnung. Das passiert auch dann, wenn diese Oberfläche in der Zwischenzeit abstürzt - der Rückweg läuft in einem eigenen Prozess."
 
-#: src/templates/ags-settings.template:868
+#: src/templates/ags-settings.template:889
 msgid "Kept in {file}"
 msgstr "Steht in {file}"
 
-#: src/templates/ags-settings.template:921
+#: src/templates/ags-settings.template:942
 msgid "Kept and written: {files}"
 msgstr "Behalten und geschrieben: {files}"
 
-#: src/templates/ags-settings.template:926
+#: src/templates/ags-settings.template:947
 msgid "Taken back."
 msgstr "Zurückgenommen."
 
-#: src/templates/ags-settings.template:964
+#: src/templates/ags-settings.template:985
 msgid "No answer - the old arrangement is coming back."
 msgstr "Keine Antwort - die alte Anordnung kommt zurück."
 
-#: src/templates/ags-settings.template:968
-#: src/templates/ags-settings.template:973
+#: src/templates/ags-settings.template:989
+#: src/templates/ags-settings.template:994
 msgid "Applied, on probation. Keep it? {seconds} s"
 msgstr "Angewandt, auf Probe. Behalten? {seconds} s"
 
-#: src/templates/ags-settings.template:1000
+#: src/templates/ags-settings.template:1021
 msgid "Writing ..."
 msgstr "Wird geschrieben ..."
 
-#: src/templates/ags-settings.template:1004
+#: src/templates/ags-settings.template:1050
 msgid "The machine follows this setting from now on."
 msgstr "Die Maschine folgt ab sofort dieser Einstellung."
 
-#: src/templates/ags-settings.template:1006
-#: src/templates/ags-settings.template:1027
+#: src/templates/ags-settings.template:1052
+#: src/templates/ags-settings.template:1073
 msgid "failed"
 msgstr "fehlgeschlagen"
 
-#: src/templates/ags-settings.template:1024
+#: src/templates/ags-settings.template:1070
 msgid "Saving ..."
 msgstr "Wird gespeichert ..."
 
-#: src/templates/ags-settings.template:1031
+#: src/templates/ags-settings.template:1077
 msgid "Saved. In effect with the next login - or now."
 msgstr "Gespeichert. Wirksam mit der nächsten Anmeldung - oder jetzt."
 
-#: src/templates/ags-settings.template:1059
+#: src/templates/ags-settings.template:1105
 msgid "{count} change(s) not yet saved"
 msgstr "{count} Änderung(en) noch nicht gespeichert"
 
-#: src/templates/ags-settings.template:1061
+#: src/templates/ags-settings.template:1107
 msgid "Saved - not yet applied."
 msgstr "Gespeichert - noch nicht angewandt."
 
-#: src/templates/ags-settings.template:1070
+#: src/templates/ags-settings.template:1116
 msgid "Keep"
 msgstr "Behalten"
 
-#: src/templates/ags-settings.template:1072
+#: src/templates/ags-settings.template:1118
 #: src/templates/ags-vpn-settings.template:2732
 msgid "Save"
 msgstr "Speichern"
 
-#: src/templates/ags-settings.template:1074
+#: src/templates/ags-settings.template:1120
 msgid "Apply now"
 msgstr "Jetzt anwenden"
 
-#: src/templates/ags-settings.template:1076
+#: src/templates/ags-settings.template:1122
 msgid "Reload"
 msgstr "Neu laden"
 
-#: src/templates/ags-settings.template:1146
+#: src/templates/ags-settings.template:1192
 msgid "SETTINGS"
 msgstr "EINSTELLUNGEN"
 
@@ -1520,7 +1520,7 @@ msgid "Both"
 msgstr "Beides"
 
 #: src/templates/ags-vpn-settings.template:2387
-#: src/templates/ags-vpn.template:1420
+#: src/templates/ags-vpn.template:1430
 msgid "Username"
 msgstr "Benutzername"
 
@@ -1634,7 +1634,7 @@ msgstr "VPN-Verbindungen"
 
 #: src/templates/ags-vpn-settings.template:2830
 #: src/templates/ags-vpn-settings.template:2939
-#: src/templates/ags-vpn.template:1653
+#: src/templates/ags-vpn.template:1663
 msgid "New connection"
 msgstr "Neue Verbindung"
 
@@ -1650,7 +1650,7 @@ msgstr "Verbindung hinzufügen"
 # kommen." Der Rueckweg braucht ein Wort, und es ist auf beiden
 # Flaechen dasselbe - Schalenseite wie Einstellungsfenster.
 #: src/templates/ags-vpn-settings.template:2892
-#: src/templates/ags-vpn.template:1666
+#: src/templates/ags-vpn.template:1676
 msgid "All connections"
 msgstr "Alle Verbindungen"
 
@@ -1683,7 +1683,7 @@ msgstr "IP: {ip}"
 msgid "Server: {server}"
 msgstr "Server: {server}"
 
-#: src/templates/ags-vpn.template:725 src/templates/ags-vpn.template:1587
+#: src/templates/ags-vpn.template:725 src/templates/ags-vpn.template:1597
 msgid "Peer: {endpoint}"
 msgstr "Gegenstelle: {endpoint}"
 
@@ -1703,7 +1703,7 @@ msgstr "VPN-Zustand unbekannt – NetworkManager antwortet nicht."
 msgid "Nobody knows whether your traffic is protected."
 msgstr "Niemand weiß, ob dein Verkehr geschützt ist."
 
-#: src/templates/ags-vpn.template:802 src/templates/ags-vpn.template:1400
+#: src/templates/ags-vpn.template:802 src/templates/ags-vpn.template:1410
 msgid "Not connected"
 msgstr "Nicht verbunden"
 
@@ -1739,39 +1739,39 @@ msgstr "Es kann nur eine VPN-Verbindung stehen – {name} wird zuerst getrennt."
 msgid "No connection configured yet - add one."
 msgstr "Noch keine Verbindung eingerichtet – bitte eine hinzufügen."
 
-#: src/templates/ags-vpn.template:1426
+#: src/templates/ags-vpn.template:1436
 msgid "Username ..."
 msgstr "Benutzername..."
 
-#: src/templates/ags-vpn.template:1437
+#: src/templates/ags-vpn.template:1447
 msgid "Password"
 msgstr "Passwort"
 
-#: src/templates/ags-vpn.template:1443
+#: src/templates/ags-vpn.template:1453
 msgid "Password ..."
 msgstr "Passwort..."
 
-#: src/templates/ags-vpn.template:1478
+#: src/templates/ags-vpn.template:1488
 msgid "2FA token (optional)"
 msgstr "2FA Token (optional)"
 
-#: src/templates/ags-vpn.template:1484
+#: src/templates/ags-vpn.template:1494
 msgid "6-digit code ..."
 msgstr "6-stelliger Code..."
 
-#: src/templates/ags-vpn.template:1496
+#: src/templates/ags-vpn.template:1506
 msgid "Remember username"
 msgstr "Benutzername merken"
 
-#: src/templates/ags-vpn.template:1534 src/templates/ags-vpn.template:1585
+#: src/templates/ags-vpn.template:1544 src/templates/ags-vpn.template:1595
 msgid "WireGuard identifies itself with keys - there is nothing to type here."
 msgstr "WireGuard weist sich mit Schlüsseln aus – hier ist nichts einzutippen."
 
-#: src/templates/ags-vpn.template:1584
+#: src/templates/ags-vpn.template:1594
 msgid "This OpenVPN connection identifies itself with certificates - there is nothing to type here."
 msgstr "Diese OpenVPN-Verbindung weist sich mit Zertifikaten aus – hier ist nichts einzugeben."
 
-#: src/templates/ags-vpn.template:1588
+#: src/templates/ags-vpn.template:1598
 msgid "No peer configured yet - open the settings."
 msgstr "Noch keine Gegenstelle eingestellt – bitte die Einstellungen öffnen."
 
@@ -1866,6 +1866,44 @@ msgstr "Nein"
 #: src/templates/ags-wallpaper.template:681
 msgid "Yes"
 msgstr "Ja"
+
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "no path to settings.py (settings_script is missing from ~/.config/hyprlaunch/config)"
+msgstr "kein Pfad zu settings.py (settings_script fehlt in ~/.config/hyprlaunch/config)"
+
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+#, c-format
+msgid "%s could not be started"
+msgstr "%s ließ sich nicht starten"
+
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "the entry carries no identifier"
+msgstr "der Eintrag trägt keine Kennung"
+
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "settings.py did not answer"
+msgstr "settings.py hat nicht geantwortet"
+
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+#, c-format
+msgid "%s is missing - the launcher appears unstyled."
+msgstr "%s fehlt - der Starter erscheint ungestylt."
+
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "`zepos-generate -hyprlaunch-style` writes the file."
+msgstr "zepos-generate -hyprlaunch-style schreibt die Datei."
+
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "ZepOS application launcher"
+msgstr "ZepOS Anwendungsstarter"
+
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "Search applications ... (= calculates)"
+msgstr "Anwendungen suchen ... (= rechnet)"
+
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "Enter copies the result"
+msgstr "Enter kopiert das Ergebnis"
 
 #~ msgid "Delete connection"
 #~ msgstr "Verbindung löschen"
