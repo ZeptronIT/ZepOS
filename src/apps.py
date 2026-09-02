@@ -375,14 +375,21 @@ def imprint_pins(system_root: Path | None = None) -> list[dict[str, str]]:
         als eine gebackene Uebersetzung eines Programms, das nicht mehr
         installiert ist.
 
-        WAS DAMIT TOT IST und in fremden Dateien liegt:
-        settings.bar_labels() (src/settings.py) antwortet ab jetzt immer
-        {} - sie filtert leere Beschriftungen schon heute weg, und ein
-        fehlendes Feld behandelt sie wie ein leeres. Der zweite
-        Rueckgabewert von model.shipped_bar() und die `labels` in
-        bar.py/bridge.py sind damit ebenfalls leer. Sie stehen noch da,
-        weil src/settings.py einem anderen Auftrag gehoert; im Bericht
-        zu Aufgabe 85 ist beides benannt.
+        WAS DESHALB NICHT WEGFAELLT, und warum das kein toter Code ist:
+        settings.bar_labels() LIEST den Abdruck, sie schreibt ihn nicht.
+        Ein frisch erzeugter Abdruck traegt kein `label` mehr, und dann
+        antwortet sie {} - ein fehlendes Feld behandelt sie wie ein
+        leeres. Ein Rechner, der von 0.1.13 hochgezogen wird, hat den
+        ALTEN Abdruck aber noch auf der Platte, bis der naechste
+        Erzeugungslauf laeuft, und bis dahin gibt sie die Beschriftungen
+        heraus, die dort stehen. Sie zu loeschen hiesse, diese Rechner
+        zwischen Aktualisierung und Erzeugungslauf schlechter zu
+        stellen, ohne dass jemand etwas davon haette.
+
+        Dasselbe gilt fuer `labels` in bridge.py: das Feld gehoert zur
+        AUSGABE von `--json get`, also zu einer veroeffentlichten
+        Schnittstelle. Es verschwinden zu lassen ist eine Entscheidung
+        ueber diese Schnittstelle und keine Aufraeumarbeit nebenbei.
     """
     root = Path(system_root) if system_root else Path(__file__).resolve().parent
     return [{"name": name, "desktop": f"{name}.desktop"}

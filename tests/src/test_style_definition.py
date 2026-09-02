@@ -694,9 +694,18 @@ def test_the_pins_come_from_the_one_place_that_knows_them():
     settings.shipped_bar() holt sie von dort.
 
     Was hier geprueft wird, ist unveraendert: dass es sie ueberhaupt
-    gibt, dass jeder Eintrag seine drei Felder hat, und dass die
+    gibt, dass jeder Eintrag seine Felder hat, und dass die
     Einstellungen darunter sind. Ohne den letzten Punkt koennte die
     Einstellungs-Anwendung sich selbst nicht anbieten.
+
+    ES WAREN DREI FELDER, SEIT DEM 02.09.2026 SIND ES ZWEI. `label`
+    trug den sichtbaren Namen, gelesen BEIM BAUEN aus der .desktop-Datei
+    im Baum - in einem Chroot, lange vor jeder Anmeldung, also
+    grundsaetzlich ohne Kenntnis der Sprache des Nutzers. Solange die
+    einzige Flaeche, die ihn zeigte, nur Deutsch sprach, war das die
+    richtige Antwort; seit das Einstellungsfenster gettext ruft, waere
+    es die eine deutsche Beschriftung in einem englischen Fenster. Die
+    Begruendung im ganzen steht bei apps.imprint_pins().
     """
     sys.path.insert(0, str(SRC))
     try:
@@ -707,10 +716,10 @@ def test_the_pins_come_from_the_one_place_that_knows_them():
     pins = apps.imprint_pins()
     assert pins, "es sind keine Anheftungen zu finden"
     for pin in pins:
-        assert set(pin) == {"name", "desktop", "label"}
+        assert set(pin) == {"name", "desktop"}
         assert pin["desktop"] == f"{pin['name']}.desktop"
-    assert {"name": "zepos-settings", "desktop": "zepos-settings.desktop",
-            "label": "Systemeinstellungen"} in pins, (
+    assert {"name": "zepos-settings",
+            "desktop": "zepos-settings.desktop"} in pins, (
         "die Einstellungen stehen nicht in der Auswahl, also kann die "
         f"Einstellungs-Anwendung sie nicht zeigen: {pins}")
 

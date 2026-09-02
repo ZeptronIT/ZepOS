@@ -444,11 +444,58 @@ def test_das_menue_geht_auf_einer_layer_flaeche_wirklich_auf(lauf):
         + lauf["protokoll"][-2000:])
 
 
+# Die vier Punkte des Rechtsklickmenues, als das Paar, das sie seit dem
+# 02.09.2026 sind: der msgid, den der Starter aufruft, und das Wort, das
+# der Nutzer dafuer sehen soll.
+MENUEPUNKTE = {
+    "Add to dock": "Zum Dock hinzufügen",
+    "Add to Home": "Zum Home hinzufügen",
+    "Remove from dock": "Vom Dock entfernen",
+    "Remove from Home": "Vom Home entfernen",
+}
+
+
+def _katalog_de() -> dict[str, str]:
+    """msgid -> deutsche Fassung, ohne die fuzzy markierten.
+
+    Ohne sie, weil `msgfmt` einen fuzzy markierten Eintrag NICHT in die
+    .mo nimmt: er stuende im .po und fehlte auf der Maschine.
+    """
+    text = (Path(__file__).resolve().parents[2]
+            / "po" / "desktop" / "de.po").read_text(encoding="utf-8")
+    eintraege = {}
+    for block in text.split("\n\n"):
+        if re.search(r"^#, .*fuzzy", block, re.M):
+            continue
+        mid = re.search(r'^msgid "(.*)"$', block, re.M)
+        wert = re.search(r'^msgstr "(.*)"$', block, re.M)
+        if mid and wert and mid.group(1):
+            eintraege[mid.group(1)] = wert.group(1)
+    return eintraege
+
+
 def test_das_menue_bietet_das_anheften_an(lauf):
-    """Der Punkt, der am 20.08.2026 bestellt war - woertlich."""
-    assert "Zum Dock hinzufügen" in lauf["menue_offen"], (
+    """Der Punkt, der am 20.08.2026 bestellt war - woertlich.
+
+    SEIT DEM 02.09.2026 SIND ES ZWEI ENDEN UND NICHT MEHR EINES. Der
+    Starter rief seine Beschriftungen bis dahin fest auf Deutsch auf;
+    seither ruft er `_("Add to dock")`. Dieser Lauf hat keinen
+    gebauten Katalog - bindtextdomain() zeigt auf ZEPOS_LOCALEDIR, also
+    auf den Ort einer INSTALLATION -, und ohne Katalog gibt gettext den
+    msgid zurueck. Ein Test, der hier weiter das deutsche Wort
+    erwartete, haette also nur noch gemeldet, dass kein Katalog da ist.
+
+    Gemessen wird deshalb das Paar: dass der Punkt im Menue steht, und
+    dass der Katalog fuer ihn das bestellte Wort fuehrt. Faellt eins
+    von beidem weg, sieht der Nutzer den Punkt nicht so, wie er ihn
+    bestellt hat.
+    """
+    assert "Add to dock" in lauf["menue_offen"], (
         "das Menue traegt den bestellten Punkt nicht: "
         f"{lauf['menue_offen']!r}")
+    assert _katalog_de().get("Add to dock") == MENUEPUNKTE["Add to dock"], (
+        "der Katalog macht aus dem Punkt nicht das bestellte Wort - auf "
+        "einer deutschen Maschine stuende dort der englische msgid")
 
 
 def test_das_menue_bietet_auch_das_home_an(lauf):
@@ -458,11 +505,14 @@ def test_das_menue_bietet_auch_das_home_an(lauf):
 
     Zwei Ziele, zwei Punkte, und beide in der Richtung, die gerade
     etwas bewirkt: in diesem Lauf liegt nichts im Fuss und nichts auf
-    dem Home, also heisst es beide Male "hinzufügen".
+    dem Home, also heisst es beide Male "hinzufügen". Dasselbe Paar wie
+    beim Punkt darueber, aus demselben Grund.
     """
-    assert "Zum Home hinzufügen" in lauf["menue_offen"], (
+    assert "Add to Home" in lauf["menue_offen"], (
         "das Menue traegt den Home-Punkt nicht: "
         f"{lauf['menue_offen']!r}")
+    assert _katalog_de().get("Add to Home") == MENUEPUNKTE["Add to Home"], (
+        "der Katalog macht aus dem Home-Punkt nicht das bestellte Wort")
 
 
 def test_das_menue_schreibt_deutsch_und_nicht_umschrieben(lauf):
@@ -478,17 +528,30 @@ def test_das_menue_schreibt_deutsch_und_nicht_umschrieben(lauf):
     fest, dass keiner der vier zurueckfaellt, auch ein spaeter
     dazugekommener nicht.
 
-    GEMESSEN wird am gerenderten Menue und nicht am Quelltext: dieses
-    Programm laeuft an gettext VORBEI (C++, kein Katalog), also ist der
-    einzige Ort, an dem sich die Schreibweise wirklich zeigt, das
-    Fenster selbst. po/desktop/de.po fuehrt "Zum Dock hinzufügen" seit
-    jeher richtig - diese Stelle sieht den Katalog nie.
+    GEMESSEN WIRD SEIT DEM 02.09.2026 AM KATALOG UND NICHT MEHR AM
+    FENSTER. Bis dahin lief dieses Programm an gettext vorbei und trug
+    die deutschen Woerter fest im Quelltext; da war das Fenster der
+    einzige Ort, an dem sich die Schreibweise zeigte. Seither ruft es
+    `_()`, und das Wort, das der Nutzer liest, steht in po/desktop/de.po
+    - im Fenster dieses Laufs steht der englische msgid, weil hier kein
+    Katalog gebaut ist. Die Regel gilt unveraendert; nur ihr Ort ist ein
+    anderer.
+
+    Geprueft werden ALLE vier Punkte und nicht die zwei aus den
+    Zusicherungen darueber, damit auch ein spaeter dazugekommener nicht
+    zurueckfaellt.
     """
-    for falsch in ("hinzufuegen", "traegt", "waehlen", "loeschen",
-                   "schliessen", "oeffnen"):
-        assert falsch not in lauf["menue_offen"], (
-            f"das Menue schreibt {falsch!r} umschrieben statt mit "
-            f"Umlaut: {lauf['menue_offen']!r}")
+    katalog = _katalog_de()
+    for msgid, erwartet in MENUEPUNKTE.items():
+        deutsch = katalog.get(msgid)
+        assert deutsch == erwartet, (
+            f"der Katalog fuehrt {msgid!r} als {deutsch!r} statt "
+            f"{erwartet!r}")
+        for falsch in ("hinzufuegen", "traegt", "waehlen", "loeschen",
+                       "schliessen", "oeffnen", "entfernt"):
+            assert falsch not in deutsch, (
+                f"der Katalog schreibt {falsch!r} umschrieben statt mit "
+                f"Umlaut: {deutsch!r}")
 
 
 def test_escape_schliesst_das_menue_und_nicht_den_starter(lauf):
