@@ -335,6 +335,79 @@ _SCHWELLE = 15         # GEMESSEN (Bericht dieser Aufgabe): zwischen zwei
                        # (mindestens 28 auf allen vier Seiten).
 
 
+# DIE WAAGERECHTE SUCHE BRAUCHT EINE EIGENE HALTELAENGE, UND DAS IST DER
+# GRUND, WARUM DIESE DATEI AM 02.09.2026 EIN ZWEITES MAL AM MESSGERAET
+# REPARIERT WURDE
+#
+#     747e68d (01.09.2026) hat die Y-HALFTE der Messung geradegezogen:
+#     gemessen wird seither dicht unter der Oberkante der Zeile, oberhalb
+#     der Glyphen. Danach meldete _spaltengrenze() auf allen vier Seiten
+#     stabil 209 statt der erwarteten 196, und das sah nach einem
+#     Rueckfall der Polsterung aus. Es war der REST DESSELBEN
+#     MESSFEHLERS, eine Ebene tiefer.
+#
+#     _HALT_PUNKTE ist aus der ZEILENHOEHE abgeleitet
+#     (STYLE_NAV_ROW_HEIGHT 49 // 2 = 24) und war fuer die SENKRECHTE
+#     Suche gedacht, die eine 49 Punkte hohe Flaeche findet. Waagerecht
+#     sucht dieselbe Zahl aber nach dem Streifen NEBEN der Hervorhebung,
+#     und der ist genau so breit wie die Polsterung, um die es geht -
+#     STYLE_SPACE_8, bei Vorgabegroesse 12 Punkte. Ein Lauf, der 24
+#     Punkte halten muss, passt in einen 12 Punkte breiten Streifen
+#     grundsaetzlich nicht hinein: nicht durch Pech, sondern durch
+#     Konstruktion - dieselbe Sorte Fehler, die der Blattkopf oben schon
+#     einmal fuer die 1px-Randlinie aufgeschrieben hat.
+#
+#     Die Suche lief deshalb ueber die Polsterung hinweg. Der eine
+#     Bildpunkt der Randlinie von .zep-sidebar setzte sie zusaetzlich
+#     zurueck: GEMESSEN am 02.09.2026, Rand (33,79,89) gegen
+#     Hervorhebung (18,78,91), Abstand GENAU 15 - und die Bedingung
+#     lautet `> _SCHWELLE`, also gilt der Rand als "gleich" und bricht
+#     den Lauf. Gefunden wurde am Ende die Flaeche HINTER der
+#     Seitenleiste, deren linke Kante bei Versatz 210 liegt: 210 - 1 =
+#     209.
+#
+#     GEMESSEN, an den Bildern desselben Laufs, waagerecht durch die
+#     aktive Zeile (Versatz: Farbe), alle vier Seiten gleich aufgebaut:
+#
+#         0-0     (33,79,89)   Rand der Platte (.overlay-outer)
+#         1-12    (10,43,49)   Polsterung von .zep-sidebar   <- 12 = SPACE_8
+#         13-196  (18,78,91)   die Hervorhebung              <- 184 = 208-2*12
+#         197-208 (10,43,49)   Polsterung von .zep-sidebar   <- 12 = SPACE_8
+#         209-209 (33,79,89)   border-right von .zep-sidebar
+#         210-    Seite
+#
+#     Die Polsterung wirkt also, und die rechte Kante der Hervorhebung
+#     liegt bei 196 - genau auf der Erwartung, die dieser Test seit
+#     Aufgabe 27 traegt. 196 ist NICHT angefasst worden.
+#
+# WARUM DIE HAELFTE DER SPROSSE UND KEINE GETIPPTE ZAHL
+#     Durchgerechnet ueber alle Haltelaengen von 1 bis 24, an den vier
+#     Bildern (Bericht dieser Aufgabe): 1 bis 11 ergeben 196, ab 12
+#     ergeben alle 209. Die Kippstelle ist die Breite der Polsterung
+#     selbst. Die Haelfte davon (6) liegt klar ueber der einzigen
+#     Unschaerfe, die es dort gibt - der Kantenpunkt bei Versatz 13
+#     bzw. 196 ist GEMESSEN genau EINEN Punkt breit - und klar unter der
+#     Kippstelle. Aus _px("STYLE_SPACE_8") gerechnet und nicht getippt,
+#     damit sie dem Groessenregler folgt wie die Polsterung, die sie
+#     misst.
+#
+# DIE GEGENPROBE IST GEFAHREN, UND SIE IST DER EIGENTLICHE BEWEIS
+#     Ein kuerzerer Lauf koennte auch einfach "196" behaupten, weil er
+#     frueher stehenbleibt. Darum ist dieselbe Messung an einem Baum OHNE
+#     die Polsterung gefahren worden - die Regel .zep-sidebar im
+#     ERZEUGTEN style.scss auf den Stand vor Aufgabe 27
+#     zurueckgedreht (min-width: 208px, kein padding), neu gebuendelt,
+#     neu abgebildet. GEMESSEN, alle vier Seiten:
+#
+#         mit Polsterung     Hervorhebung 13-196, Haltelaenge 6 -> 196
+#         ohne Polsterung    Hervorhebung  2-207, Haltelaenge 6 -> 209
+#
+#     Die reparierte Messung unterscheidet die beiden Zustaende also.
+#     Die alte tat es nicht: sie meldete 209 fuer BEIDE.
+def _halt_waagerecht() -> int:
+    return max(2, _px("STYLE_SPACE_8") // 2)
+
+
 def _aktive_zeile(bild: measure.Image,
                   platte: tuple[int, int, int, int]) -> tuple[int, int] | None:
     """Ober- und Unterkante (relativ zur Fensteroberkante) des einen
@@ -382,9 +455,15 @@ def _spaltengrenze(bild: measure.Image, platte: tuple[int, int, int, int],
     von der Fensterkante. GEMESSEN (Bericht dieser Aufgabe): ohne diesen
     Abzug landet die Messung bei 209, nicht bei den 208px, die
     .zep-sidebar in ags-style.template als min-width traegt.
+
+    DIE HALTELAENGE IST NICHT _HALT_PUNKTE, UND DAS IST DER KERN DER
+    REPARATUR VOM 02.09.2026 - die Herleitung steht bei
+    _halt_waagerecht() oben. Waagerecht muss der Lauf in die POLSTERUNG
+    passen (SPACE_8, 12 Punkte), nicht in die Zeilenhoehe (49).
     """
     x_start = platte[0] + _AKTIV_X_VERSATZ
     basis = bild.at(x_start, y_mitte_abs)[:3]
+    halt = _halt_waagerecht()
 
     lauf_start = None
     for i in range(0, 260 - _AKTIV_X_VERSATZ):
@@ -395,7 +474,7 @@ def _spaltengrenze(bild: measure.Image, platte: tuple[int, int, int, int],
             lauf_start = x
         elif not anders and lauf_start is not None:
             lauf_start = None
-        if anders and lauf_start is not None and x - lauf_start >= _HALT_PUNKTE:
+        if anders and lauf_start is not None and x - lauf_start >= halt:
             return lauf_start - platte[0] - 1
     return None
 
@@ -505,20 +584,36 @@ def test_die_seitenleiste_bemalt_208_punkte(schale):
         #     oben+6 liegt innerhalb der Hervorhebung (sie ist
         #     STYLE_NAV_ROW_HEIGHT hoch) und OBERHALB der Glyphen. Damit
         #     ist die erste Abweichung wieder das, was gesucht war: die
-        #     rechte Kante der Flaeche. Gemessen danach, auf allen vier
-        #     Seiten gleich und ueber Laeufe hinweg stabil:
-        #         {'general': 209, 'network': 209, 'bluetooth': 209, 'vpn': 209}
+        #     rechte Kante der Flaeche.
         #
-        #     Die Zusicherung bleibt damit ROT, und zwar zu Recht: die
-        #     Hervorhebung reicht bis 209 statt bis 196, faellt also aus
-        #     der Polsterung von .zep-sidebar heraus. 209 ist nicht
-        #     irgendeine Zahl - es ist GENAU der Wert, den der Kommentar
-        #     unten als Messung VOR Aufgabe 27 festhaelt, also von vor der
-        #     Einrueckung. Der Zustand ist zurueckgefallen.
+        # UND HIER STAND EIN BEFUND, DEN ICH NICHT NACHGEMESSEN HATTE -
+        # BERICHTIGT am 02.09.2026
+        #     An dieser Stelle stand: "Gemessen danach ... {'general':
+        #     209, 'network': 209, 'bluetooth': 209, 'vpn': 209} - die
+        #     Zusicherung bleibt damit ROT, und zwar zu Recht ... Der
+        #     Zustand ist zurueckgefallen."
         #
-        #     Die Erwartung (196) wird deshalb NICHT angefasst. Ein Test,
-        #     dessen Messung kaputt war, hat trotzdem den richtigen
-        #     Sollwert gehabt.
+        #     Die vier 209 waren echt, der Schluss daraus war falsch. Es
+        #     ist KEIN Rueckfall: die Polsterung von .zep-sidebar wirkt,
+        #     und die Hervorhebung endet auf allen vier Seiten GENAU bei
+        #     196. Was 209 gemeldet hat, war der Rest desselben
+        #     Messfehlers - die Haltelaenge der waagerechten Suche war
+        #     aus der Zeilenhoehe abgeleitet (24) und passte darum nie in
+        #     die 12 Punkte breite Polsterung, die sie finden sollte. Die
+        #     Herleitung, die Farbtabelle und die Gegenprobe stehen bei
+        #     _halt_waagerecht() weiter oben.
+        #
+        #     Die Lehre steht hier und nicht nur im Bericht: ich habe
+        #     dieselbe Messung an einem Tag zweimal repariert, und beim
+        #     ersten Mal aus dem verbliebenen Fehler einen Befund ueber
+        #     den Baum gemacht. "209 ist genau der Wert von vor Aufgabe
+        #     27" hat dabei wie eine Bestaetigung gewirkt und war ein
+        #     Zufall: 209 ist die linke Kante der Seite, und dort landet
+        #     jede Suche, die ueber die Seitenleiste hinweglaeuft.
+        #
+        #     Die Erwartung (196) ist in beiden Runden NICHT angefasst
+        #     worden. Ein Test, dessen Messung kaputt war, hat trotzdem
+        #     den richtigen Sollwert gehabt.
         y_mitte_abs = info["platte"][1] + oben + 6
         ergebnisse[name] = _spaltengrenze(info["bild"], info["platte"], y_mitte_abs)
 
@@ -781,15 +876,49 @@ def test_die_flaeche_haelt_ihre_polsterung_zu_beiden_kanten(schale):
         + "\n  ".join(fehler))
 
 
-# Die Zeile, die createOverlayWindow() (ags-overlay-utils.template,
-# notify::upper, Aufgabe 19/d766b7a) NUR dann schreibt, wenn der Inhalt
-# einer Seite tatsaechlich mehr Breite verlangt als das Fenster ihr
-# laesst - siehe der Kommentar dort. `[^"]*` statt "control", weil
-# config.name der Schale gehoert (ShellConfig, ags-control-center.
-# template) und diese Datei ihn nicht abschreiben soll, nur die Zahl
-# dahinter.
+# Die Zeile, die beobachteWaagerechtenUeberhang()
+# (ags-overlay-utils.template, notify::upper, Aufgabe 19/d766b7a) NUR
+# dann schreibt, wenn der Inhalt einer Seite tatsaechlich mehr Breite
+# verlangt als das Fenster ihr laesst - siehe der Kommentar dort.
+# `[^"]*` statt "control", weil config.name der Schale gehoert
+# (ShellConfig, ags-control-center.template) und diese Datei ihn nicht
+# abschreiben soll, nur die Zahlen dahinter.
+#
+# DIESER AUSDRUCK HAT AB DEM 21.08.2026 AUF NICHTS MEHR GEPASST, UND DIE
+# ZUSICHERUNG DARUNTER WAR SEITHER GRUEN, OHNE ETWAS ZU MESSEN -
+# BERICHTIGT am 02.09.2026 (Aufgabe 83)
+#
+#     Er stand auf der EINZAHLIGEN Fassung der Meldung:
+#         Ueberlagerung "...": Inhalt 63px breiter als das Fenster erlaubt
+#     Am 21.08.2026 hat die Meldung ihre zweite und dritte Zahl bekommen,
+#     damit eine Momentaufnahme von einem echten Ueberhang zu
+#     unterscheiden ist (die Herleitung steht bei
+#     beobachteWaagerechtenUeberhang()):
+#         Ueberlagerung "control": Inhalt 950px, Sichtfenster 645px -
+#         305px breiter als das Fenster erlaubt.
+#     `Inhalt (\d+)px breiter` konnte darauf nicht mehr passen. Elf Tage
+#     lang hat diese Datei also einen Log durchsucht, in dem der gesuchte
+#     Wortlaut nicht mehr vorkam, und JEDEN Zustand als "kein Ueberlauf"
+#     gelesen.
+#
+#     GEMESSEN am 02.09.2026, an derselben Schale, im erzeugten Baum:
+#         ohne Boden                        0 Zeilen  (Ausdruck: 0 Treffer)
+#         .zep-shell-flaeche min-width 900  1 Zeile   (alt: 0, neu: 1)
+#             Ueberlagerung "control": Inhalt 950px, Sichtfenster 645px -
+#             305px breiter als das Fenster erlaubt.
+#     Der alte Ausdruck fand also auch DANN nichts, wenn eine Seite 305
+#     Punkte zu breit war - die Zusicherung blieb gruen. Der neue findet
+#     genau diese eine Zeile und keine im sauberen Baum.
+#
+# ALLE DREI ZAHLEN, damit die Fehlermeldung eine Momentaufnahme
+# erkennbar macht: ein Sichtfenster, das kleiner ist als die Sprosse des
+# Fensters, stammt aus der ersten Zuteilung und ist kein Befund (siehe
+# ags-overlay-utils.template). Im sauberen Baum kommt beides nicht vor -
+# GEMESSEN, 0 Zeilen -, also braucht der Ausdruck dafuer keine Ausnahme;
+# er soll den Fall nur benennen koennen, wenn er einmal auftritt.
 _UEBERLAUF_ZEILE = re.compile(
-    r'Ueberlagerung "[^"]*": Inhalt (\d+)px breiter als das Fenster erlaubt')
+    r'Ueberlagerung "[^"]*": Inhalt (\d+)px, Sichtfenster (\d+)px - '
+    r'(\d+)px breiter als das Fenster erlaubt')
 
 
 def test_keine_seite_der_schale_scrollt_waagerecht(schale):
@@ -819,10 +948,34 @@ def test_keine_seite_der_schale_scrollt_waagerecht(schale):
     gefallen, mit denselben drei Zeilen (siehe der Bericht dieser
     Aufgabe) - der Beweis, dass er ueberhaupt etwas findet, nicht nur
     dass er nie ausloest.
+
+    DIE GEGENPROBE IST AM 02.09.2026 NEU GEFAHREN WORDEN, UND SIE HAT
+    DIESE ZUSICHERUNG BEIM NICHTSTUN ERWISCHT
+        Der Ausdruck oben passte seit dem 21.08.2026 auf keine Zeile
+        mehr (die Herleitung steht dort). GEMESSEN, mit einem Boden
+        `.zep-shell-flaeche { min-width: 900px }` im erzeugten
+        style.scss:
+
+            Waechter an beiden Flaechen, alter Ausdruck   gruen (blind)
+            Waechter an beiden Flaechen, neuer Ausdruck   ROT, 305px
+            Waechter NUR an der Fabrik,  neuer Ausdruck   gruen
+
+        Die dritte Zeile ist der Grund, warum
+        beobachteWaagerechtenUeberhang() seit Aufgabe 83 an BEIDEN
+        Bildlaufflaechen haengt: der Ueberhang einer Schalenseite kommt
+        seit dem Umbau bei der INNEREN an. Ohne den zweiten Waechter
+        waere diese Zusicherung ein zweites Mal fuer immer gruen
+        geworden - aus einem anderen Grund als beim ersten Mal.
     """
-    treffer = [int(m) for m in _UEBERLAUF_ZEILE.findall(schale["schalen_log"])]
+    treffer = _UEBERLAUF_ZEILE.findall(schale["schalen_log"])
     assert not treffer, (
-        "die Schale meldet waagerechten Ueberlauf (createOverlayWindow(), "
-        "notify::upper) auf mindestens einer Seite: "
-        + ", ".join(f"{px}px" for px in treffer) + "\n\nVoller Log:\n"
-        + schale["schalen_log"])
+        "die Schale meldet waagerechten Ueberlauf "
+        "(beobachteWaagerechtenUeberhang(), notify::upper) auf mindestens "
+        "einer Seite: "
+        + ", ".join(f"{ueber}px zu breit (Inhalt {inhalt}px in "
+                    f"Sichtfenster {sicht}px)"
+                    for inhalt, sicht, ueber in treffer)
+        + "\n\nEin Sichtfenster, das deutlich kleiner ist als die Sprosse "
+        "des Fensters, waere eine erste Zuteilung und kein Befund - siehe "
+        "beobachteWaagerechtenUeberhang() in ags-overlay-utils.template."
+        "\n\nVoller Log:\n" + schale["schalen_log"])
