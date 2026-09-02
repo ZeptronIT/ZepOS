@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import gettext
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -227,3 +229,148 @@ def test_every_msgid_in_the_source_is_in_the_catalogue():
     # "missing == []" is also what a scan that read nothing answers.
     assert checked, "no translated message was checked at all"
     assert missing == [], "msgids without a catalogue entry: " + "; ".join(missing)
+
+
+# --------------------------------------------------------------------
+# Das Ergebnis, nicht die Quelle
+# --------------------------------------------------------------------
+#
+# DIESELBE LUECKE, DIE AM 02.09.2026 IM KATALOG DER OBERFLAECHE BEINAHE
+# TEUER GEWORDEN IST - hier vorbeugend geschlossen, denn dieser Katalog
+# hat sie auch.
+#
+#     Dort brachte ein Auftrag zwei neue Saetze ein. Beide standen
+#     danach mit `#, fuzzy` in de.po, weil aus EINEM msgid mit "\n"
+#     darin ZWEI geworden waren und `msgmerge` seine Zuordnung
+#     vorsichtshalber als unsicher markiert hatte.
+#
+#         msgfmt nimmt einen fuzzy markierten Eintrag NICHT in die .mo
+#         auf.
+#
+#     Die Uebersetzung stand also lesbar in der Quelldatei und kam beim
+#     Nutzer nicht an. Ueber gettext nachgeschlagen gaben beide msgids
+#     ihren englischen Text zurueck.
+#
+# WARUM DIE PRUEFUNGEN DARUEBER DAS NICHT SEHEN
+#     Sie lesen den TEXT von po/de.po und verlangen einen nicht leeren
+#     msgstr. Der war nicht leer. Und `#, fuzzy` steht eine Zeile
+#     DARUEBER und in keinem ihrer Muster - geprueft wird die EINGABE
+#     statt des ERGEBNISSES.
+#
+# WER IN DIESE GRUBE FAELLT
+#     Jeder, der einen msgid aufteilt oder umformuliert und danach
+#     `msgmerge` laufen laesst, also jeder, der einen Satz des
+#     Assistenten verbessert. Und beim Assistenten wiegt es schwerer als
+#     sonstwo: seine Saetze liest ein Mensch, der gerade ein System
+#     installiert und dabei eine Platte loescht.
+#
+# GEZAEHLT am 02.09.2026: po/de.po hat 0 fuzzy-Marken und 0 msgctxt,
+# 183 uebersetzte Meldungen. Diese zwei Zusicherungen halten das.
+
+def _catalogue_entries(text: str) -> dict[tuple[str, str], str]:
+    """Jeder einfache Eintrag als (context, msgid) -> msgstr.
+
+    Der Zusatz gehoert zum Schluessel, auch wenn dieser Katalog heute
+    keinen einzigen msgctxt hat: sonst waere die erste
+    Unterscheidung nach Zusammenhang ein grundloser Fehlschlag. Genau
+    das ist der Zwillingsdatei in tests/src/test_ags_i18n.py passiert,
+    wo es drei solche Eintraege gibt.
+
+    Mehrzahlformen bleiben aussen vor - fuer sie gilt "ein msgid, ein
+    msgstr" nicht, und test_every_catalogue_entry_is_translated deckt
+    sie ab.
+    """
+    found: dict[tuple[str, str], str] = {}
+    for hit in re.finditer(
+            r'^(?:msgctxt "((?:[^"\\]|\\.)*)"\n)?'
+            r'^msgid "((?:[^"\\]|\\.)+)"\n'
+            r'^msgstr "((?:[^"\\]|\\.)*)"$',
+            text, re.M):
+        context, msgid, msgstr = hit.groups()
+        found[(context or "", msgid)] = msgstr
+    return found
+
+
+def test_no_catalogue_entry_is_marked_fuzzy():
+    """`#, fuzzy` heisst hier: der Satz kommt englisch beim Nutzer an.
+
+    Der eine legitime Fall fuer so eine Marke ist der KOPFEINTRAG einer
+    .pot - xgettext schreibt sie dort, damit ein Werkzeug die
+    Platzhalter erkennt ("FIRST AUTHOR <EMAIL@ADDRESS>"). Eine .pot wird
+    nie nachgeschlagen; sie ist die Liste der Fragen.
+
+    In einer de.po gibt es den Fall nicht. Ein fuzzy markierter Eintrag
+    ist dort eine Uebersetzung, die dasteht und nicht ausgeliefert wird -
+    und das ist die schlechteste der drei Lagen, weil sie beim Lesen der
+    Datei wie erledigte Arbeit aussieht.
+    """
+    fuzzy = [line for line in PO_FILE.read_text(encoding="utf-8").splitlines()
+             if line.startswith("#,") and "fuzzy" in line]
+    assert fuzzy == [], (
+        f"{len(fuzzy)} Eintrag/Eintraege in {PO_FILE.name} sind `#, fuzzy` "
+        "markiert. msgfmt laesst sie AUS der .mo weg - die Uebersetzung "
+        "steht in der Datei und kommt beim Nutzer nicht an. Pruef die "
+        "Vermutung von msgmerge und nimm die Marke weg.")
+
+
+@pytest.mark.allow_subprocess
+def test_the_built_catalogue_really_hands_out_every_translation(tmp_path):
+    """Gebaut mit msgfmt, gefragt mit gettext - wie der Installer fragt.
+
+    po/build.sh ruft msgfmt, installer/core/i18n.py ruft
+    gettext.translation() auf die Domaene zepos-installer. Zwischen
+    po/de.po und dem Menschen stehen genau diese zwei Werkzeuge, und was
+    msgfmt weglaesst, kann diese Zusicherung nicht fuer vorhanden
+    halten.
+
+    Verglichen wird mit dem ERWARTETEN Text und nicht auf "ungleich dem
+    msgid": ein Eintrag, dessen Uebersetzung zufaellig gleich dem
+    Englischen ist, waere sonst unpruefbar, und ein doppelt
+    zusammengeklebter msgstr - der Fall vom 02.09.2026 - ist AUCH
+    ungleich dem msgid und trotzdem keine Uebersetzung.
+    """
+    if shutil.which("msgfmt") is None:
+        pytest.skip("msgfmt fehlt; es kommt mit dem Paket gettext")
+
+    target = tmp_path / "de" / "LC_MESSAGES"
+    target.mkdir(parents=True)
+    built = subprocess.run(
+        ["msgfmt", "--statistics", "-o", str(target / f"{DOMAIN}.mo"),
+         str(PO_FILE)],
+        capture_output=True, text=True)
+    assert built.returncode == 0, (
+        f"msgfmt uebersetzt {PO_FILE.name} nicht:\n{built.stderr}")
+
+    # Die Zaehlung nennt "ungenau"/"fuzzy" nur, wenn es solche Eintraege
+    # GIBT - ihr blosses Vorkommen ist der Befund. Auf die Sprache der
+    # Umgebung kommt es dabei an, deshalb beide Schreibweisen.
+    assert "fuzz" not in built.stderr and "ungenau" not in built.stderr, (
+        f"msgfmt zaehlt ungenaue Meldungen in {PO_FILE.name} - genau die "
+        f"landen NICHT in der .mo: {built.stderr.strip()}")
+    assert "untransl" not in built.stderr and "unuebersetzt" not in built.stderr, (
+        f"msgfmt zaehlt unuebersetzte Meldungen: {built.stderr.strip()}")
+
+    expected = _catalogue_entries(PO_FILE.read_text(encoding="utf-8"))
+    assert len(expected) > 100, (
+        f"nur {len(expected)} Eintraege ausgelesen - 'alles kommt an' ist "
+        "auch die Antwort auf eine leere Liste")
+
+    def unescaped(raw: str) -> str:
+        return raw.replace('\\"', '"').replace("\\n", "\n")
+
+    catalogue = gettext.translation(DOMAIN, str(tmp_path), languages=["de"])
+    missing = []
+    for (context, msgid), msgstr in sorted(expected.items()):
+        if context:
+            delivered = catalogue.pgettext(unescaped(context),
+                                           unescaped(msgid))
+        else:
+            delivered = catalogue.gettext(unescaped(msgid))
+        if delivered != unescaped(msgstr):
+            where = f"{msgid!r}" if not context else f"{msgid!r} [{context}]"
+            missing.append(f"{where}: de.po sagt {unescaped(msgstr)!r}, der "
+                           f"gebaute Katalog gibt {delivered!r}")
+    assert missing == [], (
+        f"{len(missing)} Uebersetzung(en) stehen in {PO_FILE.name} und "
+        "kommen aus dem gebauten Katalog nicht heraus - fast immer eine "
+        "`#, fuzzy`-Marke:\n  " + "\n  ".join(missing[:10]))

@@ -579,19 +579,89 @@ def test_page_error_matches_wifi_passphrase_error_on_the_network_page():
 
 
 def test_page_error_is_empty_for_pages_without_field_level_checks():
+    """Drei Seiten, und "zeit" gehoert seit dem 02.09.2026 NICHT mehr
+    dazu.
+
+    Die Seite hat seither einen eigenen Feldbefund
+    (PageState.timezone_error): ein Zonenname, den die Datenbank nicht
+    kennt, haelt sie an. Sie stand hier weiter in der Liste und war
+    trotzdem gruen - aber nur, WEIL PageState() mit einer leeren
+    Zeitzone startet und ein leeres Feld kein erfundener Name ist. Der
+    Name dieses Tests behauptete damit etwas, das nicht mehr stimmte,
+    und die Zusicherung ging aus einem Grund durch, der mit ihrer
+    Aussage nichts zu tun hatte.
+
+    Was fuer "zeit" wirklich gilt, halten
+    test_page_error_reports_an_invented_timezone_on_the_time_page()
+    unten und tests/installer/test_zeitzone.py.
+    """
     state = PageState()
-    for page in ("sprache", "zeit", "zepos", "zusammenfassung"):
+    for page in ("sprache", "zepos", "zusammenfassung"):
         assert state.page_error(page) == ""
+
+
+def test_page_error_reports_an_invented_timezone_on_the_time_page():
+    """Die Seite "zeit" hat einen Feldbefund, und hier steht er.
+
+    Sie ist aus der Aufzaehlung darueber herausgefallen; eine
+    Zusicherung durch keine zu ersetzen haette die Seite ungeprueft
+    gelassen. Der volle Fall - alle drei Tore und die Gegenproben -
+    steht in tests/installer/test_zeitzone.py.
+    """
+    state = PageState()
+    # Leer heisst weiter "keine Angabe" und nicht "falsche Angabe": die
+    # laufende Zone tritt dann in to_config() ein.
+    assert state.page_error("zeit") == ""
+
+    state.timezone = "Europe/Berln"
+    assert state.page_error("zeit") != "", (
+        "ein Tippfehler in der Zeitzone laesst die Seite wieder "
+        "weiterblaettern - `date` nimmt jeden Namen an und die Uhr geht "
+        "danach still falsch")
+    assert "Europe/Berln" in state.page_error("zeit"), (
+        "der Befund nennt den getippten Namen nicht")
 
 
 # --- is_page_valid() gates the "next" button per page -----------------
 
 
-def test_is_page_valid_sprache_zeit_and_zepos_have_no_required_fields():
+def test_is_page_valid_sprache_and_zepos_have_no_required_fields():
+    """"zeit" ist am 02.09.2026 aus dem Namen und aus der Liste
+    gefallen: die Seite HAT jetzt ein Pflichtfeld im Sinne dieser Frage
+    - eine Zone, die die Datenbank nicht kennt, sperrt den
+    Weiter-Knopf.
+
+    Die alte Fassung behauptete das Gegenteil und war trotzdem gruen,
+    weil PageState() mit einer leeren Zeitzone startet. Ein leeres Feld
+    ist keine falsche Angabe; geprueft hat sie damit den Anfangszustand
+    und nicht die Zusage.
+    """
     state = PageState()
     assert state.is_page_valid("sprache") is True
-    assert state.is_page_valid("zeit") is True
     assert state.is_page_valid("zepos") is True
+
+
+def test_is_page_valid_zeit_gates_the_next_button_on_the_timezone():
+    """Der Ersatz fuer die Zeile, die oben herausgefallen ist.
+
+    Leer bleibt gueltig - to_config() setzt dann die laufende Zone.
+    Ein erfundener Name ist es nicht: er kaeme sonst ueber diese Seite
+    bis in die archinstall-Datei, und `date` beschwert sich nicht
+    (installer/core/validate.py:_timezone_findings fuehrt die Messung
+    aus).
+    """
+    state = PageState()
+    assert state.is_page_valid("zeit") is True
+
+    state.timezone = "Europe/Berln"
+    assert state.is_page_valid("zeit") is False, (
+        "der Weiter-Knopf laesst eine Zone durch, die es nicht gibt")
+
+    state.timezone = "UTC"
+    assert state.is_page_valid("zeit") is True, (
+        "eine Zone, die jede Datenbank kennt, wird abgelehnt - dann "
+        "prueft die Zeile darueber nicht die Zone, sondern irgendetwas "
+        "anderes")
 
 
 def test_is_page_valid_datentraeger_requires_a_properly_sized_disk():

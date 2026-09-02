@@ -1038,7 +1038,27 @@ def test_the_application_has_a_desktop_entry_the_launcher_will_show():
     assert entry["Icon"] and "/" not in entry["Icon"], (
         "das Symbol muss ein Name aus dem Thema sein, keine Datei")
     assert "Settings" in entry["Categories"]
-    assert "einstellungen" in entry["Keywords"].lower()
+
+    # DIE SUCHWOERTER, IN BEIDEN SPRACHEN - nachgezogen am 02.09.2026.
+    #
+    # Hier stand `"einstellungen" in entry["Keywords"]`, und der Satz war
+    # richtig, solange Deutsch die Ausgangssprache dieser Datei war. Ist
+    # es nicht mehr: `Keywords=` traegt seither die englischen
+    # Suchwoerter und `Keywords[de]=` die deutschen (die Begruendung
+    # steht in der Datei selbst).
+    #
+    # ERWEITERT und nicht bloss verschoben. Die Zusage war "man findet
+    # die Anwendung unter einem deutschen Suchwort"; sie am neuen
+    # Schluessel zu wiederholen haette das Problem nur verschoben, denn
+    # dann faende sie der englische Nutzer nicht. Geprueft wird deshalb
+    # BEIDES - und ein fehlender Schluessel faellt mit auf, weil
+    # entry[...] dann wirft.
+    assert "einstellungen" in entry["Keywords[de]"].lower(), (
+        "kein deutsches Suchwort - wer 'Einstellungen' tippt, findet "
+        "diese Anwendung nicht")
+    assert "settings" in entry["Keywords"].lower(), (
+        "kein englisches Suchwort im unbezeichneten Schluessel - wer "
+        "'settings' tippt, findet diese Anwendung nicht")
 
 
 def test_every_page_of_the_settings_is_findable(model):
@@ -1072,9 +1092,32 @@ def test_every_page_of_the_settings_is_findable(model):
     for name, title, icon in model.PAGES:
         action = groups.get(f"Desktop Action {name}")
         assert action, f"die Seite {name} hat keine Aktion"
-        assert action["Name"] == title, (
-            f"die Aktion {name} heisst anders als ihre Seite: "
-            f"{action['Name']!r} gegen {title!r}")
+
+        # DER DEUTSCHE NAME STEHT SEIT DEM 02.09.2026 IN `Name[de]`.
+        #
+        # Verglichen wurde hier `action["Name"]`, und das war richtig,
+        # solange Deutsch die Ausgangssprache der .desktop-Datei war.
+        # Ist es nicht mehr: `Name=` traegt seither Englisch,
+        # `Name[de]=` das Deutsche - dieselbe Umstellung, die dem
+        # englischen Nutzer im Starter acht deutsche Aktionen erspart.
+        #
+        # model.PAGES ist weiter DEUTSCH, denn das Fenster selbst
+        # uebersetzt noch nicht (settings/zepos_settings_gui/ ruft kein
+        # gettext; eigener Auftrag). Gegen den deutschen Schluessel
+        # gehalten bleibt die Zusage deshalb wortgleich die alte: die
+        # Aktion im Starter heisst so wie ihr Reiter im Fenster.
+        #
+        # Und der englische Name wird MITgeprueft, statt ihn
+        # ungeprueft zu lassen: ohne ihn faellt der Leser auf gar
+        # nichts zurueck, und eine Aktion ohne `Name=` ist im Starter
+        # eine Zeile ohne Beschriftung.
+        assert action["Name[de]"] == title, (
+            f"die Aktion {name} heisst auf Deutsch anders als ihre "
+            f"Seite: {action['Name[de]']!r} gegen {title!r}")
+        assert action.get("Name"), (
+            f"die Aktion {name} hat keinen Namen in der Ausgangssprache "
+            "- ein Starter in einer dritten Sprache faellt darauf "
+            "zurueck und faende nichts")
         assert action["Icon"] == icon, (
             f"die Aktion {name} traegt ein anderes Symbol als ihre Seite")
         assert action["Exec"] == (

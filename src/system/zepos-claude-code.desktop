@@ -100,10 +100,34 @@
 # Eine Zuordnung, die nur funktioniert, weil eine Exec-Zeile ein
 # bestimmtes Argument traegt, ist eine, die beim naechsten Umbau der
 # Exec-Zeile still zerfaellt.
+#
+# WARUM ZWEI VON DREI TEXTEN SEIT DEM 02.09.2026 DOPPELT DASTEHEN
+#     Eine .desktop-Datei uebersetzt sich SELBST: der unbezeichnete
+#     Schluessel traegt die Ausgangssprache, `GenericName[de]` und
+#     seinesgleichen die Uebersetzungen, und jeder Leser nimmt den
+#     Schluessel zur Sprache seiner Umgebung.
+#
+#     Bis heute stand hier NUR Deutsch als unbezeichneter Schluessel -
+#     wer ZepOS auf Englisch installierte, fand im Starter einen
+#     deutschen Untertitel und eine deutsche Beschreibung. Derselbe
+#     Fehler wie im Anwendungsstarter, nur in einem anderen
+#     Dateiformat.
+#
+# `Name` NICHT: "Claude Code" ist der EIGENNAME des Programms. Ein
+# `Name[de]` daneben waere eine zweite Stelle, an der er abweichen kann -
+# und ein uebersetzter Produktname ist ein anderes Produkt.
 Type=Application
 Name=Claude Code
-GenericName=KI-Assistent auf der Kommandozeile
-Comment=Anthropics Assistent für Programmieren und Systemarbeit – wird beim ersten Aufruf über npm geholt
+GenericName=AI assistant on the command line
+GenericName[de]=KI-Assistent auf der Kommandozeile
+# "npm" steht in BEIDEN Fassungen, und das ist eine Zusage und keine
+# Genauigkeit: tests/src/test_claude_code.py verlangt das Wort in
+# `Comment` (dem unbezeichneten Schluessel), weil der Eintrag nicht
+# verschweigen darf, dass das Programm erst geholt wird - "ich will das
+# packet nicht als meins verkaufen", 01.09.2026. Eine Uebersetzung, die
+# den Hinweis weglaesst, verschwiege ihn der einen Haelfte der Nutzer.
+Comment=Anthropic's assistant for coding and system work – fetched over npm on first use
+Comment[de]=Anthropics Assistent für Programmieren und Systemarbeit – wird beim ersten Aufruf über npm geholt
 Exec=kitty --class zepos-claude-code -e zepos-claude-code
 TryExec=/usr/bin/zepos-claude-code
 Icon=zepos-claude-code
@@ -119,5 +143,14 @@ Categories=Development;Utility;
 # Woraufhin der Starter ihn findet. Der Nutzer sucht ihn vermutlich als
 # "claude", moeglicherweise als "ki" oder "ai" - alle drei stehen hier,
 # damit die Suche nicht am Namen scheitert.
-Keywords=claude;code;ki;ai;assistent;anthropic;terminal;
+#
+# UND SEIT DEM 02.09.2026 IN BEIDEN SPRACHEN, denn zwei der Suchwoerter
+# WAREN deutsch: "ki" und "assistent". Sie standen im unbezeichneten
+# Schluessel, also in der Ausgangssprache - wer auf Englisch sucht,
+# tippt "ai" und "assistant", und "assistant" stand nirgends. Die
+# deutschen Woerter sind nicht weg, sie stehen jetzt dort, wo sie
+# gelten. "claude", "code", "ai", "anthropic" und "terminal" stehen in
+# beiden Zeilen, weil sie in beiden Sprachen dieselben sind.
+Keywords=claude;code;ai;assistant;anthropic;terminal;
+Keywords[de]=claude;code;ki;ai;assistent;assistant;anthropic;terminal;
 StartupNotify=false
