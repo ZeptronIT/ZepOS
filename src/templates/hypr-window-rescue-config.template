@@ -22,8 +22,56 @@
 # Safety:
 #   - Only touches windows that are fully off EVERY monitor (never moves a
 #     window that is already at least partially visible)
-#   - Clamps so the window always lands fully inside the monitor
+#   - Clamps so the window always lands fully inside the monitor - INCLUDING
+#     its title bar, see DIE DEKORATION ZAEHLT MIT below
 #   - Touches ONLY live window positions, never any config file
+#
+# DIE DEKORATION ZAEHLT MIT - SEIT DEM 02.09.2026
+#
+#     `movewindowpixel exact X Y` setzt die Ecke des FENSTERINHALTS. Der
+#     hyprbars-Kopf ist eine reservierte Dekoration an der Oberkante
+#     (`info.edges = DECORATION_EDGE_TOP`, `info.reserved = true`,
+#     `desiredExtents = {{0, HEIGHT}, {0, 0}}` in hyprbars/barDeco.cpp) -
+#     er liegt ueber dieser Ecke, nicht darunter.
+#
+#     GEMESSEN am 02.09.2026, Hyprland 0.56.2 mit hyprbars, bar_height 25,
+#     in einer verschachtelten Sitzung:
+#
+#         movewindowpixel exact 100 0   ->  Inhalt y=0,  KOPF y=-25
+#         togglefloating (Vorgabelage)  ->  Inhalt y=-1, KOPF y=-26
+#
+#     Der Anschlag hier hiess `max(m['y'], ...)`. Jedes Fenster, das weit
+#     genug oben lag, landete damit mit dem Inhalt auf der Oberkante des
+#     Schirms und mit dem Kopf darueber - ausserhalb. Und zwar
+#     GARANTIERT, nicht bei bestimmten Eingaben: der Anschlag IST die
+#     Oberkante.
+#
+#     Das ist bei diesem Werkzeug besonders teuer. Es heisst Rettung und
+#     hat genau einen Zweck: ein Fenster, das man nicht greifen kann,
+#     wieder greifbar machen. Der Kopf traegt die drei Knoepfe UND die
+#     Ziehflaeche - ohne ihn ist das Fenster sichtbar und weiterhin nicht
+#     zu bewegen. Der Absatz darueber versprach seit jeher "fully inside
+#     the monitor"; jetzt stimmt er.
+#
+#     WARUM ERFRAGT UND NICHT GERECHNET: die Kopfhoehe ist eine
+#     Einstellung (plugin:hyprbars:bar_height), der Nutzer kann sie
+#     drehen, hyprbars-toggle setzt sie zur Laufzeit auf 0, und
+#     src/plugins.py laesst den ganzen Block weg, wenn das Objekt fehlt -
+#     dann gibt es die Option nicht. Eine hier eingetippte Zahl waere in
+#     allen drei Faellen falsch. Ohne geladenes Plugin antwortet
+#     `getoption` mit einem Fehler; dann ist der Aufschlag NULL und nicht
+#     geraten.
+#
+#     DIESELBE FRAGE STELLT src/bin/zepos-float-toggle::option(), und
+#     zwar seit demselben Tag - dort fuer SUPER+V, hier fuer die
+#     Rettung. ZWEI Zugaenge zu EINER Frage, und das ist benannt und
+#     nicht versteckt: sie koennen nicht auseinanderlaufen, weil beide
+#     den Compositor fragen statt eine Zahl zu fuehren, aber sie sind
+#     zwei Stellen. Sie zusammenzulegen hiesse, ein gemeinsames Modul
+#     einzuziehen, das ein Shell-Skript mit eingebettetem Python und ein
+#     Programm in src/bin/ beide erreichen - das ist eine Entscheidung
+#     ueber den Bau und keine dieser Behebung. Im Bericht zu Aufgabe 82
+#     steht sie als Empfehlung.
 # =========================================
 
 rescued=$(python3 - <<'PYEOF'
@@ -32,6 +80,37 @@ import json, subprocess
 mons    = json.loads(subprocess.check_output(['hyprctl', 'monitors', '-j']))
 clients = json.loads(subprocess.check_output(['hyprctl', 'clients',  '-j']))
 mon_by_id = {m['id']: m for m in mons}
+
+
+def option(name):
+    """Eine Hyprland-Einstellung als Zahl, oder 0.
+
+    Zwei Faelle ergeben 0, und beide sind echte Lagen dieser Maschine:
+    die Einstellung gehoert einem Plugin, das nicht geladen ist (dann
+    scheitert `getoption`), oder sie ist nie gesetzt worden (dann steht
+    `set: false` in der Antwort). Geraten wird nichts - ein Aufschlag,
+    den es nicht braucht, waere ein Rand, den niemand bestellt hat.
+    """
+    try:
+        raw = subprocess.check_output(
+            ['hyprctl', 'getoption', name, '-j'],
+            stderr=subprocess.DEVNULL, timeout=5)
+        answer = json.loads(raw)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return 0
+    if not answer.get('set'):
+        return 0
+    try:
+        return max(0, int(answer.get('int') or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+# Was ueber der Inhaltsecke liegt: der Titelkopf und der Fensterrahmen.
+# Der Rahmen liegt an JEDER Seite, der Kopf nur oben - deshalb zwei
+# Namen und nicht eine Summe.
+BAR    = option('plugin:hyprbars:bar_height')
+BORDER = option('general:border_size')
 
 def on_screen(x, y, w, h):
     cx, cy = x + w / 2, y + h / 2
@@ -54,9 +133,19 @@ for c in clients:
         continue  # unknown target monitor — do not guess
 
     # Shift by the monitor's origin (restores the reconnect offset), then
-    # clamp so the window is guaranteed fully inside that monitor.
-    nx = max(m['x'], min(x + m['x'], m['x'] + m['width']  - w))
-    ny = max(m['y'], min(y + m['y'], m['y'] + m['height'] - h))
+    # clamp so the window is guaranteed fully inside that monitor -
+    # DEKORATION EINGESCHLOSSEN, siehe den Kopf dieser Datei.
+    #
+    # Die Reihenfolge der beiden Anschlaege entscheidet, und zwar
+    # absichtlich so: `max(...)` steht AUSSEN, also gewinnt die OBERE
+    # Kante, wenn ein Fenster zu hoch ist, um samt Kopf und Rahmen auf
+    # den Schirm zu passen. Ein Fenster, dessen Fuss ein Stueck
+    # ueberhaengt, ist benutzbar; eines, dessen Kopf man nicht fassen
+    # kann, ist es nicht - und genau darum geht es hier.
+    nx = max(m['x'] + BORDER,
+             min(x + m['x'], m['x'] + m['width']  - w - BORDER))
+    ny = max(m['y'] + BAR + BORDER,
+             min(y + m['y'], m['y'] + m['height'] - h - BORDER))
 
     subprocess.run(
         ['hyprctl', 'dispatch', 'movewindowpixel',
