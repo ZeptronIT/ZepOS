@@ -257,6 +257,59 @@ msgstr "{device} trennen"
 msgid "Connect to {device}"
 msgstr "Mit {device} verbinden"
 
+# DIE VIER SAETZE DES KOPPELNS, 02.09.2026 - NOCH OHNE FUNDSTELLE
+#
+# WARUM SIE HIER STEHEN, BEVOR SIE JEMAND AUFRUFT
+#     Das Bluetooth-Fenster rief bis zum 02.09.2026 nur `connect`. Ein
+#     Geraet, das noch nie gekoppelt war, verbindet sich damit nicht -
+#     das Fenster konnte GAR NICHT koppeln. Seit b857209 ruft es
+#     pair/trust/connect, und damit sind drei vorhandene Saetze im
+#     Kopplungsfall falsch:
+#
+#         "Verbinde …"                            waehrend GEKOPPELT wird
+#         "Verbinden fehlgeschlagen - gekoppelt?" nach einem KOPPLUNGSversuch
+#         "Mit {device} verbinden"                wo gekoppelt UND verbunden wird
+#
+#     Die drei bleiben stehen und werden NICHT ersetzt: fuer ein schon
+#     gekoppeltes Geraet sagen sie weiter die Wahrheit. Die vier hier
+#     sind der zweite Weg, nicht der neue.
+#
+#     Der vierte ist der wichtigste und fehlte ganz. Ohne den Hinweis
+#     auf den Kopplungsmodus scheitert eine Kopplung, und der Nutzer
+#     sieht nur, dass nichts passiert - das Geraet hat nie zugehoert.
+#
+# WARUM "Kopple …" UND NICHT "Koppeln …"
+#     Weil die Nachbarn in genau demselben Moment derselben Zeile
+#     "Verbinde …" und "Trenne …" sagen. Erste Person Singular ist in
+#     diesem Katalog die Form der Ansage waehrend eines Klicks; ein
+#     Infinitiv daneben liest sich wie eine Beschriftung und nicht wie
+#     etwas, das gerade laeuft. Der Kommentar in ags-bluetooth.template
+#     schlaegt "Koppeln …" vor - er ist aelter als diese Nachbarschaft.
+#
+# KEINE `#:`-ZEILE, UND DAS IST KEIN VERSEHEN
+#     tests/src/test_ags_i18n.py verlangt fuer jeden _()-Text der
+#     Vorlagen einen Katalogeintrag. Der Eintrag muss also VOR dem
+#     Aufruf dastehen, sonst ist der Zweig, der die Aufrufe einbaut,
+#     unweigerlich rot. `extract.sh` traegt die Fundstelle nach, sobald
+#     ags-bluetooth.template sie ruft; eine getippte Zeilennummer waere
+#     bis dahin eine Angabe, die nicht stimmt.
+#
+#     BIS DAHIN GILT: ein `extract.sh && msgmerge -U` VOR diesem Einbau
+#     kommentiert die vier als obsolet (`#~`) aus - keine Vorlage nennt
+#     sie. Wer msgmerge laufen laesst und danach vier Eintraege
+#     vermisst, findet sie am Ende der Datei und nicht im Nichts.
+msgid "Pairing …"
+msgstr "Kopple …"
+
+msgid "Pair with {device} and connect"
+msgstr "Mit {device} koppeln und verbinden"
+
+msgid "Pairing failed - hold the pairing button and try again"
+msgstr "Koppeln fehlgeschlagen - halte die Kopplungstaste gedrückt und versuche es erneut"
+
+msgid "Put the device into pairing mode - usually a button on its underside"
+msgstr "Bringe das Gerät in den Kopplungsmodus - meist eine Taste an seiner Unterseite"
+
 #: src/templates/ags-bluetooth.template:812
 msgid "DEVICES"
 msgstr "GERÄTE"
