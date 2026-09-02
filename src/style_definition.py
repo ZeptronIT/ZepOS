@@ -219,12 +219,34 @@ def get_user_vpn_setting(key, default=None):
     """
     Get user-defined VPN setting using dot notation for nested keys.
 
+    DIE VORGABE KOMMT AUS DER TABELLE UND NICHT AUS DEM AUFRUF - SEIT
+    DEM 01.09.2026
+        Bis dahin trug JEDER der siebenundzwanzig Aufrufe dieser
+        Funktion seinen Vorgabewert eingetippt mit:
+
+            get_user_vpn_setting("phase1.keylife", 86400)
+            get_user_vpn_setting("phase2.mode", "tunnel")
+
+        Das war die dritte Menge von VPN-Vorgaben in diesem Baum, und
+        sie war die gefaehrlichste der vier: sie stand nicht als Tabelle
+        da, die jemand haette vergleichen koennen, sondern verteilt
+        ueber zwei Bildschirmseiten. GEMESSEN am 01.09.2026 stimmten
+        alle siebenundzwanzig noch mit der Tabelle ueberein - was nichts
+        darueber sagt, ob der achtundzwanzigste es tut.
+
+        Der Rueckfall geht jetzt auf settings.default_connection(),
+        denselben Weg, den user_settings.get_vpn_setting() seit jeher
+        geht. Ein `default` im Aufruf schlaegt die Tabelle weiterhin -
+        aber es steht nur noch dort, wo der Aufrufer wirklich etwas
+        anderes meint als die Vorgabe.
+
     Args:
         key: Setting key with dot notation (e.g., "server", "phase1.version", "dns.servers")
-        default: Default value if not found
+        default: Value when the setting is absent. None means "answer
+            from settings.default_connection()".
 
     Returns:
-        The setting value or default
+        The setting value, the given default, or the project default
     """
     # DIE GEWAEHLTE VERBINDUNG, SEIT DEM 22.08.2026 - und nicht mehr
     # der Abschnitt selbst.
@@ -253,6 +275,17 @@ def get_user_vpn_setting(key, default=None):
             break
 
     if value is None:
+        if default is None:
+            # Denselben gepunkteten Weg noch einmal, jetzt durch die
+            # Vorgabentabelle. Ein Schluessel, den auch sie nicht kennt,
+            # ergibt None - genau wie vorher.
+            vorgabe = settings_module.default_connection()
+            for k in keys:
+                if isinstance(vorgabe, dict):
+                    vorgabe = vorgabe.get(k)
+                else:
+                    return None
+            return vorgabe
         return default
 
     return value
@@ -306,7 +339,7 @@ def get_user_weather_setting(key, default=""):
 
 def vpn_connection_name():
     """Get the configured VPN connection name."""
-    return get_user_vpn_setting("connection_name", "work")
+    return get_user_vpn_setting("connection_name")
 
 def vpn_list_setting(key):
     """One of the VPN settings that is a list, blanks removed.
@@ -324,7 +357,7 @@ def vpn_list_setting(key):
     holds it.
     """
     try:
-        return nonblank_entries(get_user_vpn_setting(key, []),
+        return nonblank_entries(get_user_vpn_setting(key),
                                 setting=f"vpn.{key}")
     except UnusableSettings as exc:
         raise UnusableSettings(
@@ -362,7 +395,12 @@ def vpn_wireguard_block():
     Ein JSON-Text ist ausserdem das einzige, was eine Liste von
     Gegenstellen ueberhaupt durch einen {{STYLE_*}}-Platzhalter bringt.
     """
-    block = get_user_vpn_setting("wireguard", None)
+    # Der Rueckfall auf die Vorgabentabelle steckt seit dem 01.09.2026
+    # in get_user_vpn_setting() selbst - hier stand er vorher noch
+    # einmal ausgeschrieben. Die isinstance-Pruefung bleibt: ein
+    # handgeschriebenes `"wireguard": "ja"` in der Datei des Nutzers ist
+    # kein Abschnitt, und json.dumps() wuerde es klaglos ausgeben.
+    block = get_user_vpn_setting("wireguard")
     if not isinstance(block, dict):
         block = settings_module.default_connection()["wireguard"]
     return json.dumps(block)
@@ -380,7 +418,7 @@ def vpn_openvpn_block():
     Traegt KEIN Geheimnis - nur Dateinamen, den Endpunkt und die
     ausgehandelten Verfahren.
     """
-    block = get_user_vpn_setting("openvpn", None)
+    block = get_user_vpn_setting("openvpn")
     if not isinstance(block, dict):
         block = settings_module.default_connection()["openvpn"]
     return json.dumps(block)
@@ -406,11 +444,11 @@ def vpn_children_block():
     return swanctl_children(
         vpn_connection_name(),
         networks,
-        rekey_time=str(get_user_vpn_setting("phase2.rekey_time", 43200)),
-        life_time=str(get_user_vpn_setting("phase2.life_time", 43200)),
-        esp_proposals=get_user_vpn_setting("phase2.esp_proposals", "aes256-sha256-ecp521"),
-        mode=get_user_vpn_setting("phase2.mode", "tunnel"),
-        replay_window=str(get_user_vpn_setting("phase2.replay_window", 32)),
+        rekey_time=str(get_user_vpn_setting("phase2.rekey_time")),
+        life_time=str(get_user_vpn_setting("phase2.life_time")),
+        esp_proposals=get_user_vpn_setting("phase2.esp_proposals"),
+        mode=get_user_vpn_setting("phase2.mode"),
+        replay_window=str(get_user_vpn_setting("phase2.replay_window")),
     )
 
 def audio_section():
@@ -1849,9 +1887,9 @@ _FIXED_STYLE_VARIABLES = {
     # Zertifikate und der private Schluessel liegen als Dateien unter
     # ~/.config/openvpn, hier stehen nur ihre Namen.
     "STYLE_VPN_OPENVPN": vpn_openvpn_block(),
-    "STYLE_VPN_SERVER": get_user_vpn_setting("server", ""),
-    "STYLE_VPN_USERNAME": get_user_vpn_setting("username", ""),
-    "STYLE_VPN_CONNECTION_NAME": get_user_vpn_setting("connection_name", "work"),
+    "STYLE_VPN_SERVER": get_user_vpn_setting("server"),
+    "STYLE_VPN_USERNAME": get_user_vpn_setting("username"),
+    "STYLE_VPN_CONNECTION_NAME": get_user_vpn_setting("connection_name"),
     "STYLE_COLOR_VPN_CONNECTING": get_user_color("vpn_connecting"),
     "STYLE_OVERLAY_BORDER_COLOR": get_user_color("overlay_border"),
 
@@ -1895,21 +1933,21 @@ _FIXED_STYLE_VARIABLES = {
     # version and the key lifetime, so whether a tunnel came up as IKEv2
     # main mode or IKEv1 aggressive mode depended on which of the two had
     # last written the settings file.
-    "STYLE_VPN_VERSION": str(get_user_vpn_setting("phase1.version", 2)),
-    "STYLE_VPN_AGGRESSIVE": "yes" if get_user_vpn_setting("phase1.aggressive", False) else "no",
-    "STYLE_VPN_IKE_PROPOSALS": get_user_vpn_setting("phase1.proposals", "aes256-sha256-ecp521"),
-    "STYLE_VPN_DPD_DELAY": str(get_user_vpn_setting("phase1.dpd_delay", 30)),
-    "STYLE_VPN_DPD_TIMEOUT": str(get_user_vpn_setting("phase1.dpd_timeout", 120)),
-    "STYLE_VPN_KEYLIFE": str(get_user_vpn_setting("phase1.keylife", 86400)),
-    "STYLE_VPN_ENCAP": "yes" if get_user_vpn_setting("phase1.encap", True) else "no",
-    "STYLE_VPN_MOBIKE": "yes" if get_user_vpn_setting("phase1.mobike", False) else "no",
+    "STYLE_VPN_VERSION": str(get_user_vpn_setting("phase1.version")),
+    "STYLE_VPN_AGGRESSIVE": "yes" if get_user_vpn_setting("phase1.aggressive") else "no",
+    "STYLE_VPN_IKE_PROPOSALS": get_user_vpn_setting("phase1.proposals"),
+    "STYLE_VPN_DPD_DELAY": str(get_user_vpn_setting("phase1.dpd_delay")),
+    "STYLE_VPN_DPD_TIMEOUT": str(get_user_vpn_setting("phase1.dpd_timeout")),
+    "STYLE_VPN_KEYLIFE": str(get_user_vpn_setting("phase1.keylife")),
+    "STYLE_VPN_ENCAP": "yes" if get_user_vpn_setting("phase1.encap") else "no",
+    "STYLE_VPN_MOBIKE": "yes" if get_user_vpn_setting("phase1.mobike") else "no",
 
     # VPN Phase 2 (ESP) Settings
-    "STYLE_VPN_REKEY_TIME": str(get_user_vpn_setting("phase2.rekey_time", 43200)),
-    "STYLE_VPN_LIFE_TIME": str(get_user_vpn_setting("phase2.life_time", 43200)),
-    "STYLE_VPN_ESP_PROPOSALS": get_user_vpn_setting("phase2.esp_proposals", "aes256-sha256-ecp521"),
-    "STYLE_VPN_MODE": get_user_vpn_setting("phase2.mode", "tunnel"),
-    "STYLE_VPN_REPLAY_WINDOW": str(get_user_vpn_setting("phase2.replay_window", 32)),
+    "STYLE_VPN_REKEY_TIME": str(get_user_vpn_setting("phase2.rekey_time")),
+    "STYLE_VPN_LIFE_TIME": str(get_user_vpn_setting("phase2.life_time")),
+    "STYLE_VPN_ESP_PROPOSALS": get_user_vpn_setting("phase2.esp_proposals"),
+    "STYLE_VPN_MODE": get_user_vpn_setting("phase2.mode"),
+    "STYLE_VPN_REPLAY_WINDOW": str(get_user_vpn_setting("phase2.replay_window")),
 
     # VPN DNS Settings
     #
@@ -1918,7 +1956,7 @@ _FIXED_STYLE_VARIABLES = {
     # per resolver, so a third could not be expressed and a single one
     # left an empty second slot behind.
     "STYLE_VPN_DNS_SERVERS": " ".join(vpn_list_setting("dns.servers")),
-    "STYLE_VPN_SEARCH_DOMAIN": get_user_vpn_setting("dns.search_domain", ""),
+    "STYLE_VPN_SEARCH_DOMAIN": get_user_vpn_setting("dns.search_domain"),
 
     # VPN Routed Networks
     #
@@ -1944,7 +1982,7 @@ _FIXED_STYLE_VARIABLES = {
 
     # A host that only answers through the tunnel. Reaching the internet
     # proves the internet works, not that the VPN does.
-    "STYLE_VPN_TEST_HOST": get_user_vpn_setting("test_host", ""),
+    "STYLE_VPN_TEST_HOST": get_user_vpn_setting("test_host"),
 
     # ============================================================================
     # NETWORK WATCHDOG

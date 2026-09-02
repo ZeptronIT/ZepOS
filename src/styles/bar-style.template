@@ -857,16 +857,20 @@ tooltip label {
   color: {{STYLE_COLOR_OFFLINE}};
 }
 
-/* DAS VPN-SCHILD - drei Zustaende, drei Farben (Aufgabe 69, 22.08.2026)
+/* DAS VPN-SCHILD - vier Zustaende, vier Farben (Aufgabe 69,
+ * 22.08.2026; der vierte seit dem 01.09.2026)
  *
  * BESTELLT: "ein schild mit farbe und tooltip ... nicht verbunden,
  * verbunden, error - mit einer farbe verbunden".
  *
- * Keine eigene Ruheregel und keine vierte Farbe: die drei Namen sind
+ * Keine eigene Ruheregel und KEIN eigener Farbname: die vier Namen sind
  * die allgemeinen Zustandsfarben dieser Datei, dieselben, die der Akku,
  * das Netz und die Hardwareanzeige tragen. Ein eigenes
  * STYLE_COLOR_VPN_* waere der Katalog, gegen den der Block bei
- * #custom-hardware oben schon einmal argumentiert hat.
+ * #custom-hardware oben schon einmal argumentiert hat. Hier stand bis
+ * zum 01.09.2026 "keine vierte Farbe" - die vierte ist dazugekommen,
+ * weil ein vierter ZUSTAND dazugekommen ist (src/vpn.py::UNKNOWN), und
+ * nicht, weil das Schild eine eigene Palette bekaeme.
  *
  * WAS DIE DREI KOSTEN - GERECHNET am 22.08.2026, nicht geschaetzt
  *     Dieselbe Rechnung, die tests/src/test_glass.py fuer den
@@ -898,12 +902,12 @@ tooltip label {
  *     Entscheidung ueber die Palette in src/brand.py, und die gehoert
  *     dem Nutzer.
  *
- * UND WARUM DIE FARBE NICHT ALLEIN TRAEGT: die drei Zustaende haben
- * drei verschiedene ZEICHEN (nf-md-shield_lock, nf-md-shield_off,
- * nf-md-shield_alert, siehe bar-vpn-config.template). Rot-Gruen ist die
- * haeufigste Farbsehschwaeche, und "geschuetzt" mit "ungeschuetzt" zu
- * verwechseln ist genau der Irrtum, den dieses Schild verhindern
- * soll. */
+ * UND WARUM DIE FARBE NICHT ALLEIN TRAEGT: die Zustaende haben
+ * verschiedene ZEICHEN (nf-md-shield_lock, nf-md-shield_off,
+ * nf-md-shield_alert und seit dem 01.09.2026 nf-md-help_circle, siehe
+ * bar-vpn-config.template). Rot-Gruen ist die haeufigste
+ * Farbsehschwaeche, und "geschuetzt" mit "ungeschuetzt" zu verwechseln
+ * ist genau der Irrtum, den dieses Schild verhindern soll. */
 #custom-vpn {
 }
 
@@ -923,6 +927,41 @@ tooltip label {
  * darunter. */
 #custom-vpn.vpn-disconnected {
   color: {{STYLE_COLOR_INACTIVE}};
+}
+
+/* NIEMAND WEISS ES - das vierte Wort, seit dem 01.09.2026.
+ *
+ * DIE WARNFARBE UND NICHT DAS KRITISCHROT: rot ist in dieser Datei die
+ * Farbe fuer "es ist etwas kaputt, und wir wissen was" - der halb
+ * stehende Tunnel darueber, die Platte, die vollaeuft. Hier ist gerade
+ * nichts festgestellt worden; nur das Feststellen ist ausgefallen. Rot
+ * waere die Behauptung eines Schadens, der vielleicht gar nicht
+ * vorliegt, und ein Schild, das rot wird, weil NetworkManager neu
+ * startet, ist nach dem dritten Mal keines mehr.
+ *
+ * UND NICHT DIE ABBLENDUNG VON "getrennt", so nahe das laege: gedaempft
+ * heisst in dieser Leiste ueberall "vorhanden und in Ruhe". Genau
+ * dieser Schluss - "wird schon nichts sein" - ist der, den der Zustand
+ * verhindern soll.
+ *
+ * KONTRAST - GERECHNET am 01.09.2026 in derselben Glasrechnung wie die
+ * Tabelle oben (dieselbe Formel wie tests/src/test_glass.py, dieselben
+ * beiden Extreme; die Zahlen der drei Farben darueber kommen dabei
+ * Hundertstel fuer Hundertstel wieder heraus):
+ *
+ *     warning              weisse   schwarze   schlechtester
+ *     ZeptronIT  #FFCB00     6.78      11.03        6.78
+ *     Tageslicht #6B4900     7.22       5.14        5.14
+ *
+ * WCAG 2.1 SC 1.4.3 verlangt 4.5:1, und diese Farbe ist die einzige
+ * Zustandsfarbe der Leiste, die in BEIDEN Themen darueber liegt -
+ * critical kommt in ZeptronIT auf 4.55, inactive auf 4.47, und in
+ * Tageslicht liegen success (4.13) und inactive (3.93) darunter (siehe
+ * den Befund im Kopf dieses Abschnitts). Das trifft sich gut mit dem,
+ * was diese eine Zeile leisten muss: sie soll gelesen werden, BEVOR
+ * der Nutzer etwas Vertrauliches tut. */
+#custom-vpn.vpn-unknown {
+  color: {{STYLE_COLOR_WARNING}};
 }
 
 #bluetooth {

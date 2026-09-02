@@ -21,10 +21,10 @@ WARUM DAS MEHR IST ALS ZIERDE
     "custom/vpn", `toggles: "vpn"` -> zeigeSeite("vpn")).
 
 WIE VIELE ZUSTAENDE ES WIRKLICH GIBT - GEZAEHLT, NICHT AUFGEZAEHLT
-    Bestellt waren drei. `vpn.py --status` kennt DREI WOERTER, und
-    dieses Modul zeigt FUENF Bilder. Die zwei zusaetzlichen liegen VOR
-    dem ersten Wort, und beide sind Faelle, die es auf echten Maschinen
-    gibt:
+    Bestellt waren drei. `vpn.py --status` kennt seit dem 01.09.2026
+    VIER WOERTER (bis dahin drei), und dieses Modul zeigt SECHS Bilder
+    (bis dahin fuenf). Die zwei zusaetzlichen liegen VOR dem ersten
+    Wort, und beide sind Faelle, die es auf echten Maschinen gibt:
 
       GAR KEINE VERBINDUNG EINGERICHTET
           leeres "text", das Modul verschwindet. Dieselbe Regel, nach
@@ -53,6 +53,11 @@ WIE VIELE ZUSTAENDE ES WIRKLICH GIBT - GEZAEHLT, NICHT AUFGEZAEHLT
                     NetworkManager "aktiviert, aber ohne Adresse". Beide
                     Wege stehen ausgeschrieben in src/vpn.py bei
                     tunnel_status() und wireguard_status().
+      unknown       ICON_QUESTION, Warnfarbe (Klasse "vpn-unknown") -
+                    das vierte Wort, seit dem 01.09.2026. Der Absatz
+                    "DER DIENST ANTWORTET NICHT" weiter unten fuehrt
+                    aus, warum es ihn gibt und warum er nicht
+                    `disconnected` heissen darf.
 
     WAS ES NICHT GIBT, UND DAS IST WICHTIGER ALS DIE LISTE
 
@@ -67,14 +72,39 @@ WIE VIELE ZUSTAENDE ES WIRKLICH GIBT - GEZAEHLT, NICHT AUFGEZAEHLT
       zweites Mal an NetworkManager zu fragen - genau die zweite Quelle,
       gegen die der Kopf von bar-status-config.template argumentiert.
 
-      "DER DIENST ANTWORTET NICHT" ebenso wenig, und das ist eine
-      GRENZE DES VERTRAGS und keine Entscheidung dieser Datei: `_run()`
-      in src/vpn.py faengt ein fehlendes oder haengendes nmcli ab und
-      gibt eine leere Antwort zurueck, aus der "disconnected" wird. Ein
-      totes NetworkManager sieht damit aus wie ein nicht verbundenes
-      VPN. Wer das aufloesen will, loest es in src/vpn.py auf, wo die
-      vier anderen Leser derselben Zeile mitprofitieren - nicht hier,
-      mit einer sechsten Meinung ueber denselben Zustand.
+      "DER DIENST ANTWORTET NICHT" war bis zum 01.09.2026 ebenso wenig
+      einer, und der Absatz, der hier stand, nannte den Weg dorthin
+      schon: "das ist eine GRENZE DES VERTRAGS und keine Entscheidung
+      dieser Datei - `_run()` in src/vpn.py faengt ein fehlendes oder
+      haengendes nmcli ab und gibt eine leere Antwort zurueck, aus der
+      'disconnected' wird. Wer das aufloesen will, loest es in
+      src/vpn.py auf, wo die vier anderen Leser derselben Zeile
+      mitprofitieren - nicht hier, mit einer sechsten Meinung ueber
+      denselben Zustand."
+
+      GENAU SO IST ES GEKOMMEN, und darum steht das Schild jetzt auf
+      SECHS Bildern. `vpn.py --status` kennt ein viertes Wort:
+
+      unknown       ICON_QUESTION, Warnfarbe (Klasse "vpn-unknown").
+                    nmcli hat NICHT geantwortet: es fehlt, es haengt,
+                    oder NetworkManager laeuft nicht (rc=8).
+
+      Der Unterschied ist keine Feinheit, sondern der ganze Zweck
+      dieses Moduls. "Getrennt" heisst "dein Verkehr laeuft
+      ungeschuetzt" - eine Aussage. "Niemand antwortet" heisst "niemand
+      weiss, ob dein Verkehr geschuetzt ist" - das Fehlen einer. Wer
+      das erste liest, wo das zweite gilt, haelt einen Ausfall der
+      Anzeige fuer einen gewoehnlichen Ruhezustand; und in der anderen
+      Richtung verbindet er neu, obwohl vielleicht ein Tunnel steht.
+      Der Kurzhinweis muss das darum AUSSPRECHEN und nicht bloss eine
+      andere Farbe zeigen.
+
+      Eine Auskunft bleibt `disconnected`, auch eine unbequeme:
+      antwortet nmcli mit rc=10 ("die genannte Verbindung gibt es
+      nicht"), ist das eine vollstaendige Aussage ueber den Tunnel.
+      Ohne diese Trennung waere `unknown` nur ein neuer Name fuer
+      denselben Sammelzweig, und eine Maschine ohne eingerichtete
+      Verbindung truege dauerhaft "niemand weiss es".
 
 WARUM EIN EIGENES SKRIPT UND NICHT EIN SECHSTES MODUL IN status.sh
     Der Kopf von bar-status-config.template nennt den guten Grund fuer
@@ -149,6 +179,21 @@ ICON_CONNECTED = "{{ICON_VPN_CONNECTED}}"
 ICON_DISCONNECTED = "{{ICON_VPN_DISCONNECTED}}"
 ICON_STALE = "{{ICON_VPN_ERROR}}"
 ICON_ALERT = "{{ICON_ALERT}}"
+
+# `unknown`, seit dem 01.09.2026. KEIN Schild, und das ist Absicht: die
+# drei Schilder oben sagen alle etwas ueber den Schutz aus (er steht, er
+# steht nicht, er steht nur halb). Dieser Zustand sagt ueber den Schutz
+# gar nichts - ein viertes Schild waere die vierte Aussage in einer
+# Reihe, in der gerade keine Aussage moeglich ist.
+#
+# NICHT nf-md-shield_question, obwohl das die naheliegende Form waere:
+# src/icons_db.py ist erzeugt und traegt nur, was in
+# src/icon_definition.py steht. Eine neue Marke dort kostet einen Lauf
+# von fetch_icons.sh, und der laedt die ganze Zeichentabelle neu aus dem
+# Netz - ein erzeugtes Ergebnis, das mit dieser Aufgabe nichts zu tun
+# hat. ICON_QUESTION gibt es, es ist von allen dreien unterscheidbar,
+# und es sagt genau das Richtige.
+ICON_UNKNOWN = "{{ICON_QUESTION}}"
 
 # Wie die drei Bauarten geschrieben werden, wenn ein Mensch sie liest.
 # Dieselben drei Schreibweisen wie in der Nebenzeile der Verbindungsliste
@@ -257,6 +302,19 @@ def antwort():
     if zustand == vpn.DISCONNECTED:
         return modul(ICON_DISCONNECTED, f"VPN getrennt\n{kopf}",
                      "vpn-disconnected")
+
+    if zustand == vpn.UNKNOWN:
+        # DER KURZHINWEIS MUSS DEN UNTERSCHIED AUSSPRECHEN, nicht nur
+        # die Farbe. "NetworkManager antwortet nicht" allein liesse den
+        # Leser selbst schliessen, was das fuer seinen Verkehr heisst -
+        # und der naheliegende Schluss ("dann laeuft wohl nichts") ist
+        # genau der falsche. Also steht beides da: was passiert ist, und
+        # was daraus folgt.
+        return modul(ICON_UNKNOWN,
+                     "VPN unbekannt\n" + kopf
+                     + "\nNetworkManager antwortet nicht"
+                     + "\nNiemand weiß, ob dein Verkehr geschützt ist",
+                     "vpn-unknown")
 
     # Ein Wort, das der Vertrag nicht kennt. Das kann nur passieren,
     # wenn `--status` umgebaut wurde, ohne diese Datei mitzunehmen -

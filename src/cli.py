@@ -55,6 +55,9 @@ import monitors
 import settings
 import theme
 import update
+# Nur fuer new_connection_id(): eine Kennung wird an EINER Stelle
+# vergeben, sonst kollidiert die Befehlszeile irgendwann mit dem Fenster.
+import vpn
 from paths import user_root
 
 # Named absolutely, so finding the interpreter never depends on PATH -
@@ -270,6 +273,50 @@ def _get(document: dict[str, Any], key: str | None) -> int:
 #     die gewaehlte Verbindung von der Befehlszeile aus zu wechseln.
 VPN_SECTION_KEYS = ("active", "connections")
 
+# Der Abschnittsname, einmal benannt statt viermal getippt - dieselbe
+# Ueberlegung, aus der settings.py VPN/VPN_ACTIVE/VPN_CONNECTIONS fuehrt.
+VPN_SECTION = settings.VPN
+
+
+def _erste_verbindung(document: dict[str, Any]) -> dict[str, Any]:
+    """Die eine Verbindung, die `set vpn.<etwas>` vorfinden muss.
+
+    AUS default_connection() UND MIT EIGENER KENNUNG
+        Aus der Vorgabentabelle gebaut und nicht getippt: sie ist seit
+        dem 01.09.2026 die einzige Stelle, an der steht, welche
+        Schluessel eine Verbindung hat (siehe ihren Kopf in
+        src/settings.py). Eine hier abgeschriebene Menge waere genau
+        die fuenfte, die dieser Umbau abgeschafft hat.
+
+        Die Kennung kommt aus vpn.new_connection_id() und nicht aus
+        settings.MIGRATED_ID: "c1" gehoert der Wanderung und darf nur
+        einmal vergeben werden - eine zweite Verbindung mit derselben
+        Kennung liesse Schalter und Schluesseldateien auf die falsche
+        zeigen.
+
+    `active` ZEIGT DANACH AUF SIE
+        Eine Verbindung, die zwar in der Liste steht, aber nicht
+        gewaehlt ist, sieht jeder Leser ueber vpn.connection() - der
+        antwortet mit der ERSTEN, wenn die gesuchte Kennung fehlt. Das
+        haette hier funktioniert und waere trotzdem falsch: der Nutzer
+        hat gerade seinen einzigen Zugang eingerichtet, und der soll
+        auch der gewaehlte sein.
+    """
+    section = document.get(VPN_SECTION)
+    if not isinstance(section, dict):
+        section = {settings.VPN_ACTIVE: "", settings.VPN_CONNECTIONS: []}
+        document[VPN_SECTION] = section
+    entries = section.get(settings.VPN_CONNECTIONS)
+    if not isinstance(entries, list):
+        entries = []
+        section[settings.VPN_CONNECTIONS] = entries
+
+    neu = dict(settings.default_connection(),
+               **{settings.VPN_ID: vpn.new_connection_id()})
+    entries.append(neu)
+    section[settings.VPN_ACTIVE] = neu[settings.VPN_ID]
+    return neu
+
 
 def _vpn_target(document: dict[str, Any], parts: list[str]) -> list[str] | None:
     """`["vpn", "server"]` -> `["vpn", "connections", "0", "server"]`.
@@ -302,9 +349,46 @@ def _set(document: dict[str, Any], key: str, raw: str) -> int:
     # would refuse the keys the style layer and the installer put there,
     # which are not in settings.defaults().
     # Ein VPN-Pfad zeigt auf die gewaehlte Verbindung; gibt es noch
-    # keine, faellt er auf die Vorgabe EINER Verbindung zurueck, damit
-    # `set vpn.server` auf einer frischen Installation weiter geht.
+    # keine, wird sie ANGELEGT, damit `set vpn.server` auf einer
+    # frischen Installation weiter geht.
+    #
+    # HIER STAND BIS ZUM 01.09.2026 EIN RUECKFALL, DER NUR DIE PRUEFUNG
+    # UMLEITETE UND NICHT DEN SCHREIBWEG
+    #
+    #     `_holds({"vpn": default_connection()}, parts)` liess den Pfad
+    #     durch, `parts` blieb aber `["vpn", "server"]`. Geschrieben
+    #     wurde der Wert damit als Geschwister von `active` und
+    #     `connections` IN DEN ABSCHNITT - und der Abschnitt ist seit
+    #     dem 22.08.2026 keine Verbindung mehr, sondern eine Liste von
+    #     Verbindungen.
+    #
+    #     GEMESSEN am 01.09.2026 an einem frischen Benutzerverzeichnis
+    #     ohne Einstellungsdatei:
+    #
+    #         set vpn.server gw.example.org   -> 0
+    #         get vpn.server                  -> gw.example.org
+    #         vpn.connection(load())          -> {}
+    #
+    #     Derselbe Schluessel mit zwei Antworten, je nachdem wer fragt.
+    #     `get` las den verlegten Wert ueber denselben Rueckfall zurueck
+    #     und sah darum richtig aus, waehrend der Erzeuger, das
+    #     Verbindungsskript und das Fenster einen leeren Server sahen.
+    #     Genau die leise Art zu scheitern, vor der _unknown() weiter
+    #     unten woertlich warnt.
+    #
+    #     Angelegt wird nur, wenn der Pfad WIRKLICH ein Schluessel einer
+    #     Verbindung ist - `set vpn.tippfehler x` legt nichts an und
+    #     bleibt "no such setting". Und nur beim SCHREIBEN: _get() legt
+    #     nichts an, ein Lesen darf die Datei nicht veraendern.
     umgeleitet = _vpn_target(document, parts)
+    if (umgeleitet is None
+            and len(parts) >= 2
+            and parts[0] == VPN_SECTION
+            and parts[1] not in VPN_SECTION_KEYS
+            and _holds({"vpn": settings.default_connection()}, parts)):
+        _erste_verbindung(document)
+        umgeleitet = _vpn_target(document, parts)
+
     if umgeleitet is not None:
         if not (_holds(document, umgeleitet)
                 or _holds({"vpn": settings.default_connection()}, parts)):

@@ -74,32 +74,64 @@ from typing import Any, Callable, Sequence
 # THIS module was loaded and never by what an earlier import left on the
 # path.
 try:
-    from .settings import UnusableSettings
+    from .settings import UnusableSettings, default_connection
 except ImportError:
-    from settings import UnusableSettings
+    from settings import UnusableSettings, default_connection
 
-# The same proposal set src/user_settings.py and src/style_definition.py
-# already default to. A THIRD default would be one more thing that has to
-# be kept in step, and the one place it would show up is a tunnel that
-# negotiates something other than what the settings dialog displays.
-PROPOSALS = "aes256-sha256-ecp521"
+# DIE TUNING-VORGABEN, GEHOLT STATT GETIPPT - SEIT DEM 01.09.2026
+#
+#     Hier standen elf Literale. Der Kommentar darueber warnte selbst
+#     vor dem, was sie waren: "A THIRD default would be one more thing
+#     that has to be kept in step, and the one place it would show up is
+#     a tunnel that negotiates something other than what the settings
+#     dialog displays." Es waren am Ende vier Mengen, nicht drei - der
+#     Kopf von settings.default_connection() zaehlt sie auf.
+#
+#     GEMESSEN am 01.09.2026: alle elf stimmten mit der Tabelle
+#     ueberein. Das ist kein Grund, sie stehen zu lassen, sondern der
+#     Grund, warum das Holen risikolos ist - Zeile fuer Zeile derselbe
+#     erzeugte swanctl-Block wie vorher.
+#
+# TEXT UND NICHT ZAHL, UND DAS BLEIBT SO
+#     swanctl.conf ist Text, und _setting() gibt Text zurueck. Die
+#     Tabelle traegt Zahlen und Wahrheitswerte, weil die
+#     Einstellungsdatei JSON ist und ein Regler im Fenster eine Zahl
+#     braucht. Die Umwandlung steht hier, an EINER Stelle, statt an
+#     jeder Verwendungsstelle - und "yes"/"no" ist die Schreibweise,
+#     die swanctl versteht, nicht "True"/"False".
+_VORGABE = default_connection()
+_PHASE1 = _VORGABE["phase1"]
+_PHASE2 = _VORGABE["phase2"]
 
-# Matches the connect script's own defaults so the two cannot drift into
-# producing differently-tuned tunnels from the same settings file.
-REKEY_TIME = "43200"
-LIFE_TIME = "43200"
-MODE = "tunnel"
-REPLAY_WINDOW = "32"
 
-# Phase 1, from the same set. IKEv2 in main mode: aggressive mode is an
-# IKEv1 concept, and the connect script emits the `aggressive` line only
-# for version 1, so this module must not emit it for version 2 either.
-IKE_VERSION = "2"
-KEYLIFE = "86400"
-DPD_DELAY = "30"
-DPD_TIMEOUT = "120"
-ENCAP = "yes"
-MOBIKE = "no"
+def _text(wert: Any) -> str:
+    """Ein Vorgabewert in der Schreibweise, die swanctl.conf traegt."""
+    if isinstance(wert, bool):
+        return "yes" if wert else "no"
+    return str(wert)
+
+
+PROPOSALS = _text(_PHASE1["proposals"])
+
+# Phase 2. `esp_proposals` traegt in der Tabelle denselben Satz wie
+# Phase 1 und wird trotzdem einzeln geholt: dass die beiden heute gleich
+# sind, ist eine Eigenschaft der Vorgabe und keine Regel - wer einen
+# davon aendert, soll nicht ungefragt den anderen mitaendern.
+ESP_PROPOSALS = _text(_PHASE2["esp_proposals"])
+REKEY_TIME = _text(_PHASE2["rekey_time"])
+LIFE_TIME = _text(_PHASE2["life_time"])
+MODE = _text(_PHASE2["mode"])
+REPLAY_WINDOW = _text(_PHASE2["replay_window"])
+
+# Phase 1. IKEv2 im Hauptmodus: `aggressive` ist ein IKEv1-Begriff, und
+# das Verbindungsskript schreibt die Zeile nur fuer version 1 - also
+# darf dieses Modul sie fuer version 2 ebenfalls nicht schreiben.
+IKE_VERSION = _text(_PHASE1["version"])
+KEYLIFE = _text(_PHASE1["keylife"])
+DPD_DELAY = _text(_PHASE1["dpd_delay"])
+DPD_TIMEOUT = _text(_PHASE1["dpd_timeout"])
+ENCAP = _text(_PHASE1["encap"])
+MOBIKE = _text(_PHASE1["mobike"])
 
 # trap, not start: the origin's value. The child security association is
 # installed as a policy and established when traffic matches it, which is
@@ -553,6 +585,44 @@ CONNECTED = "connected"
 STALE = "stale"
 DISCONNECTED = "disconnected"
 
+# DAS VIERTE WORT - SEIT DEM 01.09.2026
+#
+#     `disconnected` trug bis dahin zwei voellig verschiedene Aussagen:
+#
+#         "der Nutzer hat getrennt"           - eine Entscheidung
+#         "NetworkManager antwortet nicht"    - ein Ausfall
+#
+#     Der Docstring von wireguard_status() sagte es selbst: "alles
+#     andere, die fehlende Auskunft eingeschlossen". Gemeint war
+#     Zurueckhaltung, geworden ist daraus eine Behauptung: wer
+#     "getrennt" liest, schliesst daraus, sein Verkehr laufe
+#     ungeschuetzt. Das kann stimmen - und wenn gerade niemand mit
+#     NetworkManager reden kann, weiss es keiner.
+#
+#     GEMESSEN am 01.09.2026 an _run(): es faengt OSError und
+#     SubprocessError ab, gibt "" zurueck und sieht den Rueckgabewert
+#     ueberhaupt nicht an. Vier Lagen ergaben dasselbe Wort:
+#
+#         nmcli fehlt                     OSError          -> disconnected
+#         nmcli laeuft in den Zeitablauf  TimeoutExpired   -> disconnected
+#         NetworkManager laeuft nicht     rc=8             -> disconnected
+#         die Verbindung gibt es nicht    rc=10            -> disconnected
+#
+#     Nur die letzte davon IST eine Auskunft. Die anderen drei sind das
+#     Fehlen einer, und `unknown` ist der Name dafuer.
+#
+# REIN ADDITIV
+#     Kein Leser wird schlechter. Wer das vierte Wort nicht kennt,
+#     faellt in seinen Sonst-Zweig - und der zeigt heute schon das, was
+#     er bei nicht antwortendem NetworkManager zeigte.
+UNKNOWN = "unknown"
+
+# Der Vertrag nach aussen, an EINER Stelle. Ein fuenftes Wort ist damit
+# nicht mehr etwas, das man hinzufuegt, sondern etwas, das die
+# Zusicherungen der Leser umwirft - tests/src/test_bar_vpn_unbekannt.py
+# geht genau diese Liste durch.
+STATUS_WORDS = (CONNECTED, STALE, DISCONNECTED, UNKNOWN)
+
 # Written by vpn-connect.sh into $XDG_RUNTIME_DIR, removed on disconnect.
 STATE_FILENAME = "vpn-active"
 
@@ -672,12 +742,45 @@ def _run(runner: Runner, argv: list[str]) -> str:
     this half is a bar module or a widget refreshing on a timer, and the
     answer they need for an unanswerable question is "I cannot tell",
     which the callers below express as `disconnected`.
+
+    WER "" NICHT VON EINER ANTWORT UNTERSCHEIDEN KANN, NIMMT _antwort()
+        Diese Funktion wirft den Rueckgabewert weg und macht damit "das
+        Programm lief nicht" von "das Programm sagte nichts"
+        ununterscheidbar. Fuer den Zustand eines Tunnels ist das der
+        Unterschied zwischen einem Ausfall und einer Entscheidung -
+        siehe UNKNOWN weiter oben. wireguard_status() geht darum seit
+        dem 01.09.2026 ueber _antwort().
+
+        Die beiden anderen Aufrufer bleiben hier, und zwar nicht aus
+        Traegheit: bei der Gegenprobe in _ovpn_apply() heisst "" bereits
+        das Richtige, naemlich "NetworkManager hat den Kontonamen nicht
+        behalten" - eine nicht lesbare Antwort wird dort zum Fehler und
+        nicht zur Entwarnung. Bei configured_addresses() heisst "" das
+        Falsche; das ist ein eigener Fund und in
+        aufgabe-77-report.md getrennt gemeldet, weil ihn zu beheben den
+        Vertrag von tunnel_status() aendert und nicht diesen hier.
+    """
+    return _antwort(runner, argv)[1]
+
+
+def _antwort(runner: Runner, argv: list[str]) -> tuple[int | None, str]:
+    """(Rueckgabewert, Ausgabe) - und `None`, wenn nichts lief.
+
+    Der Rueckgabewert ist das einzige, woran sich "keine Antwort" von
+    "eine Antwort, die nichts Gutes sagt" unterscheiden laesst. `None`
+    ist kein Ersatz fuer eine Zahl, sondern eine dritte Aussage: das
+    Programm ist gar nicht erst gelaufen.
+
+    Der Zeitablauf steht bei fuenf Sekunden wie in _run(): jeder
+    Aufrufer dieser Haelfte ist ein Leistenmodul oder ein Fenster auf
+    einem Zeitgeber, und eines, das haengt, ist schlimmer als eines, das
+    "weiss ich nicht" sagt.
     """
     try:
         completed = runner(argv, capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.SubprocessError):
-        return ""
-    return completed.stdout or ""
+        return None, ""
+    return completed.returncode, (completed.stdout or "")
 
 
 def configured_addresses(runner: Runner = subprocess.run) -> dict[str, str]:
@@ -2225,7 +2328,7 @@ def openvpn_secrets_text(password: str = "", token: str = "",
 
 def openvpn_status(connection: str,
                    runner: Runner = subprocess.run) -> tuple[str, str]:
-    """connected | stale | disconnected - derselbe Vertrag wie ueberall.
+    """connected | stale | disconnected | unknown - derselbe Vertrag wie ueberall.
 
     Wortgleich zu wireguard_status(), weil dieselben vier Leser
     (ags-vpn.template, ags-network-scripts.template, vpn-control.sh und
@@ -2262,6 +2365,27 @@ def nm_state_argv(connection: str) -> list[str]:
             "connection", "show", connection]
 
 
+# DIE ZWEI RUECKGABEWERTE VON nmcli(1), AN DENEN DIE UNTERSCHEIDUNG
+# HAENGT
+#
+#     nmcli(1) fuehrt sie unter EXIT STATUS. Sie stehen hier als Namen
+#     und nicht als Zahlen im Vergleich, weil `rc == 10` an der
+#     Fallunterscheidung nichts darueber sagt, warum ausgerechnet die
+#     Zehn `disconnected` heisst und die Acht nicht.
+#
+#     8 heisst "NetworkManager laeuft nicht". Das ist keine Aussage
+#     ueber den Tunnel - wer sie als "getrennt" liest, behauptet etwas
+#     ueber einen Zustand, den gerade niemand kennt.
+#
+#     10 heisst "die genannte Verbindung gibt es nicht". Das IST eine
+#     Aussage ueber den Tunnel, und zwar eine vollstaendige: was es
+#     nicht gibt, ist nicht verbunden. Ohne diesen Zweig saehe jede
+#     Maschine ohne eingerichtete Verbindung dauerhaft "niemand weiss
+#     es" - `unknown` haette `disconnected` dann bloss ersetzt.
+NM_NICHT_DA = 8
+NM_KEINE_SOLCHE_VERBINDUNG = 10
+
+
 def parse_nm_state(report: str) -> tuple[str, str]:
     """(Zustand, Adresse) aus `nmcli -t -f GENERAL.STATE,IP4.ADDRESS`.
 
@@ -2284,12 +2408,12 @@ def parse_nm_state(report: str) -> tuple[str, str]:
 
 def wireguard_status(connection: str,
                      runner: Runner = subprocess.run) -> tuple[str, str]:
-    """connected | stale | disconnected, in genau dem Vertrag von tunnel_status().
+    """connected | stale | disconnected | unknown, im Vertrag von tunnel_status().
 
     Vier Leser teilen sich diese eine Zeile Text - ags-vpn.template,
     ags-network-scripts.template, vpn-control.sh und vpn-watcher.sh -
     und keiner von ihnen darf wissen muessen, welche Bauart gerade
-    eingestellt ist. Deshalb hat die WireGuard-Antwort dieselben drei
+    eingestellt ist. Deshalb hat die WireGuard-Antwort dieselben
     Woerter und dieselbe Bedeutung:
 
       connected      NetworkManager fuehrt die Verbindung als aktiviert
@@ -2297,13 +2421,50 @@ def wireguard_status(connection: str,
       stale          aktiviert, aber ohne Adresse: die Schnittstelle
                      steht und traegt nichts. Genau die halbe Verbindung,
                      fuer die es bei IPsec `stale` gibt.
-      disconnected   alles andere, die fehlende Auskunft eingeschlossen.
-                     Ohne Antwort wird nichts behauptet - dieselbe
-                     Zurueckhaltung wie bei tunnel_status().
+      disconnected   nmcli hat GEANTWORTET, und die Antwort heisst
+                     "nicht aktiviert" - die Verbindung gibt es nicht
+                     (rc=10), oder sie steht nicht.
+      unknown        nmcli hat NICHT geantwortet. Seit dem 01.09.2026.
+
+    HIER STAND BIS ZUM 01.09.2026 "alles andere, die fehlende Auskunft
+    eingeschlossen"
+        Gemeint war Zurueckhaltung, und die Zeile darunter nannte sie
+        auch so: "ohne Antwort wird nichts behauptet". Behauptet wurde
+        trotzdem etwas, naemlich `disconnected` - und wer das liest,
+        schliesst daraus, sein Verkehr laufe ungeschuetzt. Vier Lagen
+        fielen zu diesem einen Wort zusammen; UNKNOWN weiter oben zaehlt
+        sie mit ihren Rueckgabewerten auf.
+
+        Die Unterscheidung haengt jetzt an DEN RUECKGABEWERTEN und nicht
+        an "irgendwas ging schief". Das ist der Unterschied, ohne den
+        der vierte Zustand nichts gewesen waere als ein neuer Name fuer
+        denselben Sammelzweig: rc=10 bleibt `disconnected`, weil eine
+        nicht eingerichtete Verbindung eine echte Auskunft ist.
+
+    KEINE ADRESSE ZU EINEM UNBEKANNTEN ZUSTAND
+        Eine mitgegebene waere eine Behauptung ueber einen Tunnel, von
+        dem gerade niemand weiss, ob es ihn gibt. `stale` gibt bei
+        tunnel_status() aus gutem Grund eine mit - dort ist sie
+        AUFGESCHRIEBEN worden, hier waere sie geraten.
     """
     if not connection:
+        # Kein Name heisst: nichts eingerichtet. Das ist eine Auskunft
+        # und kostet keinen Unterprozess.
         return DISCONNECTED, ""
-    state, address = parse_nm_state(_run(runner, nm_state_argv(connection)))
+
+    rueckgabe, bericht = _antwort(runner, nm_state_argv(connection))
+    if rueckgabe is None or rueckgabe == NM_NICHT_DA:
+        return UNKNOWN, ""
+    if rueckgabe == NM_KEINE_SOLCHE_VERBINDUNG:
+        return DISCONNECTED, ""
+    if rueckgabe != 0:
+        # Ein Rueckgabewert, den nmcli(1) hier nicht fuehrt. Er koennte
+        # alles heissen, und "koennte alles heissen" ist genau das, was
+        # `unknown` benennt - die Vermutung "wird schon getrennt sein"
+        # waere die alte Behauptung mit einer neuen Begruendung.
+        return UNKNOWN, ""
+
+    state, address = parse_nm_state(bericht)
     if state != "activated":
         return DISCONNECTED, ""
     if not address:

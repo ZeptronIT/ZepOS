@@ -81,24 +81,12 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
 
-def _user_settings_connection() -> dict:
-    """DEFAULT_SETTINGS, geladen wie /usr/share/zepos es laedt.
-
-    Derselbe Kniff und dieselbe Begruendung wie in
-    tests/src/test_vpn_wireguard.py: das Modul importiert `brand`,
-    `sizes` und `theme` FLACH, so wie sie neben ihm im installierten
-    Paket liegen.
-    """
-    import sys
-    sys.path.insert(0, str(SRC))
-    try:
-        import user_settings
-        # DEFAULT_CONNECTION und nicht mehr DEFAULT_SETTINGS["vpn"]:
-        # der VPN-Abschnitt traegt seit dem 22.08.2026 eine Liste, die
-        # Vorgaben EINER Verbindung stehen eine Ebene tiefer.
-        return user_settings.DEFAULT_CONNECTION
-    finally:
-        sys.path.remove(str(SRC))
+# HIER STAND BIS ZUM 01.09.2026 _user_settings_connection()
+#
+#     Geloescht mit seinem einzigen Aufrufer, dem Vergleich der beiden
+#     Vorgabentabellen - der seit der Zusammenlegung eine Tabelle gegen
+#     sich selbst hielt. Die ausfuehrliche Begruendung steht an
+#     derselben Stelle in tests/src/test_vpn_wireguard.py.
 
 
 # WARUM DIESE BLOECKE ZUR LAUFZEIT ENTSTEHEN UND NICHT IM QUELLTEXT
@@ -285,22 +273,52 @@ def test_an_unknown_kind_is_not_passed_through():
     assert vpn_kind({"vpn": {"kind": "openvpn"}}) == "openvpn"
 
 
-def test_both_default_tables_carry_the_same_openvpn_keys():
-    """Zwei Vorgabentabellen, und sie muessen sich einig sein.
+def test_der_einleser_schreibt_keinen_schluessel_den_die_vorgabe_nicht_kennt():
+    """Was `zepos-vpn import` anlegt, muss `zepos-settings set` kennen.
 
-    `zepos-settings set` prueft gegen settings.py::defaults(), das
-    Fenster schreibt gegen user_settings.py::DEFAULT_SETTINGS. Ein
-    Schluessel, der nur in einer steht, ist ein Pfad, den die
-    Oberflaeche schreiben kann und das Kommandozeilenwerkzeug ablehnt.
+    HIER STAND BIS ZUM 01.09.2026 EIN VERGLEICH EINER TABELLE MIT SICH
+    SELBST
+        Der Test hiess test_both_default_tables_carry_the_same_openvpn_keys
+        und hielt settings.default_connection()["openvpn"] gegen
+        user_settings.DEFAULT_CONNECTION["openvpn"]. Seine Begruendung
+        war richtig und gilt weiter: "ein Schluessel, der nur in einer
+        steht, ist ein Pfad, den die Oberflaeche schreiben kann und das
+        Kommandozeilenwerkzeug ablehnt."
+
+        Getragen hat er sie seit der Zusammenlegung nicht mehr.
+        DEFAULT_CONNECTION IST seitdem der Aufruf von
+        default_connection() - beide Seiten waren dieselbe Tabelle, und
+        der Test blieb gruen, gleichgueltig was darin steht. Dieselbe
+        Stelle in tests/src/test_vpn_wireguard.py fuehrt die
+        ausfuehrliche Begruendung.
+
+        Dass die Befehlszeile jeden Schluessel der Tabelle annimmt,
+        misst seit dem 01.09.2026 tests/src/test_vpn_vorgaben.py::
+        test_die_befehlszeile_erreicht_jeden_schluessel_der_vorgabe.
+
+    WAS DORT NICHT GEMESSEN WIRD UND DARUM HIER STEHT
+        openvpn_document() ist der einzige Schreiber des
+        `openvpn`-Abschnitts, der ihn OHNE die Tabelle fuellt: er baut
+        ihn aus einer .ovpn-Datei. Traegt er einen Schluessel, den sie
+        nicht kennt, lehnt `zepos-settings set vpn.openvpn.<x>` einen
+        Pfad ab, den der Einleser gerade angelegt hat. Fehlt ihm einer,
+        kommt eine importierte Verbindung unvollstaendig an.
+
+        Verglichen werden SCHLUESSEL und nicht Werte - der Einleser
+        traegt ein, was in der Datei stand.
     """
-    # Eine Ebene tiefer seit dem 22.08.2026 - siehe die Begruendung
-    # in test_vpn_wireguard.py bei demselben Test.
-    eins = settings_default_connection()["openvpn"]
-    zwei = _user_settings_connection()["openvpn"]
-    assert set(eins) == set(zwei), (
-        f"only in settings.py: {set(eins) - set(zwei)}; "
-        f"only in user_settings.py: {set(zwei) - set(eins)}")
-    assert eins == zwei
+    importiert = openvpn_document(parse_ovpn(OVPN, "anbieter.ovpn"))
+    tabelle = settings_default_connection()["openvpn"]
+
+    assert set(importiert) == set(tabelle), (
+        f"nur im Einleser: {sorted(set(importiert) - set(tabelle))}; "
+        f"nur in der Vorgabe: {sorted(set(tabelle) - set(importiert))}")
+    # Die Gegenprobe, damit hier nicht zwei leere Mengen gegeneinander
+    # stehen - genau die Art gruener Aussage, die diesen Test ersetzt hat.
+    assert "ca_file" in tabelle
+
+    # Unveraendert aus dem alten Test: die Bauart einer nicht
+    # eingerichteten Verbindung ist "ipsec" und wird nie geraten.
     assert settings_default_connection()["kind"] == "ipsec"
 
 

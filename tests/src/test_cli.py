@@ -475,13 +475,53 @@ def test_settings_reads_and_writes_through_the_versioned_module(cli, tmp_path,
                                                                 monkeypatch):
     """Not through user_settings.py, and not through a third writer of
     its own. The file carries a schema version because a later migration
-    cannot guess what shape a stranger's file has."""
+    cannot guess what shape a stranger's file has.
+
+    DIE FUNDSTELLE HAT SICH AM 01.09.2026 VERSCHOBEN, DIE ZUSICHERUNG NICHT
+        Nachgesehen wird jetzt in `vpn.connection(...)` statt in
+        `...["vpn"][...]`. Das ist keine aufgeweichte Zusicherung,
+        sondern eine strengere an der richtigen Stelle - und der Grund
+        dafuer ist der Fehler, den dieser Test bis dahin NICHT sah.
+
+        GEMESSEN am 01.09.2026 am Stand vor der Behebung, frisches
+        ZEPOS_USER_ROOT ohne Einstellungsdatei:
+
+            set vpn.server gw.example.org            -> 0
+            get vpn.server                           -> gw.example.org
+            Datei: {"active": "", "connections": [],
+                    "server": "gw.example.org"}
+            vpn.connection(settings.load())          -> {}
+            user_settings.get_vpn_setting("server")  -> ""
+
+        Der Abschnitt `vpn` ist seit dem 22.08.2026 keine Verbindung
+        mehr, sondern eine LISTE von Verbindungen. Ein Wert, der als
+        Geschwister von `active` und `connections` darin liegt, gehoert
+        zu keiner - gelesen hat ihn danach niemand ausser der
+        Befehlszeile selbst. `...["vpn"]["connection_name"]` war also
+        genau der Griff, mit dem der Schreibfehler unsichtbar blieb: er
+        fand den verlegten Wert dort, wo er lag, und nicht dort, wo ihn
+        jemand braucht.
+
+        Der Test misst darum bis zum LESER. Und er verlangt zusaetzlich,
+        was er vorher nicht verlangte: dass die Verbindung eine Kennung
+        traegt und `active` auf sie zeigt. Ohne beides faende der
+        Schalter sie beim naechsten Lesen nicht wieder - ein
+        Wiederfinden, das vpn.connection() zwar auch ohne `active`
+        vortaeuscht, weil es bei fehlender Kennung die ERSTE Verbindung
+        antwortet.
+    """
     monkeypatch.setenv("ZEPOS_USER_ROOT", str(tmp_path))
     monkeypatch.syspath_prepend(str(SRC))
     import settings
+    import vpn
 
     assert cli.settings_command(["set", "vpn.connection_name", "office"]) == 0
-    assert settings.load()["vpn"]["connection_name"] == "office"
+
+    dokument = settings.load()
+    gewaehlt = vpn.connection(dokument)
+    assert gewaehlt["connection_name"] == "office"
+    assert gewaehlt.get("id")
+    assert dokument["vpn"]["active"] == gewaehlt["id"]
 
 
 def test_settings_keeps_the_keys_it_does_not_know_about(cli, tmp_path,
@@ -511,10 +551,45 @@ def test_settings_can_configure_what_a_fresh_installation_left_out(cli, tmp_path
     """The installer writes only the two questions it asked - plugins and
     the weather location - so a just-installed machine has no vpn section
     at all. Refusing vpn.server there would refuse it on exactly the
-    machines where it has to be set before anything works."""
+    machines where it has to be set before anything works.
+
+    DIE FUNDSTELLE HAT SICH AM 01.09.2026 VERSCHOBEN, DIE ZUSICHERUNG NICHT
+        Was dieser Test zusichert, bleibt Wort fuer Wort dasselbe: auf
+        einer frisch installierten Maschine ohne VPN-Abschnitt muss
+        `set vpn.server` durchgehen. Nur der Ort, an dem er nachsieht,
+        ist ein anderer - `vpn.connection(...)` statt `...["vpn"][...]`.
+
+        Der Grund ist, dass "durchgehen" hier bis dahin zu wenig hiess.
+        GEMESSEN am 01.09.2026 am Stand vor der Behebung, genau in der
+        Lage, die dieser Test aufbaut:
+
+            set vpn.server gw.example.org            -> 0
+            get vpn.server                           -> gw.example.org
+            Datei: {"active": "", "connections": [],
+                    "server": "gw.example.org"}
+            vpn.connection(settings.load())          -> {}
+            user_settings.get_vpn_setting("server")  -> ""
+
+        Der Befehl gab 0 zurueck, dieser Test war gruen - und der
+        Erzeuger, das Verbindungsskript und das Einstellungsfenster
+        sahen einen leeren Server. Genau auf den Maschinen also, fuer
+        die der Test geschrieben wurde, war "es geht durch" nichts
+        wert. Der Rueckfall auf default_connection() liess die PRUEFUNG
+        des Pfades durch und leitete den SCHREIBWEG nicht mit um; der
+        Wert landete als Geschwister von `active` und `connections` im
+        Abschnitt, und der ist seit dem 22.08.2026 eine Liste von
+        Verbindungen und keine Verbindung mehr.
+
+        Zusaetzlich verlangt wird jetzt, dass die angelegte Verbindung
+        eine Kennung traegt und `active` auf sie zeigt - sonst waere der
+        Griff nur verschoben und nicht verschaerft: vpn.connection()
+        antwortet auch ohne passende `active` die erste Verbindung der
+        Liste und saehe damit ueber eine ungewaehlte hinweg.
+    """
     monkeypatch.setenv("ZEPOS_USER_ROOT", str(tmp_path))
     monkeypatch.syspath_prepend(str(SRC))
     import settings
+    import vpn
 
     (tmp_path / "user-settings.json").write_text(json.dumps({
         "schema_version": settings.SCHEMA_VERSION,
@@ -523,8 +598,13 @@ def test_settings_can_configure_what_a_fresh_installation_left_out(cli, tmp_path
     }), encoding="utf-8")
 
     assert cli.settings_command(["set", "vpn.server", "vpn.example.org"]) == 0
-    assert settings.load()["vpn"]["server"] == "vpn.example.org"
-    assert settings.load()["plugins"] == {"enabled": True}
+
+    dokument = settings.load()
+    gewaehlt = vpn.connection(dokument)
+    assert gewaehlt["server"] == "vpn.example.org"
+    assert gewaehlt.get("id")
+    assert dokument["vpn"]["active"] == gewaehlt["id"]
+    assert dokument["plugins"] == {"enabled": True}
 
 
 def _zwei_verbindungen(settings, gewaehlt: str) -> dict:
