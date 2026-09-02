@@ -70,6 +70,38 @@ from tests.src.test_bar_headless import (
 from tests.src.test_dock_minimized import (
     FakeCompositor, MINIMIZED, MINIMIZED_ID, SICHTBAR, _client)
 
+# DIESE DATEI STARTET WIRKLICH PROZESSE, und das ist ihr Gegenstand.
+#
+# WARUM, sachlich und nicht als Tatsachenbehauptung: gemessen wird das
+# GEZEICHNETE Menue. Dazu wird die Schale wirklich gebaut
+# (icon_manager.py ueber _bundle), ein Anzeigeserver gestartet
+# (broadwayd), ein Kind mit gjs ausgefuehrt, ein Programm namens "gimp"
+# als echter Prozess angelegt - weil anheftbar() /proc/<pid>/comm liest
+# und eine erfundene PID darauf nicht antwortet - und settings.py als
+# echter Schreiber gerufen. Eine Nachbildung davon maesse die
+# Nachbildung; genau diese Begruendung steht im Kopf oben, und
+# tests/src/test_launcher_pin.py fuehrt sie fuer denselben Fall aus.
+#
+# "startet Unterprozesse" waere KEIN Grund - der Grund ist, dass ihr
+# Gegenstand ohne sie nicht existiert.
+#
+# AUF MODULEBENE UND NICHT JE LAUF, und das ist gemessen und nicht
+# Bequemlichkeit: eine Freigabe je Lauf ist REIHENFOLGEABHAENGIG. Laeuft
+# ein unmarkierter Lauf zuerst, faellt auch der markierte, weil pytest
+# den Fehlschlag der Vorrichtung zwischenspeichert - und die
+# Vorrichtungen hier sind modulweit. Mit `pytestmark` ist es in jeder
+# Reihenfolge gruen; vierzehn Dateien dieses Projekts tragen es schon.
+#
+# WAS ES HEUTE NOCH NICHT AENDERT: die Wache in tests/conftest.py ist
+# FUNKTIONSWEIT, und eine modulweite Vorrichtung entsteht davor - sie
+# sieht die Aufrufe dieser Datei also ohnehin nicht (GEMESSEN von einem
+# Parallelauftrag: 1656 entwischte Prozessstarts in 37 Vorrichtungen,
+# davon 11 hier). Diese Zeile ist Vorbau fuer den Umbau, der das Loch
+# schliesst - und sie ist trotzdem richtig, weil die Wache nicht
+# verbietet, Prozesse zu starten, sondern verlangt, dass es ERKLAERT
+# ist.
+pytestmark = pytest.mark.allow_subprocess
+
 CHILD = Path(__file__).resolve().parent / "dock_menue_child.tsx"
 
 # Die drei angehefteten Namen, die in diesem Aufbau ueberhaupt einen

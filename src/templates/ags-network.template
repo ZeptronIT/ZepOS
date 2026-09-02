@@ -280,13 +280,47 @@ const ICONS = {
   copy: "{{ICON_COPY}}",
 }
 
-// Das Wort, mit dem ags-network-scripts eine Kabelverbindung meldet.
-// Es steht hier als Konstante, weil es an ZWEI Stellen gebraucht wird -
-// beim Erkennen der Verbindungsart und in der Zeile, die der Nutzer
-// liest - und weil ein zweites getipptes "Kabelverbindung" beim
-// naechsten Umbenennen genau eine der beiden Stellen erwischt.
+// Die zwei Woerter, mit denen ags-network-scripts seinen Zustand meldet.
+//
+// SIE SIND EINE MASCHINENANTWORT UND WERDEN NICHT UEBERSETZT. Das
+// Skript schreibt sie auf die Standardausgabe, und die Erkennung der
+// Verbindungsart vergleicht darauf (`=== WIRED_NAME` weiter unten). Wer
+// sie uebersetzt, bricht den Vergleich - und zwar STILL: ein Vergleich,
+// der nie zutrifft, wirft keinen Fehler, er meldet nur immer "kein
+// Netz".
+//
+// WAS SICH AM 02.09.2026 GEAENDERT HAT: der Kommentar, der hier stand,
+// hat den Fehler selbst benannt, ohne ihn zu sehen - "es wird an ZWEI
+// Stellen gebraucht, beim Erkennen der Verbindungsart UND in der Zeile,
+// die der Nutzer liest". Genau das war das Problem. Eine Zeichenkette,
+// die Protokoll UND Aufschrift ist, laesst sich nicht uebersetzen, ohne
+// das Protokoll zu brechen - und nicht unuebersetzt lassen, ohne dass
+// ein englischer Nutzer Deutsch liest.
+//
+// Getrennt ist es jetzt so: die Konstanten sind das PROTOKOLL,
+// aufschrift() macht daraus, was auf dem SCHIRM steht.
 const WIRED_NAME = "Kabelverbindung"
 const NOT_CONNECTED = "Nicht verbunden"
+
+/** Aus der Antwort des Skripts die Aufschrift fuer den Nutzer.
+ *
+ * Ein SSID geht UNVERAENDERT durch - er ist der Eigenname eines fremden
+ * Funknetzes, und den zu uebersetzen waere Unsinn. Nur die zwei
+ * Protokollwoerter bekommen ihren Satz aus dem Katalog.
+ *
+ * DASS DIE VOLLSTAENDIGE LOESUNG ANDERSWO LIEGT, steht bei
+ * PROTOKOLL_DES_SKRIPTS in tests/src/test_ags_i18n.py: richtig waere,
+ * dass das Skript eine KENNUNG ausgibt ("wired", "none") und das Widget
+ * sie beschriftet. Das aendert die Schnittstelle von
+ * ags-network-scripts.template und trifft jeden ihrer Leser - eine
+ * eigene Aufgabe. Bis dahin ist diese Funktion die Naht zwischen den
+ * zwei Rollen, und sie liegt an der einen Stelle, an der beide
+ * zusammenkommen.
+ */
+const aufschrift = (antwort: string): string =>
+  antwort === WIRED_NAME ? _("Wired connection")
+    : (!antwort || antwort === NOT_CONNECTED) ? _("Not connected")
+      : antwort
 
 // Was an der Stelle einer fehlenden Angabe steht.
 const NOTHING = "—"
@@ -553,7 +587,7 @@ export const networkSeite: ShellSeite = {
       removeAllChildren(detailHeaderWrap)
       detailHeaderWrap.append(zepRow({
         symbol: getSignalIcon(currentConnectionInfo.signal),
-        titel: currentConnectionInfo.name || NOT_CONNECTED,
+        titel: aufschrift(currentConnectionInfo.name),
         unterzeile: verbunden ? `${currentConnectionInfo.signal}%` : NOTHING,
       }))
       detailIpLabel.set_text(currentConnectionInfo.ip || NOTHING)
@@ -774,17 +808,17 @@ export const networkSeite: ShellSeite = {
       removeAllChildren(statusWrap)
       if (connInfo.type === "ethernet") {
         statusWrap.append(zepStateHeader({
-          titel: WIRED_NAME,
+          titel: aufschrift(WIRED_NAME),
           unterzeile: connInfo.ip || NOTHING, ende: buildHeaderEnde(),
         }))
       } else if (connInfo.type === "wifi") {
         statusWrap.append(zepStateHeader({
-          titel: connInfo.name,
+          titel: aufschrift(connInfo.name),
           unterzeile: connInfo.ip || NOTHING, ende: buildHeaderEnde(),
         }))
       } else {
         statusWrap.append(zepStateHeader({
-          titel: NOT_CONNECTED,
+          titel: aufschrift(NOT_CONNECTED),
           unterzeile: NOTHING, ende: buildHeaderEnde(),
         }))
       }
