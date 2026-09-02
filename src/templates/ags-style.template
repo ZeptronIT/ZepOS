@@ -184,6 +184,37 @@ $overlay-border: $border;
 .zep-row-title { font-size: {{STYLE_FONT_BODY}}; color: $text; }
 .zep-row-sub { font-size: {{STYLE_FONT_CAPTION}}; color: $subtext; }
 
+// DIE AUFKLAPPBARE GERAETEWAHL im Kontrollzentrum - 01.09.2026
+//
+// BESTELLT: "kann man bei ton mikrofon und lautsprecher auswaehlen
+// anhand eines dropdowns?" Vorher stand dort eine offene Liste, die bei
+// vier Geraeten je Richtung acht zusaetzliche Zeilen kostete.
+//
+// SIE BORGT SICH `.zep-row` und setzt nur, was ein Gtk.MenuButton
+// mitbringt und eine Zeile nicht hat: GTK gibt jedem Knopf einen
+// eigenen Grund, einen Rahmen und einen Schatten. Ohne diese drei
+// Zeilen saehe die Wahl aus wie ein Adwaita-Knopf zwischen lauter
+// ZepOS-Zeilen - und der Nutzer hat genau das schon einmal beanstandet
+// ("die buttons wirken billig").
+.cc-geraetewahl {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0 {{STYLE_SPACE_12}};
+
+  // Der Abstand zwischen Symbol, Name und Pfeil. Er steht hier und
+  // nicht als `spacing` im Kasten, aus demselben Grund, aus dem
+  // `.zep-row-texts` oben ihn traegt: EIN Ort je Abstand.
+  > box > label + label { margin-left: {{STYLE_SPACE_12}}; }
+
+  &:hover { background: $item-hover; }
+}
+
+// Die Liste im Klappfenster. Der Popover selbst ist schon gestylt
+// (siehe `popover > contents` weiter unten); hier steht nur, dass die
+// Zeilen darin nicht kleben.
+.cc-geraetewahl-liste { min-width: {{STYLE_MODAL_WIDTH_S}}; }
+
 // Die Huelle, die zepRow() (ags-kit.template) um sich selbst legt, wenn
 // `aktion` gesetzt ist - NACHGETRAGEN am 19.08.2026 (Bericht Aufgabe
 // 15/16, Fund "Kasten in Kasten"). Sie ist ein Gtk.Button (fuer Fokus

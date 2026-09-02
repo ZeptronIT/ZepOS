@@ -143,6 +143,7 @@ const SCRIPTS = {
 //     `grep -c "ICONS\.network\b"` gab 0.
 const ICONS = {
   settings: "{{ICON_SETTINGS}}",
+  chevronDown: "{{ICON_CHEVRON_DOWN}}",
   // Die vier, die am 17.08.2026 hier gestrichen waren und am selben Tag
   // zurueckgekommen sind - siehe den Abschnitt NETZ & VERBINDUNGEN.
   wifi: "{{ICON_WIFI}}",
@@ -730,10 +731,29 @@ export default function ControlCenter(
       let headerWrap: Gtk.Box
       let volumeSlider: Gtk.Scale, volumeIcon: Gtk.Label, volumeLabel: Gtk.Label
       let micSlider: Gtk.Scale, micIcon: Gtk.Label, micLabel: Gtk.Label
-      // Die zwei Geraetewahlen - AUFGABE 64 (22.08.2026). Je ein
-      // Behaelter, den updateSound() neu fuellt; er bleibt LEER, solange
-      // es nichts zu waehlen gibt (siehe zeichneWahl()).
-      let ausgabeWahl: Gtk.Box, eingabeWahl: Gtk.Box
+      // Die zwei Geraetewahlen - AUFGABE 64 (22.08.2026), am 01.09.2026
+      // von einer offenen Liste auf eine AUFKLAPPBARE umgestellt. Je ein
+      // Knopf, der das gewaehlte Geraet nennt, und die Liste dahinter im
+      // Klappfenster; updateSound() fuellt sie neu.
+      //
+      // WARUM AUFKLAPPBAR - BESTELLT am 01.09.2026 ("kann man bei ton
+      // mikrofon und lautsprecher auswaehlen anhand eines dropdowns?")
+      //
+      //     Die offene Liste WUCHS NACH UNTEN. Bei Kopfhoerer, HDMI,
+      //     USB-Kopfhoerer und interner Tonkarte sind das vier Zeilen JE
+      //     RICHTUNG, also acht zusaetzliche Zeilen im Kontrollzentrum -
+      //     an einem Fenster, an dem derselbe Nutzer sich mehrfach ueber
+      //     Laenge und Enge beschwert hat. Aufgeklappt zeigt es EINE
+      //     Zeile je Richtung, und die Liste kostet erst Platz, wenn
+      //     jemand sie sehen will.
+      //
+      //     Der Preis ist ein Klick mehr fuer den, der oft umschaltet.
+      //     Das ist der richtige Tausch: umgeschaltet wird selten (wenn
+      //     ein Kopfhoerer dazukommt), angesehen wird bei jedem Oeffnen
+      //     des Kontrollzentrums.
+      let ausgabeKnopf: Gtk.MenuButton, eingabeKnopf: Gtk.MenuButton
+      let ausgabeListe: Gtk.Box, eingabeListe: Gtk.Box
+      let ausgabeName: Gtk.Label, eingabeName: Gtk.Label
 
       // DER SCHUTZ VOR DEM SCHREIBEN, DAS AUS EINEM LESEN ENTSTEHT
       //
@@ -855,14 +875,75 @@ export default function ControlCenter(
       //     Eine Liste mit einem Eintrag waere nicht nur Platz: sie
       //     laedt zu einem Klick ein, nach dem sich nichts aendert, und
       //     das sieht aus wie ein Fehler.
+      /** Ein Klappknopf: das gewaehlte Geraet vorn, die Liste dahinter.
+       *
+       * NICHT Gtk.DropDown, SONDERN Gtk.MenuButton MIT Gtk.Popover UND
+       * ZEILEN AUS DEM BAUSATZ
+       *     Gtk.DropDown zeichnet seine Eintraege selbst und bringt
+       *     GTKs eigene Knotentypen mit, die ags-style.template nicht
+       *     kennt - eine Auswahl daraus saehe aus wie Adwaita und nicht
+       *     wie ZepOS. Dieselbe Entscheidung und dieselbe Begruendung
+       *     wie beim Rechtsklickmenue in ags-dock.template, wo sie
+       *     ausfuehrlich steht: zepRow IST die klickbare Zeile dieses
+       *     Schreibtischs, und eine Liste solcher Zeilen braucht kein
+       *     eigenes Bauteil.
+       *
+       * WARUM DER POPOVER UEBER DEN FENSTERRAND DARF
+       *     GTK4 legt einen Gtk.Popover als EIGENE Wayland-Flaeche an
+       *     (xdg_popup), und gtk4-layer-shell haengt sie ueber
+       *     zwlr_layer_surface_v1.get_popup an die Layer-Flaeche. Die
+       *     Liste ist damit nicht auf die Hoehe des Kontrollzentrums
+       *     beschraenkt - genau der Punkt der Umstellung.
+       *
+       * ER GEHT AUF DREI WEGEN WIEDER ZU, alle drei aus `autohide`:
+       * Klick daneben und Escape ueber den Griff des Popups, und die
+       * Auswahl selbst - jede Zeile klappt ZUERST zu und schaltet dann.
+       * Ohne das erste bliebe die Liste offen ueber einem Knopf stehen,
+       * der schon einen anderen Namen traegt.
+       */
+      const klappwahl = (symbol: string) => {
+        const name = new Gtk.Label({ xalign: 0, hexpand: true,
+                                     ellipsize: Pango.EllipsizeMode.END })
+        name.add_css_class("zep-row-title")
+        const symbolLabel = new Gtk.Label({ label: symbol })
+        symbolLabel.add_css_class("zep-row-icon")
+        const pfeil = new Gtk.Label({ label: ICONS.chevronDown })
+        pfeil.add_css_class("zep-row-icon")
+
+        // spacing: 0 und der Abstand im Stylesheet - genau wie zepRow
+        // selbst es haelt (ags-kit.template: `new Gtk.Box({ spacing: 0 })`
+        // und `.zep-row-texts { margin-left: ... }`). Eine Zahl hier waere
+        // ein zweiter Ort, an dem derselbe Abstand steht.
+        const inhalt = new Gtk.Box({ spacing: 0 })
+        inhalt.append(symbolLabel)
+        inhalt.append(name)
+        inhalt.append(pfeil)
+
+        const liste = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL,
+                                    spacing: 4 })
+        liste.add_css_class("cc-geraetewahl-liste")
+
+        const knopf = new Gtk.MenuButton({ child: inhalt })
+        knopf.add_css_class("zep-row")
+        knopf.add_css_class("cc-geraetewahl")
+        knopf.set_popover(new Gtk.Popover({ child: liste }))
+        return { knopf, liste, name }
+      }
+
       const ausgabeLabel = zepSectionLabel(_("Output device"))
-      ausgabeWahl = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+      const ausgabe = klappwahl(ICONS.volume)
+      ausgabeKnopf = ausgabe.knopf
+      ausgabeListe = ausgabe.liste
+      ausgabeName = ausgabe.name
       const eingabeLabel = zepSectionLabel(_("Input device"))
-      eingabeWahl = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+      const eingang = klappwahl(ICONS.mic)
+      eingabeKnopf = eingang.knopf
+      eingabeListe = eingang.liste
+      eingabeName = eingang.name
       flaeche.append(ausgabeLabel)
-      flaeche.append(ausgabeWahl)
+      flaeche.append(ausgabeKnopf)
       flaeche.append(eingabeLabel)
-      flaeche.append(eingabeWahl)
+      flaeche.append(eingabeKnopf)
 
       /** Eine Richtung zeichnen - und sich ganz ausblenden, wenn es
        * nichts zu waehlen gibt.
@@ -881,20 +962,37 @@ export default function ControlCenter(
        * eine uebersetzte Zeichenkette trifft auf der naechsten Sprache
        * nichts mehr.
        */
-      const zeichneWahl = (behaelter: Gtk.Box, marke: Gtk.Widget,
+      const zeichneWahl = (knopf: Gtk.MenuButton, liste: Gtk.Box,
+                           name: Gtk.Label, marke: Gtk.Widget,
                            geraete: any[], symbol: string,
                            waehlen: (kennung: number) => void) => {
-        removeAllChildren(behaelter)
+        removeAllChildren(liste)
         const zeigen = geraete.length > 1
-        behaelter.set_visible(zeigen)
+        knopf.set_visible(zeigen)
         marke.set_visible(zeigen)
         if (!zeigen) return
+
+        // Der Knopf traegt den Namen des gewaehlten Geraets, nicht eine
+        // feste Aufschrift: er ist die EINE Zeile, die von der Liste
+        // uebrig bleibt, solange sie zu ist, und eine Auswahl, die nicht
+        // zeigt was gewaehlt ist, waere keine.
+        const gewaehlt = geraete.find(g => g.vorgabe === true)
+        name.set_text(String(gewaehlt?.name ?? ""))
+        knopf.set_tooltip_text(String(gewaehlt?.name ?? ""))
+
         for (const geraet of geraete) {
-          behaelter.append(zepRow({
+          liste.append(zepRow({
             symbol,
             titel: String(geraet.name ?? ""),
             ausgewaehlt: geraet.vorgabe === true,
-            aktion: () => waehlen(Number(geraet.kennung)),
+            // ZUERST ZU, DANN SCHALTEN. waehle() liest anschliessend neu
+            // und schreibt den neuen Namen in `name` - stuende die Liste
+            // dabei noch offen, zeigte der Knopf darunter bereits das
+            // neue Geraet, waehrend die alte Auswahl noch davor haengt.
+            aktion: () => {
+              knopf.get_popover()?.popdown()
+              waehlen(Number(geraet.kennung))
+            },
           }))
         }
       }
@@ -975,9 +1073,11 @@ export default function ControlCenter(
         micIcon.set_text(mic && mic.stumm ? ICONS.micMute : ICONS.mic)
         micLabel.set_text(mic ? `${mic.lautstaerke}%` : "—")
 
-        zeichneWahl(ausgabeWahl, ausgabeLabel, ausgabe, ICONS.volume,
+        zeichneWahl(ausgabeKnopf, ausgabeListe, ausgabeName, ausgabeLabel,
+                    ausgabe, ICONS.volume,
                     kennung => waehle("set-sink", kennung))
-        zeichneWahl(eingabeWahl, eingabeLabel, eingabe, ICONS.mic,
+        zeichneWahl(eingabeKnopf, eingabeListe, eingabeName, eingabeLabel,
+                    eingabe, ICONS.mic,
                     kennung => waehle("set-source", kennung))
 
         // DER KOPF NENNT DAS GERAET MIT - GEAENDERT am 22.08.2026

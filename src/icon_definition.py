@@ -428,6 +428,10 @@ ICON_DEFINITIONS = {
     "ICON_KEYBOARD": "nf-md-keyboard",
     "ICON_CAPS": "nf-fa-arrow_up",
     "ICON_ARROW_LEFT": "nf-md-arrow_left",
+    # Der Pfeil einer Auswahlliste, die noch zu ist. Seit dem
+    # 01.09.2026: ICON_EXPAND (nf-md-arrow_expand) ist der
+    # DIAGONALE Pfeil "groesser machen" und sagt etwas anderes.
+    "ICON_CHEVRON_DOWN": "nf-md-chevron_down",
     "ICON_ARROW_RIGHT": "nf-md-arrow_right",
     "ICON_BACK": "nf-md-arrow_left",
     "ICON_CONNECT": "nf-md-connection",
