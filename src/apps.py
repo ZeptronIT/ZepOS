@@ -261,12 +261,21 @@ def shipped(system_root: Path | None = None) -> list[str]:
     # terminal mit claude auf die oberflaeche immer mehr bis alles
     # laggt".
     #
-    # DIE UEBERSCHNEIDUNG: zepos-claude-code steht in BEIDEN Haelften.
-    # Bei den fremden, weil zepos-apps es in seinen Abhaengigkeiten
-    # nennt - das ist die Zeile, die es ueberhaupt installiert, und der
-    # Kommentar in packaging/zepos-claude-code/PKGBUILD verweist
-    # ausdruecklich darauf. Bei den eigenen, weil es ein ZepOS-Paket
-    # ist. Beides ist richtig; die Summe war es nicht.
+    # DIE UEBERSCHNEIDUNG WAR: zepos-claude-code stand in BEIDEN
+    # Haelften. Bei den fremden, weil zepos-apps es in seinen
+    # Abhaengigkeiten nannte - das war die Zeile, die es ueberhaupt
+    # installierte. Bei den eigenen, weil es ein ZepOS-Paket war. Beides
+    # war richtig; die Summe nicht.
+    #
+    # SEIT DEM 01.09.2026 GIBT ES GENAU DIESE UEBERSCHNEIDUNG NICHT
+    # MEHR, und dieser Block bleibt trotzdem stehen. Der Nutzer hat das
+    # Paket gestuerzt ("ich will das packet nicht als meins verkaufen");
+    # der Eintrag im Starter kommt jetzt aus zepos-config und steht nur
+    # noch in der EIGENEN Haelfte. Damit ist der Fall vom 17.08.2026
+    # nicht mehr zu erreichen - aber die BEDINGUNG dafuer ist eine
+    # Zeile in einem fremden Rezept, und die haelt niemand fest. Ein
+    # Filter, der nichts findet, kostet einen Mengendurchlauf ueber
+    # fuenfzehn Namen; ein fehlender kostete den Rechner des Nutzers.
     #
     # WARUM DAS MEHR KOSTET ALS EIN ZEICHEN ZU VIEL: das Dock fuehrt
     # seine Klick-Verbindungen in einer Tabelle, die nach dem

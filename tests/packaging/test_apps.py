@@ -95,13 +95,22 @@ SHIPPED = {
     "celluloid": "Medien",
     "gnome-text-editor": "Text",
     "baobab": "Datentraeger",
-    # Am 13.08.2026 dazugekommen: "kann man claude code auch bei ZepOS
-    # immer direkt vor installieren". Ein eigenes Rezept, weil das
-    # npm-Paket @anthropic-ai/claude-code die Binaerdatei nicht enthaelt
-    # (24606 Bytes, ein Nachlader) - geholt wird deshalb gleich
-    # @anthropic-ai/claude-code-linux-x64, mit fester Version und
-    # Pruefsumme, wie aylurs-gtk-shell es mit gnim vormacht.
-    "zepos-claude-code": "der Assistent",
+    # HIER STAND "zepos-claude-code": "der Assistent", vom 13.08. bis
+    # zum 01.09.2026.
+    #
+    # Der Nutzer hat das Paket gestuerzt: "ich will das packet nicht als
+    # meins verkaufen [...] weil jetzt bekommt es keine updates". Die
+    # drei Gruende stehen ausgeschrieben in packaging/zepos-apps/PKGBUILD
+    # an der Stelle, an der der Name in depends stand.
+    #
+    # DER ASSISTENT IST DAMIT NICHT WEG - er ist nur nicht mehr FREMD.
+    # Der Eintrag im Starter kommt jetzt aus zepos-config, also aus der
+    # EIGENEN Haelfte der Auswahl, und diese Tabelle beschreibt die
+    # fremde. tests/src/test_claude_code.py misst die andere Haelfte.
+    #
+    # Und die Aufgabe, die dieser Eintrag hier belegte, ist damit frei:
+    # eine Anwendung je Aufgabe gilt weiter, es gibt nur keine fremde
+    # mehr fuer "der Assistent".
     # Am 13.08.2026 dazugekommen: "es fehlt ein calculator". GTK4 und
     # libadwaita - `pacman -Si gnome-calculator` nennt gtk4, libadwaita
     # und gtksourceview5 und kein gtk3 -, also ohne die Ausnahme, die
