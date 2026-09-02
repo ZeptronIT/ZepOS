@@ -17,5 +17,20 @@
 # the reason it could not appears in it, followed by the text interface.
 set -u
 
+# Erst die Schirme, dann der Installer.
+#
+# WARUM DAS HIER STEHT UND NICHT IN zepos-live-session
+#     Weil es ein WAYLAND_DISPLAY braucht. zepos-live-session startet
+#     cage; INNERHALB von cage laeuft dieses Skript, und nur von hier aus
+#     laesst sich der Compositor nach seinen Ausgaengen fragen.
+#
+# WARUM IM HINTERGRUND UND OHNE AUF IHN ZU WARTEN
+#     Er ist eine Zugabe, keine Vorbedingung. Der Installer darf keine
+#     Sekunde spaeter kommen, weil ein Ausgang sich nicht umstellen
+#     liess - und zepos-live-schirme beendet sich von selbst, sobald cage
+#     weg ist. Was er tut, warum cage nicht spiegeln kann und was er
+#     ausdruecklich NICHT loest, steht ausgeschrieben in seinem Kopf.
+zepos-live-schirme &
+
 zepos-install
 printf '%s' "$?" >/run/zepos-install.rc

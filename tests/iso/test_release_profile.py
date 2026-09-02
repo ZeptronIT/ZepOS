@@ -375,6 +375,43 @@ def test_the_installer_is_run_inside_a_terminal_so_the_fallback_is_visible():
     assert "cage" in packages, "no compositor is in the image"
 
 
+def test_the_installer_is_put_on_every_screen_and_not_just_the_first():
+    """01.09.2026: the medium had the same blindness as the installed
+    system's login screen, and here it is worse - somebody booting a
+    stick sits in front of a machine they do not know yet.
+
+    `cage -h` of the shipped 0.3.1-1 knows exactly two output modes and
+    neither of them mirrors; zepos-live-session sets no `-m`, so `extend`
+    applies and every screen but one stays empty. Measured against real
+    cage on the headless backend, through its own wlr-screencopy: one
+    output carried 1 colour, the other 185.
+
+    The fix cannot be the one the greeter got - Hyprland refuses to run
+    as root and the installer must be root - so it is
+    /usr/local/bin/zepos-live-schirme, which puts every output on the
+    same spot through cage's zwlr_output_manager_v1. What is asserted
+    here is the WIRING: the script exists, something starts it, and the
+    client it needs is in the image. What it DOES is measured by
+    tests/iso/test_live_schirme.py, which runs it.
+    """
+    schirme = RELEASE / "airootfs/usr/local/bin/zepos-live-schirme"
+    assert schirme.is_file(), (
+        "nothing puts the installer on the second screen")
+
+    surface = _read(RELEASE / "airootfs/usr/local/bin/zepos-live-surface")
+    assert re.search(r"^zepos-live-schirme &", surface, re.M), (
+        "zepos-live-surface does not start the output helper in the "
+        "background; a medium that waits for it would be a medium whose "
+        "installer is late because a monitor did not answer")
+
+    packages = {line.strip() for line in
+                _read(RELEASE / "packages.x86_64").splitlines()
+                if line.strip() and not line.startswith("#")}
+    assert "wlr-randr" in packages, (
+        "the output client zepos-live-schirme calls is not in the image, "
+        "so the helper is a no-op and the second screen stays blank")
+
+
 def test_the_image_carries_the_installer_and_not_the_desktop():
     """Spec §4.2: the three installer packages are in the ISO and nowhere
     else, and what a ZepOS system is made of is what gets INSTALLED.
@@ -580,6 +617,10 @@ def test_the_harness_types_through_the_layout_the_medium_loads():
     "usr/local/bin/zepos-live-prepare",
     "usr/local/bin/zepos-live-session",
     "usr/local/bin/zepos-live-surface",
+    # Seit dem 01.09.2026. Er wird von zepos-live-surface im Hintergrund
+    # gestartet, also faellt ein Modus 0644 hier nicht einmal auf: der
+    # Installer kaeme trotzdem, nur eben wieder auf einem Schirm allein.
+    "usr/local/bin/zepos-live-schirme",
 ])
 def test_every_script_in_the_shipping_profile_is_declared_executable(path):
     """mkarchiso's copy is `cp -af --no-preserve=ownership,mode`, so the
