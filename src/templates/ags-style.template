@@ -211,9 +211,28 @@ $overlay-border: $border;
 }
 
 // Die Liste im Klappfenster. Der Popover selbst ist schon gestylt
-// (siehe `popover > contents` weiter unten); hier steht nur, dass die
-// Zeilen darin nicht kleben.
-.cc-geraetewahl-liste { min-width: {{STYLE_MODAL_WIDTH_S}}; }
+// (siehe `popover > contents` weiter unten), und eine BREITE steht hier
+// bewusst nicht.
+//
+// HIER STAND EINE, UND SIE WAR EIN FEHLER (02.09.2026)
+//     `min-width: {{STYLE_MODAL_WIDTH_S}}` - der Platzhalter ist
+//     ABSICHTLICH ohne Einheit, weil alle seine Leser in einem
+//     TypeScript-Zahlenkontext stehen; src/style_definition.py schreibt
+//     bei seiner Erklaerung woertlich "nie in einer CSS-Regel". Gerendert
+//     wurde daraus `min-width: 500`, und GTK meldete
+//     `CSS Error :108:14 Unit is missing`.
+//
+//     WIE DER FEHLER ENTSTAND, weil das die eigentliche Lehre ist: ich
+//     hatte im Stylesheet nach `{{STYLE_MODAL_WIDTH_S}}` gesucht, um zu
+//     pruefen, ob der Platzhalter dort ueblich ist - und fand meine
+//     EIGENE, gerade geschriebene Zeile. Ein Zeugnis fuer sich selbst.
+//
+//     Kein `px` als Ausweg: kein anderes Aufklappfenster dieses
+//     Schreibtischs setzt eine Breite. Das Rechtsklickmenue des Fusses
+//     und das des Home richten sich nach ihrem Inhalt, und ein Popover,
+//     das breiter ist als seine breiteste Zeile, waere Leerraum neben
+//     Geraetenamen. Die Zeilen darin sind zepRow-Zeilen und bringen ihre
+//     Polsterung selbst mit.
 
 // Die Huelle, die zepRow() (ags-kit.template) um sich selbst legt, wenn
 // `aktion` gesetzt ist - NACHGETRAGEN am 19.08.2026 (Bericht Aufgabe
