@@ -44,6 +44,7 @@ WAS DIE ERSTE MESSUNG GEKOSTET HAT, UND WARUM ES HIER STEHT
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import time
@@ -123,9 +124,43 @@ def menue(tmp_path_factory) -> dict:
         pytest.skip("wtype fehlt - ohne Tastendruck von aussen sagt der "
                     "Escape-Teil dieses Laufs nichts")
 
+    if not shutil.which("msgfmt"):
+        pytest.skip("msgfmt fehlt - ohne gebauten Katalog saehe dieser "
+                    "Lauf die Sprache dieser Maschine statt einer "
+                    "vorgegebenen, und die Punkte des Menues waeren "
+                    "nicht mehr vorhersagbar")
+
     bau = tmp_path_factory.mktemp("zepmenue-bau")
     bilder = tmp_path_factory.mktemp("zepmenue-bild")
     ags = render_configuration(bau)
+
+    # Die Sprache wird VORGEGEBEN und nicht von dieser Maschine geerbt.
+    #
+    # ags-i18n.template liest /etc/locale.conf SELBST (ETC_ROOT) und
+    # sucht den Katalog unter ZEPOS_LOCALEDIR. Ohne beides haengt der
+    # Wortlaut des Menues daran, welche Sprache der Rechner spricht, auf
+    # dem die Reihe gerade laeuft: auf einem deutschen kommt "Neues
+    # Fenster" heraus, auf einem englischen der msgid. GEMESSEN am
+    # 03.09.2026 - genau daran ist diese Zusicherung aufgefallen,
+    # nachdem sie auf einer Maschine ohne Katalog jahrelang den msgid
+    # gesehen hatte.
+    #
+    # Gebaut wird der Katalog aus po/desktop/de.po, also aus dem Stand
+    # dieses Baums und nicht aus po/build - sonst prueft der Lauf einen
+    # Katalog von vorgestern.
+    katalog = bau / "locale" / "de" / "LC_MESSAGES"
+    katalog.mkdir(parents=True, exist_ok=True)
+    quelle_po = Path(__file__).resolve().parents[2] / "po" / "desktop" / "de.po"
+    gebaut = subprocess.run(
+        ["msgfmt", "-o", str(katalog / "zepos-desktop.mo"), str(quelle_po)],
+        capture_output=True, text=True)
+    assert gebaut.returncode == 0, (
+        f"der Katalog laesst sich nicht bauen:\n{gebaut.stderr}")
+
+    etc_wurzel = bau / "wurzel"
+    (etc_wurzel / "etc").mkdir(parents=True, exist_ok=True)
+    (etc_wurzel / "etc" / "locale.conf").write_text(
+        "LANG=de_DE.UTF-8\n", encoding="utf-8")
 
     quelle = Path(__file__).resolve().parent / "dock_menue_child.tsx"
     ziel = ags / "dock_menue_child.tsx"
@@ -145,7 +180,9 @@ def menue(tmp_path_factory) -> dict:
         tapete = sitzung.shoot(bilder / "0-tapete.png")
 
         sitzung.spawn([str(kind)], log=kindlog, XDG_CONFIG_HOME=str(bau),
-                      ZEPOS_AUSGANG=sitzung.output)
+                      ZEPOS_AUSGANG=sitzung.output,
+                      ZEPOS_LOCALEDIR=str(bau / "locale"),
+                      ZEPOS_ETC_ROOT=str(etc_wurzel))
         time.sleep(SETTLE)
 
         flaechen = sitzung.layers()
@@ -294,7 +331,8 @@ def test_das_menue_traegt_die_drei_punkte_einer_anheftung(menue):
     tests/src/test_dock_menue.py ohne Compositor an beiden Faellen; hier
     geht es darum, dass er ueberhaupt dasteht.
     """
-    assert menue["punkte"] == "New window|Remove from Home|Remove from dock", (
+    assert menue["punkte"] == (
+        "Neues Fenster|Vom Home entfernen|Vom Dock entfernen"), (
         f"das Menue einer Anheftung zeigt {menue['punkte']!r}")
 
 
