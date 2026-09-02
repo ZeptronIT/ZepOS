@@ -310,7 +310,7 @@ def test_a_plan_that_is_not_a_plan_arms_nothing(bench):
     output, errors = process.communicate(input="{kein json\n", timeout=30)
 
     assert process.returncode == 2, output
-    assert "unlesbarer Plan" in errors
+    assert "unreadable plan" in errors
     assert applied(bench) == []
 
 
@@ -321,7 +321,7 @@ def test_the_guard_takes_no_switches(bench):
         env=bench["environment"], capture_output=True, text=True, timeout=30)
 
     assert completed.returncode == 64
-    assert "keine Schalter" in completed.stderr
+    assert "takes no switches" in completed.stderr
 
 
 # --------------------------------------------------------------------
@@ -340,8 +340,8 @@ def test_a_rollback_leaves_a_line_that_survives_the_crash(bench):
            / "displays-guard.log")
     assert log.is_file(), "der Waechter hat nichts hinterlassen"
     text = log.read_text(encoding="utf-8")
-    assert "Keine Bestätigung" in text
-    assert "wiederhergestellt" in text
+    assert "No confirmation" in text
+    assert "restored" in text
 
 
 @pytest.mark.allow_subprocess
@@ -358,10 +358,10 @@ def test_a_rollback_that_fails_says_so_instead_of_claiming_success(bench):
     # maesse die Frist nicht mehr.
     assert process.wait(timeout=30) == 10
     output = process.stdout.read()
-    assert "FEHLGESCHLAGEN" in output
+    assert "FAILED" in output
     log = (Path(bench["environment"]["XDG_STATE_HOME"]) / "zepos"
            / "displays-guard.log")
-    assert "FEHLGESCHLAGEN" in log.read_text(encoding="utf-8")
+    assert "FAILED" in log.read_text(encoding="utf-8")
 
 
 @pytest.mark.allow_subprocess

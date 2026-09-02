@@ -140,9 +140,9 @@ def test_a_missing_field_does_not_take_the_whole_answer_down():
 
 
 @pytest.mark.parametrize("entries, code, text, needle", [
-    (None, 1, "", "endete mit 1"),
-    (None, 0, "nicht wirklich json", "kein JSON"),
-    (None, 0, '{"name": "DP-1"}', "keine Liste"),
+    (None, 1, "", "exited with 1"),
+    (None, 0, "nicht wirklich json", "no JSON"),
+    (None, 0, '{"name": "DP-1"}', "not a list of screens"),
 ])
 def test_an_unusable_answer_is_one_kind_of_failure(entries, code, text, needle):
     """Ein Typ, weil ein Aufrufer genau eine Sache damit tun kann."""
@@ -155,7 +155,7 @@ def test_a_compositor_that_is_not_running_is_the_same_kind_of_failure():
     def runner(argv, **kwargs):
         raise FileNotFoundError("hyprctl")
 
-    with pytest.raises(RuntimeError, match="liess sich nicht starten"):
+    with pytest.raises(RuntimeError, match="could not be started"):
         displays.read_outputs(runner=runner)
 
 
@@ -531,7 +531,7 @@ def test_two_screens_on_the_same_spot_are_reported():
     layout[1] = displays.replace(layout[1], x=0)
 
     assert displays.overlaps(layout) == [("DP-1", "eDP-1")]
-    assert "übereinander" in displays.problems(layout)[0]
+    assert "overlap" in displays.problems(layout)[0]
 
 
 def test_screens_that_merely_touch_do_not_overlap():
@@ -552,7 +552,7 @@ def test_an_overlap_is_a_remark_and_not_a_blocker():
 
     assert displays.blockers(layout) == []
     assert len(displays.remarks(layout)) == 1
-    assert "übereinander" in displays.remarks(layout)[0]
+    assert "overlap" in displays.remarks(layout)[0]
     assert displays.problems(layout) == displays.remarks(layout)
 
 
@@ -561,7 +561,7 @@ def test_a_desk_without_a_screen_left_on_is_a_blocker():
     layout = [displays.replace(item, enabled=False) for item in a_desk()]
 
     assert len(displays.blockers(layout)) == 1
-    assert "Kein Bildschirm" in displays.blockers(layout)[0]
+    assert "No screen stays on" in displays.blockers(layout)[0]
     assert displays.remarks(layout) == [], (
         "ein Schreibtisch ohne eingeschalteten Schirm hat keine "
         "Ueberlappung - abgeschaltete Schirme nehmen keine Flaeche ein")
@@ -579,7 +579,7 @@ def test_a_desk_with_no_screen_left_on_is_refused():
     """
     layout = [displays.replace(item, enabled=False) for item in a_desk()]
 
-    assert "Kein Bildschirm bleibt an" in displays.problems(layout)[0]
+    assert "No screen stays on" in displays.problems(layout)[0]
     with pytest.raises(displays.NoScreenLeft):
         displays.apply_command(layout)
 

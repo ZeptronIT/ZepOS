@@ -59,13 +59,21 @@ from gi.repository import Adw, Gio, Gtk  # noqa: E402
 import settings as settings_file  # noqa: E402
 
 from . import model  # noqa: E402
-from .i18n import N_, _  # noqa: E402
+from desktop_i18n import N_, _, ngettext  # noqa: E402
 
 # Was der Knopf zum Zuruecksetzen an seiner Zeile sagt. Im Wortlaut und
 # an einer Stelle, weil er dreimal dasteht - einmal je Haelfte - und
 # drei Wortlaute fuer eine Handlung wie drei Handlungen lesen.
-RESET_LABEL = "Zurücksetzen"
-RESET_TITLE = "Wie ausgeliefert"
+RESET_LABEL = N_("Reset")
+RESET_TITLE = N_("As shipped")
+
+# Was diese Seite sagt, wenn die Einstellungsdatei fuer eine Haelfte
+# etwas traegt, das keine Liste von Namen ist. Der Wortlaut des Knopfes
+# steht als PLATZHALTER darin: abgeschrieben zitierte der Satz nach der
+# Uebersetzung eine Aufschrift, die es nicht mehr gibt.
+BAR_UNUSABLE = N_(
+    "{problem}. Until that is put straight this page shows nothing for "
+    "it - \"{button}\" below resets the key to the shipped order.")
 
 
 def entry_for(program: str):
@@ -210,7 +218,7 @@ class BarPage(Adw.PreferencesPage):
             # Auslieferung unbekannt ist, ist ALLES darunter anders zu
             # lesen - eine Liste ohne "hinzufuegen" sieht sonst aus wie
             # eine Leiste, die nur diese Module kennt.
-            group = Adw.PreferencesGroup(title="Die ausgelieferte Leiste")
+            group = Adw.PreferencesGroup(title=_("The shipped bar"))
             group.add(Adw.ActionRow(title=self.note, title_lines=0))
             self.add(group)
 
@@ -316,10 +324,11 @@ class BarPage(Adw.PreferencesPage):
             # und der Weg heraus steht unten in der Gruppe: der
             # Zuruecksetzen-Knopf schreibt null und repariert damit
             # genau diesen Schluessel.
-            return [], (f"{problem}. Bis das gerade gerückt ist, zeigt "
-                        f"diese Seite dafür nichts an - "
-                        f"\"{RESET_TITLE}\" unten setzt den Schlüssel "
-                        f"auf die Auslieferung zurück.")
+            # Der Wortlaut des Knopfes wird GELESEN und nicht
+            # abgeschrieben: sonst zitierte dieser Satz nach der
+            # Uebersetzung eine Aufschrift, die es nicht mehr gibt.
+            return [], _(BAR_UNUSABLE).format(
+                problem=problem, button=_(RESET_TITLE))
 
         # acceptable_in() und nicht placeable_in(): angeboten wird auf
         # dieser Seite die Auslieferung, angenommen wird jede Anwendung
@@ -353,11 +362,11 @@ class BarPage(Adw.PreferencesPage):
 
         buttons = {
             "up": Gtk.Button(icon_name="go-up-symbolic",
-                             tooltip_text="Weiter nach vorn"),
+                             tooltip_text=_("Further forward")),
             "down": Gtk.Button(icon_name="go-down-symbolic",
-                               tooltip_text="Weiter nach hinten"),
+                               tooltip_text=_("Further back")),
             "remove": Gtk.Button(icon_name="list-remove-symbolic",
-                                 tooltip_text="Herunternehmen"),
+                                 tooltip_text=_("Take down")),
         }
         buttons["up"].set_sensitive(index > 0)
         buttons["down"].set_sensitive(index < count - 1)
@@ -400,29 +409,33 @@ class BarPage(Adw.PreferencesPage):
         kann, weshalb er nicht verschwiegen, sondern unten benannt wird.
         """
         missing = self.missing[key]
-        row = Adw.ComboRow(title="Wieder hinzufügen",
+        row = Adw.ComboRow(title=_("Add back"),
                            model=Gtk.StringList.new(missing))
 
-        button = Gtk.Button(label="Hinzufügen", valign=Gtk.Align.CENTER)
+        button = Gtk.Button(label=_("Add"), valign=Gtk.Align.CENTER)
         button.connect("clicked", self._on_add, key)
         row.add_suffix(button)
 
         if model.placeable_in(self.shipped, key) is None:
-            said = ["Solange die ausgelieferte Reihenfolge unbekannt ist, "
-                    "gibt es nichts anzubieten."]
+            said = [_("As long as the shipped order is unknown there "
+                      "is nothing to offer.")]
         elif missing:
-            # Ein- und Mehrzahl, weil "1 Eintraege" die Art Fehler ist,
-            # die eine Oberflaeche unfertig aussehen laesst, ohne dass
-            # jemand sagen koennte, woran es liegt.
-            said = [("Ein Eintrag steht nicht da" if len(missing) == 1
-                     else f"{len(missing)} Einträge stehen nicht da")
-                    + " - was hier gewählt wird, kommt ans Ende."]
+            # DURCH ngettext UND NICHT DURCH EIN `if`: wie viele Formen
+            # eine Sprache hat und welche Anzahl welche nimmt,
+            # entscheidet die Sprache selbst, und diese Regel steht im
+            # Plural-Forms-Kopf des Katalogs. "1 Einträge stehen nicht
+            # da" ist der Fehler, den es verhindert, und er ist einem
+            # Leser sofort anzusehen.
+            said = [ngettext("One entry is not shown",
+                             "{count} entries are not shown",
+                             len(missing)).format(count=len(missing))
+                    + " " + _("- what is chosen here goes to the end.")]
         else:
             # "was das Dock anheften kann" und nicht "was ZepOS
             # ausliefert": ausgeliefert wird auch, was es nie anheften
             # wird, und der Satz muss neben der Zeile darunter noch
             # stimmen.
-            said = ["Es steht alles da, was hier hinkann."]
+            said = [_("Everything that can go here is shown.")]
 
         # Und was ZepOS zwar ausliefert, das Dock aber nie zeigt. Es
         # steht hier NICHT zur Wahl - ein Knopf, der ein Symbol
@@ -432,8 +445,9 @@ class BarPage(Adw.PreferencesPage):
         refused = self.refused.get(key) or []
         if refused:
             why = sorted({self._reason(name) for name in refused})
-            said.append(f"Nicht zur Wahl: {', '.join(sorted(refused))} - "
-                        f"{'; '.join(why)}.")
+            said.append(_("Not offered: {names} - {reasons}.").format(
+                names=", ".join(sorted(refused)),
+                reasons="; ".join(why)))
         row.set_subtitle(" ".join(said))
         row.set_subtitle_lines(0)
 
@@ -454,13 +468,13 @@ class BarPage(Adw.PreferencesPage):
         """
         own = self._own(key)
         row = Adw.ActionRow(
-            title=RESET_TITLE,
+            title=_(RESET_TITLE),
             title_lines=0,
-            subtitle=("Gibt diese Hälfte an die Auslieferung zurück - "
-                      "auch jedes Modul, das ZepOS später hinzufügt."
+            subtitle=(_("Hands this half back to the shipped order - "
+                        "including every module ZepOS adds later.")
                       if own else
-                      "Hier ist nichts eingestellt; es steht schon die "
-                      "ausgelieferte Reihenfolge da."))
+                      _("Nothing is set here; the shipped order is "
+                        "already shown.")))
 
         # OHNE `destructive-action`, obwohl der Knopf die eigene Liste
         # wegwirft: libadwaita faerbt diese Klasse rot, und Rot heisst

@@ -205,7 +205,7 @@ import sizes
 import theme
 import update
 
-from .i18n import N_, _
+from desktop_i18n import N_, _
 
 Runner = Callable[..., "subprocess.CompletedProcess"]
 
@@ -682,7 +682,12 @@ PAGES: tuple[tuple[str, str, str], ...] = (
     # VOR dem Thema, weil eine Anordnung der Grund ist, aus dem jemand
     # dieses Fenster ueberhaupt aufmacht, wenn er gerade ein Kabel
     # eingesteckt hat.
-    ("bildschirme", N_("Screens"), "video-display-symbolic"),
+    # "Displays" und nicht "Screens": settings/zepos-settings.desktop
+    # traegt diese Aktion seit heute unter genau diesem Wort, und
+    # test_settings_model.py haelt beide gegeneinander. Ein zweites
+    # Wort fuer dieselbe Seite waere ein Reiter, der im Starter
+    # anders heisst als im Fenster.
+    ("bildschirme", N_("Displays"), "video-display-symbolic"),
     # Die Leiste hinter den Bildschirmen: beide beschreiben, WO etwas
     # steht, und die Leiste steht auf den Bildschirmen. Vor dem Thema
     # aus demselben Grund wie die Groesse - was da ist, entscheidet man

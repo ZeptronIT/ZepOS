@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
-"POT-Creation-Date: 2026-09-02 15:31+0200\n"
+"POT-Creation-Date: 2026-09-02 15:33+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1879,4 +1879,928 @@ msgstr ""
 
 #: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
 msgid "Enter copies the result"
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:207
+msgid "Back to the shipped scale"
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:249
+msgid "Leave it to the scale again"
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:429
+#, python-brace-format
+msgid "Theme {name} set. The login screen shows it next time; the desktop after a generation run."
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:503
+#, python-brace-format
+msgid "Language {name}."
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:522
+#, python-brace-format
+msgid "Time zone {name}."
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:535
+#: settings/zepos_settings_gui/model.py:702
+msgid "Updates"
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:537
+msgid "The machine's settings cannot be read"
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:698
+msgid "From now on the machine updates itself according to this setting."
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:725
+msgid "Saved. In effect at the next login - or now."
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:731
+msgid "Apply now?"
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:736
+msgid "Later"
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:758
+msgid "Applied."
+msgstr ""
+
+#: settings/zepos_settings_gui/app.py:761
+#, python-brace-format
+msgid "The generator exited with {code}. The settings are saved and will be tried again at the next login."
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:75
+#, python-brace-format
+msgid "{problem}. Until that is put straight this page shows nothing for it - \"{button}\" below resets the key to the shipped order."
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:221
+msgid "The shipped bar"
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:365
+msgid "Further forward"
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:367
+msgid "Further back"
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:369
+msgid "Take down"
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:412
+msgid "Add back"
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:415
+msgid "Add"
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:420
+msgid "As long as the shipped order is unknown there is nothing to offer."
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:429
+#, python-brace-format
+msgid "One entry is not shown"
+msgid_plural "{count} entries are not shown"
+msgstr[0] ""
+msgstr[1] ""
+
+#: settings/zepos_settings_gui/bar.py:432
+msgid "- what is chosen here goes to the end."
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:438
+msgid "Everything that can go here is shown."
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:448
+#, python-brace-format
+msgid "Not offered: {names} - {reasons}."
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:473
+msgid "Hands this half back to the shipped order - including every module ZepOS adds later."
+msgstr ""
+
+#: settings/zepos_settings_gui/bar.py:476
+msgid "Nothing is set here; the shipped order is already shown."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:194
+msgid "usage: zepos-settings-gui --json get"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:195
+msgid "       zepos-settings-gui --json set <document>|-"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:196
+msgid "       zepos-settings-gui --json apply"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:197
+msgid "       zepos-settings-gui --json arm"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:199
+msgid "get   writes the state of all pages as one JSON document."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:200
+msgid "set   takes an object {key: value} - the same keys that `get` names"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:202
+msgid "      under \"key\" in every control, so the same ones as `zepos-settings"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:204
+msgid "      set`. \"-\" reads stdin."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:205
+msgid "apply runs zepos-generate --all and clears the marker."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:206
+msgid "arm   applies a screen arrangement ON TRIAL and STAYS RUNNING:"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:207
+msgid "      line 1 on stdin is the arrangement, line 2 the answer"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:208
+msgid "      (keep/discard). Without an answer the guard takes it back."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:209
+msgid "      For a program that keeps running - not for the hand."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:225
+#, python-brace-format
+msgid "{key}: {kind} is not a switch"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:226
+#, python-brace-format
+msgid "{key}: {kind} is not a number"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:227
+msgid "{key}: {value!r} is not one of {options}"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:228
+#, python-brace-format
+msgid "the document is not JSON: {problem}"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:233
+#: settings/zepos_settings_gui/screens.py:718
+#, python-brace-format
+msgid "Not applied: {problem}"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:234
+#: settings/zepos_settings_gui/screens.py:876
+#, python-brace-format
+msgid "The guard had already reverted: {report}"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:236
+#: settings/zepos_settings_gui/screens.py:884
+#, python-brace-format
+msgid "Applied, but not written: {problem}. The arrangement stands until the next login."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:437
+msgid "Arrangement of the screens"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:450
+#, python-brace-format
+msgid "This arrangement does not go through `set`: it is applied via {guard}, which waits {seconds} seconds for a confirmation and otherwise takes it back. A command that ends with its output could not hold the guard - it is therefore applied via `{option} arm` from a program that keeps running."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:527
+msgid "The theme belongs to the machine and not to this account, because the login screen belongs to it. Permission is asked when changing it."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:575
+msgid "This setting belongs to the machine and not to this account: the service runs before anyone has logged in. Permission is asked when changing it."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:653
+msgid "This system has no localectl. The language is in /etc/locale.conf, and that can only be reached with permission."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:668
+msgid "This system has no timedatectl. The time zone is in /etc/localtime, and that can only be reached with permission."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:754
+#, python-brace-format
+msgid "{key}: {value} is not between {low} and {high}"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:796
+#, python-brace-format
+msgid "{key}: this interface only offers {offered}. The remaining {rest} sizes are in `zepos-settings get sizes` and `user_settings.py list-sizes`."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:812
+#, python-brace-format
+msgid "{key}: that colour does not exist"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:815
+msgid "{key}: {value!r} is not a #rrggbb"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:829
+#, python-brace-format
+msgid "{key}: {kind} is not a place name"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:859
+msgid "A language only stands here if there is a catalogue for it AND this machine has generated the locale."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:872
+msgid "{key}: {value!r} is not in {directory}. `{listing}` names the ones this machine knows."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:886
+#, python-brace-format
+msgid "{key}: not a key of this interface. `--json get` names every one there is."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:906
+#, python-brace-format
+msgid "{key}: there are {keys}"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:914
+#, python-brace-format
+msgid "{key}: a list of names or null for the shipped order is expected"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:945
+#, python-brace-format
+msgid "{key}: this interface offers {offered}. `zepos-update --help` names the rest."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:1058
+msgid "{\"layout\": [{\"name\": ..., ...}]} is expected - the same shape that `--json get` prints under displays.layout"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:1066
+msgid "{screen!r}: every screen needs its `name`"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:1072
+#, python-brace-format
+msgid "{name}: this screen does not exist here. Known are {known}."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:1097
+#, python-brace-format
+msgid "{name}: this interface does not know {unknown}. Adjustable are {fields}."
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:1245
+#, python-brace-format
+msgid "zepos-generate --all exited with {code}: {stderr}"
+msgstr ""
+
+#: settings/zepos_settings_gui/bridge.py:1318
+#, python-brace-format
+msgid "an object {{key: value}} is expected, not a JSON {kind}"
+msgstr ""
+
+#: settings/zepos_settings_gui/main.py:93
+#, python-brace-format
+msgid "usage: zepos-settings-gui [{option} PAGE]"
+msgstr ""
+
+#: settings/zepos_settings_gui/main.py:95
+#, python-brace-format
+msgid "       zepos-settings-gui {option} get|set|apply"
+msgstr ""
+
+#: settings/zepos_settings_gui/main.py:97
+#, python-brace-format
+msgid "`{given}` is none of this application's switches."
+msgstr ""
+
+#: settings/zepos_settings_gui/main.py:99
+#, python-brace-format
+msgid "Pages: {names}"
+msgstr ""
+
+#: settings/zepos_settings_gui/main.py:100
+msgid "For the command line: zepos-settings --help"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:221
+#, python-brace-format
+msgid "{command} exited with {code}"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:226
+msgid "The stored order cannot be read: "
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:229
+#, python-brace-format
+msgid "This machine has no record of what ZepOS ships ({path} is missing). What stands here is therefore what stands in the settings - nothing can be added."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:237
+msgid "The file comes with the zepos-config package; a checkout without the installed package does not have it."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:245
+msgid "The theme belongs to the machine and not to this account, because the login screen belongs to it. This system has no pkexec, so the only way is:"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:250
+msgid "This setting belongs to the machine and not to this account. This system has no pkexec, so the only way is:"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:254
+#, python-brace-format
+msgid "The language belongs to the machine and not to this account, because the login screen belongs to it. This system has no localectl, so the only way is through the file itself: {path}"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:259
+#, python-brace-format
+msgid "The time zone belongs to the machine and not to this account. This system has no timedatectl, so the only way is through {path} itself."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:325
+msgid "Terminal font size"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:326
+msgid "In points, because kitty only accepts points. Follows the slider above otherwise - this once held a 7.0, that is 9 pixels, in a desktop showing 24 everywhere else."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:332
+msgid "Bar thickness"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:333
+msgid "And with it the dock's - both strips are the same height, and the dock icons follow this number. Too thin, and the bar cuts off its own modules."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:339
+msgid "Dock icons"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:340
+msgid "Normally derived: the dock is exactly as tall as the bar, and the icon fills it. Naming a number here leaves two strips of different heights."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:346
+msgid "Window gaps"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:347
+msgid "Between two windows twice this becomes visible, because Hyprland puts the inner gap on EVERY side; twice as much at the screen edge and around the bar as well. That way the gap is the same everywhere."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:354
+msgid "Window corner rounding"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:355
+msgid "The same rung as the rounding of the bar modules, so that a window and a tile visibly come from the same kit. 0 means square corners."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:416
+msgid "Desktop size"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:417
+msgid "Show motion"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:418
+msgid "Place"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:419
+msgid "Theme of this machine"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:456
+msgid "Normal"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:457
+msgid "90 degrees"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:458
+msgid "180 degrees (upside down)"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:459
+msgid "270 degrees"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:460
+msgid "Flipped"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:461
+msgid "Flipped, 90 degrees"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:462
+msgid "Flipped, 180 degrees"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:463
+msgid "Flipped, 270 degrees"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:482
+msgid "Exceptions"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:483
+msgid "Motion"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:484
+#: settings/zepos_settings_gui/model.py:699
+msgid "Theme"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:485
+msgid "Weather in the bar"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:486
+msgid "Self-update"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:494
+#, python-brace-format
+msgid "A factor on everything that is text or encloses text: the font, the line heights, the thickness of the bar. {shipped} is the shipped size - the same one the start menu writes in. 1 is the size before that."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:500
+#, python-brace-format
+msgid "Sets the factor to {shipped} and hands every exception below back to it."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:517
+msgid "Five sizes with a reason of their own to deviate from the factor. Naming a number here says what should stand on the screen - the factor no longer applies to it."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:527
+#, python-brace-format
+msgid "One curve and three durations - {durations}. They do NOT follow the factor: doubling the text size means wanting to read bigger, not to wait longer."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:551
+msgid "Off means really off - the compositor and the foreign GTK4 windows go with it. Moving surfaces trigger vertigo in people with a vestibular disorder; that is the reason for this switch, and not taste."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:556
+msgid "The remaining sizes"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:562
+#, python-brace-format
+msgid "{total} are adjustable. The other {rest} are rungs of the four ladders - font, icon, rounding, spacing - which the slider above moves IN PROPORTION, and inner measurements of windows named after the placeholder they set. Offered one by one they would be the catalogue the ladders replaced. `zepos-settings get sizes` shows what is set, `user_settings.py list-sizes` all of them with their current value."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:578
+msgid "A place name, a postal code or an airport code. Empty means: the module stays empty and asks nobody - and only then does wttr.in not learn where this machine stands. The place goes there on every refresh."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:584
+msgid "Off means: systemd does not even hold the timer."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:587
+msgid "ZepOS only leaves the Arch base alone. An unattended full upgrade on a rolling release is a machine that one morning no longer starts."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:594
+#, python-brace-format
+msgid "A failure always reports itself, except at \"{never}\" - a rejected signature must not look like \"nothing new for a while\"."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:597
+msgid "The remaining settings"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:600
+msgid "Delay after boot, random spread, catching up and the notice about the Arch base are in `zepos-update --help`."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:617
+msgid "The palette the own colours sit on top of: whatever is set on the \"Colours\" page survives every change."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:621
+msgid "The theme belongs to the MACHINE and not to this account - the login screen stands before every account and should show the same thing."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:624
+msgid "This account may write it."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:626
+msgid "Permission will therefore be asked when changing it."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:629
+msgid "These settings belong to the MACHINE and not to this account: the service runs before anyone has logged in. They are written immediately -"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:633
+msgid "this account may do that."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:635
+msgid "and permission is asked for it."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:679
+msgid "Size"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:695
+msgid "Bar"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:700
+msgid "Colours"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:701
+msgid "Weather"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:720
+#: settings/zepos_settings_gui/model.py:1747
+msgid "Language and time"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:832
+msgid "Left in the bar"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:833
+msgid "The left end of the top bar, read from the outside inwards: the topmost entry stands furthest to the left."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:835
+msgid "Right in the bar"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:836
+msgid "The right end, from the inside outwards: the topmost entry stands closest to the centred window title, the bottom one furthest out."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:839
+msgid "Pinned in the dock"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:840
+msgid "The applications in the dock, from left to right. An open window appears there anyway; what stands here is what remains without an open window."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:864
+msgid "no application entry on this machine - not installed"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:866
+msgid "a service without a window (NoDisplay) - no button in the dock"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1360
+msgid "The bar, the dock and all overlay windows are stopped and restarted in the process - they are gone for a few seconds. Terminals that are already open keep their old font size until they are reopened."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1428
+msgid "Update automatically"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1429
+msgid "Scope"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1430
+msgid "Report"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1431
+msgid "How often"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1435
+msgid "ZepOS only"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1436
+msgid "Everything, the Arch base too"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1440
+msgid "When something has changed"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1441
+msgid "Only on failures"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1442
+msgid "Never"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1450
+msgid "Daily"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1451
+msgid "Weekly"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1452
+msgid "Monthly"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1581
+msgid "The login screen shows the new theme immediately - next time, without anything having to be generated. The desktop needs a generation run. Window frames and terminals that are already open follow only after `hyprctl reload` or when reopened."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1741
+msgid "Language"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1742
+msgid "Time zone"
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1750
+msgid "Both belong to the MACHINE and not to this account: the login screen speaks a language before anyone has logged in, and the time zone decides which time every timestamp of this machine carries. Both are written immediately, and permission is asked for it."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1793
+msgid "The login screen and this window follow immediately. Bar, dock and the remaining windows after a generation run - »Apply now« does one. Programs outside the desktop at the next login."
+msgstr ""
+
+#: settings/zepos_settings_gui/model.py:1810
+msgid "Takes effect immediately for everything that gets the time from the system. The clock in the bar asks once a minute and therefore shows the new time after a minute at the latest."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:84
+msgid "No screen reported"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:391
+#, python-brace-format
+msgid "No compositor: {problem}"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:394
+msgid "The compositor does not answer"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:396
+msgid "This page asks `hyprctl monitors all -j`. Outside a running Hyprland session there is no answer to that - and then nothing to set either."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:404
+msgid "The compositor is running and lists not a single output. An arrangement could not be written onto that."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:426
+msgid "The chosen screen"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:429
+msgid "Screen"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:430
+msgid "Or click and drag in the drawing above."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:439
+msgid "Off means: the output is switched off, and windows on it move to another screen."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:445
+msgid "Resolution and refresh rate"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:446
+msgid "What this screen can do according to its EDID."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:453
+msgid "Divides the resolution. Hyprland refuses a scale at which it does not come out whole - the guard then takes the arrangement back again."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:466
+msgid "Stands at"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:472
+msgid "Written to"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:587
+#, python-brace-format
+msgid "{x} x {y}, and measures {width} x {height} pixels there. The place comes from the drawing above and snaps to the edges of its neighbours."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:596
+msgid "Click and drag a screen. It snaps to the edges of the others."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:634
+#, python-brace-format
+msgid "{first} and the active profile \"{profile}\" ({second}). Without the second the arrangement would be gone at the next login: start-hyprland copies the profile over it."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:641
+#, python-brace-format
+msgid "{first}. The profile \"{profile}\" has no directory - `save-profile {profile}` creates one, and the arrangement then survives the next login."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:646
+#, python-brace-format
+msgid "{first}. No profile is active; `save-profile` with a name turns this arrangement into one that `start-hyprland` restores under the same name."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:723
+msgid "Applied, on trial."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:740
+msgid "Keep this arrangement?"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:745
+msgid "Take back"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:786
+#, python-brace-format
+msgid "Without an answer the old arrangement is restored in {seconds} seconds."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:789
+msgid "That happens even if this window crashes in the meantime: the way back runs in a process of its own."
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:863
+#, python-brace-format
+msgid "Taken back. {report}"
+msgstr ""
+
+#: settings/zepos_settings_gui/screens.py:891
+#, python-brace-format
+msgid "Kept and written: {paths}"
+msgstr ""
+
+#: src/apps.py:517
+#, python-brace-format
+msgid "the marker `// zepos-pinned` appears {count} times in it, exactly once is expected"
+msgstr ""
+
+#: src/apps.py:562
+#, python-brace-format
+msgid "{path} cannot be read: {problem}"
+msgstr ""
+
+#: src/apps.py:598
+#, python-brace-format
+msgid "{path} cannot be written: {problem}"
+msgstr ""
+
+#: src/displays.py:137
+#, python-brace-format
+msgid "hyprctl exited with {code}: {stderr}"
+msgstr ""
+
+#: src/displays.py:343
+#, python-brace-format
+msgid "hyprctl could not be started: {problem}"
+msgstr ""
+
+#: src/displays.py:354
+#, python-brace-format
+msgid "hyprctl answered no JSON: {problem}"
+msgstr ""
+
+#: src/displays.py:359
+#, python-brace-format
+msgid "hyprctl answered {kind} and not a list of screens"
+msgstr ""
+
+#: src/displays.py:905
+msgid "No screen stays on. There is no way back out of a desktop without a picture: the question whether to keep it would stand on no screen any more."
+msgstr ""
+
+#: src/displays.py:917
+#, python-brace-format
+msgid "{first} and {second} overlap. Windows then open on a screen that is partly covered."
+msgstr ""
+
+#: src/displays.py:1099
+#, python-brace-format
+msgid "{guard} is to be found neither on PATH nor under {path}. Without the guard there is no fallback, and without a fallback nothing is applied here."
+msgstr ""
+
+#: src/displays.py:1242
+#, python-brace-format
+msgid "{guard} did not accept the plan: {problem}"
+msgstr ""
+
+#: src/displays.py:1249
+msgid "{guard} reported {got!r} instead of {wanted!r}. Without a ready guard nothing is applied."
+msgstr ""
+
+#: src/displays.py:1265
+#, python-brace-format
+msgid "Taken back: {report}"
+msgstr ""
+
+#: src/displays.py:1391
+msgid "Screens reverted"
+msgstr ""
+
+#: src/displays.py:1402
+msgid "restored"
+msgstr ""
+
+#: src/displays.py:1403
+#, python-brace-format
+msgid "FAILED ({code}): {stderr}"
+msgstr ""
+
+#: src/displays.py:1407
+#, python-brace-format
+msgid "FAILED: {problem}"
+msgstr ""
+
+#: src/displays.py:1450
+#, python-brace-format
+msgid "usage: {guard}"
+msgstr ""
+
+#: src/displays.py:1451
+msgid "This program takes no switches. It reads its plan as one line of JSON from standard input; src/displays.py describes the procedure."
+msgstr ""
+
+#: src/displays.py:1465
+msgid "no plan"
+msgstr ""
+
+#: src/displays.py:1472
+#, python-brace-format
+msgid "{guard}: unreadable plan: {problem}"
+msgstr ""
+
+#: src/displays.py:1476
+#, python-brace-format
+msgid "{guard}: the plan names no command"
+msgstr ""
+
+#: src/displays.py:1492
+#, python-brace-format
+msgid "No confirmation within {seconds} seconds"
+msgstr ""
+
+#: src/displays.py:1497
+msgid "The settings were closed before the arrangement was confirmed"
+msgstr ""
+
+#: src/displays.py:1505
+msgid "Taken back on request"
 msgstr ""

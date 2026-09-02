@@ -158,4 +158,66 @@ if [ -f "$POT_STARTER/starter.pot" ]; then
     mv "$POT_STARTER/zusammen.pot" "$HIER/zepos-desktop.pot"
 fi
 
+# --------------------------------------------------------------------
+# Das Einstellungsfenster und die Bildschirmseite, seit dem 02.09.2026
+# --------------------------------------------------------------------
+#
+# WARUM EIN DRITTER DURCHGANG UND NICHT EIN ZWEITER AUFRUF OBEN
+#     xgettext bekommt EINE Sprache je Aufruf. Python-Quelltext als
+#     JavaScript gelesen zu bekommen ist derselbe Fehler, aus dem die
+#     Shell-Skripte oben ausgenommen sind - nur leiser, weil Python und
+#     JavaScript sich in den Anfuehrungszeichen aehnlich genug sind, um
+#     ohne Warnung das Falsche zu liefern.
+#
+# WAS PASSIERT, WENN DIESER DURCHGANG FEHLT
+#     GEMESSEN am 02.09.2026: das Einstellungsfenster und src/displays.py
+#     riefen `_()` mit englischen msgids, aber KEINER davon stand in
+#     zepos-desktop.pot - 213 Zeichenketten. Das Fenster hat also nicht
+#     die Sprache gewechselt, es hat sie VERLOREN: ein deutscher Nutzer
+#     bekam englischen Text, weil der Katalog nichts zu antworten hatte.
+#     Ein Fenster, das vorher deutsch war, wird durch eine Uebersetzung
+#     englisch - das ist die Art Rueckschritt, die kein Test sah, weil
+#     der Katalog nie gefragt wurde.
+#
+# WELCHE DATEIEN
+#     Die, die `desktop_i18n` einfuehren. Die Liste steht nicht fest
+#     geschrieben, sie wird gesucht - eine neue Datei, die den Katalog
+#     benutzt, kommt damit von selbst mit. tests/settings/ verlangt fuer
+#     jeden msgid einen Katalogeintrag, also faellt hier nichts still weg.
+PY_DATEIEN=()
+while IFS= read -r pfad; do
+    PY_DATEIEN+=("${pfad#$WURZEL/}")
+done < <(grep -rl --include="*.py" "desktop_i18n" \
+             "$WURZEL/src" "$WURZEL/settings" | sort)
+
+POT_PY="$(mktemp -d)"
+trap 'rm -rf "$POT_STARTER" "$POT_PY"' EXIT
+
+# --keyword=N_ neben --keyword=_: N_() MARKIERT nur, es uebersetzt
+# nicht. Ohne die Angabe faellt jede so markierte Zeichenkette aus der
+# Auslese - und genau die sind die Beschriftungen, die einmal gebaut und
+# spaeter uebersetzt werden.
+xgettext \
+    --no-wrap \
+    --language=Python \
+    --from-code=UTF-8 \
+    --keyword=_ \
+    --keyword=N_ \
+    --keyword=ngettext:1,2 \
+    --keyword=pgettext:1c,2 \
+    --package-name=zepos-desktop \
+    --msgid-bugs-address="https://github.com/ZeptronIT/ZepOS" \
+    --add-comments=UEBERSETZER \
+    --sort-by-file \
+    --directory="$WURZEL" \
+    --output="$POT_PY/python.pot" \
+    "${PY_DATEIEN[@]}"
+
+if [ -f "$POT_PY/python.pot" ]; then
+    msgcat --no-wrap --use-first \
+        "$HIER/zepos-desktop.pot" "$POT_PY/python.pot" \
+        --output-file="$POT_PY/zusammen.pot"
+    mv "$POT_PY/zusammen.pot" "$HIER/zepos-desktop.pot"
+fi
+
 echo "geschrieben: $HIER/zepos-desktop.pot"

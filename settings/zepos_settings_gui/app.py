@@ -42,11 +42,19 @@ import brand  # noqa: E402
 import sizes  # noqa: E402
 
 from . import bar, model, screens, style  # noqa: E402
-from .i18n import _  # noqa: E402
+from desktop_i18n import N_, _  # noqa: E402
 
 APPLICATION_ID = "de.zeptronit.zepos.Settings"
 
-TITLE = "Einstellungen"
+# Der Fenstertitel traegt eine Marke und keinen fertigen Satz: er wird
+# beim Bauen des Fensters uebersetzt, nicht beim Import dieser Datei.
+TITLE = N_("Settings")
+
+# Die Aufschrift des Banner-Knopfes. DREIMAL gebraucht - nach einem
+# Themenwechsel, nach einem Sprachwechsel und nach dem Speichern -, und
+# darum eine Marke: drei gleichlautende msgids waeren drei Gelegenheiten,
+# denselben Knopf verschieden zu beschriften.
+BANNER_APPLY = N_("Apply now")
 
 # Die Seiten stehen in model.py und nicht hier: main.py prueft den
 # Schalter --page gegen sie, BEVOR es dieses Modul importiert - und
@@ -89,7 +97,7 @@ class SettingsWindow(Adw.ApplicationWindow):
 
     def __init__(self, application, draft: model.Draft, *,
                  runner=None, page: str | None = None) -> None:
-        super().__init__(application=application, title=TITLE)
+        super().__init__(application=application, title=_(TITLE))
 
         self.draft = draft
         self.runner = runner
@@ -161,7 +169,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         header.set_title_widget(Adw.ViewSwitcher(
             stack=self.stack, policy=Adw.ViewSwitcherPolicy.WIDE))
 
-        self.save_button = Gtk.Button(label="Speichern", sensitive=False)
+        self.save_button = Gtk.Button(label=_("Save"), sensitive=False)
         self.save_button.add_css_class("suggested-action")
         self.save_button.connect("clicked", self._on_save)
         header.pack_end(self.save_button)
@@ -196,11 +204,11 @@ class SettingsWindow(Adw.ApplicationWindow):
         self.scale_row.connect("notify::value", self._on_scale)
         group.add(self.scale_row)
 
-        reset = Gtk.Button(label="Auf den ausgelieferten Maßstab",
+        reset = Gtk.Button(label=_("Back to the shipped scale"),
                            valign=Gtk.Align.CENTER)
         reset.connect("clicked", self._on_scale_reset)
         shipped = Adw.ActionRow(
-            title="Zurücksetzen", subtitle=model.scale_reset_note())
+            title=_("Reset"), subtitle=model.scale_reset_note())
         shipped.add_suffix(reset)
         group.add(shipped)
         page.add(group)
@@ -238,7 +246,7 @@ class SettingsWindow(Adw.ApplicationWindow):
 
         back = Gtk.Button(icon_name="edit-undo-symbolic",
                           valign=Gtk.Align.CENTER,
-                          tooltip_text="Wieder dem Maßstab überlassen")
+                          tooltip_text=_("Leave it to the scale again"))
         back.add_css_class("flat")
         back.connect("clicked", self._on_dial_reset, dial)
         row.add_suffix(back)
@@ -339,7 +347,7 @@ class SettingsWindow(Adw.ApplicationWindow):
 
         back = Gtk.Button(icon_name="edit-undo-symbolic",
                           valign=Gtk.Align.CENTER,
-                          tooltip_text="Auf die ausgelieferte Farbe")
+                          tooltip_text=_("Back to the shipped colour"))
         back.add_css_class("flat")
         back.connect("clicked", self._on_colour_reset, key)
 
@@ -416,11 +424,11 @@ class SettingsWindow(Adw.ApplicationWindow):
         outcome = model.set_theme(name, runner=self.runner)
         self.update_report = outcome.message
         if outcome.written:
-            self.banner.set_button_label("Jetzt anwenden")
+            self.banner.set_button_label(_(BANNER_APPLY))
             self.banner.set_title(
-                f"Thema {model.theme_label(name)} gesetzt. "
-                "Der Anmeldebildschirm zeigt es beim nächsten Mal; der "
-                "Schreibtisch nach einem Erzeugungslauf.")
+                _("Theme {name} set. The login screen shows it next time; "
+                  "the desktop after a generation run.").format(
+                      name=model.theme_label(name)))
         else:
             self.banner.set_button_label("")
             self.banner.set_title(outcome.message.splitlines()[0])
@@ -490,10 +498,11 @@ class SettingsWindow(Adw.ApplicationWindow):
             # Die Marke liegt jetzt (bridge.write setzt sie); der Knopf
             # im Banner ist derselbe, den ein Themenwechsel anbietet.
             model.request_regeneration_at_login()
-            self.banner.set_button_label("Jetzt anwenden")
+            self.banner.set_button_label(_(BANNER_APPLY))
             self.banner.set_title(
-                f"Sprache {model.language_label(code)}. "
-                + _(model.LANGUAGE_TIMING))
+                _("Language {name}.").format(
+                    name=model.language_label(code))
+                + " " + _(model.LANGUAGE_TIMING))
         else:
             self.banner.set_button_label("")
             self.banner.set_title(outcome.message.splitlines()[0])
@@ -510,7 +519,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         # Erzeugungslauf waere ein Neustart der Schale fuer nichts.
         self.banner.set_button_label("")
         self.banner.set_title(
-            f"Zeitzone {zone}. " + _(model.TIMEZONE_TIMING)
+            _("Time zone {name}.").format(name=zone) + " " + _(model.TIMEZONE_TIMING)
             if outcome.written else outcome.message.splitlines()[0])
         self.banner.set_revealed(True)
 
@@ -523,9 +532,9 @@ class SettingsWindow(Adw.ApplicationWindow):
             # Eine unlesbare Maschinendatei darf die anderen drei Seiten
             # nicht mitnehmen. Sie steht unter /etc und kann von
             # jemandem editiert worden sein, der hier nicht sitzt.
-            group = Adw.PreferencesGroup(title="Aktualisierung")
+            group = Adw.PreferencesGroup(title=_("Updates"))
             group.add(Adw.ActionRow(
-                title="Die Einstellungen der Maschine sind nicht lesbar",
+                title=_("The machine's settings cannot be read"),
                 subtitle=str(problem)))
             page.add(group)
             return page
@@ -585,8 +594,8 @@ class SettingsWindow(Adw.ApplicationWindow):
             # Fensters etwas anderes einstellt, ist kein Anzeigen.
             options = [current, *options]
             row.set_model(Gtk.StringList.new(
-                [f"{current} (unverändert)",
-                 *[labels[name] for name in options[1:]]]))
+                [_("{value} (unchanged)").format(value=current),
+                 *[_(labels[name]) for name in options[1:]]]))
             row.set_selected(0)
         self.update_options[key] = options
         row.connect("notify::selected", self._on_update_choice, key)
@@ -686,8 +695,8 @@ class SettingsWindow(Adw.ApplicationWindow):
         # geschrieben, als set_update_value() zurueckkam.
         self.banner.set_button_label("")
         self.banner.set_title(
-            "Die Maschine aktualisiert sich ab sofort nach dieser "
-            "Einstellung." if outcome.written
+            _("From now on the machine updates itself according to this "
+              "setting.") if outcome.written
             else outcome.message.splitlines()[0])
         self.banner.set_revealed(True)
 
@@ -713,17 +722,19 @@ class SettingsWindow(Adw.ApplicationWindow):
         self._refresh_save()
 
         self.banner.set_title(
-            "Gespeichert. Wirksam mit der nächsten Anmeldung - oder "
-            "jetzt.")
-        self.banner.set_button_label("Jetzt anwenden")
+            _("Saved. In effect at the next login - or now."))
+        self.banner.set_button_label(_(BANNER_APPLY))
         self.banner.set_revealed(True)
 
     def _on_banner_clicked(self, _banner) -> None:
         dialog = Adw.AlertDialog(
-            heading="Jetzt anwenden?",
+            heading=_("Apply now?"),
             body=_(model.GENERATE_COST))
-        dialog.add_response("nein", "Später")
-        dialog.add_response("ja", "Anwenden")
+        # Die Kennungen "nein"/"ja" bleiben ASCII: _on_apply_answer()
+        # erkennt die Antwort daran wieder. Nur die Aufschriften daneben
+        # gehen durch den Katalog.
+        dialog.add_response("nein", _("Later"))
+        dialog.add_response("ja", _("Apply"))
         dialog.set_response_appearance("ja", Adw.ResponseAppearance.SUGGESTED)
         dialog.set_default_response("nein")
         dialog.connect("response", self._on_apply_answer)
@@ -744,12 +755,12 @@ class SettingsWindow(Adw.ApplicationWindow):
         """
         completed = model.regenerate(runner=self.runner)
         if completed.returncode == 0:
-            self.banner.set_title("Angewendet.")
+            self.banner.set_title(_("Applied."))
         else:
             self.banner.set_title(
-                f"Der Generator endete mit {completed.returncode}. Die "
-                "Einstellungen sind gespeichert und werden bei der "
-                "nächsten Anmeldung noch einmal versucht.")
+                _("The generator exited with {code}. The settings are "
+                  "saved and will be tried again at the next "
+                  "login.").format(code=completed.returncode))
         self.banner.set_button_label("")
         self.banner.set_revealed(True)
         return completed.returncode

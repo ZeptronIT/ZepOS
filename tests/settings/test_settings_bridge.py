@@ -489,18 +489,18 @@ def test_ein_stummer_compositor_ist_eine_meldung_und_kein_absturz(bridge,
 # --------------------------------------------------------------------
 
 @pytest.mark.parametrize("changes, expected", [
-    ({"sizes.scale": 40}, "liegt nicht zwischen"),
-    ({"sizes.scale": "gross"}, "ist keine Zahl"),
-    ({"sizes.motion": "ja"}, "ist kein Schalter"),
-    ({"colors.accent": "rot"}, "kein #rrggbb"),
-    ({"colors.gibtsnicht": "#ff0000"}, "gibt es nicht"),
+    ({"sizes.scale": 40}, "is not between"),
+    ({"sizes.scale": "gross"}, "is not a number"),
+    ({"sizes.motion": "ja"}, "is not a switch"),
+    ({"colors.accent": "rot"}, "not a #rrggbb"),
+    ({"colors.gibtsnicht": "#ff0000"}, "does not exist"),
     ({"sizes.values.STYLE_LAUNCHER_ROW_MIN_HEIGHT": 40}, "list-sizes"),
-    ({"theme": "neonpink"}, "ist keins von"),
-    ({"update.notify": "manchmal"}, "ist keins von"),
+    ({"theme": "neonpink"}, "is not one of"),
+    ({"update.notify": "manchmal"}, "is not one of"),
     ({"update.report_base": True}, "zepos-update --help"),
-    ({"weather.location": 5}, "ist kein Ortsname"),
-    ({"bar.modules_oben": []}, "es gibt"),
-    ({"quatsch": 1}, "kein Schlüssel dieser Oberfläche"),
+    ({"weather.location": 5}, "is not a place name"),
+    ({"bar.modules_oben": []}, "there are"),
+    ({"quatsch": 1}, "not a key of this interface"),
 ])
 def test_ungueltige_eingabe_wird_abgelehnt(bridge, capsys, tmp_path,
                                            changes, expected):
@@ -759,11 +759,11 @@ def test_falsche_schalter_geben_zwei_und_die_gebrauchsanweisung(bridge,
 def test_ein_dokument_das_kein_json_ist_wird_als_json_beklagt(bridge, capsys):
     code, document, _err = read(bridge, capsys, ["set", "{kaputt"])
     assert code == 1
-    assert "kein JSON" in document["problems"][0]
+    assert "not JSON" in document["problems"][0]
 
     code, document, _err = read(bridge, capsys, ["set", "[1, 2]"])
     assert code == 1
-    assert "Objekt" in document["problems"][0]
+    assert "object" in document["problems"][0]
 
 
 def test_das_dokument_kommt_auch_von_stdin(bridge, capsys):
@@ -910,11 +910,17 @@ def test_die_erklaerenden_texte_kommen_aus_model_py(bridge, capsys):
                               for gruppe in page["groups"]}
                for page in document["pages"]}
 
-    assert gruppen["groesse"][model.GROUP_SCALE] == model.NOTE_SCALE_GROUP
+    # scale_note()/motion_note()/sizes_rest_note() und nicht mehr
+    # die Konstanten daneben: seit dem 02.09.2026 tragen die
+    # msgids einen Platzhalter ({shipped}, {durations}, {total}),
+    # und eingesetzt wird er in der Funktion. Verglichen wird
+    # also weiter GENAU das, was im Fenster steht - nur wohnt es
+    # eine Ebene weiter.
+    assert gruppen["groesse"][model.GROUP_SCALE] == model.scale_note()
     assert gruppen["groesse"][model.GROUP_DIALS] == model.NOTE_DIALS_GROUP
-    assert gruppen["groesse"][model.GROUP_MOTION] == model.NOTE_MOTION_GROUP
+    assert gruppen["groesse"][model.GROUP_MOTION] == model.motion_note()
     assert (gruppen["groesse"][model.NOTE_SIZES_REST_TITLE]
-            == model.NOTE_SIZES_REST)
+            == model.sizes_rest_note())
     assert gruppen["wetter"][model.GROUP_WEATHER] == model.NOTE_WEATHER_GROUP
     assert gruppen["thema"][model.GROUP_THEME] == model.theme_note(
         model.theme_writable())
@@ -927,10 +933,11 @@ def test_die_erklaerenden_texte_kommen_aus_model_py(bridge, capsys):
     elemente = {control["key"]: control for page in document["pages"]
                 for control in page["controls"]}
     assert elemente["sizes.motion"]["note"] == model.NOTE_MOTION
-    assert elemente["sizes.scale"]["note"] == model.NOTE_SCALE_RESET
+    assert elemente["sizes.scale"]["note"] == model.scale_reset_note()
     assert elemente["update.enabled"]["note"] == model.NOTE_UPDATE_ENABLED
     assert elemente["update.scope"]["note"] == model.NOTE_UPDATE_SCOPE
-    assert elemente["update.notify"]["note"] == model.NOTE_UPDATE_NOTIFY
+    assert (elemente["update.notify"]["note"]
+            == model.update_notify_note())
 
     # Jede Gruppe, die ein Bedienelement nennt, gibt es auch.
     for page in document["pages"]:
@@ -952,12 +959,12 @@ def test_app_py_schreibt_die_texte_nicht_mehr_selbst():
     """
     app = (SETTINGS_ROOT / "zepos_settings_gui" / "app.py").read_text(
         encoding="utf-8")
-    for anfang in ("Ein Faktor auf alles, was Text ist",
-                   "Fuenf Groessen mit einem eigenen Grund",
-                   "Aus heisst wirklich aus",
-                   "Ein Ortsname, eine Postleitzahl",
-                   "Die Palette, unter der die eigenen Farben liegen",
-                   "Diese Einstellungen gehoeren der MASCHINE"):
+    for anfang in ("A factor on everything that is text",
+                   "Five sizes with a reason of their own",
+                   "Off means really off",
+                   "A place name, a postal code",
+                   "The palette the own colours sit on top of",
+                   "These settings belong to the MACHINE"):
         assert anfang not in app, (
             f"app.py traegt {anfang!r} wieder selbst - dann gibt es den "
             "Satz zweimal")
@@ -1100,17 +1107,17 @@ def test_ein_waechter_der_schon_zurueckstellte_schlaegt_die_absicht(
     assert code == 1
     assert zeilen[-1]["kept"] is False
     assert not displays.config_path().exists()
-    assert "zurückgestellt" in zeilen[-1]["problems"][0]
+    assert "reverted" in zeilen[-1]["problems"][0]
 
 
 @pytest.mark.parametrize("dokument, erwartet", [
-    ({"layout": [{"name": "gibt-es-nicht"}]}, "gibt es hier nicht"),
-    ({"layout": [{"name": "eDP-1", "quatsch": 1}]}, "kennt diese Oberfläche"),
-    ({"layout": [{"name": "eDP-1", "scale": "gross"}]}, "ist keine Zahl"),
-    ({"layout": [{"name": "eDP-1", "enabled": 1}]}, "ist kein Schalter"),
-    ({"layout": [{"enabled": True}]}, "braucht seinen `name`"),
-    ({"layout": [{"name": "eDP-1", "enabled": False}]}, "Kein Bildschirm"),
-    ({"schirme": []}, "erwartet wird"),
+    ({"layout": [{"name": "gibt-es-nicht"}]}, "does not exist here"),
+    ({"layout": [{"name": "eDP-1", "quatsch": 1}]}, "does not know"),
+    ({"layout": [{"name": "eDP-1", "scale": "gross"}]}, "is not a number"),
+    ({"layout": [{"name": "eDP-1", "enabled": 1}]}, "is not a switch"),
+    ({"layout": [{"enabled": True}]}, "needs its `name`"),
+    ({"layout": [{"name": "eDP-1", "enabled": False}]}, "No screen"),
+    ({"schirme": []}, "is expected"),
 ])
 def test_eine_anordnung_die_nicht_geht_wird_gar_nicht_erst_scharf(
         bridge, monkeypatch, dokument, erwartet):
@@ -1171,7 +1178,7 @@ def test_eine_ueberlappung_wird_gemeldet_und_nicht_verweigert(
     scharf = [zeile for zeile in zeilen if zeile.get("armed")]
     assert scharf, f"es wurde gar nicht erst scharfgemacht: {zeilen}"
     assert scharf[0]["problems"] == []
-    assert any("übereinander" in satz for satz in scharf[0]["warnings"]), (
+    assert any("overlap" in satz for satz in scharf[0]["warnings"]), (
         f"die Warnung fehlt in {scharf[0]}")
     assert gesehen, "es wurde trotz der Warnung kein Waechter scharfgemacht"
     assert code == 0

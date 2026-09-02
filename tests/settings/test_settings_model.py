@@ -250,10 +250,17 @@ def test_the_dials_are_a_subset_and_the_page_says_how_many_are_not(model):
 
     source = (SETTINGS_ROOT / "zepos_settings_gui" / "model.py").read_text(
         encoding="utf-8")
-    assert "{len(sizes.TABLE)}" in source, (
+    # GERECHNET und nicht getippt, wie vorher - nur steht die
+    # Rechnung seit dem 02.09.2026 in sizes_rest_note() und nicht
+    # mehr in der Konstante: der msgid traegt {total}/{rest},
+    # damit eine neue Groesse in sizes.TABLE nicht jedes Mal
+    # einen neuen Katalogeintrag verlangt.
+    assert "len(sizes.TABLE)" in source, (
         "die Anwendung nennt die Zahl der einstellbaren Groessen nicht "
         "mehr aus der Tabelle")
-    assert "{len(sizes.TABLE) - len(DIALS)}" in source
+    assert "len(sizes.TABLE) - len(DIALS)" in source
+    assert "{total}" in model.NOTE_SIZES_REST
+    assert "{rest}" in model.NOTE_SIZES_REST
 
 
 # --------------------------------------------------------------------
@@ -800,7 +807,7 @@ def test_the_cost_of_a_generator_run_is_named_and_measured(model):
     assert "ags quit" in code and "pkill" in code, (
         "der Generator beendet AGS nicht mehr - dann stimmt der Satz im "
         "Dialog nicht mehr")
-    assert "beendet und neu gestartet" in model.GENERATE_COST
+    assert "stopped and restarted" in model.GENERATE_COST
     assert "Terminals" in model.GENERATE_COST
 
 
@@ -959,9 +966,9 @@ def test_the_application_says_when_a_theme_change_arrives(model):
     umschaltbar" fuer den Nutzer etwas anderes als fuer die Maschine.
     """
     timing = model.THEME_TIMING
-    assert "Anmeldebildschirm" in timing and "sofort" in timing
-    assert "Erzeugungslauf" in timing
-    assert "hyprctl reload" in timing and "Terminals" in timing
+    assert "login screen" in timing and "immediately" in timing
+    assert "generation run" in timing
+    assert "hyprctl reload" in timing and "terminals" in timing
 
 
 def test_the_offered_choices_are_ones_the_service_accepts(model):
@@ -1093,31 +1100,30 @@ def test_every_page_of_the_settings_is_findable(model):
         action = groups.get(f"Desktop Action {name}")
         assert action, f"die Seite {name} hat keine Aktion"
 
-        # DER DEUTSCHE NAME STEHT SEIT DEM 02.09.2026 IN `Name[de]`.
+        # ZURUECK AUF `Name`, seit dem 02.09.2026 (Aufgabe 85).
         #
-        # Verglichen wurde hier `action["Name"]`, und das war richtig,
-        # solange Deutsch die Ausgangssprache der .desktop-Datei war.
-        # Ist es nicht mehr: `Name=` traegt seither Englisch,
-        # `Name[de]=` das Deutsche - dieselbe Umstellung, die dem
-        # englischen Nutzer im Starter acht deutsche Aktionen erspart.
+        # Hier stand zwei Stunden lang `Name[de]`, und der Grund dafuer
+        # war im Docstring benannt: `Name=` war englisch geworden,
+        # waehrend model.PAGES noch deutsch war - das Fenster rief kein
+        # gettext. Der deutsche Schluessel war der einzige Anker, gegen
+        # den die Zusage "die Aktion heisst so wie ihr Reiter" noch
+        # wahr war.
         #
-        # model.PAGES ist weiter DEUTSCH, denn das Fenster selbst
-        # uebersetzt noch nicht (settings/zepos_settings_gui/ ruft kein
-        # gettext; eigener Auftrag). Gegen den deutschen Schluessel
-        # gehalten bleibt die Zusage deshalb wortgleich die alte: die
-        # Aktion im Starter heisst so wie ihr Reiter im Fenster.
+        # Dieser Grund ist weg. model.PAGES traegt jetzt englische
+        # msgids, also gehoert der Vergleich wieder an den
+        # unbezeichneten Schluessel - beide sind die Ausgangssprache,
+        # und beide kommen aus derselben Umstellung.
         #
-        # Und der englische Name wird MITgeprueft, statt ihn
-        # ungeprueft zu lassen: ohne ihn faellt der Leser auf gar
-        # nichts zurueck, und eine Aktion ohne `Name=` ist im Starter
-        # eine Zeile ohne Beschriftung.
-        assert action["Name[de]"] == title, (
-            f"die Aktion {name} heisst auf Deutsch anders als ihre "
-            f"Seite: {action['Name[de]']!r} gegen {title!r}")
-        assert action.get("Name"), (
-            f"die Aktion {name} hat keinen Namen in der Ausgangssprache "
-            "- ein Starter in einer dritten Sprache faellt darauf "
-            "zurueck und faende nichts")
+        # Der DEUTSCHE wird MITgeprueft, aus demselben Grund, aus dem
+        # vorher der englische mitgeprueft wurde: ohne ihn steht im
+        # Starter eines deutschen Nutzers eine Zeile, die niemand
+        # bemerkt, wenn sie fehlt.
+        assert action["Name"] == title, (
+            f"die Aktion {name} heisst anders als ihre Seite: "
+            f"{action['Name']!r} gegen {title!r}")
+        assert action.get("Name[de]"), (
+            f"die Aktion {name} hat keinen deutschen Namen - im Starter "
+            "eines deutschen Nutzers stuende sie dann englisch da")
         assert action["Icon"] == icon, (
             f"die Aktion {name} traegt ein anderes Symbol als ihre Seite")
         assert action["Exec"] == (

@@ -1,5 +1,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Der Katalog dieses Fensters. Kein `gi` in dieser Datei.
+"""Der Katalog der OBERFLAECHE - des Fensters, der Bildschirmseite, des
+Waechters. Kein `gi` in dieser Datei.
+
+WARUM IN src/ UND NICHT IM EINSTELLUNGSPAKET
+    Weil src/displays.py ihn braucht und NICHT vom Einstellungspaket
+    abhaengen darf: dieselbe Datei traegt den Waechter
+    (zepos-displays-watchdog), und der laeuft als eigener Prozess, ohne
+    Fenster und ohne settings/ auf dem Pfad. Ein Import von dort waere
+    ein Import, der auf genau dem Weg fehlt, auf dem er gebraucht wird -
+    dieselbe Begruendung, aus der die Sprachtabelle in src/region.py
+    steht und nicht in installer/.
+
+    src/apps.py hat dieselbe Lage: es laeuft im CHROOT, beim Bauen.
+
+    `desktop_i18n` und nicht `i18n`, damit es nie mit
+    installer/core/i18n.py verwechselt wird. Zwei Kataloge, zwei
+    Domaenen, zwei Bausteine - der Name sagt, welcher.
 
 DIESELBE DOMAENE WIE DIE SCHALE, UND DAS IST EINE ENTSCHEIDUNG
     "zepos-desktop" - wortgleich zu src/region.py:150,

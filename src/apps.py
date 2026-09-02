@@ -113,7 +113,9 @@ from pathlib import Path
 
 # Flach importiert wie ueberall in src/: dieses Modul laeuft als Skript
 # aus dem Systemwurzelverzeichnis und findet seine Geschwister dort.
+import desktop_i18n
 import settings
+from desktop_i18n import _
 from paths import user_root
 
 # Wo package() den Abdruck ablegt, relativ zum Systemwurzelverzeichnis.
@@ -329,72 +331,10 @@ def shipped(system_root: Path | None = None) -> list[str]:
 #     verwirft ihn und sagt, warum; hier wird die Klage AUSGESPROCHEN
 #     und nicht bloss abgeholt.
 
-# Der Abdruck dieses Moduls kennt keine Beschriftungen: welche
-# Anwendung wie HEISST, weiss erst GIO auf der Maschine, auf der sie
-# installiert ist, und ein Paket wird in einem Chroot gebaut, in dem
-# keine davon liegt. Fuer die EIGENEN Anwendungen liegt die Antwort
-# dagegen im Baum - ihre .desktop-Datei gehoert diesem Projekt -, also
-# wird sie dort gelesen und sonst leer gelassen. settings.bar_labels()
-# rechnet mit beidem: ein Eintrag ohne Beschriftung wird unter seinem
-# Namen gezeigt.
-_DESKTOP_NAME = re.compile(r"^Name=(.+)$", re.M)
-
-# Und dieselbe Angabe auf Deutsch. Sie gibt es seit dem 02.09.2026:
-# die eigenen .desktop-Dateien tragen ihren sichtbaren Text seither
-# zweisprachig, `Name=` englisch und `Name[de]=` deutsch (die
-# Begruendung steht in settings/zepos-settings.desktop).
-_DESKTOP_NAME_DE = re.compile(r"^Name\[de\]=(.+)$", re.M)
-
-
-def _label_in_checkout(root: Path, entry: str) -> str:
-    """Wie der Anwendungseintrag `entry` heisst, wenn er im Baum liegt.
-
-    Eine Ebene unter der Wurzel des Checkouts und nicht rekursiv:
-    iso/work/ enthaelt ganze entpackte Wurzelverzeichnisse mit tausenden
-    fremder .desktop-Dateien, und ein rekursiver Lauf haette dort die
-    Beschriftung eines fremden Programms gefunden und fuer unsere
-    gehalten.
-
-    DAS DEUTSCHE ZUERST, seit dem 02.09.2026, UND WARUM DAS HIER KEINE
-    ERZWUNGENE ANZEIGESPRACHE IST
-        Diese Beschriftung wird EINMAL BEIM BAUEN in
-        /usr/share/zepos/shipped-bar.json geschrieben und kann die
-        Sprache des Nutzers deshalb nicht kennen - ein Paket entsteht in
-        einem Chroot, lange vor jeder Anmeldung. Sie ist damit die eine
-        Angabe in diesem Baum, die sich nicht zur Laufzeit entscheiden
-        laesst.
-        Gelesen wird sie an genau EINER Stelle: der Anheftungsauswahl im
-        Einstellungsfenster (settings/zepos_settings_gui/bar.py ueber
-        settings.shipped_bar()). Dieses Fenster spricht heute
-        ausschliesslich Deutsch - es ruft kein gettext, GEZAEHLT am
-        02.09.2026 sind es 119 deutsche Zeichenketten in sechs Dateien.
-        Der deutsche Name ist also nicht eine Bevorzugung, sondern die
-        Sprache der einzigen Flaeche, die diesen Wert anzeigt.
-
-        WAS SICH AENDERN MUSS, WENN DAS FENSTER UEBERSETZT: dann traegt
-        shipped-bar.json die falsche Sprache fuer jeden, der nicht
-        Deutsch liest, und der Wert muss zweisprachig hinein (oder das
-        Fenster liest die .desktop-Datei selbst ueber GIO, das die
-        Sprache der Sitzung von sich aus beachtet). Diese Zeilen sind
-        die Stelle, die das dann anfassen muss.
-
-        `Name=` bleibt der Rueckfall - fuer die Eintraege ohne
-        Uebersetzung, und das sind alle mit einem Eigennamen ("Claude
-        Code") und alle fremden.
-    """
-    for candidate in sorted(root.parent.glob(f"*/{entry}.desktop")):
-        text = candidate.read_text(encoding="utf-8")
-        for muster in (_DESKTOP_NAME_DE, _DESKTOP_NAME):
-            match = muster.search(text)
-            if match:
-                return match.group(1).strip()
-    return ""
-
-
 def imprint_pins(system_root: Path | None = None) -> list[dict[str, str]]:
     """Die ausgelieferten Anheftungen fuer /usr/share/zepos/shipped-bar.json.
 
-    Drei Felder je Eintrag, und jedes ist etwas anderes:
+    Zwei Felder je Eintrag, und jedes ist etwas anderes:
 
       name     der Paketname - das, was gespeichert wird, und das, was
                settings.bar_order() gegen die ausgelieferte Liste haelt.
@@ -403,13 +343,49 @@ def imprint_pins(system_root: Path | None = None) -> list[dict[str, str]]:
                Versprechen: GNOME benennt seine Eintraege in Umkehr-DNS,
                und der zweite Versuch dort findet sie ueber das
                Programm der Exec-Zeile.
-      label    siehe _label_in_checkout() - leer, wo nur die Maschine
-               des Nutzers die Antwort haette.
+
+    ES WAREN DREI, UND DAS DRITTE IST AM 02.09.2026 WEGGEFALLEN
+        `label` trug den sichtbaren Namen der EIGENEN Anwendungen, aus
+        ihrer .desktop-Datei im Baum gelesen (`Name[de]=` zuerst,
+        `Name=` als Rueckfall). Fuer die fremden stand dort "" - im
+        Chroot liegt keine davon.
+
+        Der Wert entstand BEIM BAUEN und konnte die Sprache des Nutzers
+        grundsaetzlich nicht kennen: ein Paket wird in einem Chroot
+        gebaut, lange vor jeder Anmeldung. Solange die einzige Flaeche,
+        die ihn anzeigt, ausschliesslich Deutsch sprach - die
+        Anheftungsauswahl im Einstellungsfenster -, war "Deutsch
+        hineinbacken" die richtige Antwort. Seit dieses Fenster gettext
+        ruft, ist es die falsche: der Wert waere die eine deutsche
+        Beschriftung in einem englischen Fenster.
+
+        WEGGELASSEN und nicht zweisprachig gemacht, weil der Rueckfall
+        die Antwort schon HAT. bar.py:_entry_row() fragt in dieser
+        Reihenfolge:
+
+            machine   GIO auf DIESER Maschine (entry_for()) - und GIO
+                      beachtet die Sprache der Sitzung von selbst
+            labels    der Abdruck   <- diese Stelle
+            name      der Paketname
+
+        Fuer jeden Eintrag, den es auf der Maschine WIRKLICH gibt,
+        antwortet GIO - der Abdruck kam nie zum Zug. Er kam nur dort
+        zum Zug, wo GIO nichts findet, und das ist genau der Fall
+        "Paket entfernt". Dort ist der PAKETNAME die ehrlichere Antwort
+        als eine gebackene Uebersetzung eines Programms, das nicht mehr
+        installiert ist.
+
+        WAS DAMIT TOT IST und in fremden Dateien liegt:
+        settings.bar_labels() (src/settings.py) antwortet ab jetzt immer
+        {} - sie filtert leere Beschriftungen schon heute weg, und ein
+        fehlendes Feld behandelt sie wie ein leeres. Der zweite
+        Rueckgabewert von model.shipped_bar() und die `labels` in
+        bar.py/bridge.py sind damit ebenfalls leer. Sie stehen noch da,
+        weil src/settings.py einem anderen Auftrag gehoert; im Bericht
+        zu Aufgabe 85 ist beides benannt.
     """
     root = Path(system_root) if system_root else Path(__file__).resolve().parent
-    return [{"name": name,
-             "desktop": f"{name}.desktop",
-             "label": _label_in_checkout(root, name)}
+    return [{"name": name, "desktop": f"{name}.desktop"}
             for name in shipped(root)]
 
 
@@ -537,9 +513,9 @@ def render(text: str, *, names: list[str] | None = None) -> str:
     hits = [index for index, line in enumerate(lines)
             if MARKER.match(line.rstrip("\n"))]
     if len(hits) != 1:
-        raise MalformedTemplate(
-            f"die Marke `// zepos-pinned` steht {len(hits)}-mal darin, "
-            f"erwartet wird genau einmal")
+        raise MalformedTemplate(_(
+            "the marker `// zepos-pinned` appears {count} times in it, "
+            "exactly once is expected").format(count=len(hits)))
 
     index = hits[0]
     indent = MARKER.match(lines[index].rstrip("\n")).group(1)
@@ -563,6 +539,14 @@ der Einstellungsdatei bleibt er stehen."""
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Der Katalog zuerst, wie in den anderen beiden Einstiegspunkten
+    # dieser Oberflaeche. Dieser hier laeuft im CHROOT beim Bauen, wo
+    # /etc/locale.conf regelmaessig gar nichts sagt - dann faellt
+    # activate() auf die Quellsprache zurueck, und die Klagen unten
+    # stehen englisch da. Das ist richtig so: sie gehen an den, der
+    # baut, und im Baulauf ist Englisch die Sprache.
+    desktop_i18n.activate()
+
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv in (["-h"], ["--help"]):
         print(USAGE)
@@ -575,7 +559,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         text = target.read_text(encoding="utf-8")
     except OSError as exc:
-        print(f"{target} cannot be read: {exc}", file=sys.stderr)
+        print(_("{path} cannot be read: {problem}").format(
+            path=target, problem=exc), file=sys.stderr)
         return 1
 
     # Derselbe Wurzelbegriff wie ueberall: der Generator reicht ihn in
@@ -610,7 +595,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         target.write_text(rendered, encoding="utf-8")
     except OSError as exc:
-        print(f"{target} cannot be written: {exc}", file=sys.stderr)
+        print(_("{path} cannot be written: {problem}").format(
+            path=target, problem=exc), file=sys.stderr)
         return 1
     return 0
 

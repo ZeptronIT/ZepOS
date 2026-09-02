@@ -46,8 +46,10 @@ from __future__ import annotations
 import sys
 from typing import Callable
 
+import desktop_i18n
 import paths
 import settings as settings_file
+from desktop_i18n import _
 
 from . import bridge, model
 
@@ -82,13 +84,20 @@ def page_of(arguments: list[str]) -> str | None:
             and arguments[0] == model.PAGE_OPTION
             and arguments[1] in model.PAGE_NAMES):
         return arguments[1]
-    raise ValueError(
-        f"usage: zepos-settings-gui [{model.PAGE_OPTION} SEITE]\n"
-        f"       zepos-settings-gui {bridge.OPTION} get|set|apply\n"
-        f"`{' '.join(arguments)}` ist keiner der Schalter dieser "
-        f"Anwendung.\n"
-        f"Seiten: {', '.join(model.PAGE_NAMES)}\n"
-        f"Für die Kommandozeile: zepos-settings --help")
+    # ZEILENWEISE durch den Katalog und nicht als ein Block: ein msgid
+    # mit einem \n darin schreibt gettext in der mehrzeiligen Form, und
+    # die Kataloguesicherung sucht die einzeilige Zeichenfolge. Fuenf
+    # msgids, hier zusammengesetzt - der Umbruch ist Anordnung und keine
+    # Sprache.
+    raise ValueError("\n".join((
+        _("usage: zepos-settings-gui [{option} PAGE]").format(
+            option=model.PAGE_OPTION),
+        _("       zepos-settings-gui {option} get|set|apply").format(
+            option=bridge.OPTION),
+        _("`{given}` is none of this application's switches.").format(
+            given=" ".join(arguments)),
+        _("Pages: {names}").format(names=", ".join(model.PAGE_NAMES)),
+        _("For the command line: zepos-settings --help"))))
 
 
 def main(argv: list[str] | None = None, *,
@@ -103,6 +112,19 @@ def main(argv: list[str] | None = None, *,
     aufrufen, und ohne einen Griff ins Fenster waere die einzige
     pruefbare Aussage, dass die Anwendung startet.
     """
+    # DER KATALOG ZUERST, VOR DEM ERSTEN ZEICHEN AUSGABE.
+    #
+    # Vor dem Abzweig nach bridge.py und vor page_of(): beide Wege geben
+    # Text aus - die Bruecke ihre Klagen als JSON, page_of() seinen
+    # Gebrauchstext auf stderr -, und ein Katalog, der erst danach
+    # gewaehlt wird, kommt fuer diese Zeile zu spaet.
+    #
+    # Ohne Angabe: die Sprache, die /etc/locale.conf gerade nennt. Der
+    # Kopf von src/desktop_i18n.py fuehrt aus, warum die DATEI und nicht
+    # die Umgebung - kurz: nach `localectl set-locale` ist die Umgebung
+    # dieses Prozesses eine Abschrift von vorher.
+    desktop_i18n.activate()
+
     arguments = list(sys.argv[1:] if argv is None else argv)
 
     if arguments and arguments[0] == bridge.OPTION:

@@ -110,8 +110,16 @@ SENKEN_JSON = frozenset({
     "message", "heading", "body", "summary", "reason",
 })
 
-# Die zwei Marken, hinter denen ein Anzeigetext stehen darf.
-KATALOG = frozenset({"_", "N_"})
+# Die Aufrufe, hinter denen ein Anzeigetext stehen darf.
+#
+# `ngettext` GEHOERT DAZU, und das war beim ersten Schreiben dieser
+# Datei vergessen. Es ist kein Nachlassen der Regel, sondern ihre
+# Vervollstaendigung: ngettext IST der Katalog, und fuer einen Text,
+# dessen Form von einer Anzahl abhaengt, ist es der RICHTIGERE Aufruf
+# als `_()`. Wie viele Formen eine Sprache hat, entscheidet die Sprache
+# selbst - diese Regel steht im Plural-Forms-Kopf des Katalogs und nicht
+# in einem `if` im Quelltext.
+KATALOG = frozenset({"_", "N_", "ngettext"})
 
 # ------------------------------------------------------------------ #
 # Was NIE auf dem Schirm steht.
@@ -449,25 +457,36 @@ def test_jede_senke_bekommt_uebersetzten_text(quellen):
     dem jemand eine Beschriftung unmittelbar hinschreibt. Die erste
     allein liesse eine neue Senke mit einem Maschinenwort darin durch;
     die zweite allein saehe die Konstanten in model.py nicht.
+
+    Und sie schaut NACH UNTEN und nicht nach oben. Hier stand erst
+    `durch_den_katalog(senke)`, also die Frage, ob die SENKE in einem
+    `_()` steht - und meldete
+
+        app.py .set_title() ' Language {name}.'
+
+    fuer den Ausdruck
+
+        _("Language {name}.").format(name=...) + " " + _(model.TIMING)
+
+    Der ist vollstaendig uebersetzt; die Aufrufe stehen nur UNTER der
+    Verkettung und nicht darueber. Gefragt wird darum je LITERAL.
     """
     nackt = []
     for quelle in quellen:
         for senke in quelle.senken():
-            knoten = senke["knoten"]
-            if not isinstance(knoten, (ast.Constant, ast.JoinedStr,
-                                       ast.BinOp)):
-                continue
-            stuecke = [k.value for k in ast.walk(knoten)
-                       if isinstance(k, ast.Constant)
-                       and isinstance(k.value, str)]
-            if not stuecke or not _traegt_ein_wort("".join(stuecke)):
-                continue
-            if all(_ist_maschinenwort(s) for s in stuecke):
-                continue
-            if quelle.durch_den_katalog(knoten):
-                continue
-            nackt.append(f"{senke['datei']}:{senke['zeile']} "
-                         f"{senke['senke']} {''.join(stuecke)[:50]!r}")
+            for literal in ast.walk(senke["knoten"]):
+                if not (isinstance(literal, ast.Constant)
+                        and isinstance(literal.value, str)):
+                    continue
+                if not _traegt_ein_wort(literal.value):
+                    continue
+                if _ist_maschinenwort(literal.value):
+                    continue
+                einheit = quelle.einheit(literal)
+                if quelle.durch_den_katalog(einheit):
+                    continue
+                nackt.append(f"{senke['datei']}:{literal.lineno} "
+                             f"{senke['senke']} {literal.value[:50]!r}")
 
     assert nackt == [], (
         f"{len(nackt)} Senken bekommen ein nacktes Literal:\n  "

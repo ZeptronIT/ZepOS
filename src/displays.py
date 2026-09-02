@@ -128,6 +128,14 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+import desktop_i18n
+from desktop_i18n import N_, _
+
+# `hyprctl endete mit ...` steht an ZWEI Stellen - beim Lesen der
+# Bildschirme und beim Anwenden. Ein msgid, damit derselbe
+# Fehlschlag nicht zweimal verschieden heisst.
+HYPRCTL_EXIT = N_("hyprctl exited with {code}: {stderr}")
+
 import monitors
 import paths
 
@@ -332,22 +340,24 @@ def read_outputs(*, runner: Runner | None = None) -> list[Output]:
         result = runner(["hyprctl", "monitors", "all", "-j"],
                         capture_output=True, text=True)
     except OSError as exc:
-        raise RuntimeError(f"hyprctl liess sich nicht starten: {exc}") from exc
+        raise RuntimeError(_("hyprctl could not be started: {problem}")
+                           .format(problem=exc)) from exc
 
     if result.returncode != 0:
-        raise RuntimeError(
-            f"hyprctl endete mit {result.returncode}: "
-            f"{(result.stderr or '').strip()}")
+        raise RuntimeError(_(HYPRCTL_EXIT).format(
+            code=result.returncode,
+            stderr=(result.stderr or "").strip()))
 
     try:
         entries = json.loads(result.stdout)
     except ValueError as exc:
-        raise RuntimeError(f"hyprctl antwortete kein JSON: {exc}") from exc
+        raise RuntimeError(_("hyprctl answered no JSON: {problem}")
+                           .format(problem=exc)) from exc
 
     if not isinstance(entries, list):
-        raise RuntimeError(
-            f"hyprctl antwortete {type(entries).__name__} und keine Liste "
-            "von Bildschirmen")
+        raise RuntimeError(_(
+            "hyprctl answered {kind} and not a list of screens").format(
+                kind=type(entries).__name__))
 
     outputs = []
     for entry in entries:
@@ -892,9 +902,9 @@ def blockers(placements: Iterable[Placement]) -> list[str]:
     """
     if any(item.enabled for item in placements):
         return []
-    return ["Kein Bildschirm bleibt an. Es gibt keinen Rückweg aus einem "
-            "Schreibtisch ohne Bild: die Frage, ob man ihn behalten will, "
-            "stünde auf keinem Schirm mehr."]
+    return [_("No screen stays on. There is no way back out of a desktop "
+              "without a picture: the question whether to keep it would "
+              "stand on no screen any more.")]
 
 
 def remarks(placements: Iterable[Placement]) -> list[str]:
@@ -904,8 +914,9 @@ def remarks(placements: Iterable[Placement]) -> list[str]:
     overlaps() steht: eine Ueberlappung ist fast immer ein Versehen,
     aber sie ist eine Anordnung, die man SIEHT und zuruecknehmen kann.
     """
-    return [f"{first} und {second} liegen übereinander. Fenster gehen "
-            "dann auf einem Schirm auf, der teilweise verdeckt ist."
+    return [_("{first} and {second} overlap. Windows then open on a "
+              "screen that is partly covered.").format(
+                  first=first, second=second)
             for first, second in overlaps(placements)]
 
 
@@ -1084,10 +1095,10 @@ def guard_command() -> list[str]:
     local = Path(__file__).resolve().parent / "bin" / GUARD_NAME
     if local.is_file():
         return [sys.executable, str(local)]
-    raise FileNotFoundError(
-        f"{GUARD_NAME} ist weder auf PATH noch unter {local} zu finden. "
-        "Ohne den Wächter gibt es keinen Rückfall, und ohne Rückfall "
-        "wird hier nichts angewandt.")
+    raise FileNotFoundError(_(
+        "{guard} is to be found neither on PATH nor under {path}. Without "
+        "the guard there is no fallback, and without a fallback nothing "
+        "is applied here.").format(guard=GUARD_NAME, path=local))
 
 
 def guard_log() -> Path:
@@ -1228,14 +1239,16 @@ def arm_and_apply(new: Iterable[Placement], previous: Iterable[Placement], *,
     except (BrokenPipeError, OSError) as problem:
         process.kill()
         raise GuardRefused(
-            f"{GUARD_NAME} nahm den Plan nicht an: {problem}") from problem
+            _("{guard} did not accept the plan: {problem}").format(
+                guard=GUARD_NAME, problem=problem)) from problem
 
     if ready != GUARD_READY:
         process.kill()
         process.communicate()
-        raise GuardRefused(
-            f"{GUARD_NAME} meldete {ready!r} statt {GUARD_READY!r}. Ohne "
-            "einen bereiten Wächter wird nichts angewandt.")
+        raise GuardRefused(_(
+            "{guard} reported {got!r} instead of {wanted!r}. Without a "
+            "ready guard nothing is applied.").format(
+                guard=GUARD_NAME, got=ready, wanted=GUARD_READY))
 
     attempt = Attempt(guard=process, applied=apply_it,
                       placements=tuple(new))
@@ -1245,9 +1258,11 @@ def arm_and_apply(new: Iterable[Placement], previous: Iterable[Placement], *,
     if completed.returncode != 0:
         outcome = attempt.revert()
         raise ApplyFailed(
-            f"hyprctl endete mit {completed.returncode}: "
-            f"{(completed.stderr or '').strip()}\n"
-            f"Zurückgenommen: {outcome.report}")
+            _(HYPRCTL_EXIT).format(
+                code=completed.returncode,
+                stderr=(completed.stderr or "").strip())
+            + "\n"
+            + _("Taken back: {report}").format(report=outcome.report))
     return attempt
 
 
@@ -1373,7 +1388,7 @@ def _tell_the_user(reason: str) -> None:
     try:
         subprocess.run(
             [found, "--urgency=critical", "--app-name=ZepOS",
-             "Bildschirme zurückgestellt", reason],
+             _("Screens reverted"), reason],
             capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         pass
@@ -1384,11 +1399,12 @@ def _revert(command: list[str], code: int, reason: str) -> int:
     try:
         completed = subprocess.run(command, capture_output=True, text=True,
                                    timeout=30)
-        outcome = ("wiederhergestellt" if completed.returncode == 0
-                   else f"FEHLGESCHLAGEN ({completed.returncode}): "
-                        f"{(completed.stderr or '').strip()}")
+        outcome = (_("restored") if completed.returncode == 0
+                   else _("FAILED ({code}): {stderr}").format(
+                       code=completed.returncode,
+                       stderr=(completed.stderr or "").strip()))
     except (OSError, subprocess.SubprocessError) as problem:
-        outcome = f"FEHLGESCHLAGEN: {problem}"
+        outcome = _("FAILED: {problem}").format(problem=problem)
     _note(f"{reason} - {outcome}")
     _say(f"{reason} - {outcome}")
     _tell_the_user(reason)
@@ -1421,12 +1437,20 @@ def guard_main(argv: list[str] | None = None) -> int:
     import signal
     import time
 
+    # DER KATALOG ZUERST. Der Waechter ist ein EIGENER PROZESS und erbt
+    # den gewaehlten Katalog des Fensters nicht - er meldet sich beim
+    # Nutzer mit notify-send ("Bildschirme zurueckgestellt"), und diese
+    # Meldung kommt aus GENAU diesem Prozess. Ohne diese Zeile stuende
+    # die Benachrichtigung englisch da, waehrend das Fenster daneben
+    # deutsch spricht.
+    desktop_i18n.activate()
+
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv:
-        print(f"usage: {GUARD_NAME}\n"
-              "Dieses Programm nimmt keine Schalter entgegen. Es liest "
-              "seinen Plan als eine Zeile JSON von der Standardeingabe; "
-              "src/displays.py beschreibt das Verfahren.", file=sys.stderr)
+        print(_("usage: {guard}").format(guard=GUARD_NAME) + "\n"
+              + _("This program takes no switches. It reads its plan as "
+                  "one line of JSON from standard input; src/displays.py "
+                  "describes the procedure."), file=sys.stderr)
         return 64
 
     for name in ("SIGHUP", "SIGPIPE"):
@@ -1438,17 +1462,19 @@ def guard_main(argv: list[str] | None = None) -> int:
 
     first = reader.line(time.monotonic() + ARMING_SECONDS)
     if not first:
-        _say("kein Plan")
+        _say(_("no plan"))
         return EXIT_NEVER_ARMED
     try:
         plan = json.loads(first)
         seconds = float(plan["seconds"])
         command = [str(part) for part in plan["command"]]
     except (ValueError, TypeError, KeyError) as problem:
-        print(f"{GUARD_NAME}: unlesbarer Plan: {problem}", file=sys.stderr)
+        print(_("{guard}: unreadable plan: {problem}").format(
+            guard=GUARD_NAME, problem=problem), file=sys.stderr)
         return EXIT_NEVER_ARMED
     if not command:
-        print(f"{GUARD_NAME}: der Plan nennt keinen Befehl", file=sys.stderr)
+        print(_("{guard}: the plan names no command").format(
+            guard=GUARD_NAME), file=sys.stderr)
         return EXIT_NEVER_ARMED
 
     # ERST JETZT. Die Oberflaeche wartet auf dieses Wort und wendet
@@ -1463,19 +1489,20 @@ def guard_main(argv: list[str] | None = None) -> int:
         if answer is None:
             return _revert(
                 command, EXIT_REVERTED_DEADLINE,
-                f"Keine Bestätigung binnen {number(seconds)} Sekunden")
+                _("No confirmation within {seconds} seconds").format(
+                    seconds=number(seconds)))
         if answer == "":
             return _revert(
                 command, EXIT_REVERTED_BROKEN_PIPE,
-                "Die Einstellungen sind beendet worden, bevor die "
-                "Anordnung bestätigt war")
+                _("The settings were closed before the arrangement "
+                  "was confirmed"))
         answer = answer.strip()
         if answer == GUARD_KEEP:
             _say(GUARD_KEEP)
             return EXIT_KEPT
         if answer == GUARD_REVERT:
             return _revert(command, EXIT_REVERTED_ON_REQUEST,
-                           "Auf Wunsch zurückgenommen")
+                           _("Taken back on request"))
         # Eine Zeile, die keins von beidem ist, wird ueberlesen. Ein
         # Waechter, der bei einem Tippfehler auf der Pipe zurueckstellt,
         # macht aus einem Verstaendigungsfehler einen Moduswechsel.

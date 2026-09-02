@@ -75,7 +75,7 @@ DIE RUECKGABEWERTE, UND WARUM STDOUT IMMER JSON IST
     0   getan
     1   abgelehnt oder fehlgeschlagen - stdout traegt {"ok": false,
         "problems": [...]}
-    2   die Schalter sind keine - USAGE auf stderr, wie in cli.py
+    2   die Schalter sind keine - usage() auf stderr, wie in cli.py
 
     Die 1 traegt ihre Begruendung als JSON und nicht als Satz auf
     stderr, weil der Aufrufer eine Oberflaeche ist: sie muss die Klage
@@ -115,7 +115,7 @@ import theme
 import update
 
 from . import model
-from .i18n import N_, _
+from desktop_i18n import N_, _
 
 # Die Fassung dieses Vertrags. Sie steht IM Dokument, weil das Fenster
 # aelter oder juenger sein kann als der Befehl: ein AGS-Fenster wird von
@@ -171,20 +171,70 @@ UPDATE_CHOICES: dict[str, dict[str, str]] = {
     model.UPDATE_INTERVAL: model.UPDATE_INTERVAL_LABELS,
 }
 
-USAGE = """usage: zepos-settings-gui --json get
-       zepos-settings-gui --json set <dokument>|-
-       zepos-settings-gui --json apply
-       zepos-settings-gui --json arm
+# Der Gebrauchstext, ZEILENWEISE durch den Katalog und nicht als ein
+# Block.
+#
+# WARUM ER UEBERHAUPT DURCH DEN KATALOG GEHT
+#     Weil ein Mensch ihn liest, wenn er einen Schalter falsch tippt -
+#     und die Regel dieses Baums ist die aus installer/core/i18n.py:
+#     "Anything a user can see goes through _()". Eine
+#     Maschinenschnittstelle ist kein Grund, deutsch zu bleiben; sie ist
+#     ein Grund, praezise zu sein.
+#
+# WARUM ZEILENWEISE
+#     Ein msgid mit einem \n darin schreibt gettext in der
+#     mehrzeiligen Form, und die Kataloguesicherung sucht die
+#     einzeilige Zeichenfolge `msgid "<ganzer Text>"`. Ein Block mit
+#     vierzehn Zeilen waere ein Eintrag, den keine Pruefung wiederfindet.
+#
+#     Die AUSRICHTUNG der zweiten Spalte bleibt dabei Sache des
+#     Uebersetzers - darum stehen die Befehlsnamen mit im msgid und
+#     nicht als Platzhalter davor.
+USAGE_LINES = (
+    N_("usage: zepos-settings-gui --json get"),
+    N_("       zepos-settings-gui --json set <document>|-"),
+    N_("       zepos-settings-gui --json apply"),
+    N_("       zepos-settings-gui --json arm"),
+    "",
+    N_("get   writes the state of all pages as one JSON document."),
+    N_("set   takes an object {key: value} - the same keys that `get` "
+       "names"),
+    N_("      under \"key\" in every control, so the same ones as "
+       "`zepos-settings"),
+    N_("      set`. \"-\" reads stdin."),
+    N_("apply runs zepos-generate --all and clears the marker."),
+    N_("arm   applies a screen arrangement ON TRIAL and STAYS RUNNING:"),
+    N_("      line 1 on stdin is the arrangement, line 2 the answer"),
+    N_("      (keep/discard). Without an answer the guard takes it back."),
+    N_("      For a program that keeps running - not for the hand."),
+)
 
-get   schreibt den Zustand aller Seiten als ein JSON-Dokument.
-set   nimmt ein Objekt {schluessel: wert} entgegen - dieselben
-      Schluessel, die `get` in jedem Bedienelement unter "key" nennt,
-      also dieselben wie bei `zepos-settings set`. "-" liest stdin.
-apply laesst zepos-generate --all laufen und raeumt die Marke weg.
-arm   wendet eine Bildschirmanordnung AUF PROBE an und BLEIBT STEHEN:
-      Zeile 1 auf stdin ist die Anordnung, Zeile 2 die Antwort
-      (behalten/verwerfen). Ohne Antwort nimmt der Waechter zurueck.
-      Fuer ein Programm, das laufen bleibt - nicht fuer die Hand."""
+
+def usage() -> str:
+    """Der Gebrauchstext, in der Sprache, die jetzt gilt."""
+    return "\n".join(_(line) if line else "" for line in USAGE_LINES)
+
+# --------------------------------------------------------------------
+# Die Klagen, die mehr als eine Stelle braucht
+# --------------------------------------------------------------------
+#
+# Vier Saetze standen woertlich an je zwei bis vier Stellen - "ist kein
+# Schalter" viermal, "ist keine Zahl" zweimal, "ist keins von" dreimal.
+# Vier msgids und nicht dreizehn: dreizehn Eintraege waeren dreizehn
+# Gelegenheiten, dieselbe Klage verschieden zu uebersetzen.
+NOT_A_SWITCH = N_("{key}: {kind} is not a switch")
+NOT_A_NUMBER = N_("{key}: {kind} is not a number")
+NOT_ONE_OF = N_("{key}: {value!r} is not one of {options}")
+NOT_JSON = N_("the document is not JSON: {problem}")
+
+# Und drei, die wortgleich in screens.py stehen. Derselbe msgid, damit
+# das Fenster und die Bruecke nicht zwei Wortlaute fuer eine Lage haben
+# - die Bruecke bedient dasselbe Fenster, nur in AGS gezeichnet.
+NOT_APPLIED = N_("Not applied: {problem}")
+GUARD_REVERTED = N_("The guard had already reverted: {report}")
+APPLIED_NOT_WRITTEN = N_(
+    "Applied, but not written: {problem}. The arrangement stands until "
+    "the next login.")
 
 
 # --------------------------------------------------------------------
@@ -384,7 +434,7 @@ def _page_bildschirme(*, runner=None) -> dict:
              for output in outputs}
 
     control = _control(
-        DISPLAY_KEY, LAYOUT, "Anordnung der Bildschirme",
+        DISPLAY_KEY, LAYOUT, _("Arrangement of the screens"),
         [{"name": place.name, "selector": place.selector,
           "enabled": place.enabled,
           "width": place.width, "height": place.height,
@@ -396,14 +446,15 @@ def _page_bildschirme(*, runner=None) -> dict:
           "modes": modes.get(place.name, [])}
          for place in layout],
         scope=DESKTOP, immediate=True, writable=False,
-        reason=reason or (
-            f"Diese Anordnung geht nicht durch `set`: sie wird über "
-            f"{displays.GUARD_NAME} angewandt, der "
-            f"{displays.CONFIRM_SECONDS} Sekunden auf eine Bestätigung "
-            f"wartet und sonst zurücknimmt. Ein Befehl, der mit seiner "
-            f"Ausgabe endet, könnte den Wächter nicht halten - "
-            f"angewandt wird deshalb über `{OPTION} arm` aus einem "
-            f"Programm, das laufen bleibt."),
+        reason=reason or _(
+            "This arrangement does not go through `set`: it is applied "
+            "via {guard}, which waits {seconds} seconds for a "
+            "confirmation and otherwise takes it back. A command that "
+            "ends with its output could not hold the guard - it is "
+            "therefore applied via `{option} arm` from a program that "
+            "keeps running.").format(
+                guard=displays.GUARD_NAME,
+                seconds=displays.CONFIRM_SECONDS, option=OPTION),
         available=available,
         armable=available and _guard_found(),
         arm=[OPTION, ARM],
@@ -472,10 +523,10 @@ def _page_thema() -> dict:
         options=[{"value": name, "label": model.theme_label(name),
                   "note": model.theme_description(name)} for name in names],
         scope=MACHINE, immediate=True, writable=writable,
-        reason="" if writable else (
-            "Das Thema gehört der Maschine und nicht diesem Konto, weil "
-            "der Anmeldebildschirm dazugehört. Beim Wechseln wird nach "
-            "Rechten gefragt."),
+        reason="" if writable else _(
+            "The theme belongs to the machine and not to this account, "
+            "because the login screen belongs to it. Permission is asked "
+            "when changing it."),
         command=model.theme_elevated_command(theme.DEFAULT)[:-1])
     return _page("thema", [control],
                  groups=[_group(model.GROUP_THEME,
@@ -520,10 +571,10 @@ def _page_aktualisierung() -> dict:
         return _page("aktualisierung", [], note=str(problem))
 
     writable = model.update_writable()
-    reason = "" if writable else (
-        "Diese Einstellung gehört der Maschine und nicht diesem Konto: "
-        "der Dienst läuft, bevor sich jemand angemeldet hat. Beim "
-        "Verstellen wird nach Rechten gefragt.")
+    reason = "" if writable else _(
+        "This setting belongs to the machine and not to this account: the "
+        "service runs before anyone has logged in. Permission is asked "
+        "when changing it.")
     shipped = update.defaults()
 
     def machine(key: str, kind: str, label: str, value: Any, **rest: Any) -> dict:
@@ -598,9 +649,10 @@ def _page_sprache() -> dict:
         options=[{"value": code, "label": model.language_label(code)}
                  for code in sprachen],
         scope=MACHINE, immediate=True, writable=sprache_geht,
-        reason="" if sprache_geht else (
-            "Auf diesem System gibt es kein localectl. Die Sprache steht "
-            "in /etc/locale.conf, und dort kommt man nur mit Rechten hin."),
+        reason="" if sprache_geht else _(
+            "This system has no localectl. The language is in "
+            "/etc/locale.conf, and that can only be reached with "
+            "permission."),
         # Der Befehl OHNE seinen letzten Teil, wie ueberall auf dieser
         # Ebene: `localectl set-locale`. Was fehlt, ist der Wert.
         command=(model.language_elevated_command(jetzt_sprache)[:-1]
@@ -612,10 +664,10 @@ def _page_sprache() -> dict:
         group=_(model.GROUP_REGION),
         options=[{"value": name, "label": name} for name in zonen],
         scope=MACHINE, immediate=True, writable=zone_geht,
-        reason="" if zone_geht else (
-            "Auf diesem System gibt es kein timedatectl. Die Zeitzone "
-            "steht in /etc/localtime, und dort kommt man nur mit Rechten "
-            "hin."),
+        reason="" if zone_geht else _(
+            "This system has no timedatectl. The time zone is in "
+            "/etc/localtime, and that can only be reached with "
+            "permission."),
         command=["timedatectl", "set-timezone"] if zone_geht else [])
 
     return _page("sprache", [sprache, zone],
@@ -695,10 +747,13 @@ def _number(key: str, value: Any, low: float, high: float,
     also durch genau das, wofuer es diese Oberflaeche gibt.
     """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        problems.append(f"{key}: {_kind(value)} ist keine Zahl")
+        problems.append(_(NOT_A_NUMBER).format(
+            key=key, kind=_kind(value)))
         return None
     if not low <= value <= high:
-        problems.append(f"{key}: {value} liegt nicht zwischen {low} und {high}")
+        problems.append(_("{key}: {value} is not between {low} and "
+                          "{high}").format(key=key, value=value, low=low,
+                                           high=high))
         return None
     return float(value)
 
@@ -728,7 +783,8 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
 
         elif key == SIZES_MOTION:
             if not isinstance(value, bool):
-                problems.append(f"{key}: {_kind(value)} ist kein Schalter")
+                problems.append(_(NOT_A_SWITCH).format(
+                    key=key, kind=_kind(value)))
             else:
                 draft.motion = value
 
@@ -736,12 +792,12 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
             name = key[len(SIZES_VALUE):]
             dial = dials.get(name)
             if dial is None:
-                problems.append(
-                    f"{key}: diese Oberfläche bietet nur "
-                    f"{', '.join(sorted(dials))} an. Die übrigen "
-                    f"{len(sizes.TABLE) - len(dials)} Größen stehen in "
-                    f"`zepos-settings get sizes` und `user_settings.py "
-                    f"list-sizes`.")
+                problems.append(_(
+                    "{key}: this interface only offers {offered}. The "
+                    "remaining {rest} sizes are in `zepos-settings get "
+                    "sizes` and `user_settings.py list-sizes`.").format(
+                        key=key, offered=", ".join(sorted(dials)),
+                        rest=len(sizes.TABLE) - len(dials)))
             elif value is None:
                 draft.clear_dial(dial)
             else:
@@ -753,9 +809,11 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
         elif key.startswith(COLOUR_PREFIX):
             name = key[len(COLOUR_PREFIX):]
             if name not in brand.COLORS:
-                problems.append(f"{key}: diese Farbe gibt es nicht")
+                problems.append(_("{key}: that colour does not "
+                                  "exist").format(key=key))
             elif not isinstance(value, str) or not HEX.match(value):
-                problems.append(f"{key}: {value!r} ist kein #rrggbb")
+                problems.append(_("{key}: {value!r} is not a "
+                                  "#rrggbb").format(key=key, value=value))
             else:
                 # Buchstabe fuer Buchstabe so, wie er hereinkam. Weder
                 # gross noch klein geschrieben: brand.COLORS traegt
@@ -768,7 +826,9 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
 
         elif key == WEATHER_KEY:
             if not isinstance(value, str):
-                problems.append(f"{key}: {_kind(value)} ist kein Ortsname")
+                problems.append(_("{key}: {kind} is not a place "
+                                  "name").format(key=key,
+                                                 kind=_kind(value)))
             else:
                 draft.weather = value
 
@@ -777,9 +837,9 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
 
         elif key == THEME_KEY:
             if value not in theme.THEMES:
-                problems.append(
-                    f"{key}: {value!r} ist keins von "
-                    f"{', '.join(sorted(theme.THEMES))}")
+                problems.append(_(NOT_ONE_OF).format(
+                    key=key, value=value,
+                    options=", ".join(sorted(theme.THEMES))))
             else:
                 machine.append((key, value))
 
@@ -793,10 +853,12 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
             moeglich = model.language_codes()
             if value not in moeglich:
                 problems.append(
-                    f"{key}: {value!r} ist keins von "
-                    f"{', '.join(moeglich)}. Eine Sprache steht hier nur, "
-                    f"wenn es einen Katalog dafür gibt UND diese Maschine "
-                    f"die Sprachumgebung erzeugt hat.")
+                    _(NOT_ONE_OF).format(
+                        key=key, value=value,
+                        options=", ".join(moeglich))
+                    + " " + _("A language only stands here if there is a "
+                              "catalogue for it AND this machine has "
+                              "generated the locale."))
             else:
                 machine.append((key, value))
 
@@ -806,11 +868,12 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
             # leer sein, waehrend /usr/share/zoneinfo dasteht - dann
             # waere jede Zone "keins von " und die Klage nennte nichts.
             if not isinstance(value, str) or not region.known_timezone(value):
-                problems.append(
-                    f"{key}: {value!r} steht nicht in "
-                    f"{region.zoneinfo_directory()}. "
-                    f"`{' '.join(region.ZONE_LISTING)}` nennt die Namen, "
-                    f"die diese Maschine kennt.")
+                problems.append(_(
+                    "{key}: {value!r} is not in {directory}. `{listing}` "
+                    "names the ones this machine knows.").format(
+                        key=key, value=value,
+                        directory=region.zoneinfo_directory(),
+                        listing=" ".join(region.ZONE_LISTING)))
             else:
                 machine.append((key, value))
 
@@ -819,9 +882,9 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
                          problems)
 
         else:
-            problems.append(
-                f"{key}: kein Schlüssel dieser Oberfläche. `--json get` "
-                f"nennt jeden, den es gibt.")
+            problems.append(_(
+                "{key}: not a key of this interface. `--json get` names "
+                "every one there is.").format(key=key))
 
     return machine
 
@@ -840,15 +903,16 @@ def _plan_bar(half: str, key: str, value: Any, draft: model.Draft,
     steht er davor und kann es richtigstellen.
     """
     if half not in settings_file.BAR_KEYS:
-        problems.append(f"{key}: es gibt {', '.join(settings_file.BAR_KEYS)}")
+        problems.append(_("{key}: there are {keys}").format(
+            key=key, keys=", ".join(settings_file.BAR_KEYS)))
         return
     if value is None:
         draft.reset_bar(half)
         return
     if not isinstance(value, list) or any(not isinstance(n, str) for n in value):
-        problems.append(
-            f"{key}: erwartet wird eine Liste von Namen oder null für "
-            f"die ausgelieferte Reihenfolge")
+        problems.append(_(
+            "{key}: a list of names or null for the shipped order is "
+            "expected").format(key=key))
         return
 
     shipped, _labels, _say = model.shipped_bar()
@@ -870,19 +934,23 @@ def _plan_update(name: str, key: str, value: Any,
                  machine: list[tuple[str, Any]], problems: list[str]) -> None:
     if name == model.UPDATE_ENABLED:
         if not isinstance(value, bool):
-            problems.append(f"{key}: {_kind(value)} ist kein Schalter")
+            problems.append(_(NOT_A_SWITCH).format(
+                key=key, kind=_kind(value)))
         else:
             machine.append((key, value))
         return
     labels = UPDATE_CHOICES.get(name)
     if labels is None:
-        problems.append(
-            f"{key}: diese Oberfläche bietet "
-            f"{', '.join(UPDATE_PREFIX + n for n in [model.UPDATE_ENABLED, *UPDATE_CHOICES])} "
-            f"an. `zepos-update --help` nennt die übrigen.")
+        problems.append(_(
+            "{key}: this interface offers {offered}. `zepos-update "
+            "--help` names the rest.").format(
+                key=key,
+                offered=", ".join(
+                    UPDATE_PREFIX + n for n in
+                    [model.UPDATE_ENABLED, *UPDATE_CHOICES])))
     elif value not in labels:
-        problems.append(f"{key}: {value!r} ist keins von "
-                        f"{', '.join(labels)}")
+        problems.append(_(NOT_ONE_OF).format(
+            key=key, value=value, options=", ".join(labels)))
     else:
         machine.append((key, value))
 
@@ -986,22 +1054,24 @@ def _arm_plan(document: Any, desk, problems: list[str]) -> None:
     """
     if not isinstance(document, dict) or not isinstance(
             document.get("layout"), list):
-        problems.append(
-            "erwartet wird {\"layout\": [{\"name\": ..., ...}]} - dieselbe "
-            "Form, die `--json get` unter displays.layout ausgibt")
+        problems.append(_(
+            "{\"layout\": [{\"name\": ..., ...}]} is expected - the same "
+            "shape that `--json get` prints under displays.layout"))
         return
 
     known = {place.name for place in desk.placements}
     for screen in document["layout"]:
         if not isinstance(screen, dict) or not isinstance(
                 screen.get("name"), str):
-            problems.append(f"{screen!r}: jeder Schirm braucht seinen `name`")
+            problems.append(_("{screen!r}: every screen needs its "
+                              "`name`").format(screen=screen))
             continue
         name = screen["name"]
         if name not in known:
-            problems.append(
-                f"{name}: diesen Schirm gibt es hier nicht. Bekannt sind "
-                f"{', '.join(sorted(known))}.")
+            problems.append(_(
+                "{name}: this screen does not exist here. Known are "
+                "{known}.").format(name=name,
+                                   known=", ".join(sorted(known))))
             continue
 
         fields: dict[str, Any] = {}
@@ -1011,21 +1081,23 @@ def _arm_plan(document: Any, desk, problems: list[str]) -> None:
             value = screen[field]
             if kind is bool:
                 if not isinstance(value, bool):
-                    problems.append(f"{name}.{field}: {_kind(value)} ist "
-                                    f"kein Schalter")
+                    problems.append(_(NOT_A_SWITCH).format(
+                        key=f"{name}.{field}", kind=_kind(value)))
                     continue
                 fields[field] = value
             elif isinstance(value, bool) or not isinstance(value, (int, float)):
-                problems.append(f"{name}.{field}: {_kind(value)} ist keine "
-                                f"Zahl")
+                problems.append(_(NOT_A_NUMBER).format(
+                    key=f"{name}.{field}", kind=_kind(value)))
             else:
                 fields[field] = kind(value)
 
         unknown = sorted(set(screen) - set(ARM_FIELDS) - {"name"})
         if unknown:
-            problems.append(
-                f"{name}: {', '.join(unknown)} kennt diese Oberfläche "
-                f"nicht. Einstellbar sind {', '.join(ARM_FIELDS)}.")
+            problems.append(_(
+                "{name}: this interface does not know {unknown}. "
+                "Adjustable are {fields}.").format(
+                    name=name, unknown=", ".join(unknown),
+                    fields=", ".join(ARM_FIELDS)))
             continue
         if fields:
             desk.change(name, **fields)
@@ -1079,7 +1151,7 @@ def arm(*, runner=None, stdin=None, stdout=None) -> int:
         document = json.loads(raw)
     except ValueError as problem:
         say({"schema": SCHEMA, "ok": False, "armed": False,
-             "problems": [f"das Dokument ist kein JSON: {problem}"]})
+             "problems": [_(NOT_JSON).format(problem=problem)]})
         return 1
 
     _arm_plan(document, desk, problems)
@@ -1114,7 +1186,7 @@ def arm(*, runner=None, stdin=None, stdout=None) -> int:
     except (displays.NoScreenLeft, displays.GuardRefused,
             displays.ApplyFailed, OSError) as problem:
         say({"schema": SCHEMA, "ok": False, "armed": False,
-             "problems": [f"Nicht angewandt: {problem}"]})
+             "problems": [_(NOT_APPLIED).format(problem=problem)]})
         return 1
 
     # Von hier an steht die neue Anordnung auf dem Schirm, und die Frist
@@ -1144,8 +1216,8 @@ def arm(*, runner=None, stdin=None, stdout=None) -> int:
         # dem Schirm steht die alte Anordnung, also wird auch keine neue
         # geschrieben. Wortgleich zu screens.py, _settle().
         say({"schema": SCHEMA, "ok": False, "armed": False, "kept": False,
-             "problems": ["Der Wächter hatte schon zurückgestellt: "
-                          + outcome.report],
+             "problems": [_(GUARD_REVERTED).format(
+                 report=outcome.report)],
              "written": [], "report": outcome.report})
         return 1
 
@@ -1153,9 +1225,8 @@ def arm(*, runner=None, stdin=None, stdout=None) -> int:
         written = displays.write(desk.placements)
     except OSError as problem:
         say({"schema": SCHEMA, "ok": False, "armed": False, "kept": True,
-             "problems": [f"Angewandt, aber nicht geschrieben: {problem}. "
-                          f"Die Anordnung steht bis zum nächsten "
-                          f"Anmelden."],
+             "problems": [_(APPLIED_NOT_WRITTEN).format(
+                 problem=problem)],
              "written": [], "report": outcome.report})
         return 1
 
@@ -1171,8 +1242,10 @@ def apply_now(*, runner=None) -> tuple[dict, int]:
     ok = completed.returncode == 0
     return ({"schema": SCHEMA, "ok": ok,
              "problems": [] if ok else [
-                 f"zepos-generate --all endete mit {completed.returncode}: "
-                 f"{(completed.stderr or '').strip()}"],
+                 _("zepos-generate --all exited with {code}: "
+                   "{stderr}").format(
+                       code=completed.returncode,
+                       stderr=(completed.stderr or "").strip())],
              "returncode": completed.returncode,
              "pending_regenerate": model.marker_path().exists()},
             0 if ok else 1)
@@ -1188,13 +1261,13 @@ OPTION = "--json"
 def main(arguments: list[str], *, runner=None, stdin=None) -> int:
     """`zepos-settings-gui --json ...`, ohne den Schalter selbst."""
     if not arguments or arguments[0] not in ("get", "set", "apply", ARM):
-        print(USAGE, file=sys.stderr)
+        print(usage(), file=sys.stderr)
         return 2
 
     verb, rest = arguments[0], arguments[1:]
     if (verb in ("get", "apply", ARM) and rest) or (
             verb == "set" and len(rest) != 1):
-        print(USAGE, file=sys.stderr)
+        print(usage(), file=sys.stderr)
         return 2
 
     if verb == ARM:
@@ -1236,14 +1309,15 @@ def main(arguments: list[str], *, runner=None, stdin=None) -> int:
     except ValueError as problem:
         print(json.dumps(
             {"schema": SCHEMA, "ok": False,
-             "problems": [f"das Dokument ist kein JSON: {problem}"]},
+             "problems": [_(NOT_JSON).format(problem=problem)]},
             ensure_ascii=False, indent=2))
         return 1
     if not isinstance(changes, dict):
         print(json.dumps(
             {"schema": SCHEMA, "ok": False,
-             "problems": [f"erwartet wird ein Objekt {{schlüssel: wert}}, "
-                          f"nicht ein JSON {_kind(changes)}"]},
+             "problems": [_("an object {{key: value}} is expected, not "
+                            "a JSON {kind}").format(
+                                kind=_kind(changes))]},
             ensure_ascii=False, indent=2))
         return 1
 

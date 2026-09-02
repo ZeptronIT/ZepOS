@@ -71,7 +71,7 @@ def _baue(verzeichnis: Path, sprache: str, text: str = KATALOG) -> Path:
 
 @pytest.fixture
 def i18n(monkeypatch):
-    """i18n.py mit src/ auf dem Pfad, so wie der Befehl es hinlegt.
+    """desktop_i18n.py mit src/ auf dem Pfad, wie der Befehl es hinlegt.
 
     Frisch je Test: das Modul haelt den gewaehlten Katalog in einer
     Modulvariablen, und ein liegengelassener Katalog aus dem
@@ -81,10 +81,11 @@ def i18n(monkeypatch):
     monkeypatch.syspath_prepend(str(SRC))
     monkeypatch.syspath_prepend(str(SETTINGS_ROOT))
     for name in [n for n in sys.modules
-                 if n == "region" or n.startswith("zepos_settings_gui")]:
+                 if n in ("region", "desktop_i18n")
+                 or n.startswith("zepos_settings_gui")]:
         monkeypatch.delitem(sys.modules, name, raising=False)
-    from zepos_settings_gui import i18n as modul
-    return modul
+    import desktop_i18n
+    return desktop_i18n
 
 
 @pytest.fixture

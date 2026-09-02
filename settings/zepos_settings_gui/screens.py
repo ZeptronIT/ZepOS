@@ -76,7 +76,12 @@ import displays  # noqa: E402
 import sizes  # noqa: E402
 
 from . import model  # noqa: E402
-from .i18n import N_, _  # noqa: E402
+from desktop_i18n import N_, _  # noqa: E402
+
+# "Kein Bildschirm gemeldet" steht ZWEIMAL: einmal als Bericht ins
+# Banner, einmal als Ueberschrift der Kachel auf der Seite. Ein msgid,
+# damit die Kachel und das Banner nicht verschieden heissen koennen.
+NO_SCREEN = N_("No screen reported")
 
 # Wie viele Bildschirmpixel hoechstens auf einen Zeichnungspixel gehen.
 # Die Zeichnung passt sich der Flaeche an, die sie bekommt (siehe
@@ -383,19 +388,22 @@ class ScreensPage(Gtk.Box):
         try:
             self.desk = displays.Desk.load()
         except RuntimeError as problem:
-            self.report = f"Kein Compositor: {problem}"
+            self.report = _("No compositor: {problem}").format(
+                problem=problem)
             self.append(_notice(
-                "Der Compositor antwortet nicht",
-                f"{problem}\n\nDiese Seite fragt `hyprctl monitors all -j`. "
-                "Ausserhalb einer laufenden Hyprland-Sitzung gibt es darauf "
-                "keine Antwort - und dann auch nichts einzustellen."))
+                _("The compositor does not answer"),
+                f"{problem}\n\n" + _(
+                    "This page asks `hyprctl monitors all -j`. Outside a "
+                    "running Hyprland session there is no answer to that - "
+                    "and then nothing to set either.")))
             return
         if not self.desk.placements:
-            self.report = "Kein Bildschirm gemeldet"
+            self.report = _(NO_SCREEN)
             self.append(_notice(
-                "Kein Bildschirm gemeldet",
-                "Der Compositor läuft und zählt keinen einzigen Ausgang "
-                "auf. Eine Anordnung liesse sich darauf nicht schreiben."))
+                _(NO_SCREEN),
+                _("The compositor is running and lists not a single "
+                  "output. An arrangement could not be written onto "
+                  "that.")))
             return
 
         self._build()
@@ -415,11 +423,11 @@ class ScreensPage(Gtk.Box):
         self.hint = Gtk.Label(wrap=True, xalign=0.0)
         self.append(self.hint)
 
-        group = Adw.PreferencesGroup(title="Der gewählte Bildschirm")
+        group = Adw.PreferencesGroup(title=_("The chosen screen"))
 
         self.chooser = Adw.ComboRow(
-            title="Bildschirm",
-            subtitle="Oder oben in der Zeichnung anklicken und ziehen.",
+            title=_("Screen"),
+            subtitle=_("Or click and drag in the drawing above."),
             model=Gtk.StringList.new(
                 [self.desk.output(item.name).label
                  for item in self.desk.placements]))
@@ -427,46 +435,47 @@ class ScreensPage(Gtk.Box):
         group.add(self.chooser)
 
         self.rows["enabled"] = Adw.SwitchRow(
-            title="Eingeschaltet",
-            subtitle="Aus heißt: der Ausgang wird abgeschaltet, und "
-                     "Fenster darauf wandern auf einen anderen Schirm.")
+            title=_("Switched on"),
+            subtitle=_("Off means: the output is switched off, and windows "
+                       "on it move to another screen."))
         self.rows["enabled"].connect("notify::active", self._on_enabled)
         group.add(self.rows["enabled"])
 
         self.rows["mode"] = Adw.ComboRow(
-            title="Auflösung und Bildrate",
-            subtitle="Was dieser Bildschirm laut seinem EDID kann.",
+            title=_("Resolution and refresh rate"),
+            subtitle=_("What this screen can do according to its EDID."),
             model=Gtk.StringList.new([]))
         self.rows["mode"].connect("notify::selected", self._on_mode)
         group.add(self.rows["mode"])
 
         self.rows["scale"] = Adw.ComboRow(
-            title="Maßstab",
-            subtitle="Teilt die Auflösung. Hyprland lehnt einen Maßstab "
-                     "ab, bei dem sie nicht ganzzahlig aufgeht - dann nimmt "
-                     "der Wächter die Anordnung wieder zurück.",
+            title=_(model.GROUP_SCALE),
+            subtitle=_("Divides the resolution. Hyprland refuses a scale "
+                       "at which it does not come out whole - the guard "
+                       "then takes the arrangement back again."),
             model=Gtk.StringList.new([]))
         self.rows["scale"].connect("notify::selected", self._on_scale)
         group.add(self.rows["scale"])
 
         self.rows["transform"] = Adw.ComboRow(
-            title="Drehung", model=Gtk.StringList.new(list(TRANSFORMS)))
+            title=_("Rotation"),
+            model=Gtk.StringList.new([_(name) for name in TRANSFORMS]))
         self.rows["transform"].connect("notify::selected", self._on_transform)
         group.add(self.rows["transform"])
 
-        self.rows["position"] = Adw.ActionRow(title="Steht bei")
+        self.rows["position"] = Adw.ActionRow(title=_("Stands at"))
         group.add(self.rows["position"])
 
         self.append(group)
 
         where = Adw.PreferencesGroup()
-        self.rows["where"] = Adw.ActionRow(title="Geschrieben wird nach",
+        self.rows["where"] = Adw.ActionRow(title=_("Written to"),
                                            subtitle_lines=0)
         where.add(self.rows["where"])
         self.append(where)
 
         self.apply_button = Gtk.Button(
-            label="Anwenden", halign=Gtk.Align.END, sensitive=False)
+            label=_("Apply"), halign=Gtk.Align.END, sensitive=False)
         self.apply_button.add_css_class("suggested-action")
         self.apply_button.connect("clicked", self._on_apply)
         self.append(self.apply_button)
@@ -575,15 +584,17 @@ class ScreensPage(Gtk.Box):
     def _show_state(self) -> None:
         item = self.desk.get(self.selected)
         self.rows["position"].set_subtitle(
-            f"{item.x} x {item.y}, und misst dort {item.displayed_width} x "
-            f"{item.displayed_height} Pixel. Die Stelle kommt aus der "
-            "Zeichnung oben und rastet an den Kanten der Nachbarn ein.")
+            _("{x} x {y}, and measures {width} x {height} pixels there. "
+              "The place comes from the drawing above and snaps to the "
+              "edges of its neighbours.").format(
+                  x=item.x, y=item.y, width=item.displayed_width,
+                  height=item.displayed_height))
         self.rows["where"].set_subtitle(self.where_note())
 
         troubles = self.desk.problems()
-        self.hint.set_text("\n".join(troubles) if troubles else (
-            "Einen Schirm anklicken und ziehen. Er rastet an den Kanten der "
-            "anderen ein."))
+        self.hint.set_text("\n".join(troubles) if troubles else _(
+            "Click and drag a screen. It snaps to the edges of the "
+            "others."))
         for name, wanted in (("error", bool(troubles)),
                              ("dim-label", not troubles)):
             if wanted:
@@ -619,18 +630,22 @@ class ScreensPage(Gtk.Box):
         where = displays.targets()
         profile = displays.current_profile()
         if len(where) > 1:
-            return (f"{where[0]} und das aktive Profil \"{profile}\" "
-                    f"({where[1]}). Ohne die zweite wäre die Anordnung bei "
-                    "der nächsten Anmeldung wieder weg: start-hyprland "
-                    "kopiert das Profil darüber.")
+            return _(
+                "{first} and the active profile \"{profile}\" ({second}). "
+                "Without the second the arrangement would be gone at the "
+                "next login: start-hyprland copies the profile over "
+                "it.").format(first=where[0], profile=profile,
+                              second=where[1])
         if profile:
-            return (f"{where[0]}. Das Profil \"{profile}\" hat kein "
-                    f"Verzeichnis - `save-profile {profile}` legt eins an, "
-                    "und die Anordnung überlebt dann die nächste "
-                    "Anmeldung.")
-        return (f"{where[0]}. Kein Profil ist aktiv; `save-profile` mit "
-                "einem Namen macht aus dieser Anordnung eine, die "
-                "`start-hyprland` mit demselben Namen wiederherstellt.")
+            return _(
+                "{first}. The profile \"{profile}\" has no directory - "
+                "`save-profile {profile}` creates one, and the arrangement "
+                "then survives the next login.").format(
+                    first=where[0], profile=profile)
+        return _(
+            "{first}. No profile is active; `save-profile` with a name "
+            "turns this arrangement into one that `start-hyprland` "
+            "restores under the same name.").format(first=where[0])
 
     def _on_desk_changed(self) -> None:
         self._show_selection()
@@ -700,11 +715,12 @@ class ScreensPage(Gtk.Box):
         except (displays.NoScreenLeft, displays.GuardRefused,
                 displays.ApplyFailed, OSError) as problem:
             self.attempt = None
-            self._say(f"Nicht angewandt: {problem}")
+            self._say(_("Not applied: {problem}").format(
+                problem=problem))
             self._show_state()
             return self.report
 
-        self._say("Angewandt, auf Probe.")
+        self._say(_("Applied, on trial."))
         self._ask()
         return self.report
 
@@ -721,10 +737,13 @@ class ScreensPage(Gtk.Box):
         wer nichts sieht, soll wissen, dass gleich etwas passiert.
         """
         self.countdown = displays.CONFIRM_SECONDS
-        dialog = Adw.AlertDialog(heading="Diese Anordnung behalten?",
+        dialog = Adw.AlertDialog(heading=_("Keep this arrangement?"),
                                  body=self._countdown_text())
-        dialog.add_response("zurueck", "Zurücknehmen")
-        dialog.add_response("behalten", "Behalten")
+        # "zurueck"/"behalten" sind KENNUNGEN - _on_answer() erkennt die
+        # Antwort daran wieder. Nur die Aufschriften daneben gehen durch
+        # den Katalog.
+        dialog.add_response("zurueck", _("Take back"))
+        dialog.add_response("behalten", _("Keep"))
         dialog.set_response_appearance("behalten",
                                        Adw.ResponseAppearance.SUGGESTED)
         # Die Vorgabe ist ZURUECKNEHMEN, und das ist der Unterschied
@@ -759,13 +778,16 @@ class ScreensPage(Gtk.Box):
         """
         troubles = self.desk.problems()
         warning = ("\n\n".join(troubles) + "\n\n") if troubles else ""
+        # ZWEI msgids und der Absatz dazwischen HIER: ein msgid mit
+        # einem \n darin schreibt gettext mehrzeilig, und die
+        # Kataloguesicherung sucht die einzeilige Zeichenfolge.
         return (
             warning
-            + f"Ohne Antwort wird in {self.countdown} Sekunden die alte "
-            "Anordnung wiederhergestellt.\n\n"
-            "Das passiert auch dann, wenn dieses Fenster in der "
-            "Zwischenzeit abstürzt: der Rückweg läuft in einem eigenen "
-            "Prozess.")
+            + _("Without an answer the old arrangement is restored in "
+                "{seconds} seconds.").format(seconds=self.countdown)
+            + "\n\n"
+            + _("That happens even if this window crashes in the "
+                "meantime: the way back runs in a process of its own."))
 
     def _tick(self) -> bool:
         self.countdown -= 1
@@ -838,7 +860,8 @@ class ScreensPage(Gtk.Box):
         if not keep:
             outcome = attempt.revert()
             self.desk.placements = list(self.desk.original)
-            self._say(f"Zurückgenommen. {outcome.report}".strip())
+            self._say(_("Taken back. {report}").format(
+                report=outcome.report).strip())
             self._on_desk_changed()
             return
 
@@ -850,20 +873,21 @@ class ScreensPage(Gtk.Box):
             # Absicht - auf dem Schirm steht die alte Anordnung, also
             # wird auch die alte geschrieben, naemlich keine.
             self.desk.placements = list(self.desk.original)
-            self._say("Der Wächter hatte schon zurückgestellt: "
-                      + outcome.report)
+            self._say(_("The guard had already reverted: {report}")
+                      .format(report=outcome.report))
             self._on_desk_changed()
             return
 
         try:
             written = displays.write(self.desk.placements)
         except OSError as problem:
-            self._say(f"Angewandt, aber nicht geschrieben: {problem}. Die "
-                      "Anordnung steht bis zum nächsten Anmelden.")
+            self._say(_("Applied, but not written: {problem}. The "
+                        "arrangement stands until the next login.").format(
+                            problem=problem))
             self._on_desk_changed()
             return
 
         self.desk.original = tuple(self.desk.placements)
-        self._say("Behalten und geschrieben: "
-                  + ", ".join(str(path) for path in written))
+        self._say(_("Kept and written: {paths}").format(
+            paths=", ".join(str(path) for path in written)))
         self._on_desk_changed()

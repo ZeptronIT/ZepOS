@@ -1150,7 +1150,7 @@ def test_saving_asks_the_next_login_to_regenerate(tmp_path):
     marker = tmp_path / "state" / "zepos" / "regenerate-required"
     assert marker.exists(), run.report
     assert run.after("save", "marker") == "True", run.report
-    assert "nächsten Anmeldung" in run.after("save", "banner"), run.report
+    assert "next login" in run.after("save", "banner"), run.report
 
 
 @pytest.mark.allow_subprocess
@@ -1163,7 +1163,7 @@ def test_applying_now_runs_the_generator_and_drops_the_request(tmp_path):
     # Anweisung, also vor der Marke, die den Zustand danach beschreibt.
     assert run.mark("cmd") == "zepos-generate --all", run.report
     assert run.after("apply", "marker") == "False", run.report
-    assert run.after("apply", "banner").endswith("Angewendet."), run.report
+    assert run.after("apply", "banner").endswith("Applied."), run.report
     marker = tmp_path / "state" / "zepos" / "regenerate-required"
     assert not marker.exists(), run.report
 
