@@ -32,17 +32,59 @@
 //     msgfmt.
 //
 // WIE DIE SPRACHE HIERHER KOMMT
-//     Gar nicht - sie ist schon da. Der Installer schreibt die Wahl aus
-//     LANGUAGE_DEFAULTS (installer/gui/pages.py) ueber archinstall nach
-//     /etc/locale.conf als LANG=de_DE.UTF-8 bzw. LANG=en_US.UTF-8,
-//     systemd reicht LANG an greetd.service, und von dort erbt es die
-//     ganze Kette bis `ags run`. gettext liest genau diese Variable.
-//     Deshalb steht hier kein setlocale und keine Sprachwahl: die
-//     Vorgabe IST die Sprache der Installation, und ein zweiter Ort,
-//     an dem sie steht, waere ein Ort, an dem sie falsch sein kann.
+//     Aus /etc/locale.conf. Der Installer schreibt die Wahl aus
+//     LANGUAGE_DEFAULTS (installer/gui/pages.py) ueber archinstall
+//     dorthin als LANG=de_DE.UTF-8 bzw. LANG=en_US.UTF-8, systemd
+//     reicht LANG an greetd.service, und von dort erbt es die ganze
+//     Kette bis `ags run`. gettext liest genau diese Variable.
+//
+// UND WARUM DIE DATEI SEIT DEM 02.09.2026 NOCH EINMAL SELBST GELESEN
+// WIRD, obwohl LANG schon dasteht
+//     Weil das Einstellungsfenster die Sprache jetzt UMSTELLEN kann -
+//     `localectl set-locale LANG=...`, also genau in diese Datei
+//     (settings/zepos_settings_gui/model.py, set_language). Und weil
+//     die Umgebung dieses Prozesses eine ABSCHRIFT der Datei ist,
+//     angefertigt bei der Anmeldung.
+//
+//     Das ist KEIN zweiter Ort fuer dieselbe Angabe - der Absatz, der
+//     hier bis heute davor gewarnt hat, hatte recht und meinte etwas
+//     anderes. Es ist DERSELBE Ort, nur unmittelbar gelesen statt ueber
+//     eine Kopie, die beliebig alt sein kann. Ein zweiter Ort waere
+//     eine ZepOS-eigene Sprachdatei daneben; die gibt es weiterhin
+//     nicht, und der Kopf von src/region.py fuehrt aus, warum es sie
+//     nie geben soll.
+//
+//     Was ohne diese Zeilen passierte: `zepos-generate --all` startet
+//     die Schale neu, damit die neue Sprache ankommt - die neue Schale
+//     erbt aber die ALTE Umgebung ihrer Sitzung und kaeme in der alten
+//     Sprache zurueck. Der Nutzer haette umgestellt, das Fenster haette
+//     "angewendet" gesagt, und nichts waere passiert.
+//
+//     WAS setlocale HIER TUT UND WAS NICHT, gemessen am 02.09.2026 mit
+//     gjs 1.88.1 gegen den gebauten Katalog:
+//
+//         setlocale(LC_MESSAGES, "en_US.UTF-8")  -> "de_DE.UTF-8"
+//         dgettext(D, "Disk space")              -> "Disk space"
+//         (vorher: "Speicherplatz")
+//
+//     und mit einer NICHT erzeugten Sprachumgebung:
+//
+//         setlocale(LC_MESSAGES, "fr_FR.UTF-8")  -> null
+//         dgettext(D, "Disk space")              -> unveraendert
+//
+//     Ein Fehlschlag ist also still. Deshalb gibt spracheAnwenden()
+//     zurueck, was WIRKLICH gilt, statt zu behaupten, es habe geklappt.
+//
+//     Und noch ein gemessener Nebenbefund, der erklaert, warum hier
+//     setlocale steht und nicht die Variable LANGUAGE: LANGUAGE allein
+//     bewegt gar nichts, glibc gibt den zwischengespeicherten Eintrag
+//     weiter. Erst eine AENDERUNG an setlocale oder an bindtextdomain
+//     leert diesen Speicher.
 //
 //     Was hier NICHT passiert, steht in tests/src/test_locale.py: eine
-//     Anzeigesprache erzwingen. Diese Datei erzwingt nichts, sie liest.
+//     Anzeigesprache ERZWINGEN. Diese Datei erzwingt nichts - sie
+//     liest, was die Maschine sagt, und nimmt es nur dann, wenn die
+//     Maschine es auch kann.
 
 import Gettext from "gettext"
 import GLib from "gi://GLib"
@@ -83,6 +125,105 @@ const LOCALEDIR = GLib.getenv("ZEPOS_LOCALEDIR")
 if (LOCALEDIR) {
   Gettext.bindtextdomain(DOMAIN, LOCALEDIR)
 }
+
+// Die Datei, in der die Sprache der MASCHINE steht.
+//
+// Derselbe Pfad und dieselbe Vorsatzwurzel wie in src/region.py und in
+// src/bin/zepos-greeter, damit ein Testlauf eine ganze Maschine vorgeben
+// kann, ohne /etc anzufassen.
+const ETC_ROOT = GLib.getenv("ZEPOS_ETC_ROOT") || "/"
+const LOCALE_CONF = `${ETC_ROOT}/etc/locale.conf`
+
+// Der Name der Zuweisung, aus der die Sprache kommt.
+//
+// Er steht als eigene Zeichenkette da und nicht als eine Zusammensetzung
+// mitten im Vergleich, und das ist gemessen: tests/src/test_locale.py
+// sucht in JEDER Vorlage nach genau dieser Schreibweise, weil sie dort
+// sonst eine ERZWUNGENE Anzeigesprache waere ("LANG=de_DE.UTF-8 date"),
+// und ein Vergleich sieht in einer Suche wie eine Zuweisung aus. Diese
+// Datei erzwingt nichts - sie liest.
+const LANG_SCHLUESSEL = "LANG"
+
+// Die Anfuehrungszeichen, in denen ein Wert stehen darf.
+//
+// Von Hand abgeschnitten und NICHT mit einem regulaeren Ausdruck.
+// GEMESSEN am 02.09.2026: /^["']|["']$/ enthaelt drei
+// Anfuehrungszeichen in einer Reihenfolge, die fuer jeden Leser, der
+// Zeichenketten zaehlt, wie eine geoeffnete Zeichenkette aussieht - und
+// tests/src/test_ags_i18n.py ist so ein Leser. Mit dem Ausdruck galt
+// der ganze Rest dieser Datei als Zeichenkette, und der Testlauf
+// meldete ein msgid aus einem KOMMENTAR als fehlenden Katalogeintrag.
+const ANFUEHRUNGSZEICHEN = ["\"", "'"]
+
+/** Der Wert von LANG aus /etc/locale.conf, oder "".
+ *
+ * Zeile fuer Zeile GELESEN und nichts ausgefuehrt - wortgleich zur
+ * Vorgehensweise in src/bin/zepos-greeter und in src/region.py. Die
+ * Datei sieht aus wie ein Shell-Schnipsel und ist keines; sie in eine
+ * Shell zu geben hiesse, einer Datei unter /etc zu erlauben, Befehle zu
+ * enthalten.
+ *
+ * Die LETZTE Zuweisung gewinnt, weil eine Shell es auch so machen
+ * wuerde - sonst gaebe dieselbe Datei je nach Leser zwei Antworten.
+ */
+export function spracheDerMaschine(): string {
+  let inhalt: string
+  try {
+    const [gelesen, bytes] = GLib.file_get_contents(LOCALE_CONF)
+    if (!gelesen) return ""
+    inhalt = new TextDecoder().decode(bytes)
+  } catch (fehler) {
+    // Keine Datei ist keine Antwort und kein Fehler: ein Container hat
+    // keine, und dort gilt die Umgebung.
+    return ""
+  }
+  const anfang = LANG_SCHLUESSEL + "="
+  let wert = ""
+  for (const zeile of inhalt.split("\n")) {
+    const roh = zeile.trim()
+    if (!roh.startsWith(anfang)) continue
+    wert = roh.slice(anfang.length).trim()
+    for (const zeichen of ANFUEHRUNGSZEICHEN) {
+      if (wert.length >= 2 && wert.startsWith(zeichen)
+          && wert.endsWith(zeichen)) {
+        wert = wert.slice(1, -1)
+        break
+      }
+    }
+  }
+  return wert
+}
+
+/** Die Sprache der Maschine in diesem Prozess geltend machen.
+ *
+ * Zurueck kommt die Sprachumgebung, die DANACH fuer Meldungen gilt -
+ * nicht die, die gewuenscht war. Der Unterschied ist der ganze Zweck:
+ * setlocale gibt bei einer nicht erzeugten Sprachumgebung null zurueck
+ * und laesst alles, wie es war (gemessen, siehe der Kopf).
+ *
+ * Aufgerufen wird sie beim Laden dieses Moduls - also einmal je
+ * Schalenstart - und noch einmal vom Einstellungsfenster, unmittelbar
+ * nachdem es die Sprache umgestellt hat. Dass eine schon GEZEICHNETE
+ * Beschriftung danach stehenbleibt, ist gemessen und steht im Kopf;
+ * deshalb zeichnet das Fenster sich anschliessend neu.
+ */
+export function spracheAnwenden(): string | null {
+  const gewuenscht = spracheDerMaschine()
+  if (!gewuenscht) return null
+  const vorher = Gettext.setlocale(Gettext.LocaleCategory.MESSAGES, "")
+  if (vorher === gewuenscht) return vorher
+  // setlocale gibt den VORHERIGEN Wert zurueck, wenn es klappt, und
+  // null, wenn nicht. Nach einem null steht noch der alte Wert, und
+  // genau den soll der Aufrufer erfahren.
+  const gesetzt = Gettext.setlocale(Gettext.LocaleCategory.MESSAGES,
+                                    gewuenscht)
+  return gesetzt === null ? vorher : gewuenscht
+}
+
+// Einmal beim Laden. Auf einer Maschine, deren Sitzung dieselbe Sprache
+// traegt wie /etc/locale.conf - dem Normalfall -, kostet das den
+// Vergleich zweier Zeichenketten und aendert nichts.
+spracheAnwenden()
 
 // Der Katalog wird bei JEDEM Aufruf gefragt und nicht einmal beim Laden.
 // Derselbe Grund wie im Kopf von `_()` in installer/core/i18n.py: ein

@@ -11,64 +11,64 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
-"POT-Creation-Date: 2026-09-01 11:06+0200\n"
+"POT-Creation-Date: 2026-09-02 09:46+0200\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/templates/ags-bar.template:723
+#: src/templates/ags-bar.template:724
 msgid "{module} is not answering: {error}"
 msgstr "{module} antwortet nicht: {error}"
 
-#: src/templates/ags-bar.template:1264
+#: src/templates/ags-bar.template:1265
 msgid "{script} is not answering: {reason}"
 msgstr "{script} antwortet nicht: {reason}"
 
-#: src/templates/ags-bar.template:2096
-#: src/templates/ags-control-center.template:1776
+#: src/templates/ags-bar.template:2208
+#: src/templates/ags-control-center.template:1898
 #: src/templates/ags-disk.template:368
 msgid "Disk space"
 msgstr "Speicherplatz"
 
-#: src/templates/ags-bar.template:2099
-#: src/templates/ags-control-center.template:1773
+#: src/templates/ags-bar.template:2211
+#: src/templates/ags-control-center.template:1895
 #: src/templates/ags-wallpaper.template:329
 msgid "Wallpaper"
 msgstr "Hintergrundbild"
 
-#: src/templates/ags-bar.template:2123
+#: src/templates/ags-bar.template:2235
 msgid "Appearance and colors"
 msgstr "Aussehen und Farben"
 
-#: src/templates/ags-bar.template:2127
+#: src/templates/ags-bar.template:2239
 msgid "Control center"
 msgstr "Kontrollzentrum"
 
-#: src/templates/ags-bar.template:2178
+#: src/templates/ags-bar.template:2290
 msgid "What no longer fits on this screen"
 msgstr "Was auf diesem Schirm nicht mehr hinpasst"
 
-#: src/templates/ags-bar.template:2435
+#: src/templates/ags-bar.template:2555
 msgid "Do not disturb is on - it is recorded, but nothing is shown"
 msgstr "Nicht stören ist an - es wird aufgezeichnet, aber nichts eingeblendet"
 
-#: src/templates/ags-bar.template:2443
+#: src/templates/ags-bar.template:2563
 msgid "{count} message since you last looked"
 msgid_plural "{count} messages since you last looked"
 msgstr[0] "{count} Meldung seit dem letzten Blick"
 msgstr[1] "{count} Meldungen seit dem letzten Blick"
 
-#: src/templates/ags-bar.template:2672
+#: src/templates/ags-bar.template:2792
 msgid "Keyboard layout: {layout} - click switches to the next of {count}"
 msgstr "Tastaturbelegung: {layout} - Klick schaltet auf die nächste von {count} um"
 
-#: src/templates/ags-bar.template:2675
+#: src/templates/ags-bar.template:2795
 msgid "Keyboard layout: {layout} - it is the only one configured"
 msgstr "Tastaturbelegung: {layout} - es ist die einzige eingerichtete"
 
-#: src/templates/ags-bar.template:2689
+#: src/templates/ags-bar.template:2809
 msgid "hyprctl did not name the keyboard layout"
 msgstr "hyprctl hat die Tastaturbelegung nicht genannt"
 
@@ -175,14 +175,14 @@ msgid "bluetoothctl is not answering ({error}). Usually the service is not runni
 msgstr "bluetoothctl antwortet nicht ({error}). Meist läuft der Dienst nicht: systemctl enable --now bluetooth.service"
 
 #: src/templates/ags-bluetooth.template:374
-#: src/templates/ags-control-center.template:464
-#: src/templates/ags-control-center.template:1529
+#: src/templates/ags-control-center.template:499
+#: src/templates/ags-control-center.template:1651
 msgid "Bluetooth"
 msgstr "Bluetooth"
 
 #: src/templates/ags-bluetooth.template:376
-#: src/templates/ags-control-center.template:636
-#: src/templates/ags-network.template:441 src/templates/ags-vpn.template:522
+#: src/templates/ags-control-center.template:671
+#: src/templates/ags-network.template:441 src/templates/ags-vpn.template:738
 msgid "CONNECTIONS"
 msgstr "VERBINDUNGEN"
 
@@ -309,231 +309,231 @@ msgstr "Voriger Monat"
 msgid "Next month"
 msgstr "Nächster Monat"
 
-#: src/templates/ags-control-center.template:469
+#: src/templates/ags-control-center.template:504
 msgid "VPN: {status}"
 msgstr "VPN: {status}"
 
-#: src/templates/ags-control-center.template:509
+#: src/templates/ags-control-center.template:544
 msgid "Network watchdog: {status}"
 msgstr "Netz-Watchdog: {status}"
 
-#: src/templates/ags-control-center.template:517
+#: src/templates/ags-control-center.template:552
 msgid "Helper scripts ({count})"
 msgstr "Hilfsskripte ({count})"
 
-#: src/templates/ags-control-center.template:566
+#: src/templates/ags-control-center.template:601
 msgid "Regenerate the configuration"
 msgstr "Die Konfiguration neu erzeugen"
 
-#: src/templates/ags-control-center.template:570
+#: src/templates/ags-control-center.template:605
 msgid "Try the update again"
 msgstr "Die Aktualisierung noch einmal versuchen"
 
-#: src/templates/ags-control-center.template:580
+#: src/templates/ags-control-center.template:615
 msgid "Update the Arch base - in the terminal, with a prompt"
 msgstr "Die Arch-Basis aktualisieren - im Terminal, mit Rückfrage"
 
-#: src/templates/ags-control-center.template:591
+#: src/templates/ags-control-center.template:626
 msgid "Configure the self-update"
 msgstr "Die Selbstaktualisierung einstellen"
 
-#: src/templates/ags-control-center.template:622
-#: src/templates/ags-control-center.template:1761
+#: src/templates/ags-control-center.template:657
+#: src/templates/ags-control-center.template:1883
 msgid "Hardware"
 msgstr "Hardware"
 
-#: src/templates/ags-control-center.template:637
+#: src/templates/ags-control-center.template:672
 msgid "SYSTEM"
 msgstr "SYSTEM"
 
-#: src/templates/ags-control-center.template:726
+#: src/templates/ags-control-center.template:761
 msgid "Sound"
 msgstr "Ton"
 
-#: src/templates/ags-control-center.template:858
+#: src/templates/ags-control-center.template:965
 msgid "Output device"
 msgstr "Ausgabegerät"
 
-#: src/templates/ags-control-center.template:860
+#: src/templates/ags-control-center.template:970
 msgid "Input device"
 msgstr "Eingabegerät"
 
-#: src/templates/ags-control-center.template:949
+#: src/templates/ags-control-center.template:1079
 msgid "wireplumber is not installed"
 msgstr "wireplumber ist nicht installiert"
 
-#: src/templates/ags-control-center.template:951
+#: src/templates/ags-control-center.template:1081
 msgid "The sound service is not answering"
 msgstr "Der Tondienst antwortet nicht"
 
-#: src/templates/ags-control-center.template:953
+#: src/templates/ags-control-center.template:1083
 msgid "The device list is not answering"
 msgstr "Die Geräteliste antwortet nicht"
 
-#: src/templates/ags-control-center.template:1005
+#: src/templates/ags-control-center.template:1137
 msgid "No output device"
 msgstr "Kein Ausgabegerät"
 
-#: src/templates/ags-control-center.template:1007
+#: src/templates/ags-control-center.template:1139
 msgid "Volume muted - {device}"
 msgstr "Lautstärke stumm – {device}"
 
-#: src/templates/ags-control-center.template:1009
+#: src/templates/ags-control-center.template:1141
 msgid "Volume {level}% - {device}"
 msgstr "Lautstärke {level}% – {device}"
 
-#: src/templates/ags-control-center.template:1015
+#: src/templates/ags-control-center.template:1147
 msgid "No input device"
 msgstr "Kein Eingabegerät"
 
-#: src/templates/ags-control-center.template:1017
+#: src/templates/ags-control-center.template:1149
 msgid "Microphone muted - {device}"
 msgstr "Mikrofon stumm – {device}"
 
-#: src/templates/ags-control-center.template:1019
+#: src/templates/ags-control-center.template:1151
 msgid "Microphone {level}% - {device}"
 msgstr "Mikrofon {level}% – {device}"
 
-#: src/templates/ags-control-center.template:1040
+#: src/templates/ags-control-center.template:1172
 msgid "Display"
 msgstr "Anzeige"
 
-#: src/templates/ags-control-center.template:1095
+#: src/templates/ags-control-center.template:1227
 msgid "Brightness {level}%"
 msgstr "Helligkeit {level}%"
 
-#: src/templates/ags-control-center.template:1216
+#: src/templates/ags-control-center.template:1348
 msgid "Control"
 msgstr "Kontrolle"
 
-#: src/templates/ags-control-center.template:1350
+#: src/templates/ags-control-center.template:1472
 msgid "PRIVACY"
 msgstr "DATENSCHUTZ"
 
-#: src/templates/ags-control-center.template:1370
+#: src/templates/ags-control-center.template:1492
 msgid "Microphone:"
 msgstr "Mikrofon:"
 
-#: src/templates/ags-control-center.template:1381
+#: src/templates/ags-control-center.template:1503
 msgid "Mute the microphone"
 msgstr "Mikrofon stummschalten"
 
-#: src/templates/ags-control-center.template:1391
+#: src/templates/ags-control-center.template:1513
 msgid "Camera:"
 msgstr "Kamera:"
 
-#: src/templates/ags-control-center.template:1460
+#: src/templates/ags-control-center.template:1582
 msgid "NETWORK & CONNECTIONS"
 msgstr "NETZ & VERBINDUNGEN"
 
-#: src/templates/ags-control-center.template:1469
+#: src/templates/ags-control-center.template:1591
 msgid "Loading …"
 msgstr "Lade …"
 
-#: src/templates/ags-control-center.template:1478
+#: src/templates/ags-control-center.template:1600
 msgid "Wi-Fi networks - the same page as above"
 msgstr "WLAN-Netzwerke - dieselbe Seite wie oben"
 
-#: src/templates/ags-control-center.template:1508
+#: src/templates/ags-control-center.template:1630
 msgid "VPN: off"
 msgstr "VPN: Aus"
 
-#: src/templates/ags-control-center.template:1539
+#: src/templates/ags-control-center.template:1661
 msgid "Bluetooth devices - the same page as above"
 msgstr "Bluetooth-Geräte - dieselbe Seite wie oben"
 
-#: src/templates/ags-control-center.template:1559
+#: src/templates/ags-control-center.template:1681
 msgid "SOUND & DISPLAY"
 msgstr "TON & BILD"
 
-#: src/templates/ags-control-center.template:1616
+#: src/templates/ags-control-center.template:1738
 msgid "Previous track"
 msgstr "Vorheriger Titel"
 
-#: src/templates/ags-control-center.template:1628
+#: src/templates/ags-control-center.template:1750
 msgid "Pause / resume"
 msgstr "Anhalten / Fortsetzen"
 
-#: src/templates/ags-control-center.template:1630
+#: src/templates/ags-control-center.template:1752
 msgid "Next track"
 msgstr "Nächster Titel"
 
-#: src/templates/ags-control-center.template:1661
+#: src/templates/ags-control-center.template:1783
 msgid "Displays"
 msgstr "Bildschirme"
 
-#: src/templates/ags-control-center.template:1675
+#: src/templates/ags-control-center.template:1797
 msgid "Set arrangement, resolution and refresh rate"
 msgstr "Anordnung, Auflösung und Frequenz einstellen"
 
-#: src/templates/ags-control-center.template:1704
+#: src/templates/ags-control-center.template:1826
 msgid "DESKTOP"
 msgstr "SCHREIBTISCH"
 
-#: src/templates/ags-control-center.template:1740
+#: src/templates/ags-control-center.template:1862
 msgid "Set the location for the weather"
 msgstr "Den Ort für das Wetter einstellen"
 
-#: src/templates/ags-control-center.template:1761
+#: src/templates/ags-control-center.template:1883
 msgid "Open btop"
 msgstr "btop öffnen"
 
-#: src/templates/ags-control-center.template:1765
+#: src/templates/ags-control-center.template:1887
 #: src/templates/ags-shortcuts.template:395
 msgid "Keyboard shortcuts"
 msgstr "Tastenkürzel"
 
-#: src/templates/ags-control-center.template:1766
+#: src/templates/ags-control-center.template:1888
 msgid "Show all keyboard shortcuts"
 msgstr "Alle Tastenkürzel zeigen"
 
-#: src/templates/ags-control-center.template:1769
+#: src/templates/ags-control-center.template:1891
 msgid "Floating windows"
 msgstr "Schwebende Fenster"
 
-#: src/templates/ags-control-center.template:1770
+#: src/templates/ags-control-center.template:1892
 msgid "Restore the saved arrangement"
 msgstr "Die gespeicherte Anordnung wiederherstellen"
 
-#: src/templates/ags-control-center.template:1773
+#: src/templates/ags-control-center.template:1895
 msgid "Choose another image"
 msgstr "Ein anderes Bild wählen"
 
-#: src/templates/ags-control-center.template:1776
+#: src/templates/ags-control-center.template:1898
 msgid "Show how the drives are filled"
 msgstr "Belegung der Laufwerke zeigen"
 
-#: src/templates/ags-control-center.template:1783
+#: src/templates/ags-control-center.template:1905
 msgid "SYSTEM SERVICES"
 msgstr "SYSTEMDIENSTE"
 
-#: src/templates/ags-control-center.template:1792
+#: src/templates/ags-control-center.template:1914
 msgid "Printer"
 msgstr "Drucker"
 
-#: src/templates/ags-control-center.template:1820
+#: src/templates/ags-control-center.template:1942
 msgid "Network watchdog"
 msgstr "Netz-Watchdog"
 
-#: src/templates/ags-control-center.template:1845
+#: src/templates/ags-control-center.template:1967
 msgid "Helper scripts"
 msgstr "Hilfsskripte"
 
-#: src/templates/ags-control-center.template:1880
+#: src/templates/ags-control-center.template:2002
 msgid "Style editor"
 msgstr "Stil-Editor"
 
-#: src/templates/ags-control-center.template:1885
+#: src/templates/ags-control-center.template:2007
 msgid "Appearance and colors - the same window as above"
 msgstr "Aussehen und Farben - dasselbe Fenster wie oben"
 
-#: src/templates/ags-control-center.template:1988
+#: src/templates/ags-control-center.template:2110
 #: src/templates/ags-logout.template:195
-#: src/templates/ags-power-button.template:128
+#: src/templates/ags-power-button.template:129
 msgid "Session"
 msgstr "Sitzung"
 
-#: src/templates/ags-control-center.template:1994
+#: src/templates/ags-control-center.template:2116
 msgid "Lock, log out, restart, shut down, suspend or hibernate"
 msgstr "Sperren, Abmelden, Neustart, Herunterfahren, Bereitschaft oder Ruhezustand"
 
@@ -595,12 +595,12 @@ msgstr "Analyse"
 msgid "New window"
 msgstr "Neues Fenster"
 
-#: src/templates/ags-dock.template:1238 src/templates/ags-dock.template:1356
-#: src/templates/ags-home.template:877
+#: src/templates/ags-dock.template:1238 src/templates/ags-dock.template:1414
+#: src/templates/ags-home.template:893
 msgid "Remove from dock"
 msgstr "Vom Dock entfernen"
 
-#: src/templates/ags-dock.template:1274 src/templates/ags-home.template:837
+#: src/templates/ags-dock.template:1274 src/templates/ags-home.template:853
 msgid "Remove from Home"
 msgstr "Vom Home entfernen"
 
@@ -608,31 +608,31 @@ msgstr "Vom Home entfernen"
 msgid "Add to Home"
 msgstr "Zum Home hinzufügen"
 
-#: src/templates/ags-dock.template:1361 src/templates/ags-home.template:883
+#: src/templates/ags-dock.template:1419 src/templates/ags-home.template:899
 msgid "Add to dock"
 msgstr "Zum Dock hinzufügen"
 
-#: src/templates/ags-dock.template:1368
+#: src/templates/ags-dock.template:1426
 msgid "Close"
 msgstr "Schließen"
 
-#: src/templates/ags-home.template:808
+#: src/templates/ags-home.template:824
 msgid "Open"
 msgstr "Öffnen"
 
-#: src/templates/ags-home.template:921
+#: src/templates/ags-home.template:937
 msgid "Open application launcher"
 msgstr "Anwendungsstarter öffnen"
 
-#: src/templates/ags-home.template:926
+#: src/templates/ags-home.template:942
 msgid "Tidy up icons"
 msgstr "Symbole ordnen"
 
-#: src/templates/ags-home.template:934
+#: src/templates/ags-home.template:950
 msgid "Choose wallpaper"
 msgstr "Hintergrundbild wählen"
 
-#: src/templates/ags-home.template:939
+#: src/templates/ags-home.template:955
 msgid "Settings"
 msgstr "Einstellungen"
 
@@ -677,14 +677,14 @@ msgstr "Offen"
 msgid "Please enter the password"
 msgstr "Bitte Passwort eingeben"
 
-#: src/templates/ags-network.template:651 src/templates/ags-vpn.template:547
-#: src/templates/ags-vpn.template:605 src/templates/ags-vpn.template:682
+#: src/templates/ags-network.template:651 src/templates/ags-vpn.template:763
+#: src/templates/ags-vpn.template:821 src/templates/ags-vpn.template:900
 msgid "Connecting ..."
 msgstr "Verbinde ..."
 
-#: src/templates/ags-network.template:655 src/templates/ags-vpn.template:559
-#: src/templates/ags-vpn.template:622 src/templates/ags-vpn.template:628
-#: src/templates/ags-vpn.template:753
+#: src/templates/ags-network.template:655 src/templates/ags-vpn.template:775
+#: src/templates/ags-vpn.template:838 src/templates/ags-vpn.template:844
+#: src/templates/ags-vpn.template:971
 msgid "Connection failed"
 msgstr "Verbindung fehlgeschlagen"
 
@@ -722,7 +722,7 @@ msgstr "Passwort für Netzwerk"
 msgid "Enter the Wi-Fi password ..."
 msgstr "WLAN-Passwort eingeben ..."
 
-#: src/templates/ags-network.template:934 src/templates/ags-vpn.template:1058
+#: src/templates/ags-network.template:934 src/templates/ags-vpn.template:1432
 msgid "Connect"
 msgstr "Verbinden"
 
@@ -767,9 +767,9 @@ msgid "Gateway"
 msgstr "Gateway"
 
 #: src/templates/ags-network.template:1221
-#: src/templates/ags-vpn-settings.template:387
-#: src/templates/ags-vpn-settings.template:400
-#: src/templates/ags-vpn-settings.template:407
+#: src/templates/ags-vpn-settings.template:414
+#: src/templates/ags-vpn-settings.template:427
+#: src/templates/ags-vpn-settings.template:434
 msgid "DNS"
 msgstr "DNS"
 
@@ -785,193 +785,193 @@ msgstr "Die Adresse des Senders, an dem dieser Rechner gerade hängt (BSSID)"
 msgid "Security"
 msgstr "Sicherheit"
 
-#: src/templates/ags-network.template:1246 src/templates/ags-vpn.template:468
-#: src/templates/ags-vpn.template:805 src/templates/ags-vpn.template:876
+#: src/templates/ags-network.template:1246 src/templates/ags-vpn.template:684
+#: src/templates/ags-vpn.template:1023 src/templates/ags-vpn.template:1116
 msgid "Disconnect"
 msgstr "Trennen"
 
-#: src/templates/ags-notifications.template:563
+#: src/templates/ags-notifications.template:571
 msgid "Do not disturb is on - nothing is shown, everything is recorded"
 msgstr "Nicht stören ist an - es wird nichts eingeblendet, aber alles aufgezeichnet"
 
-#: src/templates/ags-notifications.template:564
+#: src/templates/ags-notifications.template:572
 msgid "Turn on do not disturb"
 msgstr "Nicht stören einschalten"
 
-#: src/templates/ags-notifications.template:607
+#: src/templates/ags-notifications.template:615
 msgid "Notifications"
 msgstr "Mitteilungen"
 
-#: src/templates/ags-notifications.template:649
+#: src/templates/ags-notifications.template:657
 msgid "Do not disturb"
 msgstr "Nicht stören"
 
-#: src/templates/ags-notifications.template:674
+#: src/templates/ags-notifications.template:682
 msgid "Nothing missed."
 msgstr "Nichts verpasst."
 
-#: src/templates/ags-notifications.template:680
+#: src/templates/ags-notifications.template:688
 msgid "Clear the whole history"
 msgstr "Den ganzen Verlauf löschen"
 
-#: src/templates/ags-notifications.template:684
+#: src/templates/ags-notifications.template:692
 msgid "Clear all"
 msgstr "Alle löschen"
 
-#: src/templates/ags-settings.template:263
+#: src/templates/ags-settings.template:284
 msgid "{command} did not answer."
 msgstr "{command} hat nicht geantwortet."
 
-#: src/templates/ags-settings.template:400
+#: src/templates/ags-settings.template:421
 msgid "Back to the shipped value"
 msgstr "Zurück auf den ausgelieferten Wert"
 
-#: src/templates/ags-settings.template:401
+#: src/templates/ags-settings.template:422
 msgid "Leave it to the scale factor again"
 msgstr "Wieder dem Maßstab überlassen"
 
-#: src/templates/ags-settings.template:448
+#: src/templates/ags-settings.template:469
 msgid "{value} (unchanged)"
 msgstr "{value} (unverändert)"
 
-#: src/templates/ags-settings.template:517
+#: src/templates/ags-settings.template:538
 msgid "Back to the shipped colour"
 msgstr "Zurück auf die ausgelieferte Farbe"
 
-#: src/templates/ags-settings.template:536
+#: src/templates/ags-settings.template:557
 msgid "unknown kind: {kind}"
 msgstr "unbekannte Art: {kind}"
 
-#: src/templates/ags-settings.template:589
+#: src/templates/ags-settings.template:610
 msgid "<value>"
 msgstr "<wert>"
 
-#: src/templates/ags-settings.template:631
+#: src/templates/ags-settings.template:652
 msgid "Nothing is placed on this side."
 msgstr "Auf dieser Seite steht nichts."
 
-#: src/templates/ags-settings.template:643
+#: src/templates/ags-settings.template:664
 msgid "One place further to the front"
 msgstr "Einen Platz weiter nach vorn"
 
-#: src/templates/ags-settings.template:652
+#: src/templates/ags-settings.template:673
 msgid "One place further to the back"
 msgstr "Einen Platz weiter nach hinten"
 
-#: src/templates/ags-settings.template:658
+#: src/templates/ags-settings.template:679
 msgid "Take it off the bar"
 msgstr "Von der Leiste nehmen"
 
-#: src/templates/ags-settings.template:692
+#: src/templates/ags-settings.template:713
 msgid "Put it on the bar"
 msgstr "Auf die Leiste setzen"
 
-#: src/templates/ags-settings.template:706
+#: src/templates/ags-settings.template:727
 msgid "As shipped"
 msgstr "Wie ausgeliefert"
 
-#: src/templates/ags-settings.template:757
+#: src/templates/ags-settings.template:784
 msgid "Switched on"
 msgstr "Eingeschaltet"
 
-#: src/templates/ags-settings.template:758
+#: src/templates/ags-settings.template:785
 msgid "at {x}, {y}"
 msgstr "bei {x}, {y}"
 
-#: src/templates/ags-settings.template:785
+#: src/templates/ags-settings.template:812
 msgid "Resolution"
 msgstr "Auflösung"
 
-#: src/templates/ags-settings.template:811
+#: src/templates/ags-settings.template:838
 msgid "Scale"
 msgstr "Maßstab"
 
-#: src/templates/ags-settings.template:831
+#: src/templates/ags-settings.template:858
 msgid "Rotation"
 msgstr "Drehung"
 
-#: src/templates/ags-settings.template:843
+#: src/templates/ags-settings.template:870
 msgid "Position: every screen keeps the place it has. Dragging them around each other is done in the settings application; this window sets what a single screen shows."
 msgstr "Position: jeder Schirm behält den Platz, den er hat. Gegeneinander verschoben werden sie in der Einstellungsanwendung; dieses Fenster stellt ein, was ein einzelner Schirm zeigt."
 
-#: src/templates/ags-settings.template:850
+#: src/templates/ags-settings.template:877
 #: src/templates/ags-style-editor.template:1064
 #: src/templates/ags-style-editor.template:1192
 msgid "Apply"
 msgstr "Übernehmen"
 
-#: src/templates/ags-settings.template:857
+#: src/templates/ags-settings.template:884
 msgid "Applying asks back: without an answer within {seconds} seconds the old arrangement comes back. That happens even if this surface dies in the meantime - the way back runs in its own process."
 msgstr "Das Anwenden fragt zurück: ohne Antwort steht nach {seconds} Sekunden wieder die alte Anordnung. Das passiert auch dann, wenn diese Oberfläche in der Zwischenzeit abstürzt - der Rückweg läuft in einem eigenen Prozess."
 
-#: src/templates/ags-settings.template:862
+#: src/templates/ags-settings.template:889
 msgid "Kept in {file}"
 msgstr "Steht in {file}"
 
-#: src/templates/ags-settings.template:903
-#: src/templates/ags-settings.template:950
-msgid "Applied, on probation. Keep it? {seconds} s"
-msgstr "Angewandt, auf Probe. Behalten? {seconds} s"
-
-#: src/templates/ags-settings.template:909
+#: src/templates/ags-settings.template:942
 msgid "Kept and written: {files}"
 msgstr "Behalten und geschrieben: {files}"
 
-#: src/templates/ags-settings.template:914
+#: src/templates/ags-settings.template:947
 msgid "Taken back."
 msgstr "Zurückgenommen."
 
-#: src/templates/ags-settings.template:946
+#: src/templates/ags-settings.template:985
 msgid "No answer - the old arrangement is coming back."
 msgstr "Keine Antwort - die alte Anordnung kommt zurück."
 
-#: src/templates/ags-settings.template:980
+#: src/templates/ags-settings.template:989
+#: src/templates/ags-settings.template:994
+msgid "Applied, on probation. Keep it? {seconds} s"
+msgstr "Angewandt, auf Probe. Behalten? {seconds} s"
+
+#: src/templates/ags-settings.template:1021
 msgid "Writing ..."
 msgstr "Wird geschrieben ..."
 
-#: src/templates/ags-settings.template:984
+#: src/templates/ags-settings.template:1050
 msgid "The machine follows this setting from now on."
 msgstr "Die Maschine folgt ab sofort dieser Einstellung."
 
-#: src/templates/ags-settings.template:986
-#: src/templates/ags-settings.template:1007
+#: src/templates/ags-settings.template:1052
+#: src/templates/ags-settings.template:1073
 msgid "failed"
 msgstr "fehlgeschlagen"
 
-#: src/templates/ags-settings.template:1004
+#: src/templates/ags-settings.template:1070
 msgid "Saving ..."
 msgstr "Wird gespeichert ..."
 
-#: src/templates/ags-settings.template:1011
+#: src/templates/ags-settings.template:1077
 msgid "Saved. In effect with the next login - or now."
 msgstr "Gespeichert. Wirksam mit der nächsten Anmeldung - oder jetzt."
 
-#: src/templates/ags-settings.template:1039
+#: src/templates/ags-settings.template:1105
 msgid "{count} change(s) not yet saved"
 msgstr "{count} Änderung(en) noch nicht gespeichert"
 
-#: src/templates/ags-settings.template:1041
+#: src/templates/ags-settings.template:1107
 msgid "Saved - not yet applied."
 msgstr "Gespeichert - noch nicht angewandt."
 
-#: src/templates/ags-settings.template:1050
+#: src/templates/ags-settings.template:1116
 msgid "Keep"
 msgstr "Behalten"
 
-#: src/templates/ags-settings.template:1052
-#: src/templates/ags-vpn-settings.template:2360
+#: src/templates/ags-settings.template:1118
+#: src/templates/ags-vpn-settings.template:2732
 msgid "Save"
 msgstr "Speichern"
 
-#: src/templates/ags-settings.template:1054
+#: src/templates/ags-settings.template:1120
 msgid "Apply now"
 msgstr "Jetzt anwenden"
 
-#: src/templates/ags-settings.template:1056
+#: src/templates/ags-settings.template:1122
 msgid "Reload"
 msgstr "Neu laden"
 
-#: src/templates/ags-settings.template:1126
+#: src/templates/ags-settings.template:1192
 msgid "SETTINGS"
 msgstr "EINSTELLUNGEN"
 
@@ -979,7 +979,7 @@ msgstr "EINSTELLUNGEN"
 msgid "Edit keybinds"
 msgstr "Tastenkürzel bearbeiten"
 
-#: src/templates/ags-starter-button.template:244
+#: src/templates/ags-starter-button.template:245
 msgid "Applications"
 msgstr "Anwendungen"
 
@@ -1012,7 +1012,7 @@ msgid "ZepOS Style"
 msgstr "ZepOS Style"
 
 #: src/templates/ags-style-editor.template:436
-#: src/templates/ags-vpn-settings.template:536
+#: src/templates/ags-vpn-settings.template:723
 msgid "Not saved: {error}"
 msgstr "Nicht gespeichert: {error}"
 
@@ -1042,7 +1042,7 @@ msgid "Presets"
 msgstr "Vorlagen"
 
 #: src/templates/ags-style-editor.template:1061
-#: src/templates/ags-vpn-settings.template:2342
+#: src/templates/ags-vpn-settings.template:2714
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -1059,666 +1059,711 @@ msgid "Regenerate all configs"
 msgstr "Alle Configs neu generieren"
 
 #: src/templates/ags-style-editor.template:1213
-#: src/templates/ags-vpn-settings.template:2339
+#: src/templates/ags-vpn-settings.template:2711
 msgid "Reset"
 msgstr "Reset"
 
-#: src/templates/ags-vpn-settings.template:384
-#: src/templates/ags-vpn-settings.template:397
-#: src/templates/ags-vpn-settings.template:404
+#: src/templates/ags-vpn-settings.template:411
+#: src/templates/ags-vpn-settings.template:424
+#: src/templates/ags-vpn-settings.template:431
 msgid "General"
 msgstr "Allgemein"
 
-#: src/templates/ags-vpn-settings.template:385
+#: src/templates/ags-vpn-settings.template:412
 msgid "Interface"
 msgstr "Schnittstelle"
 
-#: src/templates/ags-vpn-settings.template:386
-#: src/templates/ags-vpn-settings.template:1799
+#: src/templates/ags-vpn-settings.template:413
+#: src/templates/ags-vpn-settings.template:2093
 msgid "Peers"
 msgstr "Gegenstellen"
 
 # OpenVPN als vierter Eintrag der Bauart-Auswahl, 22.08.2026.
 # Aufgabe 61 - siehe .superpowers/sdd/2026-08-18-ags-schale-und-
 # breitenleiter/aufgabe-61-report.md.
-#: src/templates/ags-vpn-settings.template:398
+#: src/templates/ags-vpn-settings.template:425
 msgid "Connection"
 msgstr "Verbindung"
 
-#: src/templates/ags-vpn-settings.template:399
-#: src/templates/ags-vpn-settings.template:2087
+#: src/templates/ags-vpn-settings.template:426
+#: src/templates/ags-vpn-settings.template:2378
 msgid "Certificates"
 msgstr "Zertifikate"
 
-#: src/templates/ags-vpn-settings.template:405
+#: src/templates/ags-vpn-settings.template:432
 msgid "Phase 1"
 msgstr "Phase 1"
 
-#: src/templates/ags-vpn-settings.template:406
+#: src/templates/ags-vpn-settings.template:433
 msgid "Phase 2"
 msgstr "Phase 2"
 
-#: src/templates/ags-vpn-settings.template:535
-#: src/templates/ags-vpn-settings.template:628
-#: src/templates/ags-vpn-settings.template:2258
+#: src/templates/ags-vpn-settings.template:722
+#: src/templates/ags-vpn-settings.template:815
+#: src/templates/ags-vpn-settings.template:2549
 msgid "VPN settings"
 msgstr "VPN-Einstellungen"
 
-#: src/templates/ags-vpn-settings.template:590
-#: src/templates/ags-vpn-settings.template:1222
-#: src/templates/ags-vpn-settings.template:1661
+#: src/templates/ags-vpn-settings.template:777
+#: src/templates/ags-vpn-settings.template:1495
+#: src/templates/ags-vpn-settings.template:1955
 msgid "WireGuard"
 msgstr "WireGuard"
 
-#: src/templates/ags-vpn-settings.template:591
-#: src/templates/ags-vpn-settings.template:620
+#: src/templates/ags-vpn-settings.template:778
+#: src/templates/ags-vpn-settings.template:807
 msgid "The connection was not set up: {error}"
 msgstr "Die Verbindung wurde nicht eingerichtet: {error}"
 
-#: src/templates/ags-vpn-settings.template:619
-#: src/templates/ags-vpn-settings.template:1223
-#: src/templates/ags-vpn-settings.template:2010
+#: src/templates/ags-vpn-settings.template:806
+#: src/templates/ags-vpn-settings.template:1496
+#: src/templates/ags-vpn-settings.template:2301
 msgid "OpenVPN"
 msgstr "OpenVPN"
 
-#: src/templates/ags-vpn-settings.template:628
+#: src/templates/ags-vpn-settings.template:815
 msgid "Settings saved"
 msgstr "Einstellungen gespeichert"
 
-#: src/templates/ags-vpn-settings.template:976
-msgid "Full tunnel: these networks cover the entire IPv4 and IPv6 address space. All traffic runs through the VPN - nothing goes past it."
-msgstr "Volltunnel: Diese Netze decken den gesamten IPv4- und IPv6-Adressraum ab. Aller Verkehr läuft durch das VPN – nichts geht daran vorbei."
-
-#: src/templates/ags-vpn-settings.template:979
-msgid "Full tunnel: these networks cover the entire IPv6 address space. All IPv6 traffic runs through the VPN."
-msgstr "Volltunnel: Diese Netze decken den gesamten IPv6-Adressraum ab. Aller IPv6-Verkehr läuft durch das VPN."
-
-#: src/templates/ags-vpn-settings.template:982
-msgid "Full tunnel: these networks cover the entire IPv4 address space. All IPv4 traffic runs through the VPN."
-msgstr "Volltunnel: Diese Netze decken den gesamten IPv4-Adressraum ab. Aller IPv4-Verkehr läuft durch das VPN."
-
-#: src/templates/ags-vpn-settings.template:995
-msgid "This configuration routes all traffic through the tunnel. It was taken over exactly as the file has it - the networks can be changed in the tabs."
-msgstr "Diese Konfiguration leitet den gesamten Verkehr durch den Tunnel. Sie wurde genau so übernommen, wie sie in der Datei steht – die Netze lassen sich in den Reitern ändern."
-
-#: src/templates/ags-vpn-settings.template:1213
-#: src/templates/ags-vpn-settings.template:2060
-msgid "Connection settings"
-msgstr "Verbindungseinstellungen"
-
-#: src/templates/ags-vpn-settings.template:1219
-msgid "Connection kind"
-msgstr "Art der Verbindung"
-
-#: src/templates/ags-vpn-settings.template:1220
-msgid "IPsec (IKEv1)"
-msgstr "IPsec (IKEv1)"
-
-#: src/templates/ags-vpn-settings.template:1221
-msgid "IPsec (IKEv2)"
-msgstr "IPsec (IKEv2)"
-
-#: src/templates/ags-vpn-settings.template:1254
-msgid "Certificates only - this connection comes back on its own after a network change or resume."
-msgstr "Nur Zertifikate – diese Verbindung kommt nach einem Netzwechsel oder dem Aufwachen von selbst zurück."
-
-#: src/templates/ags-vpn-settings.template:1258
-msgid "This connection needs a password every time. After a network change or resume it stays down until you connect again."
-msgstr "Diese Verbindung braucht jedes Mal ein Passwort. Nach einem Netzwechsel oder dem Aufwachen bleibt sie unten, bis Sie erneut verbinden."
-
-#: src/templates/ags-vpn-settings.template:1268
-msgid "Connection name"
-msgstr "Verbindungsname"
-
-#: src/templates/ags-vpn-settings.template:1276
-msgid "VPN server"
-msgstr "VPN Server"
-
-#: src/templates/ags-vpn-settings.template:1277
-msgid "Default username"
-msgstr "Standard-Benutzername"
-
-#: src/templates/ags-vpn-settings.template:1284
-msgid "Test host (optional)"
-msgstr "Test-Host (optional)"
-
-#: src/templates/ags-vpn-settings.template:1290
-msgid "Enable XAuth"
-msgstr "XAuth aktivieren"
-
-#: src/templates/ags-vpn-settings.template:1297
-msgid "Show debug terminal"
-msgstr "Debug-Terminal anzeigen"
-
-#: src/templates/ags-vpn-settings.template:1314
-msgid "Pre-shared key"
-msgstr "Pre-Shared Key"
-
-#: src/templates/ags-vpn-settings.template:1320
-msgid "Enter or show the PSK ..."
-msgstr "PSK eingeben oder anzeigen..."
-
-#: src/templates/ags-vpn-settings.template:1345
-msgid "Show PSK"
-msgstr "PSK anzeigen"
-
-#: src/templates/ags-vpn-settings.template:1365
-msgid "The PSK was stored securely"
-msgstr "PSK wurde sicher gespeichert"
-
-#: src/templates/ags-vpn-settings.template:1365
-#: src/templates/ags-vpn-settings.template:1379
-msgid "VPN PSK"
-msgstr "VPN PSK"
-
-#: src/templates/ags-vpn-settings.template:1367
-#: src/templates/ags-vpn-settings.template:1395
-msgid "✓ PSK present in {path}"
-msgstr "✓ PSK vorhanden in {path}"
-
-#: src/templates/ags-vpn-settings.template:1379
-msgid "The PSK could not be saved"
-msgstr "PSK konnte nicht gespeichert werden"
-
-#: src/templates/ags-vpn-settings.template:1381
-msgid "⚠ The PSK could not be saved"
-msgstr "⚠ PSK konnte nicht gespeichert werden"
-
-#: src/templates/ags-vpn-settings.template:1387
-msgid "Save PSK"
-msgstr "PSK speichern"
-
-#: src/templates/ags-vpn-settings.template:1398
-msgid "⚠ No PSK saved - please enter one and save it"
-msgstr "⚠ Kein PSK gespeichert - bitte eingeben und speichern"
-
-#: src/templates/ags-vpn-settings.template:1414
-msgid "IKE phase 1 settings"
-msgstr "IKE Phase 1 Einstellungen"
-
-#: src/templates/ags-vpn-settings.template:1445
-#: src/templates/ags-vpn-settings.template:1477
-msgid "Mode"
-msgstr "Modus"
-
-#: src/templates/ags-vpn-settings.template:1446
-msgid "Aggressive"
-msgstr "Aggressive"
-
-#: src/templates/ags-vpn-settings.template:1447
-msgid "Main"
-msgstr "Main"
-
-#: src/templates/ags-vpn-settings.template:1452
-msgid "IKE proposals"
-msgstr "IKE Proposals"
-
-#: src/templates/ags-vpn-settings.template:1453
-msgid "Key lifetime (seconds)"
-msgstr "Key Lifetime (Sekunden)"
-
-#: src/templates/ags-vpn-settings.template:1454
-msgid "DPD delay (seconds)"
-msgstr "DPD Delay (Sekunden)"
-
-#: src/templates/ags-vpn-settings.template:1455
-msgid "DPD timeout (seconds)"
-msgstr "DPD Timeout (Sekunden)"
-
-#: src/templates/ags-vpn-settings.template:1459
-msgid "NAT encapsulation"
-msgstr "NAT Encapsulation"
-
-#: src/templates/ags-vpn-settings.template:1460
-msgid "MOBIKE"
-msgstr "MOBIKE"
-
-#: src/templates/ags-vpn-settings.template:1470
-msgid "ESP phase 2 settings"
-msgstr "ESP Phase 2 Einstellungen"
-
-#: src/templates/ags-vpn-settings.template:1474
-msgid "Rekey time (seconds)"
-msgstr "Rekey Time (Sekunden)"
-
-#: src/templates/ags-vpn-settings.template:1475
-msgid "Life time (seconds)"
-msgstr "Life Time (Sekunden)"
-
-#: src/templates/ags-vpn-settings.template:1478
-msgid "Tunnel"
-msgstr "Tunnel"
-
-#: src/templates/ags-vpn-settings.template:1479
-msgid "Transport"
-msgstr "Transport"
-
-#: src/templates/ags-vpn-settings.template:1482
-msgid "Replay window"
-msgstr "Replay Window"
-
-#: src/templates/ags-vpn-settings.template:1483
-msgid "ESP proposals"
-msgstr "ESP Proposals"
-
-#: src/templates/ags-vpn-settings.template:1492
-msgid "Without at least one network the tunnel comes up and carries no traffic."
-msgstr "Ohne mindestens ein Netz baut sich der Tunnel auf und trägt keinen Verkehr."
-
-#: src/templates/ags-vpn-settings.template:1508
-#: src/templates/ags-vpn-settings.template:1863
-#: src/templates/ags-vpn-settings.template:2129
-msgid "Add network"
-msgstr "Netz hinzufügen"
-
-#: src/templates/ags-vpn-settings.template:1508
-#: src/templates/ags-vpn-settings.template:2129
-msgid "Routed networks"
-msgstr "Geroutete Netze"
-
-#: src/templates/ags-vpn-settings.template:1508
-#: src/templates/ags-vpn-settings.template:1863
-#: src/templates/ags-vpn-settings.template:2129
-msgid "e.g. 10.0.0.0/8"
-msgstr "z.B. 10.0.0.0/8"
-
-#: src/templates/ags-vpn-settings.template:1564
-msgid "WireGuard configuration"
-msgstr "WireGuard-Konfiguration"
-
-#: src/templates/ags-vpn-settings.template:1570
-msgid "Path to a .conf file ..."
-msgstr "Pfad zu einer .conf-Datei …"
-
-#: src/templates/ags-vpn-settings.template:1593
-#: src/templates/ags-vpn-settings.template:1608
-msgid "Choose a WireGuard configuration"
-msgstr "Eine WireGuard-Konfiguration auswählen"
-
-#: src/templates/ags-vpn-settings.template:1604
-#: src/templates/ags-vpn-settings.template:1957
-msgid "No file chooser available - please type the path."
-msgstr "Kein Dateiwähler verfügbar – bitte den Pfad eintippen."
-
-#: src/templates/ags-vpn-settings.template:1616
-#: src/templates/ags-vpn-settings.template:1966
-msgid "Import"
-msgstr "Einlesen"
-
-#: src/templates/ags-vpn-settings.template:1644
-#: src/templates/ags-vpn-settings.template:1993
-msgid "Imported. These lines were NOT taken over, because they run commands: {lines}"
-msgstr "Eingelesen. Diese Zeilen wurden NICHT übernommen, weil sie Befehle ausführen: {lines}"
-
-#: src/templates/ags-vpn-settings.template:1649
-#: src/templates/ags-vpn-settings.template:1998
-msgid "Imported"
-msgstr "Eingelesen"
-
-#: src/templates/ags-vpn-settings.template:1662
-msgid "The key was stored privately. The original {path} still contains it in clear text - you may want to delete it."
-msgstr "Der Schlüssel liegt jetzt geschützt. Die Ursprungsdatei {path} enthält ihn weiterhin im Klartext – Sie sollten sie löschen."
-
-#: src/templates/ags-vpn-settings.template:1667
-#: src/templates/ags-vpn-settings.template:2016
-msgid "Not imported: {error}"
-msgstr "Nicht eingelesen: {error}"
-
-#: src/templates/ags-vpn-settings.template:1688
-msgid "Interface settings"
-msgstr "Einstellungen der Schnittstelle"
-
-#: src/templates/ags-vpn-settings.template:1696
-msgid "Add address"
-msgstr "Adresse hinzufügen"
-
-#: src/templates/ags-vpn-settings.template:1696
-msgid "Addresses"
-msgstr "Adressen"
-
-#: src/templates/ags-vpn-settings.template:1696
-msgid "e.g. 10.9.0.2/24"
-msgstr "z. B. 10.9.0.2/24"
-
-#: src/templates/ags-vpn-settings.template:1699
-msgid "Listen port (0 = automatic)"
-msgstr "Abhörport (0 = automatisch)"
-
-#: src/templates/ags-vpn-settings.template:1701
-msgid "MTU (0 = automatic)"
-msgstr "MTU (0 = automatisch)"
-
-#: src/templates/ags-vpn-settings.template:1716
-msgid "Private key"
-msgstr "Privater Schlüssel"
-
-#: src/templates/ags-vpn-settings.template:1722
-#: src/templates/ags-vpn-settings.template:1758
-msgid "Key present in {path}"
-msgstr "✓ Schlüssel vorhanden in {path}"
-
-#: src/templates/ags-vpn-settings.template:1726
-msgid "No key yet - create one, or import a .conf file"
-msgstr "⚠ Noch kein Schlüssel – erzeugen Sie einen oder lesen Sie eine .conf-Datei ein"
-
-#: src/templates/ags-vpn-settings.template:1737
-msgid "Own public key ..."
-msgstr "Eigener öffentlicher Schlüssel …"
-
-#: src/templates/ags-vpn-settings.template:1746
-msgid "Copy the public key"
-msgstr "Öffentlichen Schlüssel kopieren"
-
-#: src/templates/ags-vpn-settings.template:1751
-msgid "Create a key pair"
-msgstr "Schlüsselpaar erzeugen"
-
-#: src/templates/ags-vpn-settings.template:1763
-msgid "No key was created: {error}"
-msgstr "Es wurde kein Schlüssel erzeugt: {error}"
-
-#: src/templates/ags-vpn-settings.template:1809
-msgid "Add peer"
-msgstr "Gegenstelle hinzufügen"
-
-#: src/templates/ags-vpn-settings.template:1816
-msgid "Without at least one peer with allowed networks the tunnel comes up and carries no traffic."
-msgstr "Ohne mindestens eine Gegenstelle mit erlaubten Netzen kommt der Tunnel zustande und trägt nichts."
-
-#: src/templates/ags-vpn-settings.template:1835
-msgid "Peer {number}"
-msgstr "Gegenstelle {number}"
-
-#: src/templates/ags-vpn-settings.template:1844
-msgid "Delete peer"
-msgstr "Gegenstelle löschen"
-
-#. Eine ganze Verbindung loeschen - seit dem 01.09.2026. Gemeldet:
-#. "ich kann vpn verbindungen auch nicht loeschen". Die Rueckfrage steht
-#. im Knopf selbst (zwei Klicks) und als Satz daneben; ein zweites
-#. Fenster ueber einer Layer-Flaeche ist genau das, woran der
-#. Dateiwaehler an diesem Tag gescheitert ist.
-msgid "Delete"
-msgstr "Löschen"
-
-msgid "Really delete?"
-msgstr "Wirklich löschen?"
-
-msgid "Delete this connection"
-msgstr "Diese Verbindung löschen"
-
-msgid "\"{name}\" and its stored keys will be removed. Click again to confirm."
-msgstr "„{name}“ und die dazu gespeicherten Schlüssel werden entfernt. Zum Bestätigen noch einmal klicken."
-
-msgid "Deleting ..."
-msgstr "Wird gelöscht …"
-
+#: src/templates/ags-vpn-settings.template:883
+#: src/templates/ags-vpn-settings.template:904
 msgid "Not deleted: {error}"
 msgstr "Nicht gelöscht: {error}"
 
-#: src/templates/ags-vpn-settings.template:1849
+#: src/templates/ags-vpn-settings.template:1243
+msgid "Full tunnel: these networks cover the entire IPv4 and IPv6 address space. All traffic runs through the VPN - nothing goes past it."
+msgstr "Volltunnel: Diese Netze decken den gesamten IPv4- und IPv6-Adressraum ab. Aller Verkehr läuft durch das VPN – nichts geht daran vorbei."
+
+#: src/templates/ags-vpn-settings.template:1246
+msgid "Full tunnel: these networks cover the entire IPv6 address space. All IPv6 traffic runs through the VPN."
+msgstr "Volltunnel: Diese Netze decken den gesamten IPv6-Adressraum ab. Aller IPv6-Verkehr läuft durch das VPN."
+
+#: src/templates/ags-vpn-settings.template:1249
+msgid "Full tunnel: these networks cover the entire IPv4 address space. All IPv4 traffic runs through the VPN."
+msgstr "Volltunnel: Diese Netze decken den gesamten IPv4-Adressraum ab. Aller IPv4-Verkehr läuft durch das VPN."
+
+#: src/templates/ags-vpn-settings.template:1262
+msgid "This configuration routes all traffic through the tunnel. It was taken over exactly as the file has it - the networks can be changed in the tabs."
+msgstr "Diese Konfiguration leitet den gesamten Verkehr durch den Tunnel. Sie wurde genau so übernommen, wie sie in der Datei steht – die Netze lassen sich in den Reitern ändern."
+
+#: src/templates/ags-vpn-settings.template:1486
+#: src/templates/ags-vpn-settings.template:2351
+msgid "Connection settings"
+msgstr "Verbindungseinstellungen"
+
+#: src/templates/ags-vpn-settings.template:1492
+msgid "Connection kind"
+msgstr "Art der Verbindung"
+
+#: src/templates/ags-vpn-settings.template:1493
+msgid "IPsec (IKEv1)"
+msgstr "IPsec (IKEv1)"
+
+#: src/templates/ags-vpn-settings.template:1494
+msgid "IPsec (IKEv2)"
+msgstr "IPsec (IKEv2)"
+
+#: src/templates/ags-vpn-settings.template:1527
+msgid "Certificates only - this connection comes back on its own after a network change or resume."
+msgstr "Nur Zertifikate – diese Verbindung kommt nach einem Netzwechsel oder dem Aufwachen von selbst zurück."
+
+#: src/templates/ags-vpn-settings.template:1531
+msgid "This connection needs a password every time. After a network change or resume it stays down until you connect again."
+msgstr "Diese Verbindung braucht jedes Mal ein Passwort. Nach einem Netzwechsel oder dem Aufwachen bleibt sie unten, bis Sie erneut verbinden."
+
+#: src/templates/ags-vpn-settings.template:1541
+msgid "Connection name"
+msgstr "Verbindungsname"
+
+#: src/templates/ags-vpn-settings.template:1549
+msgid "VPN server"
+msgstr "VPN Server"
+
+#: src/templates/ags-vpn-settings.template:1550
+msgid "Default username"
+msgstr "Standard-Benutzername"
+
+#: src/templates/ags-vpn-settings.template:1557
+msgid "Test host (optional)"
+msgstr "Test-Host (optional)"
+
+#: src/templates/ags-vpn-settings.template:1563
+msgid "Enable XAuth"
+msgstr "XAuth aktivieren"
+
+#: src/templates/ags-vpn-settings.template:1570
+msgid "Show debug terminal"
+msgstr "Debug-Terminal anzeigen"
+
+#: src/templates/ags-vpn-settings.template:1587
+msgid "Pre-shared key"
+msgstr "Pre-Shared Key"
+
+#: src/templates/ags-vpn-settings.template:1593
+msgid "Enter or show the PSK ..."
+msgstr "PSK eingeben oder anzeigen..."
+
+#: src/templates/ags-vpn-settings.template:1618
+msgid "Show PSK"
+msgstr "PSK anzeigen"
+
+#: src/templates/ags-vpn-settings.template:1638
+msgid "The PSK was stored securely"
+msgstr "PSK wurde sicher gespeichert"
+
+#: src/templates/ags-vpn-settings.template:1638
+#: src/templates/ags-vpn-settings.template:1652
+msgid "VPN PSK"
+msgstr "VPN PSK"
+
+#: src/templates/ags-vpn-settings.template:1640
+#: src/templates/ags-vpn-settings.template:1668
+msgid "✓ PSK present in {path}"
+msgstr "✓ PSK vorhanden in {path}"
+
+#: src/templates/ags-vpn-settings.template:1652
+msgid "The PSK could not be saved"
+msgstr "PSK konnte nicht gespeichert werden"
+
+#: src/templates/ags-vpn-settings.template:1654
+msgid "⚠ The PSK could not be saved"
+msgstr "⚠ PSK konnte nicht gespeichert werden"
+
+#: src/templates/ags-vpn-settings.template:1660
+msgid "Save PSK"
+msgstr "PSK speichern"
+
+#: src/templates/ags-vpn-settings.template:1671
+msgid "⚠ No PSK saved - please enter one and save it"
+msgstr "⚠ Kein PSK gespeichert - bitte eingeben und speichern"
+
+#: src/templates/ags-vpn-settings.template:1687
+msgid "IKE phase 1 settings"
+msgstr "IKE Phase 1 Einstellungen"
+
+#: src/templates/ags-vpn-settings.template:1718
+#: src/templates/ags-vpn-settings.template:1750
+msgid "Mode"
+msgstr "Modus"
+
+#: src/templates/ags-vpn-settings.template:1719
+msgid "Aggressive"
+msgstr "Aggressive"
+
+#: src/templates/ags-vpn-settings.template:1720
+msgid "Main"
+msgstr "Main"
+
+#: src/templates/ags-vpn-settings.template:1725
+msgid "IKE proposals"
+msgstr "IKE Proposals"
+
+#: src/templates/ags-vpn-settings.template:1726
+msgid "Key lifetime (seconds)"
+msgstr "Key Lifetime (Sekunden)"
+
+#: src/templates/ags-vpn-settings.template:1727
+msgid "DPD delay (seconds)"
+msgstr "DPD Delay (Sekunden)"
+
+#: src/templates/ags-vpn-settings.template:1728
+msgid "DPD timeout (seconds)"
+msgstr "DPD Timeout (Sekunden)"
+
+#: src/templates/ags-vpn-settings.template:1732
+msgid "NAT encapsulation"
+msgstr "NAT Encapsulation"
+
+#: src/templates/ags-vpn-settings.template:1733
+msgid "MOBIKE"
+msgstr "MOBIKE"
+
+#: src/templates/ags-vpn-settings.template:1743
+msgid "ESP phase 2 settings"
+msgstr "ESP Phase 2 Einstellungen"
+
+#: src/templates/ags-vpn-settings.template:1747
+msgid "Rekey time (seconds)"
+msgstr "Rekey Time (Sekunden)"
+
+#: src/templates/ags-vpn-settings.template:1748
+msgid "Life time (seconds)"
+msgstr "Life Time (Sekunden)"
+
+#: src/templates/ags-vpn-settings.template:1751
+msgid "Tunnel"
+msgstr "Tunnel"
+
+#: src/templates/ags-vpn-settings.template:1752
+msgid "Transport"
+msgstr "Transport"
+
+#: src/templates/ags-vpn-settings.template:1755
+msgid "Replay window"
+msgstr "Replay Window"
+
+#: src/templates/ags-vpn-settings.template:1756
+msgid "ESP proposals"
+msgstr "ESP Proposals"
+
+#: src/templates/ags-vpn-settings.template:1765
+msgid "Without at least one network the tunnel comes up and carries no traffic."
+msgstr "Ohne mindestens ein Netz baut sich der Tunnel auf und trägt keinen Verkehr."
+
+#: src/templates/ags-vpn-settings.template:1781
+#: src/templates/ags-vpn-settings.template:2157
+#: src/templates/ags-vpn-settings.template:2420
+msgid "Add network"
+msgstr "Netz hinzufügen"
+
+#: src/templates/ags-vpn-settings.template:1781
+#: src/templates/ags-vpn-settings.template:2420
+msgid "Routed networks"
+msgstr "Geroutete Netze"
+
+#: src/templates/ags-vpn-settings.template:1781
+#: src/templates/ags-vpn-settings.template:2157
+#: src/templates/ags-vpn-settings.template:2420
+msgid "e.g. 10.0.0.0/8"
+msgstr "z.B. 10.0.0.0/8"
+
+#: src/templates/ags-vpn-settings.template:1837
+msgid "WireGuard configuration"
+msgstr "WireGuard-Konfiguration"
+
+#: src/templates/ags-vpn-settings.template:1843
+msgid "Path to a .conf file ..."
+msgstr "Pfad zu einer .conf-Datei …"
+
+#: src/templates/ags-vpn-settings.template:1875
+#: src/templates/ags-vpn-settings.template:1882
+msgid "Choose a WireGuard configuration"
+msgstr "Eine WireGuard-Konfiguration auswählen"
+
+#: src/templates/ags-vpn-settings.template:1878
+#: src/templates/ags-vpn-settings.template:2245
+msgid "No file chooser available - please type the path."
+msgstr "Kein Dateiwähler verfügbar – bitte den Pfad eintippen."
+
+#: src/templates/ags-vpn-settings.template:1890
+#: src/templates/ags-vpn-settings.template:2254
+msgid "Import"
+msgstr "Einlesen"
+
+#: src/templates/ags-vpn-settings.template:1938
+#: src/templates/ags-vpn-settings.template:2284
+msgid "Imported. These lines were NOT taken over, because they run commands: {lines}"
+msgstr "Eingelesen. Diese Zeilen wurden NICHT übernommen, weil sie Befehle ausführen: {lines}"
+
+#: src/templates/ags-vpn-settings.template:1943
+#: src/templates/ags-vpn-settings.template:2289
+msgid "Imported"
+msgstr "Eingelesen"
+
+#: src/templates/ags-vpn-settings.template:1956
+msgid "The key was stored privately. The original {path} still contains it in clear text - you may want to delete it."
+msgstr "Der Schlüssel liegt jetzt geschützt. Die Ursprungsdatei {path} enthält ihn weiterhin im Klartext – Sie sollten sie löschen."
+
+#: src/templates/ags-vpn-settings.template:1961
+#: src/templates/ags-vpn-settings.template:2307
+msgid "Not imported: {error}"
+msgstr "Nicht eingelesen: {error}"
+
+#: src/templates/ags-vpn-settings.template:1982
+msgid "Interface settings"
+msgstr "Einstellungen der Schnittstelle"
+
+#: src/templates/ags-vpn-settings.template:1990
+msgid "Add address"
+msgstr "Adresse hinzufügen"
+
+#: src/templates/ags-vpn-settings.template:1990
+msgid "Addresses"
+msgstr "Adressen"
+
+#: src/templates/ags-vpn-settings.template:1990
+msgid "e.g. 10.9.0.2/24"
+msgstr "z. B. 10.9.0.2/24"
+
+#: src/templates/ags-vpn-settings.template:1993
+msgid "Listen port (0 = automatic)"
+msgstr "Abhörport (0 = automatisch)"
+
+#: src/templates/ags-vpn-settings.template:1995
+msgid "MTU (0 = automatic)"
+msgstr "MTU (0 = automatisch)"
+
+#: src/templates/ags-vpn-settings.template:2010
+msgid "Private key"
+msgstr "Privater Schlüssel"
+
+#: src/templates/ags-vpn-settings.template:2016
+#: src/templates/ags-vpn-settings.template:2052
+msgid "Key present in {path}"
+msgstr "✓ Schlüssel vorhanden in {path}"
+
+#: src/templates/ags-vpn-settings.template:2020
+msgid "No key yet - create one, or import a .conf file"
+msgstr "⚠ Noch kein Schlüssel – erzeugen Sie einen oder lesen Sie eine .conf-Datei ein"
+
+#: src/templates/ags-vpn-settings.template:2031
+msgid "Own public key ..."
+msgstr "Eigener öffentlicher Schlüssel …"
+
+#: src/templates/ags-vpn-settings.template:2040
+msgid "Copy the public key"
+msgstr "Öffentlichen Schlüssel kopieren"
+
+#: src/templates/ags-vpn-settings.template:2045
+msgid "Create a key pair"
+msgstr "Schlüsselpaar erzeugen"
+
+#: src/templates/ags-vpn-settings.template:2057
+msgid "No key was created: {error}"
+msgstr "Es wurde kein Schlüssel erzeugt: {error}"
+
+#: src/templates/ags-vpn-settings.template:2103
+msgid "Add peer"
+msgstr "Gegenstelle hinzufügen"
+
+#: src/templates/ags-vpn-settings.template:2110
+msgid "Without at least one peer with allowed networks the tunnel comes up and carries no traffic."
+msgstr "Ohne mindestens eine Gegenstelle mit erlaubten Netzen kommt der Tunnel zustande und trägt nichts."
+
+#: src/templates/ags-vpn-settings.template:2129
+msgid "Peer {number}"
+msgstr "Gegenstelle {number}"
+
+#: src/templates/ags-vpn-settings.template:2138
+msgid "Delete peer"
+msgstr "Gegenstelle löschen"
+
+#: src/templates/ags-vpn-settings.template:2143
 msgid "Public key of the peer"
 msgstr "Öffentlicher Schlüssel der Gegenstelle"
 
-#: src/templates/ags-vpn-settings.template:1851
+#: src/templates/ags-vpn-settings.template:2145
 msgid "Endpoint"
 msgstr "Endpunkt"
 
-#: src/templates/ags-vpn-settings.template:1853
+#: src/templates/ags-vpn-settings.template:2147
 msgid "Keepalive (seconds, 0 = off)"
 msgstr "Keepalive (Sekunden, 0 = aus)"
 
-#: src/templates/ags-vpn-settings.template:1863
+#: src/templates/ags-vpn-settings.template:2157
 msgid "Allowed networks"
 msgstr "Erlaubte Netze"
 
-#: src/templates/ags-vpn-settings.template:1923
+#: src/templates/ags-vpn-settings.template:2217
 msgid "OpenVPN configuration"
 msgstr "OpenVPN-Konfiguration"
 
-#: src/templates/ags-vpn-settings.template:1929
+#: src/templates/ags-vpn-settings.template:2223
 msgid "Path to an .ovpn file ..."
 msgstr "Pfad zu einer .ovpn-Datei …"
 
-#: src/templates/ags-vpn-settings.template:1946
-#: src/templates/ags-vpn-settings.template:1961
+#: src/templates/ags-vpn-settings.template:2242
+#: src/templates/ags-vpn-settings.template:2249
 msgid "Choose an OpenVPN configuration"
 msgstr "Eine OpenVPN-Konfiguration wählen"
 
-#: src/templates/ags-vpn-settings.template:2006
+#: src/templates/ags-vpn-settings.template:2297
 msgid "These lines have no effect here, because NetworkManager sets its own: {lines}"
 msgstr "Diese Zeilen wirken hier nicht, weil NetworkManager sein eigenes Gegenstück setzt: {lines}"
 
-#: src/templates/ags-vpn-settings.template:2011
+#: src/templates/ags-vpn-settings.template:2302
 msgid "The certificates and the key were stored privately. The original {path} still contains them in clear text - you may want to delete it."
 msgstr "Die Zertifikate und der Schlüssel wurden privat abgelegt. Das Original {path} enthält sie weiterhin im Klartext – Sie sollten es löschen."
 
-#: src/templates/ags-vpn-settings.template:2064
+#: src/templates/ags-vpn-settings.template:2355
 msgid "Server"
 msgstr "Server"
 
-#: src/templates/ags-vpn-settings.template:2066
+#: src/templates/ags-vpn-settings.template:2357
 msgid "Port (0 = 1194)"
 msgstr "Port (0 = 1194)"
 
-#: src/templates/ags-vpn-settings.template:2068
+#: src/templates/ags-vpn-settings.template:2359
 msgid "Protocol"
 msgstr "Protokoll"
 
-#: src/templates/ags-vpn-settings.template:2069
+#: src/templates/ags-vpn-settings.template:2360
 msgid "UDP"
 msgstr "UDP"
 
-#: src/templates/ags-vpn-settings.template:2070
+#: src/templates/ags-vpn-settings.template:2361
 msgid "TCP"
 msgstr "TCP"
 
-#: src/templates/ags-vpn-settings.template:2073
+#: src/templates/ags-vpn-settings.template:2364
 msgid "Device"
 msgstr "Gerät"
 
-#: src/templates/ags-vpn-settings.template:2074
+#: src/templates/ags-vpn-settings.template:2365
 msgid "tun (routed)"
 msgstr "tun (geroutet)"
 
-#: src/templates/ags-vpn-settings.template:2075
+#: src/templates/ags-vpn-settings.template:2366
 msgid "tap (bridged)"
 msgstr "tap (gebrückt)"
 
-#: src/templates/ags-vpn-settings.template:2086
+#: src/templates/ags-vpn-settings.template:2377
 msgid "Authentication"
 msgstr "Ausweis"
 
-#: src/templates/ags-vpn-settings.template:2088
+#: src/templates/ags-vpn-settings.template:2379
 msgid "Username and password"
 msgstr "Benutzername und Passwort"
 
-#: src/templates/ags-vpn-settings.template:2089
+#: src/templates/ags-vpn-settings.template:2380
 msgid "Both"
 msgstr "Beides"
 
-#: src/templates/ags-vpn-settings.template:2096
-#: src/templates/ags-vpn.template:924
+#: src/templates/ags-vpn-settings.template:2387
+#: src/templates/ags-vpn.template:1298
 msgid "Username"
 msgstr "Benutzername"
 
-#: src/templates/ags-vpn-settings.template:2099
+#: src/templates/ags-vpn-settings.template:2390
 msgid "The password is not stored. It is typed on the VPN page and handed to NetworkManager in a file that is deleted again."
 msgstr "Das Passwort wird nicht gespeichert. Es wird auf der VPN-Seite eingegeben und NetworkManager in einer Datei übergeben, die danach gelöscht wird."
 
-#: src/templates/ags-vpn-settings.template:2106
+#: src/templates/ags-vpn-settings.template:2397
 msgid "Verify server certificate (remote-cert-tls)"
 msgstr "Serverzertifikat prüfen (remote-cert-tls)"
 
-#: src/templates/ags-vpn-settings.template:2109
+#: src/templates/ags-vpn-settings.template:2400
 msgid "Cipher"
 msgstr "Verschlüsselung"
 
-#: src/templates/ags-vpn-settings.template:2111
+#: src/templates/ags-vpn-settings.template:2402
 msgid "HMAC authentication"
 msgstr "HMAC-Authentisierung"
 
-#: src/templates/ags-vpn-settings.template:2144
+#: src/templates/ags-vpn-settings.template:2435
 msgid "Full tunnel: the file carries redirect-gateway, which sends all traffic through the tunnel - independently of this list."
 msgstr "Volltunnel: Die Datei trägt redirect-gateway, das allen Verkehr durch den Tunnel schickt – unabhängig von dieser Liste."
 
-#: src/templates/ags-vpn-settings.template:2157
+#: src/templates/ags-vpn-settings.template:2448
 msgid "{count} further options were taken over from the file: {options}"
 msgstr "{count} weitere Optionen wurden aus der Datei übernommen: {options}"
 
-#: src/templates/ags-vpn-settings.template:2174
+#: src/templates/ags-vpn-settings.template:2465
 msgid "Certificates and keys"
 msgstr "Zertifikate und Schlüssel"
 
-#: src/templates/ags-vpn-settings.template:2179
+#: src/templates/ags-vpn-settings.template:2470
 msgid "Blocks embedded in the .ovpn file were unpacked into ~/.config/openvpn, readable only by you (0600). Only their file names are stored in the settings."
 msgstr "In der .ovpn eingebettete Blöcke wurden nach ~/.config/openvpn ausgepackt, nur für Sie lesbar (0600). In den Einstellungen stehen nur ihre Dateinamen."
 
-#: src/templates/ags-vpn-settings.template:2189
+#: src/templates/ags-vpn-settings.template:2480
 msgid "CA certificate"
 msgstr "CA-Zertifikat"
 
-#: src/templates/ags-vpn-settings.template:2190
+#: src/templates/ags-vpn-settings.template:2481
 msgid "Own certificate"
 msgstr "Eigenes Zertifikat"
 
-#: src/templates/ags-vpn-settings.template:2191
+#: src/templates/ags-vpn-settings.template:2482
 msgid "Own private key"
 msgstr "Eigener privater Schlüssel"
 
-#: src/templates/ags-vpn-settings.template:2192
+#: src/templates/ags-vpn-settings.template:2483
 msgid "TLS auth key"
 msgstr "TLS-Auth-Schlüssel"
 
-#: src/templates/ags-vpn-settings.template:2193
+#: src/templates/ags-vpn-settings.template:2484
 msgid "TLS crypt key"
 msgstr "TLS-Crypt-Schlüssel"
 
-#: src/templates/ags-vpn-settings.template:2201
+#: src/templates/ags-vpn-settings.template:2492
 msgid "File name or absolute path ..."
 msgstr "Dateiname oder absoluter Pfad …"
 
-#: src/templates/ags-vpn-settings.template:2205
+#: src/templates/ags-vpn-settings.template:2496
 msgid "Present in {path}"
 msgstr "Vorhanden in {path}"
 
-#: src/templates/ags-vpn-settings.template:2206
+#: src/templates/ags-vpn-settings.template:2497
 msgid "Not set"
 msgstr "Nicht gesetzt"
 
-#: src/templates/ags-vpn-settings.template:2217
+#: src/templates/ags-vpn-settings.template:2508
 msgid "TLS auth key direction (0, 1 or empty)"
 msgstr "Richtung des TLS-Auth-Schlüssels (0, 1 oder leer)"
 
-#: src/templates/ags-vpn-settings.template:2227
+#: src/templates/ags-vpn-settings.template:2518
 msgid "DNS settings"
 msgstr "DNS Einstellungen"
 
-#: src/templates/ags-vpn-settings.template:2231
+#: src/templates/ags-vpn-settings.template:2522
 msgid "Search domain"
 msgstr "Search Domain"
 
-#: src/templates/ags-vpn-settings.template:2236
+#: src/templates/ags-vpn-settings.template:2527
 msgid "Add DNS server"
 msgstr "DNS Server hinzufügen"
 
-#: src/templates/ags-vpn-settings.template:2236
+#: src/templates/ags-vpn-settings.template:2527
 msgid "DNS servers"
 msgstr "DNS Server"
 
-#: src/templates/ags-vpn-settings.template:2236
+#: src/templates/ags-vpn-settings.template:2527
 msgid "IP address ..."
 msgstr "IP-Adresse..."
 
-#: src/templates/ags-vpn-settings.template:2345
+#: src/templates/ags-vpn-settings.template:2717
 msgid "← VPN"
 msgstr "← VPN"
 
-#: src/templates/ags-vpn-settings.template:2349
+#: src/templates/ags-vpn-settings.template:2721
 msgid "Back to the VPN connection"
 msgstr "Zurück zur VPN-Verbindung"
 
-#: src/templates/ags-vpn.template:459 src/templates/ags-vpn.template:861
+# --------------------------------------------------------------------
+# Aus einer VPN-Verbindung wird eine Liste (22.08.2026)
+# --------------------------------------------------------------------
+# Die Liste mit den Schaltern - auf der Schalenseite und im
+# Einstellungsfenster. Die uebrigen 162 Beschriftungen der beiden
+# VPN-Vorlagen sind unveraendert geblieben; nachgewiesen in
+# tests/src/test_vpn_liste.py.
+#: src/templates/ags-vpn-settings.template:2817
+#: src/templates/ags-vpn.template:1237
+msgid "VPN connections"
+msgstr "VPN-Verbindungen"
+
+#: src/templates/ags-vpn-settings.template:2830
+#: src/templates/ags-vpn-settings.template:2939
+#: src/templates/ags-vpn.template:1531
+msgid "New connection"
+msgstr "Neue Verbindung"
+
+#: src/templates/ags-vpn-settings.template:2868
+msgid "Add connection"
+msgstr "Verbindung hinzufügen"
+
+# --------------------------------------------------------------------
+# Aus der Liste in die Einzelheit und zurueck (01.09.2026)
+# --------------------------------------------------------------------
+# Gemeldet: "ich will eine reine liste bei vpn sehen, und bei klick auf
+# das item einer vpn oder 'neu erstellen' will ich auf die details
+# kommen." Der Rueckweg braucht ein Wort, und es ist auf beiden
+# Flaechen dasselbe - Schalenseite wie Einstellungsfenster.
+#: src/templates/ags-vpn-settings.template:2892
+#: src/templates/ags-vpn.template:1544
+msgid "All connections"
+msgstr "Alle Verbindungen"
+
+#: src/templates/ags-vpn-settings.template:2933
+#: src/templates/ags-vpn-settings.template:2966
+msgid "Delete"
+msgstr "Löschen"
+
+#: src/templates/ags-vpn-settings.template:2936
+msgid "Really delete?"
+msgstr "Wirklich löschen?"
+
+#: src/templates/ags-vpn-settings.template:2938
+msgid "\"{name}\" and its stored keys will be removed. Click again to confirm."
+msgstr "„{name}“ und die dazu gespeicherten Schlüssel werden entfernt. Zum Bestätigen noch einmal klicken."
+
+#: src/templates/ags-vpn-settings.template:2945
+msgid "Deleting ..."
+msgstr "Wird gelöscht …"
+
+#: src/templates/ags-vpn-settings.template:2957
+msgid "Delete this connection"
+msgstr "Diese Verbindung löschen"
+
+#: src/templates/ags-vpn.template:675 src/templates/ags-vpn.template:1101
 msgid "IP: {ip}"
 msgstr "IP: {ip}"
 
-#: src/templates/ags-vpn.template:464 src/templates/ags-vpn.template:864
+#: src/templates/ags-vpn.template:680 src/templates/ags-vpn.template:1104
 msgid "Server: {server}"
 msgstr "Server: {server}"
 
-#: src/templates/ags-vpn.template:465 src/templates/ags-vpn.template:1091
+#: src/templates/ags-vpn.template:681 src/templates/ags-vpn.template:1465
 msgid "Peer: {endpoint}"
 msgstr "Gegenstelle: {endpoint}"
 
-#: src/templates/ags-vpn.template:466 src/templates/ags-vpn.template:867
+#: src/templates/ags-vpn.template:682 src/templates/ags-vpn.template:1107
 msgid "Connection: {connection}"
 msgstr "Verbindung: {connection}"
 
-#: src/templates/ags-vpn.template:483
+#: src/templates/ags-vpn.template:699
 msgid "VPN incomplete – please reconnect"
 msgstr "VPN unvollständig – bitte neu verbinden"
 
-#: src/templates/ags-vpn.template:494 src/templates/ags-vpn.template:905
+#: src/templates/ags-vpn.template:710 src/templates/ags-vpn.template:1278
 msgid "Not connected"
 msgstr "Nicht verbunden"
 
-#: src/templates/ags-vpn.template:520
+#: src/templates/ags-vpn.template:736
 msgid "VPN"
 msgstr "VPN"
 
-#: src/templates/ags-vpn.template:591 src/templates/ags-vpn.template:651
+#: src/templates/ags-vpn.template:807 src/templates/ags-vpn.template:867
 msgid "Username required"
 msgstr "Benutzername erforderlich"
 
-#: src/templates/ags-vpn.template:595 src/templates/ags-vpn.template:655
+#: src/templates/ags-vpn.template:811 src/templates/ags-vpn.template:871
 msgid "Password required"
 msgstr "Passwort erforderlich"
 
-#: src/templates/ags-vpn.template:663
+#: src/templates/ags-vpn.template:879
 msgid "PSK not found! Please save it in the VPN settings."
 msgstr "PSK nicht gefunden! Bitte in VPN-Einstellungen speichern."
 
-#: src/templates/ags-vpn.template:769
+#: src/templates/ags-vpn.template:987
 msgid "Disconnecting ..."
 msgstr "Trenne..."
 
-#: src/templates/ags-vpn.template:851
+#: src/templates/ags-vpn.template:1091
 msgid "Connected"
 msgstr "Verbunden"
 
-#: src/templates/ags-vpn.template:930
+#: src/templates/ags-vpn.template:1194
+msgid "Only one VPN can be connected at a time - {name} is being disconnected."
+msgstr "Es kann nur eine VPN-Verbindung stehen – {name} wird zuerst getrennt."
+
+#: src/templates/ags-vpn.template:1230
+msgid "No connection configured yet - add one."
+msgstr "Noch keine Verbindung eingerichtet – bitte eine hinzufügen."
+
+#: src/templates/ags-vpn.template:1304
 msgid "Username ..."
 msgstr "Benutzername..."
 
-#: src/templates/ags-vpn.template:941
+#: src/templates/ags-vpn.template:1315
 msgid "Password"
 msgstr "Passwort"
 
-#: src/templates/ags-vpn.template:947
+#: src/templates/ags-vpn.template:1321
 msgid "Password ..."
 msgstr "Passwort..."
 
-#: src/templates/ags-vpn.template:982
+#: src/templates/ags-vpn.template:1356
 msgid "2FA token (optional)"
 msgstr "2FA Token (optional)"
 
-#: src/templates/ags-vpn.template:988
+#: src/templates/ags-vpn.template:1362
 msgid "6-digit code ..."
 msgstr "6-stelliger Code..."
 
-#: src/templates/ags-vpn.template:1000
+#: src/templates/ags-vpn.template:1374
 msgid "Remember username"
 msgstr "Benutzername merken"
 
-#: src/templates/ags-vpn.template:1038 src/templates/ags-vpn.template:1089
+#: src/templates/ags-vpn.template:1412 src/templates/ags-vpn.template:1463
 msgid "WireGuard identifies itself with keys - there is nothing to type here."
 msgstr "WireGuard weist sich mit Schlüsseln aus – hier ist nichts einzutippen."
 
-#: src/templates/ags-vpn.template:1088
+#: src/templates/ags-vpn.template:1462
 msgid "This OpenVPN connection identifies itself with certificates - there is nothing to type here."
 msgstr "Diese OpenVPN-Verbindung weist sich mit Zertifikaten aus – hier ist nichts einzugeben."
 
-#: src/templates/ags-vpn.template:1092
+#: src/templates/ags-vpn.template:1466
 msgid "No peer configured yet - open the settings."
 msgstr "Noch keine Gegenstelle eingestellt – bitte die Einstellungen öffnen."
 
@@ -1814,44 +1859,49 @@ msgstr "Nein"
 msgid "Yes"
 msgstr "Ja"
 
-# --------------------------------------------------------------------
-# Aus einer VPN-Verbindung wird eine Liste (22.08.2026)
-# --------------------------------------------------------------------
-# Die Liste mit den Schaltern - auf der Schalenseite und im
-# Einstellungsfenster. Die uebrigen 162 Beschriftungen der beiden
-# VPN-Vorlagen sind unveraendert geblieben; nachgewiesen in
-# tests/src/test_vpn_liste.py.
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "no path to settings.py (settings_script is missing from ~/.config/hyprlaunch/config)"
+msgstr "kein Pfad zu settings.py (settings_script fehlt in ~/.config/hyprlaunch/config)"
 
-msgid "VPN connections"
-msgstr "VPN-Verbindungen"
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+#, c-format
+msgid "%s could not be started"
+msgstr "%s ließ sich nicht starten"
 
-msgid "Add connection"
-msgstr "Verbindung hinzufügen"
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "the entry carries no identifier"
+msgstr "der Eintrag trägt keine Kennung"
 
-msgid "Delete connection"
-msgstr "Verbindung löschen"
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "settings.py did not answer"
+msgstr "settings.py hat nicht geantwortet"
 
-msgid "New connection"
-msgstr "Neue Verbindung"
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+#, c-format
+msgid "%s is missing - the launcher appears unstyled."
+msgstr "%s fehlt - der Starter erscheint ungestylt."
 
-# --------------------------------------------------------------------
-# Aus der Liste in die Einzelheit und zurueck (01.09.2026)
-# --------------------------------------------------------------------
-# Gemeldet: "ich will eine reine liste bei vpn sehen, und bei klick auf
-# das item einer vpn oder 'neu erstellen' will ich auf die details
-# kommen." Der Rueckweg braucht ein Wort, und es ist auf beiden
-# Flaechen dasselbe - Schalenseite wie Einstellungsfenster.
-msgid "All connections"
-msgstr "Alle Verbindungen"
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "`zepos-generate -hyprlaunch-style` writes the file."
+msgstr "zepos-generate -hyprlaunch-style schreibt die Datei."
 
-msgid "No connection configured yet - add one."
-msgstr "Noch keine Verbindung eingerichtet – bitte eine hinzufügen."
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "ZepOS application launcher"
+msgstr "ZepOS Anwendungsstarter"
 
-msgid "Only one VPN can be connected at a time - {name} is being disconnected."
-msgstr "Es kann nur eine VPN-Verbindung stehen – {name} wird zuerst getrennt."
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "Search applications ... (= calculates)"
+msgstr "Anwendungen suchen ... (= rechnet)"
 
-msgid "Really delete {name}? Its keys and certificates are deleted with it."
-msgstr "{name} wirklich löschen? Ihre Schlüssel und Zertifikate werden mitgelöscht."
+#: packaging/zepos-hyprlaunch/zepos-hyprlaunch.patch
+msgid "Enter copies the result"
+msgstr "Enter kopiert das Ergebnis"
+
+#~ msgid "Delete connection"
+#~ msgstr "Verbindung löschen"
+
+#~ msgid "Really delete {name}? Its keys and certificates are deleted with it."
+#~ msgstr "{name} wirklich löschen? Ihre Schlüssel und Zertifikate werden mitgelöscht."
 
 #~ msgid "IKE version"
 #~ msgstr "IKE Version"

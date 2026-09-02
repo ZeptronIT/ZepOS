@@ -54,6 +54,7 @@ from installer.core.model import (
     DiskChoice, InstallConfig, MIN_DISK_MIB, UserAccount, WifiCredentials,
     ZeposOptions,
 )
+from installer.core import timezones
 from installer.core.runner import InstallationRefused
 from installer.core.validate import HOSTNAME_PATTERN, MIN_PASSWORD_LENGTH, validate
 from installer.core.wifi import (
@@ -95,14 +96,27 @@ MOUNTPOINT_CHOICES: tuple[str, ...] = (*MOUNTPOINTS, ESP_MOUNTPOINT, SWAP_CHOICE
 # Grund - dafuer gibt es den Eintrag im Auswahlfeld darueber.
 FILESYSTEM_CHOICES: tuple[str, ...] = ("ext4", "btrfs", "xfs")
 
-# (keymap, locale, default timezone) per language. Identical values and
-# identical rationale to installer.tui.app.LANGUAGES: the timezone here
-# is only a suggested default for the dedicated "zeit" page - to_config()
-# falls back to it solely when the user leaves that field empty, never
-# overwriting an explicit choice.
-LANGUAGE_DEFAULTS: dict[str, tuple[str, str, str]] = {
-    "de": ("de-latin1", "de_DE", "Europe/Berlin"),
-    "en": ("us", "en_US", "UTC"),
+# (keymap, locale) per language. Identical values and identical
+# rationale to installer.tui.app.LANGUAGES.
+#
+# DIE ZEITZONE STAND HIER BIS ZUM 02.09.2026 ALS DRITTER WERT, und sie
+# ist ersatzlos herausgefallen. Sie war "de" -> Europe/Berlin und "en"
+# -> UTC, also eine Ableitung von einem ORT aus einer SPRACHE - und die
+# gibt es nicht. Englisch wird auf sechs Kontinenten gesprochen; wer auf
+# Englisch installierte, bekam eine Uhr auf UTC - gleichgueltig, wo er
+# sass - und, bis zu derselben Aufgabe, keinen Weg zurueck. Dieselbe Sorte
+# Annahme, die src/clocks.py in der Gegenrichtung zurueckweist ("von
+# einer Zeitzone gibt es keinen verlaesslichen Weg zurueck zu einem
+# Land").
+#
+# An ihre Stelle tritt eine TATSACHE: timezones.running() liest, in
+# welcher Zone dieses Medium gerade laeuft. Eine Tastaturbelegung und
+# eine Sprachumgebung bleiben, weil beide wirklich an der Sprache
+# haengen - eine deutsche Tastatur ist eine Aussage ueber die Sprache
+# und nicht ueber den Ort.
+LANGUAGE_DEFAULTS: dict[str, tuple[str, str]] = {
+    "de": ("de-latin1", "de_DE"),
+    "en": ("us", "en_US"),
 }
 
 
@@ -547,6 +561,30 @@ class PageState:
             return ""
         return _("This entry may not be empty.")
 
+    def timezone_error(self) -> str:
+        """Ein Zonenname, den die Datenbank nicht kennt.
+
+        DIESE PRUEFUNG IST DER EIGENTLICHE FUND DIESER SEITE. Bis zum
+        02.09.2026 war die Zeitzone ein freies Textfeld ohne jede
+        Pruefung, und `date` nimmt jeden Namen an: "Europe/Berln" wird
+        installiert, danach druckt date(1) die UTC-Zeit mit "Berln" als
+        Kuerzel, Rueckgabewert 0, leere Fehlerausgabe. Ein Tippfehler
+        wurde so zu einer Uhr, die still falsch geht - und der Mensch
+        merkt es fruehestens, wenn eine Verabredung um zwei Stunden
+        verrutscht.
+
+        Die Seite bietet die Zonen seither zur AUSWAHL an; diese Zeilen
+        sind das Netz darunter. Sie bleiben auch dann noetig, wenn das
+        Feld eine Auswahl ist: die Seite laesst sich mit einer
+        vorgeladenen Konfiguration fuellen, und ein leeres Feld ist
+        keine Zone, sondern die laufende (siehe to_config()).
+        """
+        if not self.timezone or timezones.known(self.timezone):
+            return ""
+        return _(
+            "This machine's timezone database does not have \"{zone}\"."
+        ).format(zone=self.timezone)
+
     @staticmethod
     def _password_pair_error(value: str, confirm: str) -> str:
         """Shared by password_error() and root_password_error(), which
@@ -604,12 +642,13 @@ class PageState:
                 self.hostname_error() or self.username_error()
                 or self.password_error() or self.root_password_error()
             )
-        # "sprache", "zeit", "zepos" and "zusammenfassung" have no
-        # single field-level error of their own: a language is always
-        # one of the two offered, the timezone and the ZepOS options
-        # both carry usable defaults, and the summary page's own
-        # validity is the whole-config findings() list below, not one
-        # field's message.
+        if page == "zeit":
+            return self.timezone_error()
+        # "sprache", "zepos" and "zusammenfassung" have no single
+        # field-level error of their own: a language is always one of the
+        # two offered, the ZepOS options carry usable defaults, and the
+        # summary page's own validity is the whole-config findings() list
+        # below, not one field's message.
         return ""
 
     def is_page_valid(self, page: str) -> bool:
@@ -644,7 +683,7 @@ class PageState:
         reselects an already-loaded catalogue.
         """
         activate(self.language)
-        keymap, locale, default_timezone = LANGUAGE_DEFAULTS[self.language]
+        keymap, locale = LANGUAGE_DEFAULTS[self.language]
         wifi = (
             WifiCredentials(ssid=self.wifi_ssid, passphrase=self.wifi_passphrase)
             if self.wifi_ssid
@@ -659,7 +698,10 @@ class PageState:
             language=self.language,
             keymap=keymap,
             locale=locale,
-            timezone=self.timezone or default_timezone,
+            # Die Zone, in der dieses Medium laeuft, wenn die Seite
+            # nichts gesetzt hat - und nicht eine aus der Sprache
+            # abgeleitete. Siehe LANGUAGE_DEFAULTS oben.
+            timezone=self.timezone or timezones.running(),
             hostname=self.hostname,
             disk=DiskChoice(
                 device=self.device, wipe=self.wipe,

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 
+from . import timezones
 from .crypt import (
     MIN_PASSPHRASE_LENGTH, effective_layout, encrypted_partitions,
 )
@@ -58,9 +59,70 @@ def validate(cfg: InstallConfig) -> list[str]:
     if cfg.wifi is not None and not cfg.wifi.passphrase:
         findings.append(_("No password was given for the wireless network."))
 
+    findings.extend(_timezone_findings(cfg))
     findings.extend(_encryption_findings(cfg))
 
     return findings
+
+
+def _timezone_findings(cfg: InstallConfig) -> list[str]:
+    """Ein Zonenname, den die Datenbank dieses Mediums nicht kennt.
+
+    DIES IST DER EIGENTLICHE SCHUTZ, UND NICHT DIE AUSWAHLLISTE
+        Beide Oberflaechen bieten die Zonen seit dem 02.09.2026 zur
+        Auswahl an - ein Aufklappfeld mit Suche in der grafischen
+        (installer/gui/app.py:_build_zeit), eine geprueft nachfragende
+        Frage in der Textfassung (installer/tui/app.py:_ask_timezone).
+        Beides sind EINGABEHILFEN. Sie helfen, solange sie dastehen, und
+        ein Umbau nimmt sie weg: bis heute war dieses Feld ein FREIES
+        TEXTFELD, und niemand hat es bemerkt, weil nichts es bemerkt
+        hat.
+
+        Diese Zeilen bemerken es. Sie haengen an keiner Oberflaeche,
+        sondern an der Konfiguration, und von dort geht cfg.timezone
+        unveraendert in die archinstall-Datei
+        (translate.to_archinstall_config(), Schluessel "timezone").
+        installer.core.runner.install() ruft validate() unmittelbar vor
+        dem Loeschen der Platte - dieselbe Begruendung, die
+        _encryption_findings() unten schon einmal ausfuehrt: die Seite
+        ist nicht der einzige Weg hierher. Eine vorgeladene
+        Konfigurationsdatei hat nie eine Auswahlliste gesehen.
+
+    WARUM ES DIESE PRUEFUNG BRAUCHT, obwohl doch `date` und archinstall
+    etwas sagen wuerden
+        Sie sagen nichts. `date` nimmt JEDEN Namen an und druckt fuer
+        einen unbekannten die UTC-Zeit mit dem erfundenen Kuerzel,
+        Rueckgabewert 0, leere Fehlerausgabe - die Messung steht in
+        src/doctor.py:check_clock_zones. "Europe/Berln" wurde bis heute
+        anstandslos installiert, und heraus kam eine Uhr, die still zwei
+        Stunden falsch geht. Ein Mensch merkt das fruehestens, wenn eine
+        Verabredung verrutscht.
+
+    WAS HIER ABSICHTLICH NICHT GEPRUEFT WIRD
+        Eine LEERE Zeitzone. Sie ist kein erfundener Name, sondern eine
+        fehlende Angabe, und beide Oberflaechen fuellen sie mit
+        timezones.running(). Was ohne sie in archinstall passiert, ist
+        ein LAUTER Fehlschlag - und still ist der Fall, um den es hier
+        geht.
+
+        Und eine fehlende Datenbank. Ohne sie lehnt known() jeden Namen
+        ab, UTC eingeschlossen; ein Befund daraus hielte auf einem
+        Medium ohne tzdata jede Installation an, mit dem Satz "diese
+        Zone gibt es nicht" ueber eine Zone, die es gibt. Die
+        Begruendung steht bei timezones.database_present().
+    """
+    if not cfg.timezone or not timezones.database_present():
+        return []
+    if timezones.known(cfg.timezone):
+        return []
+    # Woertlich derselbe msgid, den PageState.timezone_error() und
+    # _ask_timezone() benutzen: drei Stellen, die dieselbe Regel
+    # verschieden erklaeren, sind drei Regeln. Dieselbe Sparsamkeit wie
+    # bei HOSTNAME_PATTERN oben.
+    return [
+        _("This machine's timezone database does not have \"{zone}\".")
+        .format(zone=cfg.timezone)
+    ]
 
 
 def _encryption_findings(cfg: InstallConfig) -> list[str]:

@@ -1258,7 +1258,17 @@ def test_the_two_languages_are_the_ones_the_installer_offers():
     fall = re.search(r"^case \"\$sprache\" in\n(.*?)^esac$", text, re.S | re.M)
     assert fall, "der Greeter entscheidet nicht mehr ueber die Sprache"
 
-    for _kuerzel, (_keymap, locale, _zone) in sorted(LANGUAGE_DEFAULTS.items()):
+    # `*_rest` und nicht `_zone`: die Tabelle fuehrte bis zum 02.09.2026
+    # eine dritte Spalte, die Zeitzone, und sie ist herausgefallen (die
+    # Begruendung steht bei LANGUAGE_DEFAULTS selbst - eine Sprache ist
+    # kein Ort). Diese Zeile las sie mit aus, ohne sie zu benutzen. Das
+    # offene Ende steht hier, damit eine kuenftige Spalte diese
+    # Zusicherung nicht an ihrer STELLENZAHL scheitern laesst statt an
+    # ihrer AUSSAGE; dieselbe Schreibweise benutzt tests/src/
+    # test_region.py fuer dieselbe Tabelle. An der Zusage aendert es
+    # nichts - geprueft wird weiter, dass der Greeter jede
+    # Sprachumgebung kennt, die der Assistent anbietet.
+    for _kuerzel, (_keymap, locale, *_rest) in sorted(LANGUAGE_DEFAULTS.items()):
         assert re.search(rf"^\s*{re.escape(locale)}\)", fall.group(1), re.M), (
             f"der Assistent bietet {locale} an, der Greeter kennt es "
             "nicht - diese Installation bekaeme eine deutsche Maske")

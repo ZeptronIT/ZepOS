@@ -108,6 +108,7 @@ from typing import Any
 import brand
 import displays
 import paths
+import region
 import settings as settings_file
 import sizes
 import theme
@@ -151,6 +152,13 @@ BAR_PREFIX = f"{settings_file.BAR}."
 THEME_KEY = "theme"
 UPDATE_PREFIX = "update."
 
+# Die beiden Maschinenwerte, die systemd selbst fuehrt. Blanke
+# Schluessel wie `theme` und ohne Praefix, weil sie keine Gruppe unter
+# sich haben - und weil sie in `--json set` genauso heissen sollen, wie
+# ein Mensch sie nennt.
+LANGUAGE_KEY = "language"
+TIMEZONE_KEY = "timezone"
+
 # Die vier Aktualisierungsschluessel, die model.py anbietet, mit der
 # Pruefung, die ihr Wert bestehen muss. update.validate() prueft sie
 # beim Schreiben noch einmal; das hier ist die Ablehnung VOR dem
@@ -167,7 +175,7 @@ USAGE = """usage: zepos-settings-gui --json get
        zepos-settings-gui --json apply
        zepos-settings-gui --json arm
 
-get   schreibt den Zustand aller sieben Seiten als ein JSON-Dokument.
+get   schreibt den Zustand aller Seiten als ein JSON-Dokument.
 set   nimmt ein Objekt {schluessel: wert} entgegen - dieselben
       Schluessel, die `get` in jedem Bedienelement unter "key" nennt,
       also dieselben wie bei `zepos-settings set`. "-" liest stdin.
@@ -555,6 +563,65 @@ def _page_aktualisierung() -> dict:
     ])
 
 
+def _page_sprache() -> dict:
+    """Die Sprache und die Zeitzone dieser Maschine.
+
+    ZWEI WERTE AUF EINER SEITE, UND DAS IST KEINE BEQUEMLICHKEIT
+        Sie beantworten dieselbe Frage - "wo und wie spricht diese
+        Maschine" -, sie gehoeren beide der MASCHINE, und sie werden
+        beide durch ein systemd-Werkzeug mit Polkit-Rueckfrage gesetzt.
+        Der Kopf von model.py fuehrt es aus. Zwei Seiten dafuer waeren
+        zwei Orte fuer eine Entscheidung, die man in einem Zug trifft:
+        wer umzieht, stellt beides um.
+
+    WARUM DIE ZEITZONE EINE AUSWAHL IST UND KEIN FELD
+        Weil `date` jeden Namen annimmt. Der Assistent hat sie bis heute
+        als freies Textfeld abgefragt, und ein Tippfehler darin - "Europe/
+        Berlm" - wird dort zu einer Uhr, die still auf UTC laeuft (die
+        Messung steht in src/doctor.py). Die Liste kommt aus
+        `timedatectl list-timezones`, also aus genau dem, was der
+        Setzbefehl danach auch annimmt.
+    """
+    sprachen = model.language_codes()
+    zonen = model.timezone_names()
+    sprache_geht = model.language_writable()
+    zone_geht = model.timezone_writable()
+
+    jetzt_sprache = model.current_language()
+    jetzt_zone = model.current_timezone()
+
+    sprache = _control(
+        LANGUAGE_KEY, CHOICE, model.LABEL_LANGUAGE, jetzt_sprache,
+        note=model.LANGUAGE_TIMING,
+        group=model.GROUP_REGION,
+        options=[{"value": code, "label": model.language_label(code)}
+                 for code in sprachen],
+        scope=MACHINE, immediate=True, writable=sprache_geht,
+        reason="" if sprache_geht else (
+            "Auf diesem System gibt es kein localectl. Die Sprache steht "
+            "in /etc/locale.conf, und dort kommt man nur mit Rechten hin."),
+        # Der Befehl OHNE seinen letzten Teil, wie ueberall auf dieser
+        # Ebene: `localectl set-locale`. Was fehlt, ist der Wert.
+        command=(model.language_elevated_command(jetzt_sprache)[:-1]
+                 if sprachen else []))
+
+    zone = _control(
+        TIMEZONE_KEY, CHOICE, model.LABEL_TIMEZONE, jetzt_zone,
+        note=model.TIMEZONE_TIMING,
+        group=model.GROUP_REGION,
+        options=[{"value": name, "label": name} for name in zonen],
+        scope=MACHINE, immediate=True, writable=zone_geht,
+        reason="" if zone_geht else (
+            "Auf diesem System gibt es kein timedatectl. Die Zeitzone "
+            "steht in /etc/localtime, und dort kommt man nur mit Rechten "
+            "hin."),
+        command=["timedatectl", "set-timezone"] if zone_geht else [])
+
+    return _page("sprache", [sprache, zone],
+                 groups=[_group(model.GROUP_REGION,
+                                model.NOTE_REGION_GROUP)])
+
+
 def _dotted(document: dict, key: str) -> Any:
     """`schedule.interval` in einem verschachtelten Dokument nachschlagen.
 
@@ -575,7 +642,7 @@ def _dotted(document: dict, key: str) -> Any:
 # --------------------------------------------------------------------
 
 def state(draft: model.Draft, *, runner=None) -> dict:
-    """Alle sieben Seiten, in der Reihenfolge von model.PAGES."""
+    """Alle Seiten, in der Reihenfolge von model.PAGES."""
     return {
         "schema": SCHEMA,
         "ok": True,
@@ -588,7 +655,14 @@ def state(draft: model.Draft, *, runner=None) -> dict:
         "elevator": model.elevator(),
         "pending_regenerate": model.marker_path().exists(),
         "cost": {"generate": model.GENERATE_COST,
-                 "theme": model.THEME_TIMING},
+                 "theme": model.THEME_TIMING,
+                 # Was ein Sprach- und ein Zonenwechsel wann erreichen.
+                 # Sie stehen NEBEN dem Thema und nicht statt seiner:
+                 # das Fenster sagt nach jedem Schreiben, was gerade
+                 # passiert ist, und die drei Saetze sind verschieden,
+                 # weil die drei Wirkungen es sind.
+                 "language": model.LANGUAGE_TIMING,
+                 "timezone": model.TIMEZONE_TIMING},
         "pages": [
             _page_groesse(draft),
             _page_bildschirme(runner=runner),
@@ -597,6 +671,7 @@ def state(draft: model.Draft, *, runner=None) -> dict:
             _page_farben(draft),
             _page_wetter(draft),
             _page_aktualisierung(),
+            _page_sprache(),
         ],
     }
 
@@ -707,6 +782,37 @@ def _plan(changes: dict[str, Any], draft: model.Draft,
             else:
                 machine.append((key, value))
 
+        elif key == LANGUAGE_KEY:
+            # Gegen die Liste geprueft, die DIESE Maschine anbietet, und
+            # nicht gegen region.LANGUAGES: eine Sprache ohne Katalog
+            # oder ohne erzeugte Sprachumgebung wird still ignoriert
+            # (gemessen, siehe den Kopf von src/region.py), und still
+            # ignoriert ist genau das, was eine Oberflaeche nicht
+            # weiterreichen darf.
+            moeglich = model.language_codes()
+            if value not in moeglich:
+                problems.append(
+                    f"{key}: {value!r} ist keins von "
+                    f"{', '.join(moeglich)}. Eine Sprache steht hier nur, "
+                    f"wenn es einen Katalog dafür gibt UND diese Maschine "
+                    f"die Sprachumgebung erzeugt hat.")
+            else:
+                machine.append((key, value))
+
+        elif key == TIMEZONE_KEY:
+            # An der Datenbank und nicht an der Liste: `timedatectl
+            # list-timezones` kann auf einer Maschine ohne timedatectl
+            # leer sein, waehrend /usr/share/zoneinfo dasteht - dann
+            # waere jede Zone "keins von " und die Klage nennte nichts.
+            if not isinstance(value, str) or not region.known_timezone(value):
+                problems.append(
+                    f"{key}: {value!r} steht nicht in "
+                    f"{region.zoneinfo_directory()}. "
+                    f"`{' '.join(region.ZONE_LISTING)}` nennt die Namen, "
+                    f"die diese Maschine kennt.")
+            else:
+                machine.append((key, value))
+
         elif key.startswith(UPDATE_PREFIX):
             _plan_update(key[len(UPDATE_PREFIX):], key, value, machine,
                          problems)
@@ -803,6 +909,32 @@ def write(changes: dict[str, Any], *, runner=None) -> tuple[dict, int]:
     for key, value in machine:
         if key == THEME_KEY:
             outcome = model.set_theme(value, runner=runner)
+        elif key == LANGUAGE_KEY:
+            outcome = model.set_language(value, runner=runner)
+            # DIE MARKE, UND WARUM SIE HIER GESETZT WIRD
+            #     Ihre Aufgabe ist "die Aenderung ist spaetestens bei
+            #     der naechsten Anmeldung da, ohne dass jemand etwas
+            #     anklickt" (siehe model.request_regeneration_at_login).
+            #     Bei einer Groesse heisst das: die erzeugten Dateien
+            #     sind veraltet. Hier heisst es etwas anderes und genau
+            #     so viel: die laufende Schale spricht noch die alte
+            #     Sprache, und der Erzeugungslauf ist das EINZIGE, was
+            #     sie neu baut - GEMESSEN, eine schon gezeichnete
+            #     Beschriftung folgt keinem Katalogwechsel (der Absatz
+            #     zu LANGUAGE_TIMING in model.py fuehrt die Messung).
+            #
+            #     Sie ist damit zugleich der Knopf: das Fenster zeigt
+            #     "Jetzt anwenden", solange sie liegt, und wer nicht
+            #     klickt, bekommt es beim naechsten Anmelden.
+            if outcome.written:
+                model.request_regeneration_at_login()
+        elif key == TIMEZONE_KEY:
+            # OHNE Marke, und das ist der Unterschied zur Sprache: eine
+            # Zeitzone steckt in keiner erzeugten Datei. `date` liest
+            # /etc/localtime bei JEDEM Aufruf, und die Uhr der Leiste
+            # ruft `date` einmal je Minute. Ein Erzeugungslauf dafuer
+            # waere ein Neustart der ganzen Schale fuer nichts.
+            outcome = model.set_timezone(value, runner=runner)
         else:
             outcome = model.set_update_value(
                 key[len(UPDATE_PREFIX):], value, runner=runner)

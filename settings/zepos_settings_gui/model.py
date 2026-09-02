@@ -199,6 +199,7 @@ from typing import Any, Callable
 
 import brand
 import paths
+import region
 import settings as settings_file
 import sizes
 import theme
@@ -569,6 +570,23 @@ PAGES: tuple[tuple[str, str, str], ...] = (
     ("farben", "Farben", "applications-graphics-symbolic"),
     ("wetter", "Wetter", "weather-few-clouds-symbolic"),
     ("aktualisierung", "Aktualisierung", "software-update-available-symbolic"),
+    # Sprache und Zeitzone ZULETZT, und das ist eine Entscheidung mit
+    # zwei Haelften.
+    #
+    # WARUM NICHT ZUERST
+    #     Der naheliegende Platz waere ganz vorn: wer die Oberflaeche
+    #     nicht lesen kann, braucht genau diese Seite. Nur zeigt das
+    #     Fenster beim Oeffnen die ERSTE Seite - sie nach vorn zu
+    #     ziehen hiesse, jedem, der die Groesse verstellen will, ab
+    #     sofort eine andere Seite vorzulegen. Eine Einstellung, die man
+    #     EINMAL trifft, verdraengt nicht die, die man staendig trifft.
+    #
+    # WARUM TROTZDEM AUFFINDBAR
+    #     Ueber die Desktop Action derselben Seite (siehe unten): wer
+    #     "sprache", "language", "zeitzone" oder "uhr" in den Starter
+    #     tippt, bekommt sie unmittelbar, ohne das Fenster zu oeffnen
+    #     und ohne einen Reiter lesen zu muessen.
+    ("sprache", "Sprache und Zeit", "preferences-desktop-locale-symbolic"),
 )
 
 PAGE_NAMES = tuple(name for name, _, _ in PAGES)
@@ -1529,6 +1547,251 @@ def set_update_value(key: str, value: Any, *,
 
     runner = runner or subprocess.run
     completed = runner([*lifting, *command], capture_output=True, text=True)
+    if completed.returncode == 0:
+        return UpdateOutcome(True, "", command)
+    return UpdateOutcome(
+        False,
+        (completed.stderr or "").strip()
+        or f"{' '.join(command)} endete mit {completed.returncode}",
+        command)
+
+
+# --------------------------------------------------------------------
+# Die Sprache und die Zeitzone - die dritte und vierte Einstellung,
+# die der Maschine gehoert
+# --------------------------------------------------------------------
+#
+# WAS BESTELLT WURDE
+#     Der Nutzer am 02.09.2026, woertlich: "ausserdem will ich i18n
+#     unterstuetzung man muss in den einstellungen auch die sprache
+#     wechseln koennen und die uhrzeit anhand der zeitzone".
+#
+# WAS GEMESSEN WURDE, BEVOR ETWAS GEBAUT WURDE
+#     Die Uhr der Leiste war NICHT kaputt. custom/date ruft das blanke
+#     `date` (src/templates/date-config.template, ohne TZ davor), und
+#     das liest /etc/localtime - die Zeitzone der Maschine also, wie es
+#     sich gehoert. Was fehlte, war der Weg, sie nach der Installation
+#     zu AENDERN: im ganzen Baum gab es keinen. Der Assistent fragt sie
+#     einmal ab, und danach war sie fuer immer gesetzt.
+#
+#     Warum das mehr ist als eine Bequemlichkeit: der Assistent schlug
+#     die Zone bis heute aus der SPRACHE vor, "en" also UTC. Wer ZepOS
+#     auf Englisch installierte und durchklickte, bekam eine Uhr auf
+#     UTC und keinen Weg zurueck. Die Ableitung ist mit dieser Aufgabe
+#     gefallen (installer/gui/pages.py), der fehlende Weg ist diese
+#     Seite.
+#
+# WARUM BEIDES DURCH localectl UND timedatectl GEHT
+#     Der Kopf von src/region.py fuehrt es aus: sie schreiben GENAU die
+#     Dateien, die der Greeter und der Installer schon lesen, und
+#     Polkit fragt dabei ueber denselben Agenten nach, den der
+#     Schreibtisch ohnehin startet. Eine eigene Datei unter /etc/zepos
+#     daneben waere eine zweite Wahrheit ueber dieselbe Sache.
+#
+#     Deshalb gibt es hier auch KEIN Gegenstueck zu theme_writable():
+#     die Frage ist nicht, ob dieses Konto eine Datei schreiben darf,
+#     sondern ob der Befehl ueberhaupt vorhanden ist. Alles Weitere
+#     entscheidet Polkit, und zwar erst beim Klick.
+
+LABEL_LANGUAGE = "Sprache"
+LABEL_TIMEZONE = "Zeitzone"
+
+GROUP_REGION = "Sprache und Zeit"
+
+NOTE_REGION_GROUP = (
+    "Beides gehört der MASCHINE und nicht diesem Konto: der "
+    "Anmeldebildschirm spricht eine Sprache, bevor sich jemand "
+    "angemeldet hat, und die Zeitzone entscheidet, welche Uhrzeit jeder "
+    "Zeitstempel dieses Rechners trägt. Beides wird sofort geschrieben, "
+    "und dabei wird nach Rechten gefragt."
+)
+
+# Was ein Sprachwechsel WANN erreicht. Im Wortlaut, damit die
+# Oberflaeche es nicht umschreibt - und weil die drei Zeitpunkte
+# GEMESSEN sind und nicht versprochen:
+#
+#   sofort        Die Anmeldemaske. src/bin/zepos-greeter liest LANG bei
+#                 jedem Start, erst aus der Umgebung, dann aus
+#                 /etc/locale.conf - genau der Datei, die localectl
+#                 gerade geschrieben hat. Kein Erzeugungslauf noetig,
+#                 dieselbe Lage wie beim Thema.
+#
+#                 Und das Fenster, in dem man es umstellt. GEMESSEN am
+#                 02.09.2026 mit gjs 1.88.1 und GTK 4.22.4 an einem
+#                 wirklich gezeichneten Fenster:
+#
+#                     Gettext.setlocale(LC_MESSAGES, "en_US.UTF-8")
+#                     dgettext(...)              -> "Disk space"
+#                                                   (vorher "Speicherplatz")
+#                     schon gebaute Beschriftung -> "Speicherplatz"
+#                     neu gebaute Beschriftung   -> "Disk space"
+#
+#                 Der Katalog wechselt also im laufenden Prozess, aber
+#                 eine bereits GEZEICHNETE Beschriftung bleibt stehen.
+#                 Das AGS-Einstellungsfenster zeichnet sich nach jedem
+#                 Schreiben ohnehin neu (neuLaden) und folgt deshalb
+#                 sofort.
+#   nach dem Lauf Leiste, Dock und die uebrigen Fenster. Sie werden beim
+#                 Start der Schale EINMAL gebaut - ags-config.template
+#                 legt widgets.calendar und die anderen dort an -, und
+#                 nach derselben Messung folgt eine gebaute Beschriftung
+#                 keinem Katalogwechsel mehr. Ein Erzeugungslauf startet
+#                 die Schale neu, und die neue liest /etc/locale.conf.
+#   beim Anmelden Alles ausserhalb der Schale. Die Umgebung einer
+#                 laufenden Sitzung ist eine ABSCHRIFT von
+#                 /etc/locale.conf, angefertigt bei der Anmeldung; ein
+#                 Programm, das jetzt startet, erbt sie und nicht die
+#                 Datei.
+LANGUAGE_TIMING = (
+    "Der Anmeldebildschirm und dieses Fenster folgen sofort. Leiste, "
+    "Dock und die übrigen Fenster nach einem Erzeugungslauf - "
+    "»Jetzt anwenden« macht ihn. Programme außerhalb der Oberfläche "
+    "beim nächsten Anmelden."
+)
+
+# Und was ein Zeitzonenwechsel wann erreicht. Kuerzer, weil er weniger
+# betrifft: hier ist nichts uebersetzt und nichts gebaut.
+#
+#   sofort       Alles, was die Zeit von der C-Bibliothek holt, und das
+#                ist jedes Programm dieser Maschine. timedatectl legt
+#                /etc/localtime neu, und der naechste Aufruf von `date`
+#                liest die neue Zone - kein Neustart, keine Anmeldung.
+#   binnen einer Die Uhr der Leiste. Sie fragt ihr Skript einmal je
+#   Minute       Minute ab (intervalMs 60000 an custom/date in
+#                ags-bar.template), also steht die neue Zeit spaetestens
+#                nach einer Minute da.
+TIMEZONE_TIMING = (
+    "Wirkt sofort für alles, was die Uhrzeit vom System holt. Die Uhr "
+    "in der Leiste fragt einmal je Minute nach und zeigt die neue Zeit "
+    "deshalb spätestens nach einer Minute."
+)
+
+
+def language_codes() -> list[str]:
+    """Die Sprachen, die diese Maschine wirklich anbieten kann.
+
+    Aus src/region.py und nicht aus einer Aufzaehlung hier: die Regel
+    ("hat einen Katalog UND eine erzeugte Sprachumgebung") ist dort
+    gemessen und begruendet, und eine zweite Liste waere die erste
+    Stelle, an der eine dritte Sprache nur in einer von beiden landet.
+
+    OHNE `runner`, wie timezone_names(): beide Haelften der Regel stehen
+    in DATEIEN - der Katalog liegt oder liegt nicht, und /etc/locale.gen
+    nennt die Sprachumgebungen. Das blosse Ansehen dieser Seite startet
+    damit keinen einzigen Prozess, und das ist Absicht: eine Seite, die
+    sich ohne Prozess nicht aufbauen laesst, zwingt jeden Test daneben
+    zu einem Ersatzlaeufer fuer eine blosse Auskunft.
+    """
+    return [language.code for language in region.available_languages()]
+
+
+def language_label(code: str) -> str:
+    """Der Name der Sprache, in ihrer eigenen Sprache - siehe region.py."""
+    return region.language_named(code).label
+
+
+def current_language() -> str:
+    return region.current_language()
+
+
+def language_writable() -> bool:
+    """Gibt es auf dieser Maschine localectl?
+
+    Und nicht "darf dieses Konto /etc/locale.conf schreiben": es darf es
+    fast nie, und es MUSS es auch nicht - localectl geht ueber den
+    Systembus, und Polkit fragt beim Klick. Ein Regler, der gesperrt
+    waere, weil eine Datei root gehoert, waere hier eine Sperre gegen
+    etwas, das ohnehin funktioniert.
+    """
+    return region.can_set_language()
+
+
+def language_elevated_command(code: str) -> list[str]:
+    return region.language_command(code)
+
+
+def set_language(code: str, *, runner: Runner | None = None) -> UpdateOutcome:
+    """Die Sprache der Maschine setzen.
+
+    KEIN pkexec DAVOR, anders als beim Thema. localectl redet mit
+    systemd-localed ueber den Systembus, und die Rechtefrage stellt
+    Polkit - dasselbe Fenster, derselbe Agent, nur ohne einen zweiten
+    erhoehten Prozess dazwischen. `pkexec localectl` waere zwei
+    Rechteabfragen fuer eine Handlung.
+    """
+    try:
+        command = tuple(language_elevated_command(code))
+    except region.UnknownLanguage as problem:
+        return UpdateOutcome(False, str(problem), ())
+
+    if not language_writable():
+        return UpdateOutcome(
+            False,
+            "Die Sprache gehört der Maschine und nicht diesem Konto, "
+            "weil der Anmeldebildschirm dazugehört. Auf diesem System "
+            "gibt es kein localectl, also geht es nur über die Datei "
+            f"selbst: {region.locale_conf_path()}",
+            command)
+
+    runner = runner or subprocess.run
+    completed = runner(list(command), capture_output=True, text=True)
+    if completed.returncode == 0:
+        return UpdateOutcome(True, "", command)
+    return UpdateOutcome(
+        False,
+        (completed.stderr or "").strip()
+        or f"{' '.join(command)} endete mit {completed.returncode}",
+        command)
+
+
+def timezone_names() -> list[str]:
+    """Die Zonennamen, die `timedatectl set-timezone` auch annimmt.
+
+    OHNE `runner`, anders als language_codes(): die Liste kommt aus
+    einer DATEI (region.ZONE_FILE) und nicht aus einem Prozess. Ein
+    Parameter, den niemand braucht, waere die Andeutung, hier starte
+    etwas.
+    """
+    return region.timezones()
+
+
+def current_timezone() -> str:
+    return region.current_timezone()
+
+
+def timezone_writable() -> bool:
+    return region.can_set_timezone()
+
+
+def timezone_elevated_command(zone: str) -> list[str]:
+    return region.timezone_command(zone)
+
+
+def set_timezone(zone: str, *, runner: Runner | None = None) -> UpdateOutcome:
+    """Die Zeitzone der Maschine setzen.
+
+    Der Name wird VOR dem Aufruf gegen die Datenbank gehalten -
+    region.timezone_command() wirft sonst -, und das ist nicht doppelt
+    gemoppelt: `date` nimmt JEDEN Namen an und druckt fuer einen
+    unbekannten die UTC-Zeit mit dem erfundenen Kuerzel, die Begruendung
+    dazu steht in src/doctor.py. Eine Zone, die dieses Fenster
+    durchliesse, waere eine Uhr, die still falsch geht.
+    """
+    try:
+        command = tuple(timezone_elevated_command(zone))
+    except region.UnknownTimezone as problem:
+        return UpdateOutcome(False, str(problem), ())
+
+    if not timezone_writable():
+        return UpdateOutcome(
+            False,
+            "Die Zeitzone gehört der Maschine und nicht diesem Konto. "
+            "Auf diesem System gibt es kein timedatectl, also geht es "
+            f"nur über {region.localtime_path()} selbst.",
+            command)
+
+    runner = runner or subprocess.run
+    completed = runner(list(command), capture_output=True, text=True)
     if completed.returncode == 0:
         return UpdateOutcome(True, "", command)
     return UpdateOutcome(

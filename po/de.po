@@ -151,6 +151,24 @@ msgstr "Root-Passwort"
 msgid "Timezone"
 msgstr "Zeitzone"
 
+#: installer/core/validate.py installer/gui/pages.py installer/tui/app.py
+msgid "This machine's timezone database does not have \"{zone}\"."
+msgstr "Die Zeitzonendatenbank dieses Rechners kennt »{zone}« nicht."
+
+#: installer/tui/app.py
+msgid "`timedatectl list-timezones` names the zones this machine knows."
+msgstr "»timedatectl list-timezones« nennt die Zonen, die dieser Rechner kennt."
+
+#: installer/tui/app.py
+msgid "Did you mean one of these?"
+msgstr "Meinten Sie eine davon?"
+
+#: installer/tui/app.py
+msgid "{count} more name matches."
+msgid_plural "{count} more names match."
+msgstr[0] "{count} weiterer Name passt."
+msgstr[1] "{count} weitere Namen passen."
+
 #: installer/tui/app.py
 msgid "Location for the weather widget"
 msgstr "Ort für das Wetter-Widget"
