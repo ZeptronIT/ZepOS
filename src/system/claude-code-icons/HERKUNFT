@@ -1,0 +1,65 @@
+Das Zeichen von Claude Code - Herkunft und was ZepOS damit tut
+==============================================================
+
+WAS HIER LIEGT
+
+  claude-code-48.png    1324 Bytes
+  claude-code-64.png    1875 Bytes
+  claude-code-128.png   4454 Bytes
+  claude-code-256.png   9740 Bytes
+
+  Vier Groessen des Programmzeichens von Claude Code, Lanczos-
+  verkleinert aus genau einer Vorlage:
+
+      https://claude.ai/images/claude_app_icon.png
+      338x338 RGBA, 14038 Bytes
+      sha256 c7b5642f810adfba78781592d9dec18d7eb376c7ebf403c4d882fb9d39f65408
+
+  Die Reihe endet bei 256 und nicht bei 512, weil die Vorlage 338 Pixel
+  hat und es keine skalierbare gibt: die naheliegenden SVG-Adressen
+  (claude.ai/logo.svg, /icon.svg, /images/claude_app_icon.svg) liefern
+  alle dieselbe HTML-Seite der Weboberflaeche, 90325 Bytes, kein SVG.
+  Hochskaliert waere nur unscharf. Zugeschnitten ist nichts: `magick
+  -trim` misst 338x338 von 338x338, der Schatten reicht bis an die Kante.
+
+  Vorgerechnet und kein Bauschritt: die vier Groessen mit ImageMagick
+  beim Bauen zu erzeugen hiesse makedepends=('imagemagick') fuer 17 KiB
+  Bild.
+
+WEM ES GEHOERT, UND WARUM ES TROTZDEM HIER LIEGT
+
+  Das Zeichen ist die Marke von Anthropic. ZepOS macht daraus keinen
+  Anspruch und gibt es unter keinem eigenen Namen weiter.
+
+  Es liegt hier aus GENAU EINEM Grund: ZepOS liefert einen Eintrag im
+  Starter aus, der Claude Code startet und - wenn es fehlt - ueber npm
+  nachinstalliert (src/system/zepos-claude-code.desktop, src/bin/
+  zepos-claude-code). Ein Eintrag braucht ein Zeichen, und das Zeichen
+  eines Programms ist das, unter dem dieses Programm ueberall sonst
+  auftritt. Ein Symbolthema kann es gar nicht fuehren: Papirus hat
+  keines fuer Claude, so wie es keines fuer irgendein anderes Programm
+  hat, das seine Marke selbst mitbringt. Genau dafuer gibt es hicolor,
+  und dorthin legt packaging/zepos-config/PKGBUILD die vier Dateien.
+
+  DAS IST DIE UNTERSCHEIDUNG, DIE AM 01.09.2026 DAS PAKET GEKOSTET HAT.
+  Der Nutzer: "ich will das packet nicht als meins verkaufen". Bis dahin
+  baute packaging/zepos-claude-code/PKGBUILD Anthropics Programm selbst
+  in ein signiertes ZepOS-Paket - 91831121 Bytes, das groesste im
+  Repository, unter LicenseRef-Anthropic-Commercial-Terms. Das war die
+  Weitergabe fremder Software unter eigenem Namen, und sie ist weg.
+
+  Ein Zeichen ZEIGT AUF ein Programm; es IST nicht das Programm.
+  plugins/LICENSE traegt dieselbe Unterscheidung fuer hyprlaunch und
+  hyprclipx aus: die Erlaubnis, etwas zu bauen, ist nicht die Erlaubnis,
+  eine Kopie davon zu verbreiten.
+
+  Was diese vier Dateien NICHT haben, ist der zweite Grund, aus dem das
+  Paket gefallen ist: eine Fassung. Ein Zeichen veraltet nicht. Das
+  Paket stand auf Claude Code 2.1.233, waehrend npm 2.1.257 auslieferte
+  - vierundzwanzig Fassungen weiter, und das Programm meldete dem Nutzer
+  voellig zu Recht "update available". 17 KiB Bild kosten diesen Preis
+  nicht.
+
+  Wer das Zeichen nicht will, loescht diese vier Dateien und die
+  Icon=-Zeile aus dem Eintrag. Dann zeigt der Starter einen leeren
+  Kasten - der Rest funktioniert unveraendert.

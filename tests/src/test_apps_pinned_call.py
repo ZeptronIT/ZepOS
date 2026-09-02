@@ -171,10 +171,19 @@ def test_ein_unbekannter_name_wird_genannt_und_bricht_nicht_ab(tmp_path):
 #
 # apps.shipped() haengt zwei Listen aneinander - die fremden Anwendungen
 # aus dem depends-Block von zepos-apps und die eigenen Pakete.
-# zepos-claude-code steht in BEIDEN: bei den fremden, weil zepos-apps es
-# in den Abhaengigkeiten nennt (das ist die Zeile, die es installiert),
-# und bei den eigenen, weil es ein ZepOS-Paket ist. Beide Haelften hatten
+# zepos-claude-code stand in BEIDEN: bei den fremden, weil zepos-apps es
+# in den Abhaengigkeiten nannte (das war die Zeile, die es installierte),
+# und bei den eigenen, weil es ein ZepOS-Paket war. Beide Haelften hatten
 # recht; die Summe nicht.
+#
+# GENAU DIESE UEBERSCHNEIDUNG GIBT ES SEIT DEM 01.09.2026 NICHT MEHR.
+# Der Nutzer hat das Paket gestuerzt ("ich will das packet nicht als
+# meins verkaufen"); der Eintrag kommt jetzt aus zepos-config und steht
+# nur noch in der eigenen Haelfte. Dieser Test bleibt trotzdem, und
+# zwar unveraendert: er fragt nicht nach EINEM Namen, sondern nach der
+# Eigenschaft "ein Name, ein Platz". Ein Test, der mit dem Paket
+# verschwindet, das ihn ausgeloest hat, laesst die naechste
+# Ueberschneidung wieder durch.
 #
 # WAS DAS GEKOSTET HAT, und deshalb steht dieser Test hier und nicht bei
 # den Kosmetika: das Dock fuehrt seine Klick-Verbindungen in einer
@@ -204,26 +213,65 @@ def test_no_application_is_pinned_twice():
         "Zeichen zu viel - siehe der Kopf dieses Abschnitts.")
 
 
-def test_the_two_halves_really_can_overlap():
-    """Der Selbsttest: ohne Ueberschneidung waere der Test darueber
-    eine Regel ohne Gegenstand.
+def test_the_deduplication_really_removes_an_overlap(tmp_path):
+    """Der Selbsttest: ohne ihn waere der Test darueber eine Regel ohne
+    Gegenstand.
 
-    Bricht DIESER Test, ist die Ueberschneidung verschwunden - dann
-    gehoert nachgesehen, ob zepos-apps das Paket nicht mehr nennt, und
-    nicht etwa der Test darueber entfernt.
+    HIER STAND BIS ZUM 01.09.2026 EINE MESSUNG AM ECHTEN BAUM: die
+    beiden Haelften ueberschnitten sich wirklich, und der Test las
+    nach, dass sie es taten. Sein eigener Kopf sagte, was zu tun ist,
+    wenn er bricht - "dann gehoert nachgesehen, ob zepos-apps das Paket
+    nicht mehr nennt, und nicht etwa der Test darueber entfernt".
+
+    GENAU DAS IST PASSIERT, und zwar mit Absicht. Der Nutzer hat
+    zepos-claude-code gestuerzt ("ich will das packet nicht als meins
+    verkaufen"); es war der EINZIGE Name, der in beiden Haelften stand,
+    und der Eintrag kommt jetzt aus zepos-config, also nur noch aus der
+    eigenen. Die Ueberschneidung ist weg.
+
+    Der Filter in apps.shipped() bleibt trotzdem stehen, und deshalb
+    bleibt auch dieser Test - nur misst er nicht mehr den Baum, sondern
+    die FUNKTION. Ein Filter ohne Test ist Code, von dem niemand weiss,
+    ob er noch tut, was sein Kommentar behauptet; ein Test, der auf
+    einen Namen wartet, den es nicht mehr gibt, ist ein Test, der nie
+    wieder etwas sagt.
     """
     from pathlib import Path
 
-    wurzel = Path(apps.__file__).resolve().parent
-    rezept = apps._recipe_path(wurzel)
-    fremde = (apps.from_recipe(rezept.read_text(encoding="utf-8"))
-              if rezept.is_file() else apps._read_imprint(wurzel / apps.IMPRINT))
-    eigene = apps.own(wurzel)
+    # Ein Baum mit genau der Lage, die es am 17.08.2026 wirklich gab:
+    # derselbe Name in zepos-apps' depends UND als Anwendungseintrag
+    # eines eigenen Rezepts.
+    # Der Aufbau eines CHECKOUTS und nicht der einer Installation: src/
+    # liegt neben packaging/, und genau daran erkennt apps._recipe_path()
+    # und apps.own(), dass sie die Rezepte lesen duerfen statt der
+    # Abdruecke.
+    wurzel = tmp_path / "src"
+    rezepte = tmp_path / "packaging"
+    wurzel.mkdir(parents=True)
+    (rezepte / "zepos-apps").mkdir(parents=True)
+    (rezepte / "zepos-doppelt").mkdir(parents=True)
 
-    gemeinsam = sorted(set(fremde) & set(eigene))
-    assert gemeinsam, (
-        "die beiden Haelften ueberschneiden sich nicht mehr - dann ist "
-        "test_no_application_is_pinned_twice eine Regel ohne Gegenstand")
+    (rezepte / "zepos-apps" / "PKGBUILD").write_text(
+        "depends=(\n    'firefox'\n    'zepos-doppelt'\n)\n", encoding="utf-8")
+    (rezepte / "zepos-doppelt" / "PKGBUILD").write_text(
+        'install -Dm644 x "$pkgdir/usr/share/applications/zepos-doppelt.desktop"\n',
+        encoding="utf-8")
+
+    fremde = apps.from_recipe(
+        (rezepte / "zepos-apps" / "PKGBUILD").read_text(encoding="utf-8"))
+    eigene = apps.own(Path(wurzel))
+    assert "zepos-doppelt" in fremde and "zepos-doppelt" in eigene, (
+        "der gebaute Fall ueberschneidet sich nicht - dann misst dieser "
+        f"Test nichts.\n  fremd: {fremde}\n  eigen: {eigene}")
+
+    angeheftet = apps.shipped(Path(wurzel))
+    assert angeheftet.count("zepos-doppelt") == 1, (
+        "apps.shipped() wirft die Doppelte nicht mehr weg. Was das "
+        "kostet, steht im Kopf dieses Abschnitts: der Rechner des "
+        f"Nutzers stand.\n  {angeheftet}")
+    assert angeheftet.index("zepos-doppelt") < len(fremde), (
+        "der Name ist nach hinten gewandert - der erste Platz gewinnt, "
+        f"weil die Reihenfolge eine Entscheidung ist: {angeheftet}")
 
 
 def test_a_terminal_is_within_reach():

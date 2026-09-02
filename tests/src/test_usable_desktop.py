@@ -183,6 +183,18 @@ PROVIDED_BY = {
     # Der volle Pfad und nicht der Dateiname: so steht er in der
     # exec-once-Zeile, und der Paketname steckt nicht darin.
     "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1": "polkit-gnome",
+    # zepos-claude-code, seit dem 01.09.2026. Der Befehl heisst wie das
+    # PAKET, das ihn bis dahin trug - und dieses Paket gibt es nicht
+    # mehr: der Nutzer hat es gestuerzt, weil es Anthropics Programm
+    # unter einem ZepOS-Namen weitergab ("ich will das packet nicht als
+    # meins verkaufen"). Der Befehl ist geblieben und liegt jetzt bei
+    # den anderen neun zepos-* Befehlen in zepos-config.
+    #
+    # OHNE DIESE ZEILE WAERE DIE exec-once-STARTZEILE EINE TOTE
+    # REFERENZ, und dieser Test hat genau das gemeldet, als sie
+    # dazukam. tests/src/test_claude_code.py misst die andere Haelfte:
+    # dass das Rezept den Befehl wirklich ablegt.
+    "zepos-claude-code": "zepos-config",
 }
 
 # Kommandos aus dem Grundsystem, mit dem Paket, das jedes traegt -
@@ -818,11 +830,13 @@ def test_the_dock_is_pinned_from_the_shipped_selection_and_from_nowhere_else(tre
     # HIER STAND `_depends("zepos-apps") + apps.own(SRC)` - die
     # Zusammensetzung ein zweites Mal nachgerechnet. Bis zum 17.08.2026
     # war das dieselbe Rechnung wie in apps.shipped(); seither ist es
-    # das nicht mehr. shipped() wirft Doppelte weg, weil
-    # zepos-claude-code in BEIDEN Haelften steht - und ein zweiter
+    # das nicht mehr. shipped() wirft Doppelte weg, weil damals
+    # zepos-claude-code in BEIDEN Haelften stand - und ein zweiter
     # Knopf mit demselben Programmnamen kostet weit mehr als ein
     # Zeichen zu viel (die Messung steht in
-    # tests/src/test_apps_pinned_call.py).
+    # tests/src/test_apps_pinned_call.py). Der Filter blieb, auch
+    # nachdem der Name am 01.09.2026 in die eigene Haelfte gewandert
+    # ist; die Nachrechnung hier bleibt aus demselben Grund weg.
     #
     # Die Nachrechnung hat diesen Fehler also mitgespiegelt, statt ihn
     # zu fangen. Geprueft wird jetzt die ABSICHT dieses Tests - "die
