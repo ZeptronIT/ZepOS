@@ -66,10 +66,26 @@ I18N_TEMPLATE = "ags-i18n.template"
 DOMAIN = "zepos-desktop"
 
 # Eigenschaften, deren Wert auf dem Schirm steht.
+#
+# DIE ZWEI DEUTSCHEN NAMEN AM ENDE SIND DAS LOCH, DAS AM 02.09.2026
+# GEFUNDEN WURDE, und es ist eins, das man nur durch Nachzaehlen findet:
+#
+#     Der eigene Bausteinkasten (ags-kit.template) nimmt seinen
+#     Anzeigetext unter DEUTSCHEN Parameternamen entgegen - zepRow({
+#     titel, unterzeile }). Diese Liste kannte nur englische. Damit war
+#     jede Beschriftung, die durch zepRow geht, fuer die strukturelle
+#     Suche unsichtbar, und das ist der am haeufigsten benutzte
+#     Baustein der Schale.
+#
+#     GEMESSEN mit und ohne die zwei Namen: 409 -> 436 sichtbare
+#     Zeichenketten, also 27 Literale mehr unter Beobachtung, davon 0
+#     ohne _() und 0 Fehlalarme. Die Senke geht damit zu, ohne heute
+#     etwas zu kosten.
 SICHTBARE_EIGENSCHAFTEN = (
     "label", "headerTitle", "title", "subtitle", "tooltip", "tooltip_text",
     "tooltipText", "placeholder_text", "placeholderText", "text",
     "body", "summary", "heading", "message", "description", "name",
+    "titel", "unterzeile",
 )
 SICHTBARE_SETZER = (
     "set_label", "set_title", "set_subtitle", "set_tooltip_text",
@@ -145,12 +161,29 @@ EIGENNAMEN = (
 )
 
 
-def _ohne_kommentare(text: str) -> str:
+def _ohne_kommentare(text: str, *, shell: bool = False) -> str:
     """Kommentare durch Leerzeichen ersetzen.
 
     Die LAENGE bleibt erhalten, damit jeder Versatz und damit jede
     Zeilennummer noch stimmt. Zeichenketten bleiben unberuehrt - ein
     `//` in einer URL ist kein Kommentaranfang.
+
+    `shell=True` FUER DIE VIER *-scripts.template, seit dem 02.09.2026.
+    Sie sind SHELL-Skripte und kommentieren mit '#'; ein Entferner, der
+    nur `//` und `/* */` kennt, liest ihre Kommentare als Quelltext.
+    GEMESSEN: 113 Scheinkandidaten allein in
+    ags-network-scripts.template, dazu einer in
+    ags-media-scripts.template:134, der in Wahrheit ein Kommentar ist.
+
+    Das ist derselbe blinde Fleck wie eine Pruefung, die nichts sieht -
+    nur in der anderen Richtung: sie sieht ZU VIEL, und eine Zusicherung
+    mit Fehlalarmen ist eine, die abgeschaltet wird.
+
+    WARUM EIN SCHALTER UND NICHT '#' IMMER: in TypeScript ist '#' ein
+    gueltiger Namensanfang (private Felder, `#privat`) und in einer
+    Farbe steht es mitten im Wort ("#1a1a1a"). Ein Entferner, der '#'
+    ueberall als Kommentar liest, wuerde dort den Rest der Zeile
+    verschlucken.
     """
     aus = list(text)
     i = 0
@@ -165,6 +198,13 @@ def _ohne_kommentare(text: str) -> str:
             if zeichen == anfuehrung:
                 anfuehrung = None
             i += 1
+            continue
+        if shell and zeichen == "#":
+            ende = text.find("\n", i)
+            ende = n if ende == -1 else ende
+            for j in range(i, ende):
+                aus[j] = " "
+            i = ende
             continue
         if zeichen in "\"'`":
             anfuehrung = zeichen
@@ -730,14 +770,96 @@ def test_jeder_msgid_der_vorlagen_steht_im_katalog():
 DIAGNOSE_RE = re.compile(r"(?:console\.\w+|new\s+Error)\s*\(")
 
 # Ein Wort, das es nur im Deutschen gibt, oder ein Umlaut.
+#
+# DIE PARTIZIPIEN STEHEN SEIT DEM 02.09.2026 MIT DRIN, und der Fall, der
+# sie erzwungen hat, ist lehrreich:
+#
+#     const zustand = device.connected ? "Verbunden"
+#       : device.paired ? "Gekoppelt" : "Gefunden"
+#     ...
+#     unterzeile: `${zustand} • ${device.address}`
+#
+#     Drei deutsche Beschriftungen in ags-bluetooth.template, die durch
+#     BEIDE Netze fielen. Durch das strukturelle, weil das Literal ueber
+#     eine VARIABLE in die Senke laeuft - an der Senke steht dann ein
+#     Template-Literal, dessen Woerter die Einsetzung wegnimmt. Und
+#     durch dieses hier, weil die Liste die INFINITIVE kannte
+#     ("Verbinden", "Trennen", "Speichern") und nicht die PARTIZIPIEN.
+#     NACHGEMESSEN: "Herunterfahren" -> Treffer, "Gerät" -> Treffer,
+#     "Verbunden" -> KEIN Treffer.
+#
+# WARUM EINE WORTLISTE UND NICHT DEM DATENFLUSS FOLGEN
+#     Weil der Datenfluss hier nicht entscheidbar ist, und das ist
+#     GEMESSEN und nicht befuerchtet: eine einstufige Verfolgung von
+#     const/let in eine Senke ergab 920 Treffer, ueberwiegend
+#     Maschinenwerte ("bar-module", "playerctl next", "media.class").
+#     Der Grund steht in derselben Messung - an einer SENKE sagt der
+#     Schluesselname, dass der Wert angezeigt wird; in einer ZUWEISUNG
+#     sagt er nichts. `const zustand = "Verbunden"` und
+#     `const klasse = "aktiv"` sind strukturell dasselbe. Die
+#     Unterscheidung braeuchte echte Gueltigkeitsbereiche,
+#     Schliessungen und Weitergabe durch Funktionen - mit regulaeren
+#     Ausdruecken ueber TypeScript ist das die Sorte Erkennung, die
+#     grundlos rot ist und darum abgeschaltet wird. Eine Zusicherung mit
+#     Fehlalarmen ist schlimmer als keine.
+#
+# DASS DIESE LISTE EINE UNTERGRENZE IST, UND WARUM SIE TROTZDEM RICHTIG
+# IST
+#     Sie ist per Bauart unvollstaendig. Jedes deutsche Wort, das nicht
+#     darin steht und keinen Umlaut hat, faellt durch - "Leiste",
+#     "Thema", "Dock" tun es heute. Das ist kein Versagen der Liste,
+#     sondern ihre Form: sie nennt Woerter, und Woerter kann man immer
+#     weitere finden.
+#
+#     Sie ist trotzdem die richtige Wahl, weil die Alternative nicht
+#     "vollstaendig" heisst, sondern "Fehlalarme". Eine Liste, die zu
+#     wenig findet, kostet einen Fund; eine Erkennung, die zu viel
+#     findet, kostet die ganze Zusicherung, weil jemand sie abschaltet.
+#
+#     ERWEITERN IST DESHALB VORGESEHEN UND KEIN EINGESTAENDNIS. Wer ein
+#     deutsches Wort im Quelltext findet, das hier durchfaellt, traegt
+#     es ein - GEMESSEN am 02.09.2026 kostet das nichts: die vierzehn
+#     Partizipien unten ergaben im ganzen Baum 3 Treffer, genau die drei
+#     echten Faelle, 0 Fehlalarme, auch mit IGNORECASE.
+#
+#     Dieselbe Ehrlichkeit gilt fuer die Umlaut-Regel in
+#     tests/src/test_desktop_i18n.py, und sie steht dort mit demselben
+#     Satz: Untergrenze, nicht Beweis.
 DEUTSCH_RE = re.compile(
     r"[ÄÖÜäöüß]"
     r"|(?<![\w-])(?:der|die|das|und|oder|mit|fuer|nicht|kein|keine|eine|"
     r"einen|zum|zur|vom|von|auf|ist|wird|werden|sind|dem|den|des|wie|noch|"
     r"schon|bitte|alle|alles|ohne|beim|dieser|diese|hat|haben|Herunterfahren|"
     r"Neustart|Bereitschaft|Sperren|Abmelden|Verbinden|Trennen|Speichern|"
-    r"Abbrechen|Suchen|Laden|Fenster|Farben|Einstellungen|Beenden|Anzeigen)"
+    r"Abbrechen|Suchen|Laden|Fenster|Farben|Einstellungen|Beenden|Anzeigen|"
+    # Die Partizipien - siehe den Block darueber. Ein Zustand IN WORTEN
+    # ist die haeufigste Beschriftung, die keinen Umlaut braucht.
+    r"Verbunden|Getrennt|Gekoppelt|Gefunden|Gespeichert|Geladen|Gesperrt|"
+    r"Beendet|Fehlgeschlagen|Unbekannt|Angehalten|Abgebrochen|"
+    r"Aktualisiert|Uebersprungen|"
+    # Zwei Geraetenamen, die im Deutschen anders geschrieben werden als
+    # im Englischen. GEMESSEN am 02.09.2026: sie ergeben 4 zusaetzliche
+    # Treffer, alle echt (die Tooltips von ags-privacy-scripts), 0
+    # Fehlalarme. Kein Zusammenstoss mit "camera"/"microphone" - die
+    # unterscheiden sich im ersten Buchstaben, und daran aendert
+    # IGNORECASE nichts.
+    r"Mikrofon|Kamera)"
     r"(?![\w-])", re.IGNORECASE)
+
+# WAS ICH GEMESSEN UND WIEDER VERWORFEN HABE, damit es niemand ein
+# zweites Mal versucht: "Aktualisierung", "Bildschirm" und
+# "Lautstaerke" schienen naheliegend und ergaben je einen FEHLALARM -
+#
+#     ags-control-center.template:660    "settings:aktualisierung"
+#                                        ein Seitenname, kein Satz
+#     ags-control-center.template:1139   "${vol.lautstaerke}%"
+#                                        ein Feldname in einer Einsetzung
+#     ags-bar.template:2834              ein Kommentarrest
+#
+# Drei Woerter, drei Fehlalarme - und jeder von ihnen haette die
+# Zusicherung bei jedem Lauf rot gemacht, ohne dass etwas falsch ist.
+# Das ist der Grund, aus dem diese Liste WAECHST und nicht RAET: ein
+# Wort kommt hinein, wenn es gemessen keinen Fehlalarm erzeugt.
 
 # Die eine Stelle, an der ein deutsches Wort stehen BLEIBEN muss, und
 # der Grund, aus dem es dort steht.
@@ -759,21 +881,199 @@ DEUTSCH_RE = re.compile(
 #     ags-network-scripts.template und trifft jeden ihrer Leser; es ist
 #     eine eigene Aufgabe und keine Zeile hier. Bis dahin steht sie
 #     namentlich hier, damit sie niemand uebersieht.
-PROTOKOLL_DES_SKRIPTS = ("Kabelverbindung", "Nicht verbunden", "Kein Drucker")
+#
+# DIE AUSNAHME HAENGT SEIT DEM 02.09.2026 AM ORT UND NICHT AM WERT, und
+# das war ein echter Fehler und keine Verschoenerung.
+#
+#     Vorher war es eine blosse Wortliste. Damit entschuldigte sie JEDES
+#     Vorkommen dieser Woerter - auch das, das auf dem Schirm steht.
+#     GEMESSEN: dieselben zwei Woerter standen in ags-network.template
+#     als `titel:` in drei Zeilen (556, 777, 787), also als Aufschrift
+#     fuer den Nutzer, und die Ausnahme deckte sie mit.
+#
+#     Das ist dieselbe Krankheit wie eine Pruefung, die nichts sieht,
+#     nur andersherum: eine AUSNAHME, DIE ZU VIEL DECKT. Und sie ist
+#     schwerer zu bemerken, weil sie sich als Sorgfalt liest.
+#
+# WAS EIN "ORT" HIER IST
+#     Die Datei. Praeziser waere die Senke - Standardausgabe eines
+#     Skripts gegen `titel:` eines Widgets -, und das waere auch
+#     richtiger. Es ist hier nicht noetig: die Skripte HABEN keine
+#     andere Senke als ihre Ausgabe, und die Widgets haben keinen Grund,
+#     ein Protokollwort zu drucken. Die Datei trennt die zwei Faelle
+#     also vollstaendig, und eine feinere Unterscheidung waere Aufwand
+#     ohne Wirkung.
+#
+#     Der Preis steht dabei: schreibt jemand in ags-network-scripts.
+#     template einen NEUEN deutschen Satz, deckt ihn diese Ausnahme
+#     NICHT - sie nennt die drei Woerter, die ein Protokoll sind, und
+#     kein Freibrief fuer die Datei.
+#     GEZAEHLT am 02.09.2026, wo die drei Woerter wirklich stehen:
+#
+#         ags-network-scripts.template:190   echo "Kein Drucker"
+#         ags-network-scripts.template       "Kabelverbindung",
+#                                            "Nicht verbunden"
+#         ags-network.template:288/289       dieselben zwei als const,
+#                                            und als `titel:` angezeigt
+#         ags-control-center.template:292    `|| "Kein Drucker"` als
+#                                            Rueckfall - also ANGEZEIGT
+#
+#     Alle drei stehen im NETZWERK-Skript; einen Drucker-Skriptbaustein
+#     gibt es nicht. Die zwei Widget-Stellen sind keine Ausnahme,
+#     sondern der Befund - sie gehen seit heute durch den Katalog.
+#
+# WARUM DIE ZWEI WIDGETS SEIT DEM 02.09.2026 EBENFALLS DARIN STEHEN, und
+# es ist NICHT dieselbe Ausnahme wie beim Skript
+#     Das Skript SCHREIBT die Woerter, die Widgets VERGLEICHEN darauf.
+#     Beide brauchen den Wortlaut, und keins von beiden darf ihn
+#     uebersetzen - ein uebersetztes Protokollwort bricht den Vergleich,
+#     und zwar still.
+#
+#     Was die Widgets seit heute NICHT mehr tun, ist ihn ANZEIGEN. In
+#     ags-network.template macht aufschrift() aus dem Protokollwort
+#     einen Satz aus dem Katalog, in ags-control-center.template dieselbe
+#     Funktion desselben Namens. Die Konstanten bleiben also als
+#     VERGLEICHSWERT stehen, und genau dafuer gilt die Ausnahme.
+#
+#     Der Unterschied ist wichtig, weil er die Grenze der Ausnahme
+#     bestimmt: sie deckt einen Wert, der mit `===` verglichen wird -
+#     nicht einen, der in ein `titel:` fliesst. Wer hier eine Datei
+#     hinzufuegt, muss denselben Satz sagen koennen.
+#
+#     DIE VOLLSTAENDIGE LOESUNG steht seit langem im Absatz darueber und
+#     ist noch offen: das Skript gibt eine KENNUNG aus ("wired", "none"),
+#     das Widget beschriftet sie. Dann braucht keine Datei diese
+#     Ausnahme. Es aendert die Schnittstelle des Skripts und trifft jeden
+#     ihrer Leser - eine eigene Aufgabe, und der Grund, aus dem sie hier
+#     namentlich steht.
+PROTOKOLL_DES_SKRIPTS = {
+    "ags-network-scripts.template": (
+        "Kabelverbindung", "Nicht verbunden", "Kein Drucker"),
+    # Vergleichswerte, keine Aufschriften - siehe den Absatz darueber.
+    "ags-network.template": ("Kabelverbindung", "Nicht verbunden"),
+    "ags-control-center.template": ("Nicht verbunden", "Kein Drucker"),
+}
+
+# --------------------------------------------------------------------
+# Die Saetze der Schalenskripte, und warum sie NOCH nicht durch den
+# Katalog gehen
+# --------------------------------------------------------------------
+#
+# SECHS SAETZE IN ZWEI DATEIEN, und sie stehen auf dem Schirm:
+#     ags-updates-scripts.template setzt `short=`, und dieselbe Datei
+#     macht daraus zwei Zeilen weiter den `tooltip` des Leistenmoduls.
+#     ags-privacy-scripts.template setzt `tooltip=` unmittelbar.
+#
+# WARUM SIE HIER STEHEN UND NICHT BEHOBEN SIND: die Entscheidung ist
+# gefallen, die Umsetzung braucht eine Datei, die diesem Auftrag nicht
+# gehoert.
+#
+# DIE ENTSCHEIDUNG, und meine erste Vermutung war FALSCH
+#     Zuerst hielt ich `gettext(1)` zur Laufzeit fuer zu teuer - "ein
+#     Prozessstart je Takt". GEMESSEN ist das falsch: das
+#     Aktualisierungsmodul laeuft mit intervalMs 600000, also alle ZEHN
+#     MINUTEN (ags-bar.template). Vier Aufrufe alle zehn Minuten sind
+#     nichts.
+#
+#     Was gegen die Laufzeit spricht, ist ein anderer gemessener Grund:
+#
+#         /usr/bin/gettext.sh gehoert dem Paket `gettext`, 20,79 MiB,
+#         und gettext ist NICHT in der Gruppe `base` - auf dieser
+#         Maschine liegt es nur als Abhaengigkeit eines anderen Pakets.
+#         In den PKGBUILDs steht es als makedepends, NICHT als depends.
+#
+#     Eine Uebersetzung zur Laufzeit machte daraus also eine neue
+#     LAUFZEIT-Abhaengigkeit des ganzen Schreibtischs - fuer sechs
+#     Saetze. Und wo sie fehlte, zeigte das Leistenmodul nichts, ohne
+#     eine Zeile Erklaerung.
+#
+#     RICHTIG IST DIE ERSETZUNG BEIM ERZEUGEN. Die Vorlagen laufen
+#     ohnehin durch den Generator - ags-updates-scripts.template traegt
+#     drei {{PLATZHALTER}} -, und die Sprache der Maschine steht beim
+#     Erzeugen fest. Der Erzeugungslauf ist ausserdem GENAU das, was ein
+#     Sprachwechsel ausloest; settings/zepos_settings_gui/model.py sagt
+#     es im Wortlaut ("Leiste, Dock und die uebrigen Fenster nach einem
+#     Erzeugungslauf"). Die Auffrischung stimmt damit schon, ohne dass
+#     jemand etwas verspricht.
+#
+#     Der Preis, ausgeschrieben: die erzeugte Datei traegt EINE Sprache.
+#     Wer umstellt, braucht einen Erzeugungslauf - genau das, was fuer
+#     die Leiste ohnehin gilt.
+#
+# WAS NOCH FEHLT: der Generator (src/icon_manager.py) gehoert diesem
+# Auftrag nicht. Bis das entschieden ist, stehen die sechs Saetze hier -
+# einzeln, mit ihrer Datei, und NICHT als Freibrief fuer die Dateien.
+# Ein SIEBTER Satz in derselben Datei faellt auf.
+NOCH_NICHT_IM_KATALOG = {
+    "ags-updates-scripts.template": (
+        "Die letzte Aktualisierung ist gescheitert.",
+        "Neue Vorlagen sind eingespielt - die Konfiguration ist noch die alte.",
+        "Die Selbstaktualisierung ist abgeschaltet (update.enabled).",
+    ),
+    # DIE WERTE SO, WIE DER LESER SIE SIEHT, und nicht so, wie sie in
+    # der Datei stehen. In einem Shell-Skript endet ein
+    # Anfuehrungszeichen die Zeichenkette auch dann, wenn eine
+    # Befehlseinsetzung `$( ... )` noch offen ist - der Leser hier
+    # kennt Shell-Regeln nicht und darf sie auch nicht kennen (er
+    # dient TypeScript). Die Bereiche zerfallen deshalb an den
+    # inneren Anfuehrungszeichen.
+    #
+    # Abgeschrieben ist hier also die MESSUNG und nicht die Absicht -
+    # wer die Saetze uebersetzt, loescht diese Eintraege ganz und
+    # nicht Stueck fuer Stueck.
+    "ags-privacy-scripts.template": (
+        "Mikrofon: $(printf '%s' ",
+        # Ein ECHTER Zeilenumbruch darin, kein "\\n": der Wert laeuft in
+        # der Vorlage ueber zwei Zeilen.
+        " | paste -sd ', ')\nKamera: $(printf '%s' ",
+        "Kamera: $(printf '%s' ",
+    ),
+}
+
+# UND ZWEI, DIE DIE WORTLISTE HEUTE NICHT SIEHT - gemessen, damit die
+# Zahl ehrlich ist und niemand "sechs" fuer "alle" haelt:
+#
+#     ags-updates-scripts.template:107  "$base Arch-Aktualisierungen
+#                                        liegen bereit."
+#     ags-privacy-scripts.template       die dritte Tooltip-Zeile, die
+#                                        mit den zwei anderen in einem
+#                                        Literalbereich liegt
+#
+# "Arch-Aktualisierungen" faellt durch, weil der Bindestrich davor zum
+# Wort gehoert und die Wortgrenze damit nicht greift. Das ist die
+# Untergrenze der Wortliste in Zahlen - siehe den Block bei DEUTSCH_RE.
 
 
 def test_keine_deutsche_zeichenkette_bleibt_in_der_oberflaeche():
-    """Das zweite Netz - siehe den Block darueber."""
+    """Das zweite Netz - siehe den Block darueber.
+
+    DIE SCHALENVORLAGEN SIND SEIT DEM 02.09.2026 MIT DABEI. Sie waren
+    ausgenommen ("if pfad.name.endswith('-scripts.template'): continue"),
+    und das war eine Ausnahme fuer eine ganze Dateiart - genau die Form,
+    die zu viel deckt. Was darin steht, ist nicht weniger sichtbar:
+    ags-updates-scripts.template setzt `short=`, und das wird in
+    derselben Datei zum `tooltip` des Leistenmoduls.
+
+    Moeglich wurde das erst durch die Reparatur an _ohne_kommentare():
+    ein Entferner, der nur `//` kennt, liest in einem Shell-Skript die
+    KOMMENTARE als Quelltext. GEMESSEN: 113 Scheinkandidaten allein in
+    ags-network-scripts.template.
+    """
     deutsch = []
     for pfad in _vorlagen():
-        if pfad.name.endswith("-scripts.template"):
-            continue
-        text = _ohne_kommentare(pfad.read_text(encoding="utf-8"))
+        text = _ohne_kommentare(pfad.read_text(encoding="utf-8"),
+                                shell=pfad.name.endswith("-scripts.template"))
         diagnosen = [(t.end() - 1, _klammer_ende(text, t.end() - 1))
                      for t in DIAGNOSE_RE.finditer(text)]
+        # Die Ausnahme gilt je DATEI und nicht ueberall - siehe den Block
+        # bei PROTOKOLL_DES_SKRIPTS. Dazu die sechs Saetze, deren Weg in
+        # den Katalog entschieden aber noch nicht gebaut ist; auch sie
+        # haengen an ihrer Datei und sind einzeln genannt.
+        erlaubt = (PROTOKOLL_DES_SKRIPTS.get(pfad.name, ())
+                   + NOCH_NICHT_IM_KATALOG.get(pfad.name, ()))
         for anfang, ende in _literal_bereiche(text):
             wert = text[anfang + 1:ende - 1]
-            if not wert.strip() or wert in PROTOKOLL_DES_SKRIPTS:
+            if not wert.strip() or wert in erlaubt:
                 continue
             if not DEUTSCH_RE.search(wert):
                 continue
@@ -1053,3 +1353,114 @@ def test_der_gebaute_katalog_gibt_jede_uebersetzung_wirklich_heraus(tmp_path):
         "kommen aus dem gebauten Katalog nicht heraus - fast immer eine "
         "`#, fuzzy`-Marke, die msgfmt den Eintrag weglassen laesst:\n  "
         + "\n  ".join(fehlend[:10]))
+
+
+# --------------------------------------------------------------------
+# Das Loch, das die Ortsbindung selbst aufgemacht hat
+# --------------------------------------------------------------------
+#
+# WAS DIE AUSNAHME KOSTET, und ich habe es gemessen statt gehofft:
+#     PROTOKOLL_DES_SKRIPTS erlaubt "Kabelverbindung" und "Nicht
+#     verbunden" in ags-network.template, weil sie dort VERGLEICHSWERTE
+#     sind. Damit ist das Literal an seiner Deklaration entschuldigt -
+#     und niemand hindert jemanden daran, die KONSTANTE wieder direkt
+#     anzuzeigen.
+#
+#     GEGENPROBE am 02.09.2026: `titel: aufschrift(WIRED_NAME)` zurueck
+#     auf `titel: WIRED_NAME` gestellt - alle 13 Zusicherungen blieben
+#     GRUEN. Der Fehler von heute morgen waere unbemerkt
+#     zurueckgekommen.
+#
+# WARUM DIE ZWEI NETZE IHN NICHT SEHEN KOENNEN
+#     Das strukturelle Netz liest LITERALE an sichtbaren Senken. An
+#     `titel: WIRED_NAME` steht kein Literal, sondern ein BEZEICHNER -
+#     und ein Bezeichner an einer Senke ist nicht beurteilbar:
+#     `titel: connInfo.name` ist voellig richtig (ein SSID ist ein
+#     Eigenname). Dieselbe Unentscheidbarkeit wie bei der
+#     Datenflussverfolgung, nur eine Zeile spaeter.
+#
+#     Das sprachliche Netz sieht das Literal - aber genau dort, wo die
+#     Ausnahme gilt.
+#
+# DESHALB EINE EIGENE, ENGE ZUSICHERUNG. Sie beurteilt keine Bezeichner
+# im Allgemeinen, sondern nennt die vier Konstanten beim Namen und sagt,
+# was mit ihnen erlaubt ist. Eine Ausnahme, die ein Risiko aufmacht,
+# bekommt eine Wache fuer genau dieses Risiko.
+PROTOKOLL_KONSTANTEN = {
+    "ags-network.template": ("WIRED_NAME", "NOT_CONNECTED"),
+    "ags-control-center.template": ("SKRIPT_NICHT_VERBUNDEN",
+                                    "SKRIPT_KEIN_DRUCKER"),
+}
+
+# Die Funktion, die aus einem Protokollwort eine Aufschrift macht. In
+# beiden Dateien heisst sie gleich, und das ist Absicht - es ist
+# dieselbe Naht zwischen denselben zwei Rollen.
+AUFSCHRIFT = "aufschrift("
+
+
+def test_ein_protokollwort_kommt_nur_ueber_aufschrift_auf_den_schirm():
+    """Die vier Konstanten duerfen VERGLICHEN, aber nicht ANGEZEIGT werden.
+
+    Erlaubt ist genau dreierlei, und jedes ist an der Zeile zu erkennen:
+
+      die Deklaration     `const WIRED_NAME = "..."`
+      ein Vergleich       `=== WIRED_NAME`, `!== NOT_CONNECTED`
+      der Weg zum Schirm  irgendwo in derselben Zeile `aufschrift(`
+
+    Alles andere ist ein Protokollwort auf dem Weg an eine Stelle, die
+    diese Zusicherung nicht kennt - und das ist genau der Fall, den sie
+    verhindern soll. Sie ist ABSICHTLICH streng: eine neue, richtige
+    Verwendung faellt hier auf und muss ihren Weg dazuschreiben, statt
+    dass eine falsche durchrutscht.
+
+    Ein Sonderfall steht namentlich drin: `name: name.trim() ||
+    NOT_CONNECTED` in getConnectionInfo() setzt das Protokollwort in die
+    DATENSTRUKTUR, nicht auf den Schirm - dort ist es richtig, weil der
+    Vergleich danach darauf laeuft. Die Anzeige holt es sich von dort
+    ueber aufschrift().
+    """
+    verstoesse = []
+    for name, konstanten in PROTOKOLL_KONSTANTEN.items():
+        pfad = TEMPLATES / name
+        text = _ohne_kommentare(pfad.read_text(encoding="utf-8"))
+        for nummer, zeile in enumerate(text.splitlines(), start=1):
+            for konstante in konstanten:
+                if not re.search(rf"(?<![\w]){konstante}(?![\w])", zeile):
+                    continue
+                if re.search(rf"const\s+{konstante}\s*=", zeile):
+                    continue
+                if re.search(rf"[=!]==\s*{konstante}(?![\w])", zeile):
+                    continue
+                if AUFSCHRIFT in zeile:
+                    continue
+                # Die Datenstruktur - siehe den Docstring.
+                if re.search(rf"name:\s*[^,]*\|\|\s*{konstante}(?![\w])",
+                             zeile):
+                    continue
+                if re.search(rf"name:\s*{konstante}(?![\w])", zeile):
+                    continue
+                verstoesse.append(f"{name}:{nummer} {zeile.strip()[:70]}")
+    assert verstoesse == [], (
+        "ein Protokollwort steht an einer Stelle, die weder Vergleich "
+        "noch Deklaration noch aufschrift() ist - auf einer englischen "
+        "Installation stuende dort Deutsch:\n  " + "\n  ".join(verstoesse))
+
+
+def test_die_wache_fuer_die_protokollwoerter_faengt_ueberhaupt_etwas():
+    """Der Selbsttest: findet sie die Konstanten ueberhaupt?
+
+    Eine Wache, die ihre Konstanten nicht mehr findet - umbenannt,
+    verschoben, geloescht -, meldet dasselbe "sauber" wie eine Datei
+    ohne Fehler. Gezaehlt wird deshalb, dass jede genannte Konstante
+    wirklich in ihrer Datei steht.
+    """
+    for name, konstanten in PROTOKOLL_KONSTANTEN.items():
+        text = (TEMPLATES / name).read_text(encoding="utf-8")
+        for konstante in konstanten:
+            assert re.search(rf"const\s+{konstante}\s*=", text), (
+                f"{name} erklaert {konstante} nicht mehr - die Wache "
+                "darueber prueft damit nichts")
+        assert AUFSCHRIFT in text, (
+            f"{name} hat keine aufschrift() mehr - dann kommt das "
+            "Protokollwort entweder gar nicht oder ungefiltert auf den "
+            "Schirm")

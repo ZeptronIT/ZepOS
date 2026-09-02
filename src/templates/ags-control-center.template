@@ -255,9 +255,43 @@ async function runScript(action: string): Promise<string> {
   }
 }
 
+// Die Woerter, mit denen ags-network-scripts seinen Zustand meldet.
+//
+// EINE MASCHINENANTWORT, DIE HIER AUF DEM SCHIRM LANDET - und das war
+// bis zum 02.09.2026 der Fehler. networkLabel.set_text() und
+// printerLabel.set_text() weiter unten setzen die Antwort des Skripts
+// UNVERAENDERT als Aufschrift; auf einer englischen Installation stand
+// dort Deutsch, und zwar nicht nur im Rueckfall, sondern im
+// Normalfall.
+//
+// Uebersetzen laesst sich das Wort nicht - ags-network.template
+// vergleicht darauf, um die Verbindungsart zu erkennen, und ein
+// uebersetztes Protokollwort bricht diesen Vergleich still. Getrennt
+// wird es deshalb wie dort: die Konstante ist das Protokoll,
+// aufschrift() macht die Aufschrift.
+//
+// Die vollstaendige Loesung - das Skript gibt eine KENNUNG aus, das
+// Widget beschriftet sie - steht bei PROTOKOLL_DES_SKRIPTS in
+// tests/src/test_ags_i18n.py und ist eine eigene Aufgabe, weil sie die
+// Schnittstelle des Skripts aendert.
+const SKRIPT_NICHT_VERBUNDEN = "Nicht verbunden"
+const SKRIPT_KEIN_DRUCKER = "Kein Drucker"
+
+/** Aus der Antwort des Skripts die Aufschrift, oder sie selbst.
+ *
+ * Ein SSID und ein Druckername gehen UNVERAENDERT durch - Eigennamen.
+ * Eine leere Antwort ist derselbe Fall wie das Protokollwort: es gibt
+ * nichts, und beides soll denselben Satz zeigen.
+ */
+function aufschrift(antwort: string, protokoll: string,
+                    ersatz: string): string {
+  return (!antwort || antwort === protokoll) ? ersatz : antwort
+}
+
 // Was das Netz meldet
 async function getNetworkStatus(): Promise<string> {
-  return await runScript("info") || "Nicht verbunden"
+  return aufschrift(await runScript("info"), SKRIPT_NICHT_VERBUNDEN,
+                    _("Not connected"))
 }
 
 // Die IP-Adresse - oder nichts.
@@ -287,9 +321,10 @@ async function isVpnConnected(): Promise<boolean> {
   }
 }
 
-// Der Zustand des Druckers
+// Der Zustand des Druckers - dieselbe Naht wie beim Netz darueber.
 async function getPrinterStatus(): Promise<string> {
-  return await runScript("printer") || "Kein Drucker"
+  return aufschrift(await runScript("printer"), SKRIPT_KEIN_DRUCKER,
+                    _("No printer"))
 }
 
 // Der Zustand des Netz-Watchdogs
