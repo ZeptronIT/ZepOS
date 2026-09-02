@@ -42,6 +42,7 @@ import brand  # noqa: E402
 import sizes  # noqa: E402
 
 from . import bar, model, screens, style  # noqa: E402
+from .i18n import _  # noqa: E402
 
 APPLICATION_ID = "de.zeptronit.zepos.Settings"
 
@@ -182,10 +183,10 @@ class SettingsWindow(Adw.ApplicationWindow):
         # Fassungen desselben Satzes driften ab der ersten
         # Umformulierung. Siehe den Kopf des NOTE_*-Blocks dort.
         group = Adw.PreferencesGroup(
-            title=model.GROUP_SCALE, description=model.NOTE_SCALE_GROUP)
+            title=_(model.GROUP_SCALE), description=model.scale_note())
 
         self.scale_row = Adw.SpinRow(
-            title=model.LABEL_SCALE,
+            title=_(model.LABEL_SCALE),
             adjustment=Gtk.Adjustment(
                 lower=model.SCALE_MINIMUM, upper=model.SCALE_MAXIMUM,
                 step_increment=model.SCALE_STEP,
@@ -199,29 +200,29 @@ class SettingsWindow(Adw.ApplicationWindow):
                            valign=Gtk.Align.CENTER)
         reset.connect("clicked", self._on_scale_reset)
         shipped = Adw.ActionRow(
-            title="Zurücksetzen", subtitle=model.NOTE_SCALE_RESET)
+            title="Zurücksetzen", subtitle=model.scale_reset_note())
         shipped.add_suffix(reset)
         group.add(shipped)
         page.add(group)
 
         exceptions = Adw.PreferencesGroup(
-            title=model.GROUP_DIALS, description=model.NOTE_DIALS_GROUP)
+            title=_(model.GROUP_DIALS), description=_(model.NOTE_DIALS_GROUP))
         for dial in model.DIALS:
             exceptions.add(self._dial_row(dial))
         page.add(exceptions)
 
         motion = Adw.PreferencesGroup(
-            title=model.GROUP_MOTION, description=model.NOTE_MOTION_GROUP)
+            title=_(model.GROUP_MOTION), description=model.motion_note())
         self.motion_row = Adw.SwitchRow(
-            title=model.LABEL_MOTION, subtitle=model.NOTE_MOTION,
+            title=_(model.LABEL_MOTION), subtitle=_(model.NOTE_MOTION),
             active=self.draft.current_motion())
         self.motion_row.connect("notify::active", self._on_motion)
         motion.add(self.motion_row)
         page.add(motion)
 
         rest = Adw.PreferencesGroup()
-        rest.add(Adw.ActionRow(title=model.NOTE_SIZES_REST_TITLE,
-                               subtitle=model.NOTE_SIZES_REST))
+        rest.add(Adw.ActionRow(title=_(model.NOTE_SIZES_REST_TITLE),
+                               subtitle=model.sizes_rest_note()))
         page.add(rest)
         return page
 
@@ -361,9 +362,9 @@ class SettingsWindow(Adw.ApplicationWindow):
     def _weather_page(self) -> Adw.PreferencesPage:
         page = Adw.PreferencesPage()
         group = Adw.PreferencesGroup(
-            title=model.GROUP_WEATHER, description=model.NOTE_WEATHER_GROUP)
+            title=_(model.GROUP_WEATHER), description=_(model.NOTE_WEATHER_GROUP))
 
-        self.weather_row = Adw.EntryRow(title=model.LABEL_WEATHER)
+        self.weather_row = Adw.EntryRow(title=_(model.LABEL_WEATHER))
         self.weather_row.set_text(self.draft.current_weather())
         self.weather_row.connect("changed", self._on_weather)
         group.add(self.weather_row)
@@ -390,14 +391,14 @@ class SettingsWindow(Adw.ApplicationWindow):
         writable = model.theme_writable()
 
         group = Adw.PreferencesGroup(
-            title=model.GROUP_THEME, description=model.theme_note(writable))
+            title=_(model.GROUP_THEME), description=model.theme_note(writable))
 
         names = model.theme_names()
         current = model.current_theme()
         self.theme_names = names
         self.theme_row = Adw.ComboRow(
-            title=model.LABEL_THEME,
-            subtitle=model.THEME_TIMING,
+            title=_(model.LABEL_THEME),
+            subtitle=_(model.THEME_TIMING),
             model=Gtk.StringList.new(
                 [f"{model.theme_label(name)} - "
                  f"{model.theme_description(name)}" for name in names]))
@@ -448,12 +449,12 @@ class SettingsWindow(Adw.ApplicationWindow):
         """
         page = Adw.PreferencesPage()
         group = Adw.PreferencesGroup(
-            title=model.GROUP_REGION, description=model.NOTE_REGION_GROUP)
+            title=_(model.GROUP_REGION), description=_(model.NOTE_REGION_GROUP))
 
         self.language_codes = model.language_codes()
         self.language_row = Adw.ComboRow(
-            title=model.LABEL_LANGUAGE,
-            subtitle=model.LANGUAGE_TIMING,
+            title=_(model.LABEL_LANGUAGE),
+            subtitle=_(model.LANGUAGE_TIMING),
             model=Gtk.StringList.new(
                 [model.language_label(code) for code in self.language_codes]),
             sensitive=model.language_writable())
@@ -465,8 +466,8 @@ class SettingsWindow(Adw.ApplicationWindow):
 
         self.timezone_names = model.timezone_names()
         self.timezone_row = Adw.ComboRow(
-            title=model.LABEL_TIMEZONE,
-            subtitle=model.TIMEZONE_TIMING,
+            title=_(model.LABEL_TIMEZONE),
+            subtitle=_(model.TIMEZONE_TIMING),
             model=Gtk.StringList.new(self.timezone_names),
             sensitive=model.timezone_writable())
         zone = model.current_timezone()
@@ -492,7 +493,7 @@ class SettingsWindow(Adw.ApplicationWindow):
             self.banner.set_button_label("Jetzt anwenden")
             self.banner.set_title(
                 f"Sprache {model.language_label(code)}. "
-                + model.LANGUAGE_TIMING)
+                + _(model.LANGUAGE_TIMING))
         else:
             self.banner.set_button_label("")
             self.banner.set_title(outcome.message.splitlines()[0])
@@ -509,7 +510,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         # Erzeugungslauf waere ein Neustart der Schale fuer nichts.
         self.banner.set_button_label("")
         self.banner.set_title(
-            f"Zeitzone {zone}. " + model.TIMEZONE_TIMING
+            f"Zeitzone {zone}. " + _(model.TIMEZONE_TIMING)
             if outcome.written else outcome.message.splitlines()[0])
         self.banner.set_revealed(True)
 
@@ -531,12 +532,12 @@ class SettingsWindow(Adw.ApplicationWindow):
 
         writable = model.update_writable()
         group = Adw.PreferencesGroup(
-            title=model.GROUP_UPDATE,
+            title=_(model.GROUP_UPDATE),
             description=model.update_note(writable))
 
         enabled = Adw.SwitchRow(
             title=model.UPDATE_LABELS[model.UPDATE_ENABLED],
-            subtitle=model.NOTE_UPDATE_ENABLED,
+            subtitle=_(model.NOTE_UPDATE_ENABLED),
             active=bool(config.get(model.UPDATE_ENABLED)))
         enabled.connect("notify::active", self._on_update_switch,
                         model.UPDATE_ENABLED)
@@ -545,12 +546,12 @@ class SettingsWindow(Adw.ApplicationWindow):
 
         group.add(self._update_choice(
             model.UPDATE_SCOPE, model.UPDATE_LABELS[model.UPDATE_SCOPE],
-            model.NOTE_UPDATE_SCOPE,
+            _(model.NOTE_UPDATE_SCOPE),
             model.UPDATE_SCOPE_LABELS, config.get(model.UPDATE_SCOPE)))
 
         group.add(self._update_choice(
             model.UPDATE_NOTIFY, model.UPDATE_LABELS[model.UPDATE_NOTIFY],
-            model.NOTE_UPDATE_NOTIFY,
+            model.update_notify_note(),
             model.UPDATE_NOTIFY_LABELS, config.get(model.UPDATE_NOTIFY)))
 
         schedule = config.get("schedule")
@@ -563,8 +564,8 @@ class SettingsWindow(Adw.ApplicationWindow):
         page.add(group)
 
         rest = Adw.PreferencesGroup()
-        rest.add(Adw.ActionRow(title=model.NOTE_UPDATE_REST_TITLE,
-                               subtitle=model.NOTE_UPDATE_REST))
+        rest.add(Adw.ActionRow(title=_(model.NOTE_UPDATE_REST_TITLE),
+                               subtitle=_(model.NOTE_UPDATE_REST)))
         page.add(rest)
         return page
 
@@ -720,7 +721,7 @@ class SettingsWindow(Adw.ApplicationWindow):
     def _on_banner_clicked(self, _banner) -> None:
         dialog = Adw.AlertDialog(
             heading="Jetzt anwenden?",
-            body=model.GENERATE_COST)
+            body=_(model.GENERATE_COST))
         dialog.add_response("nein", "Später")
         dialog.add_response("ja", "Anwenden")
         dialog.set_response_appearance("ja", Adw.ResponseAppearance.SUGGESTED)

@@ -59,6 +59,7 @@ from gi.repository import Adw, Gio, Gtk  # noqa: E402
 import settings as settings_file  # noqa: E402
 
 from . import model  # noqa: E402
+from .i18n import N_, _  # noqa: E402
 
 # Was der Knopf zum Zuruecksetzen an seiner Zeile sagt. Im Wortlaut und
 # an einer Stelle, weil er dreimal dasteht - einmal je Haelfte - und

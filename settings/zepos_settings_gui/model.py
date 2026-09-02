@@ -205,7 +205,59 @@ import sizes
 import theme
 import update
 
+from .i18n import N_, _
+
 Runner = Callable[..., "subprocess.CompletedProcess"]
+
+
+# --------------------------------------------------------------------
+# Die Meldungen, die mehr als eine Stelle braucht
+# --------------------------------------------------------------------
+
+# Ein Befehl, der mit einem Rueckgabewert endete. VIERMAL gebraucht -
+# Thema, Aktualisierung, Sprache, Zeitzone -, und darum EIN msgid und
+# nicht vier gleichlautende: vier Eintraege waeren vier Gelegenheiten,
+# denselben Satz verschieden zu uebersetzen.
+OUTCOME_EXIT = N_("{command} exited with {code}")
+
+# EIN Wortlaut fuer "der Abdruck ist da und taugt nicht", obwohl es zwei
+# Wege dorthin gibt (unlesbare Datei, unlesbarer Inhalt): zwei
+# Formulierungen fuer eine Lage lesen sich wie zwei Lagen.
+BAR_IMPRINT_UNREADABLE = N_("The stored order cannot be read: ")
+
+BAR_IMPRINT_MISSING = N_(
+    "This machine has no record of what ZepOS ships ({path} is missing). "
+    "What stands here is therefore what stands in the settings - nothing "
+    "can be added.")
+
+# Ein eigener msgid und kein angehaengter Halbsatz: der erste Satz sagt
+# dem Nutzer, WAS los ist, dieser sagt, WOHER die Datei kaeme. Zwei
+# Gedanken, und ein Uebersetzer darf sie umstellen.
+BAR_IMPRINT_FROM_PACKAGE = N_(
+    "The file comes with the zepos-config package; a checkout without the "
+    "installed package does not have it.")
+
+# Die drei Saetze fuer "das gehoert der Maschine, und dieses System hat
+# kein Werkzeug dafuer". Der Befehl beziehungsweise der Pfad steht NICHT
+# im msgid: er wird angehaengt, damit der Uebersetzer keinen Dateinamen
+# vor sich hat.
+THEME_NEEDS_ROOT = N_(
+    "The theme belongs to the machine and not to this account, because "
+    "the login screen belongs to it. This system has no pkexec, so the "
+    "only way is:")
+
+UPDATE_NEEDS_ROOT = N_(
+    "This setting belongs to the machine and not to this account. This "
+    "system has no pkexec, so the only way is:")
+
+LANGUAGE_NEEDS_FILE = N_(
+    "The language belongs to the machine and not to this account, because "
+    "the login screen belongs to it. This system has no localectl, so the "
+    "only way is through the file itself: {path}")
+
+TIMEZONE_NEEDS_FILE = N_(
+    "The time zone belongs to the machine and not to this account. This "
+    "system has no timedatectl, so the only way is through {path} itself.")
 
 
 # --------------------------------------------------------------------
@@ -270,39 +322,39 @@ class Dial:
 DIALS: tuple[Dial, ...] = (
     Dial(
         "STYLE_TERMINAL_FONT_SIZE",
-        "Schrift im Terminal",
-        "In Punkt, weil kitty nur Punkt entgegennimmt. Folgt sonst dem "
-        "Regler oben - hier stand einmal eine 7.0, also 9 Pixel, in "
-        "einem Schreibtisch, der überall sonst 24 zeigte.",
+        N_("Terminal font size"),
+        N_("In points, because kitty only accepts points. Follows the "
+           "slider above otherwise - this once held a 7.0, that is 9 "
+           "pixels, in a desktop showing 24 everywhere else."),
         6, 40),
     Dial(
         "STYLE_BAR_THICKNESS",
-        "Dicke der Leiste",
-        "Und damit auch die des Fusses - beide Streifen sind gleich "
-        "hoch, und die Symbole im Dock folgen dieser Zahl. Zu schmal, "
-        "und die Leiste schneidet ihre eigenen Module ab.",
+        N_("Bar thickness"),
+        N_("And with it the dock's - both strips are the same height, and "
+           "the dock icons follow this number. Too thin, and the bar cuts "
+           "off its own modules."),
         60, 400),
     Dial(
         "STYLE_DOCK_ICON_SIZE",
-        "Symbole im Dock",
-        "Normalerweise abgeleitet: der Fuss ist genauso hoch wie die "
-        "Leiste, und das Symbol füllt ihn aus. Wer hier eine Zahl "
-        "nennt, hat danach zwei verschieden hohe Streifen.",
+        N_("Dock icons"),
+        N_("Normally derived: the dock is exactly as tall as the bar, and "
+           "the icon fills it. Naming a number here leaves two strips of "
+           "different heights."),
         16, 128),
     Dial(
         "STYLE_GAPS_IN",
-        "Abstand der Fenster",
-        "Zwischen zwei Fenstern wird das Doppelte davon sichtbar, weil "
-        "Hyprland den inneren Abstand an JEDE Seite legt; zum Schirmrand "
-        "und um die Leiste herum ebenfalls das Doppelte. So ist der "
-        "Abstand überall derselbe.",
+        N_("Window gaps"),
+        N_("Between two windows twice this becomes visible, because "
+           "Hyprland puts the inner gap on EVERY side; twice as much at "
+           "the screen edge and around the bar as well. That way the gap "
+           "is the same everywhere."),
         0, 32),
     Dial(
         "STYLE_WINDOW_ROUNDING",
-        "Eckenrundung der Fenster",
-        "Dieselbe Sprosse wie die Rundung der Module in der Leiste, "
-        "damit ein Fenster und eine Kachel erkennbar aus demselben "
-        "Baukasten kommen. 0 sind quadratische Ecken.",
+        N_("Window corner rounding"),
+        N_("The same rung as the rounding of the bar modules, so that a "
+           "window and a tile visibly come from the same kit. 0 means "
+           "square corners."),
         0, 32),
 )
 
@@ -361,10 +413,10 @@ def size_text(name: str, value: float) -> str:
 #     hebt sie einzeln hierher - eine Zeile, die nichts als ihren Ort
 #     aendert." Genau das ist am selben Tag (Aufgabe 32, das AGS-Fenster)
 #     passiert - siehe NOTE_* weiter unten.
-LABEL_SCALE = "Größe des Schreibtischs"
-LABEL_MOTION = "Bewegung zeigen"
-LABEL_WEATHER = "Ort"
-LABEL_THEME = "Thema dieses Rechners"
+LABEL_SCALE = N_("Desktop size")
+LABEL_MOTION = N_("Show motion")
+LABEL_WEATHER = N_("Place")
+LABEL_THEME = N_("Theme of this machine")
 
 
 # --------------------------------------------------------------------
@@ -401,14 +453,14 @@ LABEL_THEME = "Thema dieses Rechners"
 # nicht importieren - die Datei ist ein Gtk.Box und zieht `gi` herein,
 # also genau das, wovon `--json get` frei sein muss.
 TRANSFORMS = (
-    "Normal",
-    "90 Grad",
-    "180 Grad (auf dem Kopf)",
-    "270 Grad",
-    "Gespiegelt",
-    "Gespiegelt, 90 Grad",
-    "Gespiegelt, 180 Grad",
-    "Gespiegelt, 270 Grad",
+    N_("Normal"),
+    N_("90 degrees"),
+    N_("180 degrees (upside down)"),
+    N_("270 degrees"),
+    N_("Flipped"),
+    N_("Flipped, 90 degrees"),
+    N_("Flipped, 180 degrees"),
+    N_("Flipped, 270 degrees"),
 )
 
 # Die Massstaebe, die angeboten werden.
@@ -426,105 +478,178 @@ SCALES = (1.0, 1.25, 1.5, 1.75, 2.0, 3.0)
 # darunter: das AGS-Fenster setzt dieselben Ueberschriften ueber
 # dieselben Regler (zepSectionLabel, ags-kit.template), und eine
 # Ueberschrift, die in app.py steht, waere dort abgeschrieben.
-GROUP_SCALE = "Maßstab"
-GROUP_DIALS = "Ausnahmen"
-GROUP_MOTION = "Bewegung"
-GROUP_THEME = "Thema"
-GROUP_WEATHER = "Wetter in der Leiste"
-GROUP_UPDATE = "Selbstaktualisierung"
+GROUP_SCALE = N_("Scale")
+GROUP_DIALS = N_("Exceptions")
+GROUP_MOTION = N_("Motion")
+GROUP_THEME = N_("Theme")
+GROUP_WEATHER = N_("Weather in the bar")
+GROUP_UPDATE = N_("Self-update")
 
-NOTE_SCALE_GROUP = (
-    "Ein Faktor auf alles, was Text ist oder Text umschliesst: "
-    "die Schrift, die Zeilenhöhen, die Dicke der Leiste. "
-    f"{sizes.SCALE_DEFAULT:.4g} ist die ausgelieferte Größe - "
-    "dieselbe, in der das Startmenue schreibt. 1 ist die "
-    "Größe davor.")
+# EIN PLATZHALTER UND KEINE EINGESETZTE ZAHL. Hier stand eine
+# f-Zeichenkette, die sizes.SCALE_DEFAULT beim Import einsetzte - als
+# msgid haette der Satz sich mit jeder Verstellung dort geaendert, und
+# der Uebersetzer waere jedes Mal aufs Neue gefragt worden, ohne dass
+# sich ein Wort geaendert haette.
+NOTE_SCALE_GROUP = N_(
+    "A factor on everything that is text or encloses text: the font, the "
+    "line heights, the thickness of the bar. {shipped} is the shipped "
+    "size - the same one the start menu writes in. 1 is the size before "
+    "that.")
 
-NOTE_SCALE_RESET = (
-    f"Stellt den Faktor auf {sizes.SCALE_DEFAULT:.4g} und gibt jede "
-    "Ausnahme unten wieder an ihn zurück.")
+NOTE_SCALE_RESET = N_(
+    "Sets the factor to {shipped} and hands every exception below back "
+    "to it.")
 
-NOTE_DIALS_GROUP = (
-    "Fünf Größen mit einem eigenen Grund, vom Faktor abzuweichen. "
-    "Wer hier eine Zahl nennt, sagt, was auf dem Schirm stehen soll - "
-    "der Faktor gilt für sie dann nicht mehr.")
 
-# Die drei Dauern werden GELESEN und nicht genannt: sie stehen in
-# sizes.py, und eine abgeschriebene Millisekundenzahl hier waere beim
-# naechsten Verstellen dort falsch.
-NOTE_MOTION_GROUP = (
-    "Eine Kurve und drei Dauern - "
-    + ", ".join(sizes.value_of(f"{sizes.MOTION_PREFIX}{role}", {})
-                for role, _ in sizes.MOTION_ROLES)
-    + ". Sie folgen dem Faktor NICHT: wer die Schrift verdoppelt, "
-      "will größer lesen und nicht länger warten.")
+def scale_note() -> str:
+    """Die Beschreibung der Massstabsgruppe, mit der Vorgabe darin."""
+    return _(NOTE_SCALE_GROUP).format(
+        shipped=f"{sizes.SCALE_DEFAULT:.4g}")
 
-NOTE_MOTION = (
-    "Aus heißt wirklich aus - der Compositor und die fremden "
-    "GTK4-Fenster gehen mit. Bewegte Flächen lösen bei einer "
-    "vestibulären Störung Schwindel aus; das ist der Grund "
-    "für diesen Schalter und kein Geschmack.")
 
-NOTE_SIZES_REST_TITLE = "Die übrigen Größen"
+def scale_reset_note() -> str:
+    """Was der Zuruecksetzen-Knopf tut, mit derselben Zahl."""
+    return _(NOTE_SCALE_RESET).format(
+        shipped=f"{sizes.SCALE_DEFAULT:.4g}")
 
-NOTE_SIZES_REST = (
-    f"Einstellbar sind {len(sizes.TABLE)}. Die anderen "
-    f"{len(sizes.TABLE) - len(DIALS)} sind Sprossen der "
-    "vier Leitern - Schrift, Symbol, Rundung, Abstand -, die "
-    "der Regler oben IM VERHAELTNIS bewegt, und Innenmasse "
-    "von Fenstern, die nach dem Platzhalter heissen, den sie "
-    "setzen. Einzeln angeboten wären sie wieder der Katalog, "
-    "den die Leitern abgelöst haben. "
-    "`zepos-settings get sizes` zeigt, was gesetzt ist, "
-    "`user_settings.py list-sizes` alle mit ihrem aktuellen Wert.")
 
-NOTE_WEATHER_GROUP = (
-    "Ein Ortsname, eine Postleitzahl oder ein Flughafencode. "
-    "Leer heißt: das Modul bleibt leer und fragt niemanden - "
-    "und nur dann erfährt wttr.in nicht, wo diese Maschine "
-    "steht. Der Ort geht bei jeder Auffrischung dorthin.")
+NOTE_DIALS_GROUP = N_(
+    "Five sizes with a reason of their own to deviate from the factor. "
+    "Naming a number here says what should stand on the screen - the "
+    "factor no longer applies to it.")
 
-NOTE_UPDATE_ENABLED = (
-    "Aus heißt: systemd hält den Zeitgeber gar nicht erst.")
+# ZWEI msgids UND EIN {}, NICHT DREI STUECKE UM EINE VERKETTUNG HERUM.
+# Ein Uebersetzer, der "One curve and three durations - " und ". They do
+# NOT follow the factor: ..." getrennt vorfindet, kann die Satzstellung
+# nicht mehr aendern - und im Deutschen steht das Verb woanders. Der
+# Platzhalter traegt die drei Dauern, die aus sizes.py GELESEN werden.
+NOTE_MOTION_GROUP = N_(
+    "One curve and three durations - {durations}. They do NOT follow the "
+    "factor: doubling the text size means wanting to read bigger, not to "
+    "wait longer.")
 
-NOTE_UPDATE_SCOPE = (
-    "Nur ZepOS lässt die Arch-Basis in Ruhe. Ein "
-    "unbeaufsichtigtes Vollupgrade auf einem Rolling Release ist "
-    "ein Rechner, der eines Morgens nicht mehr startet.")
 
-NOTE_UPDATE_NOTIFY = (
-    "Ein Fehlschlag meldet sich immer, ausser bei \"Nie\" - eine "
-    "abgelehnte Unterschrift darf nicht wie \"schon eine Weile "
-    "nichts Neues\" aussehen.")
+def motion_note() -> str:
+    """Die Beschreibung der Bewegungsgruppe, mit den drei Dauern darin.
 
-NOTE_UPDATE_REST_TITLE = "Die übrigen Einstellungen"
+    Die Dauern werden GELESEN und nicht genannt: sie stehen in sizes.py,
+    und eine abgeschriebene Millisekundenzahl hier waere beim naechsten
+    Verstellen dort falsch.
 
-NOTE_UPDATE_REST = (
-    "Verzögerung nach dem Start, zufällige Streuung, Nachholen und "
-    "die Meldung über die Arch-Basis stehen in `zepos-update --help`.")
+    `_label` und nicht `_` in der Klammer: `_` ist in dieser Datei der
+    Katalog. Eine Erzeuger-Klammer hat ihren eigenen Namensraum und
+    ueberschreibt ihn nicht - aber ein Leser muesste das wissen, um
+    sicher zu sein.
+    """
+    dauern = ", ".join(
+        sizes.value_of(f"{sizes.MOTION_PREFIX}{role}", {})
+        for role, _label in sizes.MOTION_ROLES)
+    return _(NOTE_MOTION_GROUP).format(durations=dauern)
+
+
+NOTE_MOTION = N_(
+    "Off means really off - the compositor and the foreign GTK4 windows "
+    "go with it. Moving surfaces trigger vertigo in people with a "
+    "vestibular disorder; that is the reason for this switch, and not "
+    "taste.")
+
+NOTE_SIZES_REST_TITLE = N_("The remaining sizes")
+
+# Auch hier Platzhalter statt eingesetzter Zahlen: die Tabelle waechst,
+# und ein msgid, der mit ihr waechst, macht aus jedem neuen Eintrag eine
+# Uebersetzungsaufgabe.
+NOTE_SIZES_REST = N_(
+    "{total} are adjustable. The other {rest} are rungs of the four "
+    "ladders - font, icon, rounding, spacing - which the slider above "
+    "moves IN PROPORTION, and inner measurements of windows named after "
+    "the placeholder they set. Offered one by one they would be the "
+    "catalogue the ladders replaced. `zepos-settings get sizes` shows "
+    "what is set, `user_settings.py list-sizes` all of them with their "
+    "current value.")
+
+
+def sizes_rest_note() -> str:
+    """Wie viele Groessen es gibt und wie viele davon Sprossen sind."""
+    return _(NOTE_SIZES_REST).format(
+        total=len(sizes.TABLE), rest=len(sizes.TABLE) - len(DIALS))
+
+
+NOTE_WEATHER_GROUP = N_(
+    "A place name, a postal code or an airport code. Empty means: the "
+    "module stays empty and asks nobody - and only then does wttr.in not "
+    "learn where this machine stands. The place goes there on every "
+    "refresh.")
+
+NOTE_UPDATE_ENABLED = N_(
+    "Off means: systemd does not even hold the timer.")
+
+NOTE_UPDATE_SCOPE = N_(
+    "ZepOS only leaves the Arch base alone. An unattended full upgrade on "
+    "a rolling release is a machine that one morning no longer starts.")
+
+# Der Wortlaut von UPDATE_NOTIFY_LABELS["never"] steht hier als
+# PLATZHALTER und nicht abgeschrieben: sonst hiesse die Auswahl "Never"
+# und der Satz darunter zitierte weiter "Nie".
+NOTE_UPDATE_NOTIFY = N_(
+    "A failure always reports itself, except at \"{never}\" - a rejected "
+    "signature must not look like \"nothing new for a while\".")
+
+NOTE_UPDATE_REST_TITLE = N_("The remaining settings")
+
+NOTE_UPDATE_REST = N_(
+    "Delay after boot, random spread, catching up and the notice about "
+    "the Arch base are in `zepos-update --help`.")
+
+
+# VIER msgids UND KEIN EINGEBETTETES \n. Ein msgid mit einem
+# Zeilenumbruch darin schreibt gettext in der MEHRZEILIGEN Form
+#
+#     msgid ""
+#     "erste Zeile\n"
+#     "\n"
+#     "zweite Zeile"
+#
+# und die Kataloguesicherung sucht die EINZEILIGE Zeichenfolge
+# `msgid "<ganzer Text>"`. Der Eintrag findet sich darin nicht wieder,
+# und der Lauf meldet einen msgid ohne Uebersetzung, der uebersetzt
+# dasteht. Zwei msgids, hinterher zusammengesetzt.
+NOTE_THEME_PALETTE = N_(
+    "The palette the own colours sit on top of: whatever is set on the "
+    "\"Colours\" page survives every change.")
+
+NOTE_THEME_OWNER = N_(
+    "The theme belongs to the MACHINE and not to this account - the login "
+    "screen stands before every account and should show the same thing.")
+
+NOTE_MAY_WRITE = N_("This account may write it.")
+
+NOTE_WILL_ASK = N_("Permission will therefore be asked when changing it.")
+
+NOTE_UPDATE_OWNER = N_(
+    "These settings belong to the MACHINE and not to this account: the "
+    "service runs before anyone has logged in. They are written "
+    "immediately -")
+
+NOTE_UPDATE_MAY_WRITE = N_("this account may do that.")
+
+NOTE_UPDATE_WILL_ASK = N_("and permission is asked for it.")
 
 
 def theme_note(writable: bool) -> str:
-    """Die Beschreibung der Themenseite - mit dem Satz, der misst."""
-    return (
-        "Die Palette, unter der die eigenen Farben liegen: was "
-        "auf der Seite \"Farben\" eingestellt ist, überlebt "
-        "jeden Wechsel.\n\n"
-        "Das Thema gehört der MASCHINE und nicht diesem Konto - "
-        "der Anmeldebildschirm steht vor jedem Konto und soll "
-        "dasselbe zeigen. "
-        + ("Dieses Konto darf es schreiben." if writable else
-           "Deshalb wird beim Wechseln nach Rechten gefragt."))
+    """Die Beschreibung der Themenseite - mit dem Satz, der misst.
+
+    Der Absatz entsteht HIER und nicht im Katalog: der Umbruch ist
+    Anordnung und keine Sprache.
+    """
+    return (f"{_(NOTE_THEME_PALETTE)}\n\n{_(NOTE_THEME_OWNER)} "
+            + (_(NOTE_MAY_WRITE) if writable else _(NOTE_WILL_ASK)))
 
 
 def update_note(writable: bool) -> str:
     """Dieselbe Form fuer die Aktualisierung."""
-    return (
-        "Diese Einstellungen gehören der MASCHINE und nicht "
-        "diesem Konto: der Dienst läuft, bevor sich jemand "
-        "angemeldet hat. Sie werden sofort geschrieben - "
-        + ("dieses Konto darf das." if writable else
-           "und dafür wird nach Rechten gefragt."))
+    return (f"{_(NOTE_UPDATE_OWNER)} "
+            + (_(NOTE_UPDATE_MAY_WRITE) if writable
+               else _(NOTE_UPDATE_WILL_ASK)))
 
 
 # Die Seiten dieses Fensters, in der Reihenfolge, in der sie im
@@ -551,25 +676,26 @@ def update_note(writable: bool) -> str:
 #     auseinanderlaufen koennen, steht die Liste hier EINMAL, und
 #     tests/settings/test_settings_model.py haelt die Datei dagegen.
 PAGES: tuple[tuple[str, str, str], ...] = (
-    ("groesse", "Größe", "preferences-desktop-font-symbolic"),
+    ("groesse", N_("Size"), "preferences-desktop-font-symbolic"),
     # Die Bildschirme direkt hinter der Groesse, weil beide dieselbe
     # Frage beantworten - "wie gross ist das hier eigentlich" -, und
     # VOR dem Thema, weil eine Anordnung der Grund ist, aus dem jemand
     # dieses Fenster ueberhaupt aufmacht, wenn er gerade ein Kabel
     # eingesteckt hat.
-    ("bildschirme", "Bildschirme", "video-display-symbolic"),
+    ("bildschirme", N_("Screens"), "video-display-symbolic"),
     # Die Leiste hinter den Bildschirmen: beide beschreiben, WO etwas
     # steht, und die Leiste steht auf den Bildschirmen. Vor dem Thema
     # aus demselben Grund wie die Groesse - was da ist, entscheidet man
     # vor der Farbe, die es hat.
-    ("leiste", "Leiste", "view-list-ordered-symbolic"),
+    ("leiste", N_("Bar"), "view-list-ordered-symbolic"),
     # Vor den Farben, weil es UNTER ihnen liegt: das Thema setzt die
     # Palette, die eigenen Farben liegen darueber. Wer beides aendern
     # will, waehlt erst das Thema.
-    ("thema", "Thema", "preferences-desktop-theme-symbolic"),
-    ("farben", "Farben", "applications-graphics-symbolic"),
-    ("wetter", "Wetter", "weather-few-clouds-symbolic"),
-    ("aktualisierung", "Aktualisierung", "software-update-available-symbolic"),
+    ("thema", N_("Theme"), "preferences-desktop-theme-symbolic"),
+    ("farben", N_("Colours"), "applications-graphics-symbolic"),
+    ("wetter", N_("Weather"), "weather-few-clouds-symbolic"),
+    ("aktualisierung", N_("Updates"),
+     "software-update-available-symbolic"),
     # Sprache und Zeitzone ZULETZT, und das ist eine Entscheidung mit
     # zwei Haelften.
     #
@@ -586,10 +712,15 @@ PAGES: tuple[tuple[str, str, str], ...] = (
     #     "sprache", "language", "zeitzone" oder "uhr" in den Starter
     #     tippt, bekommt sie unmittelbar, ohne das Fenster zu oeffnen
     #     und ohne einen Reiter lesen zu muessen.
-    ("sprache", "Sprache und Zeit", "preferences-desktop-locale-symbolic"),
+    ("sprache", N_("Language and time"),
+     "preferences-desktop-locale-symbolic"),
 )
 
-PAGE_NAMES = tuple(name for name, _, _ in PAGES)
+# `_label`/`_icon` und nicht `_`: `_` ist in dieser Datei seit dem
+# 02.09.2026 der Katalog. Ein Unterstrich in einer Erzeuger-Klammer
+# ueberschreibt ihn NICHT (eine Klammer hat ihren eigenen Namensraum),
+# aber ein Leser muesste das wissen, um sicher zu sein.
+PAGE_NAMES = tuple(name for name, _label, _icon in PAGES)
 
 # Der Schalter, mit dem eine Aktion aus der .desktop-Datei ihre Seite
 # nennt. Er steht hier, weil main.py ihn liest und die Vorlage der
@@ -693,16 +824,17 @@ def hex_of(red: float, green: float, blue: float) -> str:
 # stehen. Links, rechts, Dock - von oben nach unten so, wie sie auf dem
 # Schirm von links nach rechts und dann darunter stehen.
 BAR_SIDES: tuple[tuple[str, str, str], ...] = (
-    (settings_file.BAR_LEFT, "Links in der Leiste",
-     "Das linke Ende der oberen Leiste, von außen nach innen gelesen: "
-     "der oberste Eintrag steht am weitesten links."),
-    (settings_file.BAR_RIGHT, "Rechts in der Leiste",
-     "Das rechte Ende, von innen nach außen: der oberste Eintrag steht "
-     "der Fenstertitelmitte am nächsten, der unterste ganz außen."),
-    (settings_file.BAR_PINS, "Im Dock angeheftet",
-     "Die Anwendungen im Fuss, von links nach rechts. Ein offenes "
-     "Fenster erscheint dort ohnehin; hier steht, was auch ohne "
-     "geöffnetes Fenster dableibt."),
+    (settings_file.BAR_LEFT, N_("Left in the bar"),
+     N_("The left end of the top bar, read from the outside inwards: the "
+        "topmost entry stands furthest to the left.")),
+    (settings_file.BAR_RIGHT, N_("Right in the bar"),
+     N_("The right end, from the inside outwards: the topmost entry "
+        "stands closest to the centred window title, the bottom one "
+        "furthest out.")),
+    (settings_file.BAR_PINS, N_("Pinned in the dock"),
+     N_("The applications in the dock, from left to right. An open window "
+        "appears there anyway; what stands here is what remains without "
+        "an open window.")),
 )
 
 
@@ -724,9 +856,9 @@ BAR_SIDES: tuple[tuple[str, str, str], ...] = (
 #     Angezeigt, weil er in der ausgelieferten Liste steht und der
 #     Nutzer sonst ein Symbol weniger sieht, als hier Zeilen stehen -
 #     ohne einen Anhaltspunkt, warum.
-DOCK_NO_ENTRY = ("kein Anwendungseintrag auf dieser Maschine - "
-                 "nicht installiert")
-DOCK_SERVICE = "ein Dienst ohne Fenster (NoDisplay) - kein Knopf im Dock"
+DOCK_NO_ENTRY = N_("no application entry on this machine - not installed")
+DOCK_SERVICE = N_(
+    "a service without a window (NoDisplay) - no button in the dock")
 
 
 def dock_reason(found: bool, nodisplay: bool) -> str:
@@ -867,7 +999,7 @@ def shipped_bar() -> tuple[dict[str, list[str] | None], dict[str, str], str]:
     # EIN Wortlaut fuer "der Abdruck ist da und taugt nicht", obwohl es
     # zwei Wege dorthin gibt (unlesbare Datei, unlesbarer Inhalt): zwei
     # Formulierungen fuer eine Lage lesen sich wie zwei Lagen.
-    broken = "Die hinterlegte Reihenfolge ist nicht zu lesen: "
+    broken = _(BAR_IMPRINT_UNREADABLE)
 
     try:
         imprint = settings_file.shipped_bar()
@@ -876,13 +1008,10 @@ def shipped_bar() -> tuple[dict[str, list[str] | None], dict[str, str], str]:
 
     if imprint is None:
         return (unknown, {},
-                f"Auf dieser Maschine ist nicht hinterlegt, was ZepOS "
-                f"ausliefert "
-                f"({paths.system_root() / settings_file.SHIPPED_BAR} "
-                f"fehlt). Was hier steht, ist deshalb das, was in den "
-                f"Einstellungen steht - hinzufügen lässt sich nichts. "
-                f"Die Datei bringt das Paket zepos-config mit; ein "
-                f"Checkout ohne installiertes Paket hat sie nicht.")
+                _(BAR_IMPRINT_MISSING).format(
+                    path=paths.system_root()
+                    / settings_file.SHIPPED_BAR)
+                + " " + _(BAR_IMPRINT_FROM_PACKAGE))
 
     try:
         lists = {key: settings_file.bar_names(imprint, key)
@@ -1222,11 +1351,10 @@ GENERATE_COMMAND = ("zepos-generate", "--all")
 # Was ein Neuerzeugen kostet, im Wortlaut, damit die Oberflaeche es nicht
 # umschreibt. GEMESSEN in src/generate_config.sh: `ags quit`, bis zu
 # zwei Sekunden warten, `pkill -9 -f "gjs.*ags"`, neu starten.
-GENERATE_COST = (
-    "Die Leiste, das Dock und alle Ueberlagerungsfenster werden dabei "
-    "beendet und neu gestartet - sie sind für wenige Sekunden weg. "
-    "Bereits geöffnete Terminals behalten ihre alte Schriftgröße, "
-    "bis sie neu geöffnet werden."
+GENERATE_COST = N_(
+    "The bar, the dock and all overlay windows are stopped and restarted "
+    "in the process - they are gone for a few seconds. Terminals that are "
+    "already open keep their old font size until they are reopened."
 )
 
 
@@ -1292,21 +1420,21 @@ UPDATE_NOTIFY = "notify"
 UPDATE_INTERVAL = "schedule.interval"
 
 UPDATE_LABELS = {
-    UPDATE_ENABLED: "Automatisch aktualisieren",
-    UPDATE_SCOPE: "Umfang",
-    UPDATE_NOTIFY: "Melden",
-    UPDATE_INTERVAL: "Wie oft",
+    UPDATE_ENABLED: N_("Update automatically"),
+    UPDATE_SCOPE: N_("Scope"),
+    UPDATE_NOTIFY: N_("Report"),
+    UPDATE_INTERVAL: N_("How often"),
 }
 
 UPDATE_SCOPE_LABELS = {
-    update.SCOPE_ZEPOS: "Nur ZepOS",
-    update.SCOPE_ALL: "Alles, auch die Arch-Basis",
+    update.SCOPE_ZEPOS: N_("ZepOS only"),
+    update.SCOPE_ALL: N_("Everything, the Arch base too"),
 }
 
 UPDATE_NOTIFY_LABELS = {
-    update.NOTIFY_CHANGES: "Wenn sich etwas geändert hat",
-    update.NOTIFY_FAILURES: "Nur bei Fehlschlägen",
-    update.NOTIFY_NEVER: "Nie",
+    update.NOTIFY_CHANGES: N_("When something has changed"),
+    update.NOTIFY_FAILURES: N_("Only on failures"),
+    update.NOTIFY_NEVER: N_("Never"),
 }
 
 # Die Kalenderworte von systemd, die als "wie oft" einen Sinn ergeben.
@@ -1314,10 +1442,24 @@ UPDATE_NOTIFY_LABELS = {
 # und eine Aktualisierung, die stuendlich nach Paketen fragt, ist keine
 # Einstellung, sondern ein Fehler mit einem Namen.
 UPDATE_INTERVAL_LABELS = {
-    "daily": "Täglich",
-    "weekly": "Wöchentlich",
-    "monthly": "Monatlich",
+    "daily": N_("Daily"),
+    "weekly": N_("Weekly"),
+    "monthly": N_("Monthly"),
 }
+
+
+def update_notify_note() -> str:
+    """Der Hinweis unter "Melden" - mit dem Wortlaut von "Nie" darin.
+
+    Der zitierte Wortlaut wird GELESEN und nicht abgeschrieben. Hier
+    stand ein festes "Nie" im Satz, und sobald die Auswahl darueber
+    uebersetzt ist, zitierte der Hinweis eine Aufschrift, die es nicht
+    mehr gibt - "except at \"Nie\"" unter einer Liste, in der "Never"
+    steht. Derselbe Grund, aus dem die Beschriftungen in dieser Datei
+    stehen und nicht in app.py.
+    """
+    return _(NOTE_UPDATE_NOTIFY).format(
+        never=_(UPDATE_NOTIFY_LABELS[update.NOTIFY_NEVER]))
 
 
 # --------------------------------------------------------------------
@@ -1398,10 +1540,7 @@ def set_theme(name: str, *, runner: Runner | None = None) -> UpdateOutcome:
     if not lifting:
         return UpdateOutcome(
             False,
-            "Das Thema gehört der Maschine und nicht diesem Konto, weil "
-            "der Anmeldebildschirm dazugehört. Auf diesem System ist "
-            "kein pkexec vorhanden, also geht es nur so:\n    sudo "
-            + " ".join(command),
+            f"{_(THEME_NEEDS_ROOT)}\n    sudo " + " ".join(command),
             command)
 
     runner = runner or subprocess.run
@@ -1411,7 +1550,9 @@ def set_theme(name: str, *, runner: Runner | None = None) -> UpdateOutcome:
     return UpdateOutcome(
         False,
         (completed.stderr or "").strip()
-        or f"{' '.join(command)} endete mit {completed.returncode}",
+        or _(OUTCOME_EXIT).format(
+            command=" ".join(command),
+            code=completed.returncode),
         command)
 
 
@@ -1431,12 +1572,11 @@ def set_theme(name: str, *, runner: Runner | None = None) -> UpdateOutcome:
 #                 Fensterleisten also erst dann. Und schon offene
 #                 Terminals behalten ihre Farben, bis sie neu geoeffnet
 #                 werden: kitty liest kitty.conf einmal.
-THEME_TIMING = (
-    "Der Anmeldebildschirm zeigt das neue Thema sofort - beim nächsten "
-    "Mal, ohne dass etwas erzeugt werden muss. Der Schreibtisch braucht "
-    "einen Erzeugungslauf. Fensterrahmen und schon offene Terminals "
-    "folgen erst nach `hyprctl reload` beziehungsweise beim nächsten "
-    "Oeffnen."
+THEME_TIMING = N_(
+    "The login screen shows the new theme immediately - next time, "
+    "without anything having to be generated. The desktop needs a "
+    "generation run. Window frames and terminals that are already open "
+    "follow only after `hyprctl reload` or when reopened."
 )
 
 
@@ -1540,9 +1680,7 @@ def set_update_value(key: str, value: Any, *,
     if not lifting:
         return UpdateOutcome(
             False,
-            "Diese Einstellung gehört der Maschine und nicht diesem "
-            "Konto. Auf diesem System ist kein pkexec vorhanden, also "
-            "geht es nur so:\n    sudo " + " ".join(command),
+            f"{_(UPDATE_NEEDS_ROOT)}\n    sudo " + " ".join(command),
             command)
 
     runner = runner or subprocess.run
@@ -1552,7 +1690,9 @@ def set_update_value(key: str, value: Any, *,
     return UpdateOutcome(
         False,
         (completed.stderr or "").strip()
-        or f"{' '.join(command)} endete mit {completed.returncode}",
+        or _(OUTCOME_EXIT).format(
+            command=" ".join(command),
+            code=completed.returncode),
         command)
 
 
@@ -1593,17 +1733,19 @@ def set_update_value(key: str, value: Any, *,
 #     sondern ob der Befehl ueberhaupt vorhanden ist. Alles Weitere
 #     entscheidet Polkit, und zwar erst beim Klick.
 
-LABEL_LANGUAGE = "Sprache"
-LABEL_TIMEZONE = "Zeitzone"
+LABEL_LANGUAGE = N_("Language")
+LABEL_TIMEZONE = N_("Time zone")
 
-GROUP_REGION = "Sprache und Zeit"
+# Wortgleich zur Beschriftung des Reiters in PAGES - und derselbe msgid,
+# damit der Reiter und die Gruppe darin nicht in zwei Sprachen geraten
+# koennen.
+GROUP_REGION = N_("Language and time")
 
-NOTE_REGION_GROUP = (
-    "Beides gehört der MASCHINE und nicht diesem Konto: der "
-    "Anmeldebildschirm spricht eine Sprache, bevor sich jemand "
-    "angemeldet hat, und die Zeitzone entscheidet, welche Uhrzeit jeder "
-    "Zeitstempel dieses Rechners trägt. Beides wird sofort geschrieben, "
-    "und dabei wird nach Rechten gefragt."
+NOTE_REGION_GROUP = N_(
+    "Both belong to the MACHINE and not to this account: the login screen "
+    "speaks a language before anyone has logged in, and the time zone "
+    "decides which time every timestamp of this machine carries. Both are "
+    "written immediately, and permission is asked for it."
 )
 
 # Was ein Sprachwechsel WANN erreicht. Im Wortlaut, damit die
@@ -1642,11 +1784,10 @@ NOTE_REGION_GROUP = (
 #                 /etc/locale.conf, angefertigt bei der Anmeldung; ein
 #                 Programm, das jetzt startet, erbt sie und nicht die
 #                 Datei.
-LANGUAGE_TIMING = (
-    "Der Anmeldebildschirm und dieses Fenster folgen sofort. Leiste, "
-    "Dock und die übrigen Fenster nach einem Erzeugungslauf - "
-    "»Jetzt anwenden« macht ihn. Programme außerhalb der Oberfläche "
-    "beim nächsten Anmelden."
+LANGUAGE_TIMING = N_(
+    "The login screen and this window follow immediately. Bar, dock and "
+    "the remaining windows after a generation run - \u00bbApply now\u00ab "
+    "does one. Programs outside the desktop at the next login."
 )
 
 # Und was ein Zeitzonenwechsel wann erreicht. Kuerzer, weil er weniger
@@ -1660,10 +1801,10 @@ LANGUAGE_TIMING = (
 #   Minute       Minute ab (intervalMs 60000 an custom/date in
 #                ags-bar.template), also steht die neue Zeit spaetestens
 #                nach einer Minute da.
-TIMEZONE_TIMING = (
-    "Wirkt sofort für alles, was die Uhrzeit vom System holt. Die Uhr "
-    "in der Leiste fragt einmal je Minute nach und zeigt die neue Zeit "
-    "deshalb spätestens nach einer Minute."
+TIMEZONE_TIMING = N_(
+    "Takes effect immediately for everything that gets the time from the "
+    "system. The clock in the bar asks once a minute and therefore shows "
+    "the new time after a minute at the latest."
 )
 
 
@@ -1727,10 +1868,8 @@ def set_language(code: str, *, runner: Runner | None = None) -> UpdateOutcome:
     if not language_writable():
         return UpdateOutcome(
             False,
-            "Die Sprache gehört der Maschine und nicht diesem Konto, "
-            "weil der Anmeldebildschirm dazugehört. Auf diesem System "
-            "gibt es kein localectl, also geht es nur über die Datei "
-            f"selbst: {region.locale_conf_path()}",
+            _(LANGUAGE_NEEDS_FILE).format(
+                path=region.locale_conf_path()),
             command)
 
     runner = runner or subprocess.run
@@ -1740,7 +1879,9 @@ def set_language(code: str, *, runner: Runner | None = None) -> UpdateOutcome:
     return UpdateOutcome(
         False,
         (completed.stderr or "").strip()
-        or f"{' '.join(command)} endete mit {completed.returncode}",
+        or _(OUTCOME_EXIT).format(
+            command=" ".join(command),
+            code=completed.returncode),
         command)
 
 
@@ -1785,9 +1926,8 @@ def set_timezone(zone: str, *, runner: Runner | None = None) -> UpdateOutcome:
     if not timezone_writable():
         return UpdateOutcome(
             False,
-            "Die Zeitzone gehört der Maschine und nicht diesem Konto. "
-            "Auf diesem System gibt es kein timedatectl, also geht es "
-            f"nur über {region.localtime_path()} selbst.",
+            _(TIMEZONE_NEEDS_FILE).format(
+                path=region.localtime_path()),
             command)
 
     runner = runner or subprocess.run
@@ -1797,5 +1937,7 @@ def set_timezone(zone: str, *, runner: Runner | None = None) -> UpdateOutcome:
     return UpdateOutcome(
         False,
         (completed.stderr or "").strip()
-        or f"{' '.join(command)} endete mit {completed.returncode}",
+        or _(OUTCOME_EXIT).format(
+            command=" ".join(command),
+            code=completed.returncode),
         command)

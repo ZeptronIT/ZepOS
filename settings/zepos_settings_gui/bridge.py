@@ -115,6 +115,7 @@ import theme
 import update
 
 from . import model
+from .i18n import N_, _
 
 # Die Fassung dieses Vertrags. Sie steht IM Dokument, weil das Fenster
 # aelter oder juenger sein kann als der Befehl: ein AGS-Fenster wird von
@@ -294,14 +295,14 @@ def _scale_free(draft: model.Draft, name: str) -> float:
 
 def _page_groesse(draft: model.Draft) -> dict:
     controls = [_control(
-        SIZES_SCALE, NUMBER, model.LABEL_SCALE, draft.current_scale(),
+        SIZES_SCALE, NUMBER, _(model.LABEL_SCALE), draft.current_scale(),
         # Der Satz erklaert den Rueckstell-Knopf neben diesem Regler
         # (im GTK-Fenster eine eigene Zeile "Zuruecksetzen", hier das
-        # `default`-Feld daneben) - siehe model.NOTE_SCALE_RESET.
-        note=model.NOTE_SCALE_RESET,
+        # `default`-Feld daneben) - siehe model.scale_reset_note().
+        note=model.scale_reset_note(),
         default=sizes.SCALE_DEFAULT,
         minimum=model.SCALE_MINIMUM, maximum=model.SCALE_MAXIMUM,
-        step=model.SCALE_STEP, digits=2, unit="", group=model.GROUP_SCALE)]
+        step=model.SCALE_STEP, digits=2, unit="", group=_(model.GROUP_SCALE))]
 
     for dial in model.DIALS:
         controls.append(_control(
@@ -311,23 +312,23 @@ def _page_groesse(draft: model.Draft) -> dict:
             default=_scale_free(draft, dial.name),
             minimum=dial.minimum, maximum=dial.maximum,
             step=1, digits=0, unit=sizes.TABLE[dial.name].unit,
-            group=model.GROUP_DIALS,
+            group=_(model.GROUP_DIALS),
             # Der ganze Sinn der fuenf Ausnahmen: eine 24 kann heissen
             # "der Faktor hat 24 daraus gemacht" oder "hier steht fest
             # eine 24". null als Wert setzt sie wieder auf den Faktor.
             follows_scale=draft.follows_scale(dial.name)))
 
     controls.append(_control(
-        SIZES_MOTION, SWITCH, model.LABEL_MOTION, draft.current_motion(),
-        note=model.NOTE_MOTION, group=model.GROUP_MOTION,
+        SIZES_MOTION, SWITCH, _(model.LABEL_MOTION), draft.current_motion(),
+        note=_(model.NOTE_MOTION), group=_(model.GROUP_MOTION),
         default=sizes.motion_enabled({})))
     return _page("groesse", controls, groups=[
-        _group(model.GROUP_SCALE, model.NOTE_SCALE_GROUP),
-        _group(model.GROUP_DIALS, model.NOTE_DIALS_GROUP),
-        _group(model.GROUP_MOTION, model.NOTE_MOTION_GROUP),
+        _group(model.GROUP_SCALE, model.scale_note()),
+        _group(model.GROUP_DIALS, _(model.NOTE_DIALS_GROUP)),
+        _group(model.GROUP_MOTION, model.motion_note()),
         # Die Gruppe ohne Bedienelemente - siehe _page(). Sie sagt, was
         # diese Oberflaeche nicht anbietet, und wo es stattdessen steht.
-        _group(model.NOTE_SIZES_REST_TITLE, model.NOTE_SIZES_REST),
+        _group(model.NOTE_SIZES_REST_TITLE, model.sizes_rest_note()),
     ])
 
 
@@ -465,9 +466,9 @@ def _page_thema() -> dict:
     writable = model.theme_writable()
     names = model.theme_names()
     control = _control(
-        THEME_KEY, CHOICE, model.LABEL_THEME, model.current_theme(),
-        note=model.THEME_TIMING,
-        default=theme.DEFAULT, group=model.GROUP_THEME,
+        THEME_KEY, CHOICE, _(model.LABEL_THEME), model.current_theme(),
+        note=_(model.THEME_TIMING),
+        default=theme.DEFAULT, group=_(model.GROUP_THEME),
         options=[{"value": name, "label": model.theme_label(name),
                   "note": model.theme_description(name)} for name in names],
         scope=MACHINE, immediate=True, writable=writable,
@@ -504,12 +505,12 @@ def _page_farben(draft: model.Draft) -> dict:
 def _page_wetter(draft: model.Draft) -> dict:
     stored = settings_file.defaults().get("weather")
     control = _control(
-        WEATHER_KEY, TEXT, model.LABEL_WEATHER, draft.current_weather(),
-        group=model.GROUP_WEATHER,
+        WEATHER_KEY, TEXT, _(model.LABEL_WEATHER), draft.current_weather(),
+        group=_(model.GROUP_WEATHER),
         default=stored.get("location", "") if isinstance(stored, dict) else "")
     return _page("wetter", [control],
                  groups=[_group(model.GROUP_WEATHER,
-                                model.NOTE_WEATHER_GROUP)])
+                                _(model.NOTE_WEATHER_GROUP))])
 
 
 def _page_aktualisierung() -> dict:
@@ -528,7 +529,7 @@ def _page_aktualisierung() -> dict:
     def machine(key: str, kind: str, label: str, value: Any, **rest: Any) -> dict:
         return _control(f"{UPDATE_PREFIX}{key}", kind, label, value,
                         scope=MACHINE, immediate=True, writable=writable,
-                        reason=reason, group=model.GROUP_UPDATE,
+                        reason=reason, group=_(model.GROUP_UPDATE),
                         command=model.update_elevated_command(key, None)[:-1],
                         **rest)
 
@@ -536,9 +537,9 @@ def _page_aktualisierung() -> dict:
     # keine - er hatte im GTK-Fenster auch keine, und ein erfundener
     # Satz hier waere ein Satz, den nur eines der beiden Fenster zeigt.
     notes = {
-        model.UPDATE_ENABLED: model.NOTE_UPDATE_ENABLED,
-        model.UPDATE_SCOPE: model.NOTE_UPDATE_SCOPE,
-        model.UPDATE_NOTIFY: model.NOTE_UPDATE_NOTIFY,
+        model.UPDATE_ENABLED: _(model.NOTE_UPDATE_ENABLED),
+        model.UPDATE_SCOPE: _(model.NOTE_UPDATE_SCOPE),
+        model.UPDATE_NOTIFY: model.update_notify_note(),
         model.UPDATE_INTERVAL: "",
     }
 
@@ -559,7 +560,7 @@ def _page_aktualisierung() -> dict:
                      for name, text in labels.items()]))
     return _page("aktualisierung", controls, groups=[
         _group(model.GROUP_UPDATE, model.update_note(writable)),
-        _group(model.NOTE_UPDATE_REST_TITLE, model.NOTE_UPDATE_REST),
+        _group(model.NOTE_UPDATE_REST_TITLE, _(model.NOTE_UPDATE_REST)),
     ])
 
 
@@ -591,9 +592,9 @@ def _page_sprache() -> dict:
     jetzt_zone = model.current_timezone()
 
     sprache = _control(
-        LANGUAGE_KEY, CHOICE, model.LABEL_LANGUAGE, jetzt_sprache,
-        note=model.LANGUAGE_TIMING,
-        group=model.GROUP_REGION,
+        LANGUAGE_KEY, CHOICE, _(model.LABEL_LANGUAGE), jetzt_sprache,
+        note=_(model.LANGUAGE_TIMING),
+        group=_(model.GROUP_REGION),
         options=[{"value": code, "label": model.language_label(code)}
                  for code in sprachen],
         scope=MACHINE, immediate=True, writable=sprache_geht,
@@ -606,9 +607,9 @@ def _page_sprache() -> dict:
                  if sprachen else []))
 
     zone = _control(
-        TIMEZONE_KEY, CHOICE, model.LABEL_TIMEZONE, jetzt_zone,
-        note=model.TIMEZONE_TIMING,
-        group=model.GROUP_REGION,
+        TIMEZONE_KEY, CHOICE, _(model.LABEL_TIMEZONE), jetzt_zone,
+        note=_(model.TIMEZONE_TIMING),
+        group=_(model.GROUP_REGION),
         options=[{"value": name, "label": name} for name in zonen],
         scope=MACHINE, immediate=True, writable=zone_geht,
         reason="" if zone_geht else (
@@ -619,7 +620,7 @@ def _page_sprache() -> dict:
 
     return _page("sprache", [sprache, zone],
                  groups=[_group(model.GROUP_REGION,
-                                model.NOTE_REGION_GROUP)])
+                                _(model.NOTE_REGION_GROUP))])
 
 
 def _dotted(document: dict, key: str) -> Any:
@@ -654,15 +655,15 @@ def state(draft: model.Draft, *, runner=None) -> dict:
         # umlegt.
         "elevator": model.elevator(),
         "pending_regenerate": model.marker_path().exists(),
-        "cost": {"generate": model.GENERATE_COST,
-                 "theme": model.THEME_TIMING,
+        "cost": {"generate": _(model.GENERATE_COST),
+                 "theme": _(model.THEME_TIMING),
                  # Was ein Sprach- und ein Zonenwechsel wann erreichen.
                  # Sie stehen NEBEN dem Thema und nicht statt seiner:
                  # das Fenster sagt nach jedem Schreiben, was gerade
                  # passiert ist, und die drei Saetze sind verschieden,
                  # weil die drei Wirkungen es sind.
-                 "language": model.LANGUAGE_TIMING,
-                 "timezone": model.TIMEZONE_TIMING},
+                 "language": _(model.LANGUAGE_TIMING),
+                 "timezone": _(model.TIMEZONE_TIMING)},
         "pages": [
             _page_groesse(draft),
             _page_bildschirme(runner=runner),

@@ -76,6 +76,7 @@ import displays  # noqa: E402
 import sizes  # noqa: E402
 
 from . import model  # noqa: E402
+from .i18n import N_, _  # noqa: E402
 
 # Wie viele Bildschirmpixel hoechstens auf einen Zeichnungspixel gehen.
 # Die Zeichnung passt sich der Flaeche an, die sie bekommt (siehe
