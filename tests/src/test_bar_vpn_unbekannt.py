@@ -17,9 +17,13 @@ WORUM ES GEHT
 
     Die Begruendung fuer den Zustand selbst steht in src/vpn.py bei
     UNKNOWN und wird von tests/src/test_vpn_unbekannt.py gemessen. Hier
-    geht es um den Leser: dass das Wort ankommt, dass es eine eigene
-    Farbe und ein eigenes Zeichen bekommt, und dass der Kurzhinweis den
-    Unterschied AUSSPRICHT statt ihn dem Leser zu ueberlassen.
+    geht es um den Leser: dass das Wort ankommt, dass es ein eigenes
+    Zeichen bekommt, und dass der Kurzhinweis den Unterschied
+    AUSSPRICHT statt ihn dem Leser zu ueberlassen.
+
+    Dass jeder Zustand eine eigene FARBE hat, misst
+    tests/src/test_bar_vpn.py::test_every_state_arrives_in_its_own_colour
+    fuer alle vier auf einmal - siehe Abschnitt 4 unten.
 
 DAS VERFAHREN
     Die Vorrichtung aus tests/src/test_bar_vpn.py, unveraendert
@@ -39,8 +43,7 @@ from __future__ import annotations
 import pytest
 
 from src.vpn import STATUS_WORDS
-from tests.src.test_bar_vpn import (Sandbox, WIREGUARD, _document, _nm,
-                                    _placeholder_of, _shipped_styles)
+from tests.src.test_bar_vpn import Sandbox, WIREGUARD, _document, _nm
 
 pytestmark = pytest.mark.allow_subprocess
 
@@ -137,24 +140,18 @@ def test_der_name_der_verbindung_steht_auch_hier(box):
     assert "WireGuard" in hinweis, hinweis
 
 
-def test_das_zeichen_ist_von_den_drei_schildern_verschieden(box):
-    """Farbe traegt nicht allein - dieselbe Regel wie fuer die drei.
-
-    Rot-Gruen ist die haeufigste Farbsehschwaeche, und dieses Modul ist
-    genau die Anzeige, bei der ein Irrtum teuer ist. Gemessen wird
-    gegen die drei anderen Zeichen und nicht gegen ein Literal: ein
-    Vergleich mit einem eingetippten Glyphen waere gruen, wenn zwei
-    Zustaende DENSELBEN falschen traegen.
-    """
-    zeichen = {}
-    for wort, stub in _STUBS.items():
-        box.stub("nmcli", stub)
-        zeichen[wort] = box.run()["text"]
-
-    assert len(set(zeichen.values())) == len(STATUS_WORDS), (
-        "zwei Zustaende des Schildes zeigen dasselbe Zeichen: "
-        + str(zeichen))
-
+# DAS ZEICHEN: GEMESSEN IN tests/src/test_bar_vpn.py
+#
+#     Hier stand bis zum 02.09.2026
+#     test_das_zeichen_ist_von_den_drei_schildern_verschieden. Es ist
+#     dorthin eingezogen, wo die Zusicherung ueber die drei aelteren
+#     Zeichen schon stand - test_every_state_arrives_with_its_own_symbol
+#     geht seither vpn.STATUS_WORDS durch und deckt alle vier ab.
+#
+#     Zwei Tests ueber dieselbe Eigenschaft waeren die Doppelung, die
+#     dieser Auftragsstrang aufloest: zwei Stellen, die dasselbe
+#     behaupten, und eine davon veraltet. Genau das war hier schon
+#     passiert - die aeltere zaehlte drei, waehrend es vier gab.
 
 # --------------------------------------------------------------------
 # 2. Was WEITERHIN "getrennt" heisst
@@ -231,45 +228,24 @@ def test_das_schild_kennt_jedes_wort_des_vertrags(box):
 
 
 # --------------------------------------------------------------------
-# 4. Die vierte Farbe
+# 4. Die vierte Farbe - GEMESSEN IN tests/src/test_bar_vpn.py
 # --------------------------------------------------------------------
-
-def test_der_vierte_zustand_hat_eine_eigene_farbe(tmp_path, monkeypatch):
-    """Vier Zustaende brauchen vier Farben - beide Enden geprueft.
-
-    Dieselbe Bauart wie
-    test_the_three_states_arrive_in_three_different_colours in
-    tests/src/test_bar_vpn.py, um das vierte Wort erweitert: erst die
-    Namen im Stylesheet, dann die Werte, die der Erzeuger daraus macht.
-    Verschiedene Namen fuer denselben Wert waeren vier Regeln, die
-    dasselbe malen - und jede Zusicherung ueber die KLASSEN bliebe
-    dabei gruen.
-
-    WARUM DIE WARNFARBE UND NICHT DAS KRITISCHROT
-        Rot ist in der Leiste die Farbe fuer "etwas ist kaputt, und wir
-        wissen was". Hier ist nichts festgestellt worden - nur das
-        Feststellen ist ausgefallen. Und nicht die Abblendung von
-        "getrennt", so nahe das laege: gedaempft heisst in dieser Leiste
-        ueberall "vorhanden und in Ruhe", und genau dieser Schluss ist
-        der, den der Zustand verhindern soll. Der Test haelt nur fest,
-        dass die vier verschieden sind - WELCHE es ist, begruendet
-        src/styles/bar-style.template.
-    """
-    namen = {klasse: _placeholder_of(klasse) for klasse in
-             ("vpn-connected", "vpn-stale", "vpn-disconnected",
-              "vpn-unknown")}
-    assert len(set(namen.values())) == 4, (
-        "zwei Zustaende des Schildes zeigen auf denselben Farbnamen: "
-        + str(namen))
-
-    styles = _shipped_styles(tmp_path, monkeypatch)
-    werte = {}
-    for klasse, name in namen.items():
-        assert name in styles, (
-            f"{name} ist kein Platzhalter, den der Erzeuger kennt - die "
-            "Regel bliebe im erzeugten Stylesheet ungefuellt stehen")
-        werte[klasse] = str(styles[name])
-
-    assert len(set(werte.values())) == 4, (
-        "zwei Farbnamen des Schildes fuehren auf denselben Wert: "
-        + str(werte))
+#
+# HIER STAND BIS ZUM 02.09.2026 test_der_vierte_zustand_hat_eine_eigene_farbe
+#
+#     Es war eine ZWEITE Zusicherung ueber dieselbe Eigenschaft: dass
+#     jeder Zustand des Schildes einen eigenen Farbnamen und einen
+#     eigenen Wert hat. Die erste stand in tests/src/test_bar_vpn.py und
+#     zaehlte drei; diese hier zaehlte vier.
+#
+#     Sie ist nicht geloescht, sondern eingezogen worden: der Test dort
+#     heisst jetzt test_every_state_arrives_in_its_own_colour und holt
+#     seine Liste aus vpn.STATUS_WORDS. Damit deckt er ab, was diese
+#     Fassung abdeckte, und mehr - ein fuenftes Wort wirft ihn um,
+#     waehrend zwei getippte Listen nebeneinander genau die Doppelung
+#     gewesen waeren, die dieser ganze Auftragsstrang aufloest: zwei
+#     Stellen, die dasselbe behaupten, und eine davon veraltet.
+#
+#     WELCHE der Zustand traegt - die Warnfarbe und nicht das
+#     Kritischrot, und nicht die Abblendung von "getrennt" - begruendet
+#     src/styles/bar-style.template an der Regel selbst.

@@ -69,7 +69,40 @@ optdepends=(
     'aylurs-gtk-shell: runs the AGS widget templates, the bar and the dock'
     'kitty: runs the terminal templates'
     'zepos-hyprland: the compositor the generated configuration is for'
+    # Seit dem 01.09.2026, mit dem Fall von zepos-claude-code. Dieses
+    # Paket legt /usr/bin/zepos-claude-code ab; der Befehl holt Claude
+    # Code ueber `npm i -g` und misst npm, statt es vorauszusetzen -
+    # sein Kopf begruendet beides. Ein HARTES depends stuende gegen den
+    # Satz oben, dass diese Liste kurz bleibt: wer nur den Generator
+    # will, soll ihn ohne JavaScript-Laufzeit bekommen. Ein
+    # ausgeliefertes ZepOS hat npm ohnehin, es haengt an zepos-desktop.
+    'npm: zepos-claude-code holt Claude Code damit aus der npm-Registry'
 )
+
+# WAS DIESES PAKET ABLOEST, UND WARUM DIESE ZWEI ZEILEN NICHT WEGGELASSEN
+# WERDEN DUERFEN
+#
+# ENTSCHIEDEN vom Nutzer am 01.09.2026: "ich will claude nicht mit
+# liefern bei zepos [...] ich will das packet nicht als meins verkaufen".
+# packaging/zepos-claude-code/ ist geloescht; was von ihm bleibt - der
+# Eintrag im Starter, die vier Zeichen und der Starter selbst - liegt
+# jetzt in src/ und wird von package() unten abgelegt, UNTER DENSELBEN
+# PFADEN.
+#
+# OHNE `replaces` BLIEBEN 309,6 MiB AUF JEDER SCHON INSTALLIERTEN MASCHINE
+# LIEGEN, und zwar fuer immer. Ein gleichnamiger Nachfolger waere kein
+# Ausweg: das gefallene Paket stand auf 2.1.233 (der Fassung von Claude
+# Code), jedes ZepOS-Paket traegt dagegen die Fassung aus VERSION, heute
+# 0.1.x. pacman haelt 0.1.14 fuer AELTER als 2.1.233, meldet "local is
+# newer" und spielt nichts ein.
+#
+# `conflicts` daneben und nicht statt dessen: die abgelegten Dateien
+# liegen unter denselben Pfaden (/usr/bin/zepos-claude-code, der
+# Eintrag, die vier Zeichen). Ohne diese Zeile waere eine Maschine, auf
+# der beide Pakete noch stehen, ein Dateikonflikt mitten in einem
+# `pacman -Syu`.
+replaces=('zepos-claude-code')
+conflicts=('zepos-claude-code')
 
 # Produced by packaging/build.sh from the working tree, with mtimes
 # clamped to SOURCE_DATE_EPOCH so that one tree gives one tarball.
@@ -300,6 +333,10 @@ assert "dock_pins" not in d, ("die Anheftungen gehoeren zepos-apps und "
     # sorgt dafuer, dass die Maske auf JEDEM Schirm steht; die Maske
     # startet regreet und nimmt den Compositor mit, wenn sie fertig ist.
     # Beide Dateien tragen ihre Begruendung im Kopf.
+    # zepos-claude-code ist die zehnte, seit dem 01.09.2026, und sie ist
+    # die einzige, die auf ein Programm zeigt, das ZepOS NICHT
+    # ausliefert. Sie startet Claude Code - und holt es ueber `npm i -g`,
+    # wenn es fehlt. Ihr Kopf traegt die ganze Begruendung.
     install -Dm755 -t "$pkgdir/usr/bin" \
         bin/zepos-generate \
         bin/zepos-settings \
@@ -309,7 +346,66 @@ assert "dock_pins" not in d, ("die Anheftungen gehoeren zepos-apps und "
         bin/zepos-greeter-maske \
         bin/zepos-greeter-spiegel \
         bin/zepos-session \
-        bin/zepos-displays-guard
+        bin/zepos-displays-guard \
+        bin/zepos-claude-code
+
+    # ------------------------------------------------------------------
+    # Claude Code: der Eintrag und das Zeichen - und sonst nichts
+    # ------------------------------------------------------------------
+    # HIER LAG BIS ZUM 01.09.2026 EIN EIGENES PAKET, packaging/
+    # zepos-claude-code/, das Anthropics Programm aus einem npm-Archiv
+    # baute: 324598650 Bytes entpackt, 91831121 Bytes signiert - das
+    # groesste Objekt im ganzen Repository, und bei jedem Push auf
+    # gh-pages die Warnung "larger than GitHub's recommended maximum
+    # file size of 50.00 MB".
+    #
+    # ENTSCHIEDEN vom Nutzer: "ich will das packet nicht als meins
+    # verkaufen [...] weil jetzt bekommt es keine updates". Beides traf
+    # zu. Das Paket gab fremde, proprietaere Software unter einem
+    # ZepOS-Namen weiter, und es nagelte sie auf 2.1.233 fest, waehrend
+    # npm 2.1.257 auslieferte - vierundzwanzig Fassungen weiter.
+    #
+    # WAS DIESES PAKET STATT DESSEN ABLEGT, ist ZepOS' eigene Arbeit:
+    # einen Eintrag im Starter und das Zeichen dazu. Das Programm kommt
+    # von npm, und der Befehl darueber holt es.
+    #
+    # UND DAS IST KEINE FALLE, obwohl der Eintrag auf ein Programm zeigt,
+    # das eine frische Maschine noch nicht hat: /usr/bin/zepos-claude-code
+    # fragt und installiert nach. Ein Eintrag, der nur meldet, dass
+    # etwas fehlt, waere Spec 7.4 - ein Knopf, der nichts oeffnet.
+    #
+    # DASS DER EINTRAG HIER LIEGT, HAELT IHN AUCH IM DOCK: src/apps.py
+    # liest die eigenen Anwendungen aus genau der Zeile, mit der ein
+    # Rezept einen Eintrag nach /usr/share/applications legt (siehe den
+    # Abdruck weiter oben). Er wechselt damit von der FREMDEN Haelfte -
+    # zepos-apps nannte das Paket in seinen depends - in die EIGENE, und
+    # die Ueberschneidung, die am 17.08.2026 zwei Knoepfe im Dock
+    # gekostet hat, gibt es nicht mehr.
+    install -Dm644 system/zepos-claude-code.desktop \
+        "$pkgdir/usr/share/applications/zepos-claude-code.desktop"
+
+    # Das Zeichen, in den Groessen, die der Starter und das Dock
+    # anfordern. Der DATEINAME ist der Symbolname aus dem Eintrag
+    # (Icon=zepos-claude-code) - stimmen die beiden nicht ueberein, zeigt
+    # der Starter einen leeren Kasten und sagt dazu nichts.
+    #
+    # hicolor und nicht Papirus: hicolor ist der Satz, in den ein
+    # Programm sein eigenes Zeichen legt und aus dem JEDES Thema es
+    # holt, wenn es selbst keines hat - genau der Fall hier. Ein Zeichen
+    # in Papirus abzulegen hiesse, ein fremdes Thema zu veraendern.
+    #
+    # Wem die vier Dateien gehoeren und warum sie trotzdem im Baum
+    # liegen duerfen, steht in src/system/claude-code-icons/HERKUNFT.
+    # Diese Datei wandert MIT: system/ geht oben unveraendert nach
+    # /usr/share/zepos/, die Herkunftsangabe liegt also auf jeder
+    # Installation neben den Bildern und nicht nur im Quellbaum. 3 KiB
+    # fuer eine Frage, die der Nutzer am 01.09.2026 als seine wichtigste
+    # bezeichnet hat.
+    local groesse
+    for groesse in 48 64 128 256; do
+        install -Dm644 "system/claude-code-icons/claude-code-$groesse.png" \
+            "$pkgdir/usr/share/icons/hicolor/${groesse}x${groesse}/apps/zepos-claude-code.png"
+    done
 
     # ------------------------------------------------------------------
     # Die Selbstaktualisierung (UP-1)

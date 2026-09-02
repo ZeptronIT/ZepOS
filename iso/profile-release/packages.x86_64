@@ -79,6 +79,47 @@ cage
 mesa
 foot
 
+# WHY wlr-randr IS HERE: cage CANNOT MIRROR, AND ON 01.09.2026 THAT COST
+# THE SECOND SCREEN
+#     cage has exactly two output modes, `-m extend` (the default) and
+#     `-m last`. Under extend it lays the outputs SIDE BY SIDE and puts
+#     its single window at the origin of that surface, so every other
+#     screen stays empty. Measured against real cage on the headless
+#     backend with two outputs, captured through cage's own
+#     wlr-screencopy and counted pixel by pixel:
+#
+#         HEADLESS-1:   1 colour   (the background, nothing else)
+#         HEADLESS-2: 185 colours  (the installer)
+#
+#     `-m last` does not fix it either - measured, cage then brings up
+#     only ONE output at all, so the blank screen simply moves.
+#
+#     The installed system's login screen had the same defect and was
+#     fixed by moving it to Hyprland, whose `mirror` does the work. That
+#     is NOT available here: the installer must run as root, and Hyprland
+#     refuses to start as root - the block above still holds, unchanged.
+#
+#     What IS available: cage offers zwlr_output_manager_v1 - measured,
+#     `zwlr_output_manager_v1 v4` appears in its interface list - and a
+#     wlroots compositor draws on each output exactly the part of the
+#     surface that output SITS ON. Put two outputs at the same position
+#     and they show the same picture. Measured, same setup, after moving
+#     both to 0,0:
+#
+#         HEADLESS-1: 185 colours
+#         HEADLESS-2: 185 colours, BYTE-IDENTICAL to HEADLESS-1
+#
+#     wlr-randr is the client that says so; /usr/local/bin/
+#     zepos-live-schirme is the loop that uses it, and its header carries
+#     the whole reasoning - including what it does NOT solve, which is
+#     screens of unequal size.
+#
+#     It is small and it is not load-bearing: without it, or if it fails,
+#     the medium behaves exactly as it did before. A missing output
+#     configuration cannot break an installer; it can only fail to make
+#     it visible.
+wlr-randr
+
 # --- archiso baseline: without these the image does not boot -----------
 base
 linux

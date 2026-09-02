@@ -1,0 +1,241 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Den Installer auf JEDEN angeschlossenen Schirm legen.
+#
+# Gestartet von /usr/local/bin/zepos-live-surface, also INNERHALB von
+# cage - nur dort gibt es ein WAYLAND_DISPLAY, an dem sich die Ausgaenge
+# umstellen lassen.
+#
+# WAS DIESES SKRIPT LOEST
+#     Dieselbe Blindheit, die am 01.09.2026 den Anmeldebildschirm des
+#     installierten Systems gekostet hat, steckte auch hier - und hier
+#     ist sie schlimmer. Wer sein installiertes ZepOS nicht mehr sieht,
+#     kommt ueber das GRUB-Menue in den Textmodus. Wer von einem Stick
+#     bootet, sitzt vor einem Rechner, den er noch gar nicht kennt, und
+#     der erste Eindruck von ZepOS ist ein schwarzes Bild.
+#
+#     `cage -h` der ausgelieferten Fassung 0.3.1-1 kennt genau zwei
+#     Betriebsarten:
+#
+#         -m extend  Extend the display across all connected outputs (default)
+#         -m last    Use only the last connected output
+#
+#     zepos-live-session setzt kein -m, also gilt `extend`: cage legt die
+#     Ausgaenge NEBENEINANDER und setzt sein einziges Fenster an den
+#     Ursprung dieser Flaeche. Alle anderen Schirme bleiben leer.
+#
+#     GEMESSEN am 01.09.2026 an echtem cage auf dem headless-Backend mit
+#     zwei Ausgaengen, aufgenommen ueber cages eigenes wlr-screencopy und
+#     Pixel fuer Pixel ausgezaehlt:
+#
+#         HEADLESS-1:   1 Farbe   (der Hintergrund, sonst nichts)
+#         HEADLESS-2: 185 Farben  (der Installer)
+#
+#     Und `-m last` behebt es nicht, es verlegt nur den leeren Schirm:
+#     gemessen nimmt cage dann NUR EINEN Ausgang ueberhaupt in Betrieb.
+#
+# WARUM NICHT DIESELBE LOESUNG WIE BEIM ANMELDEBILDSCHIRM
+#     Der Greeter laeuft seit dem 01.09.2026 unter Hyprland und laesst
+#     dessen `mirror` die Arbeit machen (src/bin/zepos-greeter-spiegel).
+#     Hier geht das nicht, und der Grund ist keine Bequemlichkeit:
+#
+#       * Der Installer MUSS als root laufen - archinstall besteht
+#         darauf, dieses Medium hat kein sudo, und ein Live-Benutzer mit
+#         passwortlosem root waere die eine Zugangsberechtigung in einem
+#         Abbild, das keine tragen soll.
+#       * Hyprland verweigert den Start als root. src/main.cpp:204-207
+#         der ausgelieferten Fassung 0.56.1 bricht mit
+#         "Hyprland was launched with superuser privileges" ab und
+#         verweist auf --i-am-really-stupid. Ein Auslieferungsmedium,
+#         dessen Sitzung mit einem so benannten Schalter startet, ist
+#         kein Auslieferungsmedium.
+#
+#     Die Begruendung steht ausgeschrieben in iso/profile-release/
+#     packages.x86_64 und in iso/README.md; sie gilt unveraendert.
+#
+# WIE ES STATTDESSEN GEHT: ZWEI AUSGAENGE AUF DIESELBE STELLE
+#     cage kann nicht spiegeln - aber es bietet zwlr_output_manager_v1
+#     an (nachgemessen an cage 0.3.1: `zwlr_output_manager_v1 v4` steht
+#     in seiner Schnittstellenliste). Und ein wlroots-Compositor zeichnet
+#     auf jeden Ausgang genau den Ausschnitt der Flaeche, an dem dieser
+#     Ausgang LIEGT. Liegen zwei Ausgaenge auf derselben Stelle, zeigen
+#     sie dasselbe Bild - das ist Spiegelung, ohne dass es so heisst.
+#
+#     GEMESSEN am 01.09.2026, gleicher Aufbau wie oben, nach dem
+#     Umstellen beider Ausgaenge auf 0,0:
+#
+#         HEADLESS-1: 185 Farben
+#         HEADLESS-2: 185 Farben
+#         beide Ausgaenge BYTE-GLEICH: ja
+#
+# WAS DABEI NICHT GLEICH WIRD: UNGLEICH GROSSE SCHIRME
+#     Ueberlagern ist kein Skalieren. Jeder Ausgang zeigt den Ausschnitt
+#     ab 0,0 IN SEINER EIGENEN GROESSE, und der kleinere schneidet ab.
+#
+#     GEMESSEN am 01.09.2026, dreimal mit demselben Ergebnis, mit
+#     1280x720 neben 800x600 auf derselben Stelle:
+#
+#         beide Ausgaenge     185 Farben - der Installer steht auf beiden
+#         der kleinere        BYTE FUER BYTE der linke obere Ausschnitt
+#                             des groesseren
+#         der groessere       trug Inhalt bis Bildzeile 719, also 120
+#                             Zeilen unter dem, was der kleinere zeigen
+#                             kann
+#
+#     Das Fenster folgt dabei dem GROESSEREN Ausgang - cage legt sein
+#     Vollbild auf den Ausgang, den es bei ueberlappender Anordnung
+#     zuerst findet, und das war in allen drei Laeufen der grosse.
+#     Festgenagelt ist das in tests/render/test_live_spiegel.py, das
+#     genau diesen Aufbau nachstellt und die Bilder vergleicht.
+#
+#     ES GIBT EINEN FALL, IN DEM DAS EINEN SCHIRM SCHLECHTER MACHT, und
+#     er gehoert hierhin und nicht in eine Fussnote: war der kleinere
+#     Schirm derjenige, den cage vorher zufaellig am Ursprung hatte, dann
+#     stand der Installer dort VOLLSTAENDIG, und danach ist er dort
+#     angeschnitten. Gemessen: vorher Inhalt bis Zeile 599 auf einem
+#     600 Zeilen hohen Schirm, nachher derselbe Schirm mit dem
+#     Ausschnitt eines 720 Zeilen hohen Bildes.
+#
+#     Es bleibt trotzdem der bessere Zustand, und zwar nicht knapp.
+#     Vorher gab es GENAU EINEN Schirm, auf dem der Installer zu sehen
+#     war, und WELCHER das ist, sucht cage sich aus - der Fehler, der
+#     diese Datei ausgeloest hat, war genau der, dass es der falsche war.
+#     Nachher steht auf JEDEM Schirm ein Installer, und auf dem
+#     groessten steht er vollstaendig.
+#
+#     Ein Ausgleich ueber `set_scale` oder einen anderen Modus waere
+#     denkbar und ist bewusst NICHT eingebaut. Beides ist eine
+#     Konfiguration, die ein ECHTER Bildschirm ablehnen kann - anders als
+#     eine blosse Position, die keine Hardware kosten kann -, und eine
+#     abgelehnte Konfiguration heisst: es bleibt beim schwarzen Schirm.
+#     Der Ausschnitt ist der Preis dafuer, dass dieser Fix nicht
+#     fehlschlagen kann.
+#
+# WARUM HIER KEINE TASTATURBELEGUNG STEHT
+#     Beim Anmeldebildschirm musste sie mit umziehen: Hyprland hat fuer
+#     input:kb_layout die Vorgabe "us" und liest XKB_DEFAULT_LAYOUT NICHT
+#     von selbst (ConfigValues.cpp:272), also haette die Portierung dort
+#     jede Maschine auf US-Belegung gestellt - auf dem Schirm, auf dem
+#     ein Passwort verdeckt getippt wird.
+#
+#     Dieses Medium bleibt bei cage, und cage/wlroots liest
+#     XKB_DEFAULT_LAYOUT. zepos-live-session setzt es vor dem Start aus
+#     LC_MESSAGES; das ist unveraendert und gilt weiter. Dass die Falle
+#     hier nicht zuschnappt, ist kein Zufall, sondern ein Nebeneffekt der
+#     Entscheidung oben - und auf einem Medium, auf dem jemand ein
+#     WLAN-Passwort tippt, waere sie besonders teuer gewesen.
+#
+# WAS PASSIERT, WENN ETWAS DAVON FEHLSCHLAEGT: NICHTS
+#     Ohne wlr-randr, bei unlesbarer Ausgabe, bei einem abgelehnten
+#     Umstellen - in jedem dieser Faelle tut dieses Skript GAR NICHTS,
+#     und das Medium verhaelt sich exakt wie vorher. Es kann den
+#     Installer nicht kaputtmachen, es kann ihn nur zusaetzlich sichtbar
+#     machen. Auf dem Startpfad eines Installationsmediums ist das die
+#     einzige vertretbare Bauform.
+set -u
+
+# Wie oft nachgesehen wird, ob sich die Schirme geaendert haben.
+# Ueberschreibbar fuer den Test; im Betrieb setzt das niemand.
+INTERVALL="${ZEPOS_SCHIRME_INTERVALL:-2}"
+
+# Ein Protokoll nur, wenn eins gewuenscht ist.
+LOG="${ZEPOS_SCHIRME_LOG:-}"
+
+log() {
+    [[ -n "$LOG" ]] || return 0
+    printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" >>"$LOG" 2>/dev/null || true
+}
+
+# Wie viele erfolglose Anfragen hintereinander als "der Compositor ist
+# weg" gelten. cage endet mit dem Installer, und dieses Skript soll dann
+# nicht als Waise weiterlaufen.
+GEDULD=5
+
+# --------------------------------------------------------------------
+# Welche Ausgaenge gibt es?
+# --------------------------------------------------------------------
+# NUR DIE NAMEN, und das ist Absicht. wlr-randr schreibt je Ausgang einen
+# Block, dessen KOPFZEILE ganz links beginnt und mit dem Namen anfaengt;
+# alles Weitere ist eingerueckt. Von diesem Format wird hier genau eine
+# Eigenschaft benutzt - "Kopfzeilen sind nicht eingerueckt" -, und sonst
+# nichts. Kein Feld, keine Reihenfolge, keine Einheit.
+#
+# Faellt das Format doch einmal anders aus, kommt hier eine leere Liste
+# heraus, und eine leere Liste heisst: nichts tun. Siehe den Kopf.
+namen() {
+    wlr-randr 2>/dev/null | awk '/^[^[:space:]]/ { print $1 }'
+}
+
+# --------------------------------------------------------------------
+# Alle auf dieselbe Stelle
+# --------------------------------------------------------------------
+# EIN EINZIGER Aufruf mit allen Ausgaengen, nicht einer je Ausgang:
+# wlr-randr baut daraus EINE Konfiguration, und der Compositor nimmt sie
+# als Ganzes an oder gar nicht. Nacheinander umgestellt gaebe es
+# Zwischenzustaende, in denen die Flaeche kurz anders aussieht.
+anwenden() {
+    local name argumente=()
+    while read -r name; do
+        [[ -n "$name" ]] || continue
+        argumente+=(--output "$name" --pos 0,0)
+    done
+    (( ${#argumente[@]} )) || return 1
+    wlr-randr "${argumente[@]}" >/dev/null 2>&1
+}
+
+# --------------------------------------------------------------------
+# Und immer wieder nachsehen
+# --------------------------------------------------------------------
+# UMGESTELLT WIRD NUR, WENN SICH DIE LISTE DER AUSGAENGE AENDERT.
+#
+#     Damit ist der Normalfall genau ein Umstellen - beim Start -, und
+#     ein spaeter angestecktes Kabel bekommt seins. Wer bei jedem
+#     Durchlauf umstellte, schriebe alle zwei Sekunden eine
+#     Ausgangskonfiguration auf einen Rechner, auf dem gerade jemand ein
+#     WLAN-Passwort tippt.
+#
+#     Verglichen wird die LISTE und nicht ihre Laenge: ein Schirm ab und
+#     ein anderer an, zwischen zwei Durchlaeufen, ist dieselbe Anzahl und
+#     eine andere Lage.
+log "Schirme gestartet, Intervall ${INTERVALL}s"
+letzte=""
+fehlschlaege=0
+while :; do
+    jetzt="$(namen)"
+    if [[ -z "$jetzt" ]]; then
+        fehlschlaege=$((fehlschlaege + 1))
+        if (( fehlschlaege >= GEDULD )); then
+            log "seit $GEDULD Versuchen kein Ausgang - Ende"
+            exit 0
+        fi
+    else
+        fehlschlaege=0
+        if [[ "$jetzt" != "$letzte" ]]; then
+            anzahl=0
+            while read -r zeile; do
+                [[ -n "$zeile" ]] && anzahl=$((anzahl + 1))
+            done <<<"$jetzt"
+
+            # EIN SCHIRM WIRD NICHT ANGEFASST.
+            #
+            #     Die Maschine der meisten Menschen hat einen Bildschirm,
+            #     und der liegt ohnehin auf 0,0. Ihn trotzdem umzustellen
+            #     hiesse, auf JEDEM Start des Mediums eine
+            #     Ausgangskonfiguration festzuschreiben, die nichts
+            #     aendert - und jede davon ist ein Moduswechsel, den der
+            #     Compositor ausfuehren darf. Der Normalfall soll durch
+            #     diese Datei nicht schlechter werden.
+            if (( anzahl < 2 )); then
+                log "nur $anzahl Ausgang - es gibt nichts zu ueberlagern"
+                letzte="$jetzt"
+            elif printf '%s\n' "$jetzt" | anwenden; then
+                log "auf 0,0 gelegt: $(printf '%s' "$jetzt" | tr '\n' ' ')"
+                letzte="$jetzt"
+            else
+                log "das Umstellen wurde abgelehnt - es bleibt, wie es war"
+            fi
+        fi
+    fi
+    sleep "$INTERVALL"
+done

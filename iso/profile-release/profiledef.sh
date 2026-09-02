@@ -110,4 +110,5 @@ file_permissions=(
   ["/usr/local/bin/zepos-live-prepare"]="0:0:755"
   ["/usr/local/bin/zepos-live-session"]="0:0:755"
   ["/usr/local/bin/zepos-live-surface"]="0:0:755"
+  ["/usr/local/bin/zepos-live-schirme"]="0:0:755"
 )

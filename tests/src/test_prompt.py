@@ -406,8 +406,11 @@ def test_a_first_login_no_longer_reports_a_missing_file(tmp_path, monkeypatch):
 # liegt, gewinnt gegen jedes Programm des Systems; am selben Tag lag
 # genau dort der Verdacht, ein altes `claude` in einem dieser
 # Verzeichnisse fange den Aufruf ab. (Es war es nicht - die Ursache stand
-# im Paketrezept, siehe tests/packaging/test_claude_code.py -, aber die
-# Falle bleibt eine, solange die Zeilen dastehen.)
+# im damaligen Paketrezept: makepkg strippte die mit `bun build
+# --compile` erzeugte Binaerdatei, und uebrig blieb der blanke bun. Das
+# Rezept ist am 01.09.2026 mit dem ganzen Paket gefallen, siehe
+# tests/src/test_claude_code.py. Die Falle im PATH bleibt trotzdem eine,
+# solange die Zeilen dastehen.)
 
 # Die vier Orte, an denen die Vorlage Software vermutete, die keine
 # Installation von ZepOS hat. NACHGESEHEN am 17.08.2026 auf der

@@ -220,19 +220,44 @@ depends=(
     # hier sagt, warum er voll ist.
     'baobab'
 
-    # --- der Assistent ------------------------------------------------
-    # zepos-claude-code. GEMELDET am 13.08.2026: "kann man claude code
-    # auch bei ZepOS immer direkt vor installieren direkt zu beginn".
+    # HIER STAND zepos-claude-code, VOM 13.08. BIS ZUM 01.09.2026.
     #
-    # Er steht hier und nicht unter optdepends, weil "immer" genau das
-    # heisst - pacman installiert optdepends nicht, und ein Eintrag im
-    # Starter ohne Programm dahinter ist Spec 7.4.
+    # ENTSCHIEDEN vom Nutzer am 01.09.2026, mit drei Gruenden, und der
+    # erste ist ihm der wichtigste gewesen: "ich will claude nicht mit
+    # liefern bei zepos es muss per bash command dazu installiert werden
+    # sodass es ausfuehrbar ist aber ich will das packet nicht als meins
+    # verkaufen [...] weil jetzt bekommt es keine updates."
     #
-    # Das Rezept daneben erklaert, warum die Binaerdatei direkt aus der
-    # npm-Registry kommt statt ueber `npm install` oder das AUR, und was
-    # sie kostet: rund 310 MiB entpackt, der groesste einzelne Zuwachs,
-    # den ZepOS bisher bekommen hat.
-    'zepos-claude-code'
+    # 1. HERKUNFT. Ein Paket namens zepos-claude-code, gebaut und
+    #    signiert von ZepOS, war die Weitergabe fremder, proprietaerer
+    #    Software unter einem eigenen Namen - license=
+    #    ('LicenseRef-Anthropic-Commercial-Terms') stand im Rezept und
+    #    sagte es selbst. plugins/LICENSE traegt dieselbe Unterscheidung
+    #    schon einmal aus: die Erlaubnis, etwas zu BAUEN, ist nicht die
+    #    Erlaubnis, eine KOPIE davon zu verbreiten.
+    #
+    # 2. DIE FASSUNG. GEMESSEN am 01.09.2026: das Paket stand auf
+    #    2.1.233, npm lieferte 2.1.257 - vierundzwanzig Fassungen
+    #    weiter. Claude Code meldete dem Nutzer "update available", und
+    #    ZepOS war schuld.
+    #
+    # 3. DERSELBE SATZ WIE BEI RUFLO, gleich darunter: ohne Netz tut
+    #    Claude Code gar nichts, es spricht selbst mit der
+    #    Anthropic-Schnittstelle. Damit faellt der einzige Vorteil, den
+    #    Vorinstallieren gegenueber `npm i -g` ueberhaupt hat.
+    #
+    # UND ES KOSTET KEINEN EINTRAG. Der Starter zeigt Claude Code
+    # weiterhin - der Eintrag, das Zeichen und der Befehl
+    # /usr/bin/zepos-claude-code kommen jetzt aus zepos-config, und
+    # dieser Befehl HOLT Claude Code ueber `npm i -g`, wenn es fehlt.
+    # Was hier verschwindet, sind allein die 309,6 MiB fremdes
+    # Programm (324598650 Bytes entpackt, 91831121 Bytes als Paket).
+    #
+    # ER KANN AUCH GAR NICHT MEHR HIER STEHEN: der Eintrag gehoert
+    # seither einem ZepOS-Paket, und der Kopf dieses Rezepts verbietet
+    # die Zeile ausdruecklich - "Eine Anwendung, die ZepOS selbst baut,
+    # gehoert dort nicht hinein". Das Dock verliert ihn trotzdem nicht,
+    # src/apps.py liest die eigene Haelfte aus den Rezepten.
 
     # HIER STAND zepos-ruflo, VOM 19. BIS ZUM 20.08.2026.
     #

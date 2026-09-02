@@ -483,7 +483,43 @@ def test_die_seitenleiste_bemalt_208_punkte(schale):
             ergebnisse[name] = None
             continue
         oben, unten = zeile
-        y_mitte_abs = info["platte"][1] + (oben + unten) // 2
+        # NICHT DIE MITTE DER ZEILE, SONDERN EIN STREIFEN DICHT UNTER
+        # IHRER OBERKANTE - GEAENDERT am 02.09.2026, und die Aenderung ist
+        # eine REPARATUR DES MESSGERAETS, keine Anpassung der Erwartung.
+        #
+        # WAS DIE MITTE MASS
+        #     _spaltengrenze() taastet waagerecht ab und haelt beim ersten
+        #     Lauf abweichender Farbe. In der MITTE der Zeile stehen
+        #     Symbol und Beschriftung, und Glyphen SIND abweichende
+        #     Farbe. Gemessen wurde damit der Abstand bis zum ersten
+        #     Buchstaben, nicht die rechte Kante der Hervorhebung - und
+        #     weil _AKTIV_X_VERSATZ (50) mitten im Textbereich liegt,
+        #     konnte sogar die VERGLEICHSFARBE selbst schon Schrift sein.
+        #
+        #     Das Ergebnis schwankte darum von Lauf zu Lauf und von Seite
+        #     zu Seite. Zwei Laeufe am selben Stand:
+        #         {'general': 128, 'network': 130, 'bluetooth':  81, 'vpn': 209}
+        #         {'general': 158, 'network': 142, 'bluetooth':  81, 'vpn': 209}
+        #
+        # WAS DIESER STREIFEN MISST
+        #     oben+6 liegt innerhalb der Hervorhebung (sie ist
+        #     STYLE_NAV_ROW_HEIGHT hoch) und OBERHALB der Glyphen. Damit
+        #     ist die erste Abweichung wieder das, was gesucht war: die
+        #     rechte Kante der Flaeche. Gemessen danach, auf allen vier
+        #     Seiten gleich und ueber Laeufe hinweg stabil:
+        #         {'general': 209, 'network': 209, 'bluetooth': 209, 'vpn': 209}
+        #
+        #     Die Zusicherung bleibt damit ROT, und zwar zu Recht: die
+        #     Hervorhebung reicht bis 209 statt bis 196, faellt also aus
+        #     der Polsterung von .zep-sidebar heraus. 209 ist nicht
+        #     irgendeine Zahl - es ist GENAU der Wert, den der Kommentar
+        #     unten als Messung VOR Aufgabe 27 festhaelt, also von vor der
+        #     Einrueckung. Der Zustand ist zurueckgefallen.
+        #
+        #     Die Erwartung (196) wird deshalb NICHT angefasst. Ein Test,
+        #     dessen Messung kaputt war, hat trotzdem den richtigen
+        #     Sollwert gehabt.
+        y_mitte_abs = info["platte"][1] + oben + 6
         ergebnisse[name] = _spaltengrenze(info["bild"], info["platte"], y_mitte_abs)
 
     fehlend = {name: grenze for name, grenze in ergebnisse.items()

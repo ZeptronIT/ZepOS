@@ -312,14 +312,21 @@ Die Zeile ganz oben ist eine Behauptung, also steht sie hier vollständig, mit
 der Datei, die jeden Teil davon trägt. Nichts davon ist geplant, in Arbeit oder
 demnächst; jede Zeile steht heute im Baum.
 
-**Claude Code ist ein Paket dieser Distribution und nichts, was man hinterher
-installiert.** `packaging/zepos-claude-code/PKGBUILD` baut es aus einem
-angehefteten, sha256-geprüften Archiv der npm-Registry – in der
-veröffentlichten Paketquelle Fassung `2.1.233-4` – und es ist mit demselben
-Schlüssel signiert wie alles andere, was ZepOS ausliefert. `zepos-apps` hängt
-davon ab, es kommt also mit dem Schreibtisch; es ist im Dock angeheftet und
-liegt auf dem Home. Nach der ersten Anmeldung einer frischen Installation ist
-der Agent bereits auf der Maschine.
+**Claude Code ist einen Befehl entfernt – und ZepOS gibt es nicht weiter.**
+`src/bin/zepos-claude-code` holt es aus npm: `npm i -g
+@anthropic-ai/claude-code`, ohne root, weil `/etc/npmrc` npms Präfix auf
+`~/.local` setzt. Der Eintrag ist von der ersten Sekunde an im Dock angeheftet
+und liegt auf dem Home; ein Klick auf einer frischen Maschine fragt einmal und
+installiert. Die erste Anmeldung bietet es von sich aus einmal an, in demselben
+Fenster. `zepos-claude-code update` holt die nächste Fassung.
+
+Bis zum 01.09.2026 lieferte ZepOS Claude Code als eigenes, signiertes Paket aus
+– `zepos-claude-code`, 87,58 MiB und das größte Objekt in diesem Repository.
+Das ist weg, und beide Gründe stehen unter
+[Was installiert wird](#was-installiert-wird): ein Paket unter ZepOS-Namen mit
+dem proprietären Programm eines anderen ist eine Weitergabe, zu der ZepOS kein
+Recht hat, und ein Paket nagelt eine Fassung fest, die sein Hersteller laufend
+ersetzt – 2.1.233 gegen npms 2.1.257, gemessen am Tag seines Falls.
 
 **Ein gewöhnlicher Nutzer kann Agenten-Werkzeug global installieren, ohne
 `sudo`.** ZepOS liefert Node 24 LTS und npm mit (`nodejs-lts-krypton`, `npm`,
@@ -554,13 +561,33 @@ Zwei freiwillige Gruppen werden nicht mitinstalliert: `zepos-apps-office`
 (LibreOffice mit deutschen Wörterbüchern) und `zepos-apps-devel` (`base-devel`,
 `git`).
 
-`zepos-apps` enthält außerdem **Claude Code**, als `zepos-claude-code` aus einem
-festgenagelten, prüfsummengesicherten Upstream-Tarball gebaut und im Dock
-angeheftet. Es ist Anthropics proprietäres Kommandozeilenwerkzeug unter eigener
-Lizenz, nicht Teil von ZepOS' GPL, und es braucht ein Anthropic-Konto, um
-überhaupt etwas zu tun. Wer es nicht will, entfernt das Paket.
+**Claude Code wird nicht mitgeliefert, und das ist eine Entscheidung.** ZepOS
+liefert einen Starter-Eintrag, ein Zeichen und den Befehl `zepos-claude-code`
+aus – seine eigene Arbeit – und keine Zeile von Anthropics Programm. Vom
+13. August bis zum 1. September 2026 lieferte es das Programm mit, als
+`zepos-claude-code` aus einem festgenagelten, prüfsummengesicherten
+Upstream-Tarball gebaut: 91.831.121 Bytes, 87,58 MiB, das größte Objekt in
+diesem Repository. Zwei Dinge waren daran falsch, und das erste wiegt schwerer:
 
-**Ruflo wird nicht mitgeliefert, und das ist eine Entscheidung.** Ruflo (auf
+* **Herkunft.** Ein Paket unter ZepOS-Namen, mit ZepOS-Schlüssel signiert, das
+  das proprietäre Programm eines anderen enthält, ist eine Weiterverbreitung –
+  und das Rezept sagte es selbst:
+  `license=('LicenseRef-Anthropic-Commercial-Terms')`. `plugins/LICENSE` zieht
+  dieselbe Linie für hyprlaunch und hyprclipx: die Erlaubnis, etwas zu *bauen*,
+  ist nicht die Erlaubnis, eine Kopie davon zu verbreiten.
+* **Die Fassung.** Ein Paket nagelt fest, was sein Hersteller laufend ersetzt.
+  Gemessen am 01.09.2026: das Paket stand auf 2.1.233, npm lieferte 2.1.257 –
+  vierundzwanzig Fassungen weiter, und Claude Code meldete dem Nutzer völlig zu
+  Recht „update available“.
+
+Es kommt deshalb aus npm, wie Ruflo darunter, und der Eintrag im Starter ist
+der Weg dorthin: ein Klick fragt einmal, dann installiert er.
+`zepos-claude-code update` holt die nächste Fassung, `zepos-claude-code status`
+sagt, was auf der Maschine liegt. Es bleibt Anthropics proprietäres
+Kommandozeilenwerkzeug unter eigener Lizenz, nicht Teil von ZepOS' GPL, und es
+braucht ein Anthropic-Konto, um überhaupt etwas zu tun.
+
+**Ruflo wird ebenfalls nicht mitgeliefert, aus demselben Grund.** Ruflo (auf
 npm: `claude-flow`) ist ein Orchestrator, der Claude Code steuert. Es war vom
 19. bis zum 20. August 2026 ein Paket und ist wieder gefallen: es steuert Claude
 Code, Claude Code spricht mit der Anthropic-API, und ohne Netz tut beides
@@ -568,9 +595,10 @@ Code, Claude Code spricht mit der Anthropic-API, und ohne Netz tut beides
 Netz – existiert für dieses Werkzeug also gar nicht, und ein Paket hätte es auf
 eine Fassung festgenagelt, während npm laufend neue ausliefert.
 
-ZepOS bringt Node 24 LTS und npm mit, ein Befehl holt es – **ohne `sudo`**:
+ZepOS bringt Node 24 LTS und npm mit, ein Befehl holt beide – **ohne `sudo`**:
 
 ```bash
+zepos-claude-code install   # oder einfach "Claude Code" im Starter anklicken
 npm i -g claude-flow
 claude-flow --version
 ```

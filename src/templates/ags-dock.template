@@ -1319,6 +1319,63 @@ export function DockContent(): Gtk.Box {
    *                     Knopf trifft, den der Nutzer meint. Ein zweiter
    *                     Eintrag entstuende dabei nie: angeheftet wird
    *                     hier nichts, was schon dasteht.
+   *
+   * ZURUECK KOMMT DIE KENNUNG DES EINTRAGS UND NICHT MEHR `comm`
+   * (02.09.2026)
+   *
+   *     GEMELDET, woertlich: "ich muss um zu home oder zur dock etwas
+   *     hinzuzufuegen geht es nicht ich habe eben versucht das zu
+   *     machen und abmelden gedrueckt aber selbst danach war das
+   *     gewuenschte programm nicht auf home noch auf der dock".
+   *
+   *     Das Abmelden war der richtige Verdacht am falschen Glied. Der
+   *     Menuepunkt hat angenommen, `settings.py dock add` hat mit 0
+   *     geendet, und der Name STAND danach in user-settings.json - er
+   *     hat das Abmelden ueberlebt. Herausgefallen ist er erst beim
+   *     LESEN: settings.pinnable() laesst nur durch, was
+   *     desktop_entries.names() kennt, und das sind die DATEINAMEN der
+   *     Anwendungseintraege ohne Endung.
+   *
+   *     Hier stand bis heute `program`, also /proc/<pid>/comm. Die zwei
+   *     sind auf dieser Maschine bei 40 von 133 Eintraegen in
+   *     /usr/share/applications VERSCHIEDEN (GEMESSEN am 02.09.2026,
+   *     Exec-Basisname gegen Dateinamen) - brave-browser/brave,
+   *     io.dbeaver.DBeaver/dbeaver, io.missioncenter.MissionCenter/
+   *     missioncenter, und jedes GNOME-Programm in Umkehr-DNS.
+   *
+   *     GEMESSEN am 02.09.2026 gegen einen Eintrag
+   *     org.gimp.GIMP.desktop mit Exec=gimp:
+   *
+   *         settings.py dock add gimp   -> rc=0, steht in dock_pins
+   *         settings.py dock            -> discarded: "gimp"
+   *                                        (auf dieser Maschine nicht
+   *                                         installiert)
+   *
+   *     entryFor() findet den Eintrag trotzdem, weil es einen ZWEITEN
+   *     Versuch ueber die Exec-Zeile hat - src/desktop_entries.py hat
+   *     den ausdruecklich NICHT nachgebaut und dafuer angenommen, der
+   *     Nutzer hefte "ueber die Kennung an, unter der sein Schreibtisch
+   *     den Eintrag fuehrt". Genau das tat dieses Menue nicht.
+   *
+   *     Geschrieben wird deshalb, was der Starter seit dem 20.08.2026
+   *     schreibt: die Kennung des Eintrags (AppDiscovery::pinName() im
+   *     Patch unter packaging/zepos-hyprlaunch/ schneidet dafuer
+   *     dasselbe ".desktop" ab). DREI Menues, EIN Name - und damit
+   *     heftet ein Rechtsklick im Fuss und einer im Starter nicht
+   *     laenger DIESELBE Anwendung unter ZWEI Namen an, was sie zweimal
+   *     nebeneinander in den Fuss gestellt haette.
+   *
+   *     `namen.includes(program)` bleibt DAVOR stehen: die
+   *     ausgelieferte Auswahl ist in Programmnamen geschrieben
+   *     (src/apps.py: "nautilus", "gnome-text-editor"), und wer ein
+   *     Fenster davon anklickt, soll den Knopf treffen, der dasteht,
+   *     und keinen zweiten daneben anlegen.
+   *
+   *     Hidden wird MITGEPRUEFT, aus demselben Grund wie NoDisplay: die
+   *     Spezifikation nennt einen solchen Eintrag "geloescht", und
+   *     desktop_entries.is_application() laesst ihn deshalb nicht durch.
+   *     Ein Punkt, der ihn anhefte, schriebe wieder einen Namen, den das
+   *     naechste Lesen verwirft.
    */
   const dockName = (client: Hyprland.Client): string | null => {
     const vertreter = pins.find(
@@ -1329,8 +1386,9 @@ export function DockContent(): Gtk.Box {
     if (!program) return null
     if (namen.includes(program)) return program
     const info = entryFor(program)
-    if (!info || info.get_nodisplay()) return null
-    return program
+    if (!info || info.get_nodisplay() || info.get_is_hidden()) return null
+    const kennung = info.get_id()
+    return kennung ? kennung.replace(/\.desktop$/, "") : program
   }
 
   /** Was ein Rechtsklick auf ein FENSTER anbietet.

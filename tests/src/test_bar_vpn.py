@@ -471,22 +471,47 @@ def _shipped_styles(tmp_path, monkeypatch) -> dict:
     return modul.STYLE_VARIABLES
 
 
-def test_the_three_states_arrive_in_three_different_colours(tmp_path,
-                                                            monkeypatch):
-    """"mit einer farbe verbunden" - und drei Zustaende brauchen drei.
+def test_every_state_arrives_in_its_own_colour(tmp_path, monkeypatch):
+    """"mit einer farbe verbunden" - und jeder Zustand braucht eine eigene.
 
-    Der Waechter gegen den Fehler, der sich nicht sehen laesst: drei
-    Klassen, die alle auf denselben Farbnamen zeigen, ergeben ein
-    Schild, das immer gleich aussieht - und jede Zusicherung ueber die
-    KLASSEN bliebe dabei gruen.
+    Der Waechter gegen den Fehler, der sich nicht sehen laesst: Klassen,
+    die alle auf denselben Farbnamen zeigen, ergeben ein Schild, das
+    immer gleich aussieht - und jede Zusicherung ueber die KLASSEN
+    bliebe dabei gruen.
 
-    Geprueft werden BEIDE Enden: die drei Namen im Stylesheet und die
-    drei Werte, die der Erzeuger daraus macht. Verschiedene Namen fuer
-    denselben Wert waeren drei Regeln, die dasselbe malen.
+    Geprueft werden BEIDE Enden: die Namen im Stylesheet und die Werte,
+    die der Erzeuger daraus macht. Verschiedene Namen fuer denselben
+    Wert waeren mehrere Regeln, die dasselbe malen.
+
+    HIESS BIS ZUM 02.09.2026 ...three_states_arrive_in_three_different_
+    colours UND ZAEHLTE DREI
+        `vpn.py --status` hat seit dem 01.09.2026 ein viertes Wort, und
+        das Schild eine vierte Klasse. Der Test zaehlte weiter drei -
+        also haette `vpn-unknown` auf denselben Farbnamen zeigen
+        koennen wie `vpn-disconnected`, und diese Zeile waere gruen
+        geblieben. Ausgerechnet bei den beiden Zustaenden, deren
+        Verwechslung der vierte Zustand abstellt.
+
+        Die Liste kommt darum jetzt aus vpn.STATUS_WORDS und nicht mehr
+        aus einem getippten Dreiergespann: ein fuenftes Wort ist damit
+        nicht mehr etwas, das man hinzufuegt, sondern etwas, das diese
+        Zusicherung umwirft. Eine getippte Liste war die Menge, die
+        veraltet ist - und sie hat es getan.
+
+        Die Zusicherung ist damit STRENGER als vorher, nicht bloss
+        laenger: sie erstreckt sich auf jeden Zustand, den der Vertrag
+        kennt, statt auf die drei, die es beim Schreiben gab.
     """
-    namen = {klasse: _placeholder_of(klasse) for klasse in
-             ("vpn-connected", "vpn-stale", "vpn-disconnected")}
-    assert len(set(namen.values())) == 3, (
+    from src.vpn import STATUS_WORDS
+
+    # Die Klassennamen des Schildes sind `vpn-<wort>`. Dass die
+    # Zuordnung wirklich so lautet, wird nicht hier angenommen, sondern
+    # in tests/src/test_bar_vpn_unbekannt.py::
+    # test_das_schild_kennt_jedes_wort_des_vertrags AUSGEFUEHRT: dort
+    # wird jedes Wort erzeugt und die Klasse abgelesen, die herauskommt.
+    klassen = [f"vpn-{wort}" for wort in STATUS_WORDS]
+    namen = {klasse: _placeholder_of(klasse) for klasse in klassen}
+    assert len(set(namen.values())) == len(klassen), (
         "zwei Zustaende des Schildes zeigen auf denselben Farbnamen: "
         + str(namen))
 
@@ -498,30 +523,50 @@ def test_the_three_states_arrive_in_three_different_colours(tmp_path,
             "Regel bliebe im erzeugten Stylesheet ungefuellt stehen")
         werte[klasse] = str(styles[name])
 
-    assert len(set(werte.values())) == 3, (
+    assert len(set(werte.values())) == len(klassen), (
         "zwei Zustaende des Schildes tragen dieselbe Farbe: " + str(werte))
 
 
-def test_the_three_states_arrive_with_three_different_symbols(box):
-    """Und drei verschiedene ZEICHEN, weil Farbe allein nicht fuer jeden
-    unterscheidet.
+def test_every_state_arrives_with_its_own_symbol(box):
+    """Und jeder Zustand ein eigenes ZEICHEN, weil Farbe allein nicht
+    fuer jeden unterscheidet.
 
     Rot-Gruen ist die haeufigste Farbsehschwaeche, und "geschuetzt" mit
     "ungeschuetzt" zu verwechseln ist genau der Irrtum, den dieses
     Schild verhindern soll. Gemessen wird an den WIRKLICHEN Laeufen und
     nicht an der Vorlage: es geht darum, was auf der Leiste ankommt.
-    """
-    box.stub("nmcli", _nm(address="10.9.0.2/24"))
-    verbunden = box.run()["text"]
-    box.stub("nmcli", _nm())
-    unvollstaendig = box.run()["text"]
-    box.stub("nmcli", "exit 0")
-    getrennt = box.run()["text"]
 
-    zeichen = {"connected": verbunden, "stale": unvollstaendig,
-               "disconnected": getrennt}
+    HIESS BIS ZUM 02.09.2026 ...three_states...three_different_symbols
+    UND ZAEHLTE DREI
+        Dieselbe Verschiebung wie beim Farbtest darueber, aus demselben
+        Grund und mit demselben Mittel: die Lage kommt aus
+        vpn.STATUS_WORDS statt aus drei eingetippten Faellen. `unknown`
+        haette sonst dasselbe Zeichen tragen koennen wie `disconnected`,
+        und diese Zeile waere gruen geblieben - bei genau den beiden
+        Zustaenden, deren Verwechslung der vierte Zustand abstellt.
+    """
+    from src.vpn import STATUS_WORDS
+
+    # Wie die Welt aussehen muss, damit `--status` jedes Wort schreibt.
+    # `exit 8` ist "NetworkManager laeuft nicht" - nmcli hat NICHT
+    # geantwortet, und genau das heisst `unknown`.
+    lagen = {
+        "connected": _nm(address="10.9.0.2/24"),
+        "stale": _nm(),
+        "disconnected": _nm(state="deactivated"),
+        "unknown": "exit 8",
+    }
+    assert set(lagen) == set(STATUS_WORDS), (
+        "die Tabelle der Lagen und der Vertrag in src/vpn.py sind "
+        f"auseinander: {sorted(set(lagen) ^ set(STATUS_WORDS))}")
+
+    zeichen = {}
+    for wort, stub in lagen.items():
+        box.stub("nmcli", stub)
+        zeichen[wort] = box.run()["text"]
+
     assert all(zeichen.values()), zeichen
-    assert len(set(zeichen.values())) == 3, (
+    assert len(set(zeichen.values())) == len(STATUS_WORDS), (
         "zwei Zustaende des Schildes tragen dasselbe Zeichen: " + str(zeichen))
 
 

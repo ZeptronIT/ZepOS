@@ -193,25 +193,45 @@ setopt auto_cd interactive_comments
 typeset -U path PATH
 path=(~/.local/bin $path)
 
-# WAS DAMIT AUCH FUER npm GILT - und wie man Ruflo bekommt
+# WAS DAMIT AUCH FUER npm GILT - und wie man Claude Code und Ruflo
+# bekommt
 #
 # ZepOS bringt Node und npm mit (nodejs-lts-krypton und npm, siehe
 # packaging/zepos-desktop/PKGBUILD), aber KEIN vorinstalliertes
 # npm-Werkzeug. /etc/npmrc setzt npms Praefix auf ~/.local, also landet
 # alles, was du global installierst, unter ~/.local/bin - dem
 # Verzeichnis, das die Zeile darueber gerade in den PATH gesetzt hat. Es
-# braucht deshalb weder root noch einen zweiten PATH-Eintrag:
+# braucht deshalb weder root noch einen zweiten PATH-Eintrag.
+#
+# CLAUDE CODE liegt seit dem 01.09.2026 NICHT MEHR VORINSTALLIERT BEI.
+# Bis dahin baute ZepOS es in ein eigenes Paket - 87,58 MiB, das
+# groesste im ganzen Repository -, und das hiess zweierlei: ZepOS gab
+# fremde, proprietaere Software unter einem eigenen Namen weiter, und es
+# nagelte sie auf eine Fassung fest, waehrend npm laengst weiter war
+# (2.1.233 gegen 2.1.257 am 01.09.2026). Beides ist weg. Der Weg dahin:
+#
+#     zepos-claude-code install     # holt es ueber npm
+#     zepos-claude-code update      # holt die naechste Fassung
+#     zepos-claude-code             # startet es - und fragt, ob es
+#                                   # fehlt, statt zu klagen
+#
+# Derselbe Befehl steckt hinter dem Eintrag "Claude Code" im Starter,
+# und bei der ersten Anmeldung fragt er von sich aus einmal nach.
+# Darunter passiert nichts anderes als `npm i -g
+# @anthropic-ai/claude-code`; wer es lieber selbst tippt, tippt das.
+#
+# RUFLO, aus demselben Grund und schon seit dem 20.08.2026:
 #
 #     npm i -g claude-flow      # danach: claude-flow --version
 #
-# Das ist Ruflo: ein Orchestrierer, der Claude Code steuert und mehrere
-# KI-Agenten in Rollen arbeiten laesst (Supervisor, Planer, Umsetzer).
-# Es SETZT Claude Code VORAUS - das bringt ZepOS als zepos-claude-code
-# schon mit - und es braucht eine Internetverbindung, weil Claude Code
-# mit der Anthropic-Schnittstelle spricht. Genau darum liegt es nicht
-# vorinstalliert bei: ein Werkzeug, das ohne Netz ohnehin nichts tut,
-# gewinnt nichts dadurch, dass es schon auf der Platte liegt - und aus
-# npm bekommst du immer die aktuelle Fassung statt einer eingefrorenen.
+# Ein Orchestrierer, der Claude Code steuert und mehrere KI-Agenten in
+# Rollen arbeiten laesst (Supervisor, Planer, Umsetzer). Es SETZT Claude
+# Code VORAUS und braucht eine Internetverbindung, weil Claude Code mit
+# der Anthropic-Schnittstelle spricht. Genau darum liegt keines von
+# beiden vorinstalliert bei: ein Werkzeug, das ohne Netz ohnehin nichts
+# tut, gewinnt nichts dadurch, dass es schon auf der Platte liegt - und
+# aus npm bekommst du immer die aktuelle Fassung statt einer
+# eingefrorenen.
 #
 # Wer seinen eigenen Praefix will, setzt ihn in ~/.npmrc; die eigene
 # Datei gewinnt gegen /etc/npmrc.

@@ -50,6 +50,35 @@
 #               davon. Das ist in src/templates/ags-user-settings.template
 #               behoben (Gio.FileMonitor auf user-settings.json).
 #
+#   02.09.2026  ECHTE UMLAUTE IN DEN SICHTBAREN ZEICHENKETTEN.
+#
+#               Gemeldet woertlich: "ausserdem steht dort hinzufuegen was
+#               ich nicht gut finde bei deutsch umlaute verwenden oeaeue".
+#
+#               Betroffen waren "Zum Dock hinzufuegen" und "Zum Home
+#               hinzufuegen" (LauncherRenderer.cpp) - die zwei
+#               Menuepunkte, die der Nutzer vor sich hat -, dazu zwei
+#               Zeichenketten aus AppDiscovery.cpp, die im Fehlerfall
+#               entstehen: "traegt keine Kennung" und "liess sich nicht
+#               starten".
+#
+#               WARUM HIER UND NICHT IM KATALOG: dieses Programm ist C++
+#               und laeuft an gettext VORBEI. po/desktop/de.po fuehrt
+#               "Zum Dock hinzufügen" seit jeher richtig (Zeile 613) -
+#               diese Stelle sieht den Katalog nie. Die Umschreibung
+#               ue/ae/oe gilt in diesem Haus fuer KOMMENTARE; was auf dem
+#               Schirm steht, traegt den Buchstaben, den das Wort hat.
+#               Die Anbindung an den Katalog baut ein eigener Auftrag;
+#               sie ist hier ausdruecklich NICHT vorweggenommen.
+#
+#               Die Datei traegt seit dem 11.08.2026 UTF-8 (die drei
+#               Zeichen in ConfigParser stehen als \x-Folgen, die
+#               Kommentare als Text), und `patch` reicht Bytes durch -
+#               die Zeilenzahl aendert sich durch diese Aenderung nicht,
+#               nur der Inhalt von vier Zeilen. sha256sums im PKGBUILD
+#               ist mitgezogen; tests/src/test_own_plugins.py haelt beide
+#               gegeneinander.
+#
 # Alle Einzelheiten und alle Messungen stehen in den Dateikoepfen selbst
 # (SPDX-License-Identifier: GPL-3.0-or-later fuer die ZepOS-Anteile).
 #
@@ -1029,7 +1058,7 @@ diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
 +    if (!started) {
 +        failure = error && error->message
 +                  ? std::string(error->message)
-+                  : std::string(PYTHON) + " liess sich nicht starten";
++                  : std::string(PYTHON) + " ließ sich nicht starten";
 +        if (error) g_error_free(error);
 +        return false;
 +    }
@@ -1130,7 +1159,7 @@ diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
 +                                 const std::string& desktopId) {
 +    const std::string name = AppDiscovery::pinName(desktopId);
 +    if (name.empty())
-+        return {"der Eintrag traegt keine Kennung"};
++        return {"der Eintrag trägt keine Kennung"};
 +
 +    std::string answer;
 +    std::string failure;
@@ -2291,7 +2320,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 +        entries.push_back({m_config.unpinIcon, "Vom Dock entfernen",
 +            [script, id]() { AppDiscovery::unpinFromDock(script, id); }});
 +    } else {
-+        entries.push_back({m_config.pinIcon, "Zum Dock hinzufuegen",
++        entries.push_back({m_config.pinIcon, "Zum Dock hinzufügen",
 +            [script, id]() { AppDiscovery::pinToDock(script, id); }});
 +    }
 +
@@ -2305,7 +2334,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 +        entries.push_back({m_config.homeIcon, "Vom Home entfernen",
 +            [script, id]() { AppDiscovery::removeFromHome(script, id); }});
 +    } else {
-+        entries.push_back({m_config.homeIcon, "Zum Home hinzufuegen",
++        entries.push_back({m_config.homeIcon, "Zum Home hinzufügen",
 +            [script, id]() { AppDiscovery::addToHome(script, id); }});
 +    }
 +

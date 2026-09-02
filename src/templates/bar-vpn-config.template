@@ -183,16 +183,37 @@ ICON_ALERT = "{{ICON_ALERT}}"
 # `unknown`, seit dem 01.09.2026. KEIN Schild, und das ist Absicht: die
 # drei Schilder oben sagen alle etwas ueber den Schutz aus (er steht, er
 # steht nicht, er steht nur halb). Dieser Zustand sagt ueber den Schutz
-# gar nichts - ein viertes Schild waere die vierte Aussage in einer
-# Reihe, in der gerade keine Aussage moeglich ist.
+# gar nichts.
 #
-# NICHT nf-md-shield_question, obwohl das die naheliegende Form waere:
-# src/icons_db.py ist erzeugt und traegt nur, was in
-# src/icon_definition.py steht. Eine neue Marke dort kostet einen Lauf
-# von fetch_icons.sh, und der laedt die ganze Zeichentabelle neu aus dem
-# Netz - ein erzeugtes Ergebnis, das mit dieser Aufgabe nichts zu tun
-# hat. ICON_QUESTION gibt es, es ist von allen dreien unterscheidbar,
-# und es sagt genau das Richtige.
+# WARUM NICHT nf-md-shield_question - NACHGEZAEHLT am 02.09.2026
+#     Weil es das nicht gibt. Nerd Fonts fuehrt einundfuenfzig
+#     nf-md-shield*-Zeichen, und ein Fragezeichen ist keines davon
+#     (gezaehlt in derselben erzeugten CSS-Tabelle, aus der
+#     src/fetch_icons.py liest). Hier stand bis dahin, eine neue Marke
+#     koste einen Lauf von fetch_icons.sh - der Einwand ist erledigt,
+#     das Werkzeug laeuft in Sekunden durch. Die Entscheidung steht
+#     seither allein auf der Form.
+#
+# WAS ES STATTDESSEN GIBT, UND WARUM KEINES DAVON TAUGT
+#     shield_search sagt "es wird nachgesehen" - hier ist das Nachsehen
+#     gerade AUSGEFALLEN. shield_half_full sagt "halb geschuetzt", und
+#     das ist `stale`. shield_sync sagt "es laeuft gerade". Jedes waere
+#     eine neue Behauptung an der einen Stelle, an der es keine zu
+#     machen gibt.
+#
+#     Bleibt shield_outline, das leere Schild - die einzige ehrliche
+#     Schildform. Es scheitert an etwas anderem: es waere ein LEICHTES,
+#     ungefuelltes Schild direkt neben shield_off, dem
+#     durchgestrichenen. Ausgerechnet zwischen `unknown` und
+#     `disconnected` haette das Schild damit seine schwaechste
+#     Unterscheidung - zwischen genau den beiden Zustaenden, deren
+#     Verwechslung dieser Umbau abstellt.
+#
+# ALSO ICON_QUESTION, und der Bruch mit der Schildreihe IST die Aussage:
+# der Nutzer soll sehen, dass dies KEINER der drei Schildzustaende ist.
+# Was das Zeichen an Wiedererkennung kostet ("ist das ueberhaupt das
+# VPN?"), holt der Kurzhinweis zurueck - er nennt Namen und Bauart der
+# Verbindung. Was es an Unterscheidung bringt, holt nichts anderes.
 ICON_UNKNOWN = "{{ICON_QUESTION}}"
 
 # Wie die drei Bauarten geschrieben werden, wenn ein Mensch sie liest.

@@ -170,11 +170,40 @@ def bundle(tmp_path_factory) -> tuple[Path, Path]:
     return _bundle(CHILD, tmp_path_factory.mktemp("menue-bundle"))
 
 
+def _wirksam(wurzel: Path, share: Path, root: Path,
+             bereich: str) -> dict:
+    """Was eine NEUE Sitzung an dieser Stelle wirklich vorfaendet.
+
+    Ein eigener Prozess, nach dem Ende des Fusses gestartet, mit
+    derselben Umgebung - also genau das, was beim naechsten Anmelden
+    liest. Das ist das Glied, an dem die Kette am 02.09.2026 gerissen
+    ist: `settings.py dock add` hatte mit 0 geendet, der Name STAND in
+    der Datei und hat das Abmelden ueberlebt, und trotzdem kam er nicht
+    wieder - settings.pinnable() hat ihn beim LESEN verworfen.
+
+    Eine Zusicherung, die nur nachsieht, ob der Unterbefehl gerufen
+    wurde oder was in dock_pins steht, faellt darauf herein: beides war
+    richtig. Erst dieser zweite Lesevorgang misst, was der Nutzer sieht.
+    """
+    lauf = subprocess.run(
+        [sys.executable, str(SRC / "settings.py"), bereich],
+        env={"ZEPOS_SYSTEM_ROOT": str(SRC),
+             "ZEPOS_USER_ROOT": str(wurzel),
+             "XDG_DATA_DIRS": str(share),
+             "XDG_DATA_HOME": str(root / "data"),
+             "HOME": str(root),
+             "PATH": os.environ.get("PATH", "/usr/bin")},
+        capture_output=True, text=True, timeout=60)
+    assert lauf.returncode == 0, f"settings.py {bereich}: {lauf.stderr}"
+    return json.loads(lauf.stdout)
+
+
 def _lauf(bundle: tuple[Path, Path], root: Path, *,
           menues: tuple[str, ...] = (), wahl: str = "",
           gepflegt: list[str] | None = None,
           home: list[str] | None = None,
           fremd: list[str] | None = None,
+          kennung: str | None = None,
           abgelegt: bool = False) -> dict:
     """Ein Lauf des Kindes gegen einen Compositor und eine echte Datei.
 
@@ -184,11 +213,25 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
     falsche Dokument schreibt, waere derselbe Fehler wie ein Knopf, der
     den falschen Befehl absetzt.
 
+    Seit dem 02.09.2026 kommt eine VIERTE mit: "wirksam-dock" und
+    "wirksam-home", gelesen von einem eigenen Prozess NACH dem Lauf.
+    Siehe _wirksam() - die drei anderen waren am gemeldeten Fehler alle
+    gruen.
+
     `fremd` ist ein Aufruf von settings.py, den DIESER Test waehrend des
     Laufs absetzt - also eine Aenderung, die von ausserhalb des Fusses
     kommt, so wie sie vom Starter oder vom Home kaeme. Er ist die Probe
     auf den Fehler, den der Nutzer aus 0.1.7 gemeldet hat ("wenn ich es
     dort mit der dock versuche dann passiert nichts").
+
+    `kennung` benennt den gimp-Eintrag um, ohne seine Exec-Zeile
+    anzufassen - aus `gimp.desktop` wird zum Beispiel
+    `org.gimp.GIMP.desktop`. Das ist der Normalfall auf einer
+    Installation und nicht der Sonderfall: GEMESSEN am 02.09.2026
+    tragen 40 der 133 Eintraege in /usr/share/applications einen
+    Dateinamen, der nicht ihr Exec-Basisname ist. Die Vorgabe hier legt
+    beide gleich ab, und genau deshalb hat kein Lauf dieses Verzeichnis
+    den Fehler je gesehen.
     """
     display_server = broadwayd()
     if display_server is None:
@@ -208,6 +251,16 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
     # dock_headless_child.tsx: sonst misst er, was der Entwickler
     # zufaellig installiert hat).
     _desktop_entries(share, binaries)
+
+    if kennung is not None:
+        # NUR DER DATEINAME WANDERT, die Exec-Zeile bleibt `gimp`. Damit
+        # steht hier der Fall, den eine Installation staendig hat und
+        # dieses Verzeichnis nie hatte: der Name, unter dem der Kern den
+        # Prozess fuehrt, ist NICHT der Name, unter dem der Schreibtisch
+        # den Eintrag fuehrt.
+        eintraege = share / "applications"
+        (eintraege / "gimp.desktop").rename(
+            eintraege / f"{kennung}.desktop")
 
     # DAS PROGRAMM, DAS "gimp" HEISST. _desktop_entries legt dafuer ein
     # Bash-Skript ab, das sofort endet; comm waere dann der Interpreter
@@ -289,6 +342,8 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
         "dispatches": list(compositor.dispatches),
         "vorher": vorher,
         "nachher": _gelesen(wurzel),
+        "wirksam-dock": _wirksam(wurzel, share, root, "dock"),
+        "wirksam-home": _wirksam(wurzel, share, root, "home"),
     }
 
 
@@ -675,3 +730,135 @@ def test_der_lauf_meldet_nichts_ueber_ein_fehlendes_zeichen(menues):
     for name in ("ICON_PIN", "ICON_MINUS", "ICON_COMPUTER", "ICON_WINDOW",
                  "ICON_WINDOW_CLOSE"):
         assert icons_db.icons.get(name), f"{name} fehlt in icons_db"
+
+
+# --------------------------------------------------------------------
+# Dass es nach dem Anmelden NOCH DA IST (02.09.2026)
+# --------------------------------------------------------------------
+#
+# GEMELDET, woertlich: "ich muss um zu home oder zur dock etwas
+# hinzuzufuegen geht es nicht ich habe eben versucht das zu machen und
+# abmelden gedrueckt aber selbst danach war das gewuenschte programm
+# nicht auf home noch auf der dock das ist ein Bug".
+#
+# WARUM KEIN LAUF DIESES VERZEICHNISSES DAS GEFANGEN HAT
+#     Die Zusicherungen darueber messen den SCHREIBWEG: welcher Punkt im
+#     Menue steht, welchen Unterbefehl er absetzt, was danach in
+#     bar.dock_pins steht. Am gemeldeten Fehler waren alle drei GRUEN -
+#     `settings.py dock add gimp` endete mit 0, und "gimp" stand in der
+#     Datei. Es hat sogar das Abmelden ueberlebt.
+#
+#     Gerissen ist die Kette beim LESEN. settings.pinnable() laesst nur
+#     durch, was desktop_entries.names() kennt, und das sind die
+#     DATEINAMEN der Anwendungseintraege ohne Endung. Der Fuss hat aber
+#     /proc/<pid>/comm geschrieben.
+#
+#     GEMESSEN am 02.09.2026 gegen einen Eintrag org.gimp.GIMP.desktop
+#     mit Exec=gimp:
+#
+#         settings.py dock add gimp   rc=0, dock_pins: [..., "gimp"]
+#         settings.py dock            discarded: [{"name": "gimp",
+#                                      "why": "auf dieser Maschine
+#                                              nicht installiert"}]
+#
+#     Und warum dieses Verzeichnis blind dafuer war: _desktop_entries()
+#     legt jeden Eintrag als `<programm>.desktop` ab. Damit sind die
+#     zwei Namen IMMER gleich, und der Fall existiert im Test nicht. Auf
+#     dieser Maschine sind sie bei 40 von 133 Eintraegen in
+#     /usr/share/applications verschieden (GEMESSEN am selben Tag).
+#
+# WAS DIESE LAEUFE DESHALB MESSEN
+#     Den ganzen Weg: Menuepunkt ausloesen -> was auf der Platte steht ->
+#     ein NEUER Prozess liest -> steht es da. Der letzte Schritt hat
+#     gefehlt.
+
+# Der Eintrag, wie ihn eine Installation fuehrt: Umkehr-DNS, waehrend das
+# Programm weiter `gimp` heisst. Nicht erfunden - dieselbe Form tragen
+# brave-browser/brave, io.dbeaver.DBeaver/dbeaver und jedes
+# GNOME-Programm auf dieser Maschine.
+GIMP_KENNUNG = "org.gimp.GIMP"
+
+
+@pytest.fixture(scope="module")
+def anheften_umkehr_dns(bundle, tmp_path_factory) -> dict:
+    """Anheften, wenn Eintragsname und Programmname auseinandergehen."""
+    return _lauf(bundle, tmp_path_factory.mktemp("menue-umkehr-dns"),
+                 wahl=f"{GIMP_TITEL}>Add to dock", home=[],
+                 kennung=GIMP_KENNUNG)
+
+
+def test_das_angeheftete_ist_nach_dem_anmelden_noch_da(anheften_umkehr_dns):
+    """DIE MELDUNG SELBST: angeheftet, abgemeldet, und dann war es weg.
+
+    Gemessen wird nicht die Datei, sondern was ein NEUER Prozess an
+    dieser Stelle vorfindet - also das, was der Fuss beim naechsten
+    Anmelden zeichnet.
+    """
+    plan = anheften_umkehr_dns["wirksam-dock"]
+    assert GIMP_KENNUNG in plan["pins"], (
+        f"nach dem Anmelden verworfen: {plan['discarded']} - "
+        f"wirksam sind {plan['pins']}")
+
+
+def test_beim_anheften_faellt_nichts_stillschweigend_heraus(
+        anheften_umkehr_dns):
+    """`discarded` ist die Klage, die niemand sieht.
+
+    settings.py hat den Namen von Anfang an begruendet herausgenommen
+    ("auf dieser Maschine nicht installiert"); die Meldung ging ins
+    Protokoll eines Fensters, das der Nutzer nicht liest. Ein leeres
+    `discarded` ist deshalb die eigentliche Zusicherung - sie faellt auch
+    dann, wenn irgendwann ein anderer Grund dazukommt.
+    """
+    assert anheften_umkehr_dns["wirksam-dock"]["discarded"] == []
+
+
+def test_angeheftet_wird_unter_der_kennung_des_eintrags(anheften_umkehr_dns):
+    """Und zwar unter DEM Namen, den auch der Starter schreibt.
+
+    AppDiscovery::pinName() im Patch unter packaging/zepos-hyprlaunch/
+    schneidet ".desktop" von der Kennung ab und schickt den Rest an
+    denselben Unterbefehl. Schriebe der Fuss `comm` und der Starter die
+    Kennung, stuende dieselbe Anwendung nach zwei Rechtsklicks ZWEIMAL im
+    Fuss - unter zwei Namen, die beide auf denselben Eintrag zeigen.
+    """
+    assert _pinliste(anheften_umkehr_dns) == ANGEHEFTET + [GIMP_KENNUNG], (
+        f"geschrieben wurde {_pinliste(anheften_umkehr_dns)!r}")
+
+
+@pytest.fixture(scope="module")
+def aufs_home_umkehr_dns(bundle, tmp_path_factory) -> dict:
+    """Dasselbe fuer das Home - die zweite Haelfte der Meldung."""
+    return _lauf(bundle, tmp_path_factory.mktemp("home-umkehr-dns"),
+                 wahl=f"{GIMP_TITEL}>Add to Home", home=[],
+                 kennung=GIMP_KENNUNG)
+
+
+def test_das_aufs_home_gelegte_ist_nach_dem_anmelden_noch_da(
+        aufs_home_umkehr_dns):
+    """"weder auf home noch auf der dock" - das Home ist derselbe Weg.
+
+    Es ruft DIESELBEN Unterbefehle (siehe den Kopf von
+    ags-user-settings.template), also reisst die Kette an genau
+    demselben Glied. Zwei Laeufe und nicht einer, weil ein Fix, der nur
+    den Fuss richtet, hier gruen bleiben muesste, um richtig zu sein.
+    """
+    plan = aufs_home_umkehr_dns["wirksam-home"]
+    namen = [icon["name"] for icon in plan["icons"]]
+    assert GIMP_KENNUNG in namen, (
+        f"nach dem Anmelden verworfen: {plan['discarded']} - "
+        f"wirksam sind {namen}")
+
+
+def test_ein_gleichnamiger_eintrag_bleibt_beim_programmnamen(anheften):
+    """Der andere Fall, und er darf sich NICHT mitverschieben.
+
+    Heisst der Eintrag wie das Programm - `gimp.desktop` zu `gimp` -,
+    dann IST die Kennung der Programmname, und geschrieben wird
+    weiterhin genau der. Diese Zusicherung haelt fest, dass die
+    Umstellung auf die Kennung keine ZWEITE Schreibweise eingefuehrt
+    hat, sondern die eine gewaehlt hat, die immer stimmt.
+    """
+    assert _pinliste(anheften) == ANGEHEFTET + ["gimp"]
+    assert "gimp" in anheften["wirksam-dock"]["pins"], (
+        f"verworfen: {anheften['wirksam-dock']['discarded']}")

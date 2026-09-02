@@ -194,6 +194,49 @@ source = ~/.config/hypr/profile-autostart.conf
 # festen Arbeitsbereiche.
 exec-once = sleep 3 && cd ~/.config/ags && setsid -f ags run >/dev/null 2>&1
 
+# Claude Code, EINMAL bei der ersten Anmeldung angeboten.
+#
+# GEMELDET am 01.09.2026: "es soll bei installation mit installiert
+# werden genauso wie ruflo aber als bash command install script".
+#
+# WARUM NICHT IM INSTALLER, sondern hier. Drei Messungen, jede fuer sich
+# ausreichend:
+#
+#   1. installer/core/translate.py ruft seine Zusatzbefehle als
+#      `arch-chroot -S <ziel> bash <datei>` auf - ALS ROOT. /etc/npmrc
+#      setzt prefix=${HOME}/.local, und ${HOME} ist dort /root. Das
+#      Programm laege unter /root/.local/bin/claude und waere fuer das
+#      Konto des Nutzers weder im PATH noch lesbar.
+#   2. Dieselbe Datei sagt, was ein Fehlschlag dort kostet: SysCommand
+#      wirft, und in guided.py steht danach installation.genfstab().
+#      Ein hier scheiternder Befehl kostet die /etc/fstab - ein System,
+#      das nicht mehr bootet. Die Erreichbarkeit von registry.npmjs.org
+#      zur Bedingung dafuer zu machen, ob eine Maschine startet, ist
+#      kein Tausch, den irgendjemand eingehen wuerde.
+#   3. Auch src/bin/zepos-session ist der falsche Ort: es laeuft VOR dem
+#      Compositor, auf schwarzem Bildschirm, und die Sitzung wartet auf
+#      ihn. Ein 50-MB-Ladevorgang dort waere eine erste Anmeldung, die
+#      eine Minute lang nichts zeigt.
+#
+# NICHT das fehlende NETZ ist das Argument: der Installer verlangt
+# ohnehin eines (installer/core/preflight.py, base_system_problem() -
+# "eine Installation ganz ohne Netz gibt es heute nicht").
+#
+# Ein exec-once laeuft NEBEN dem Compositor, also sichtbar. Der Befehl
+# selbst haelt die Zeile billig: liegt claude schon da oder wurde schon
+# einmal gefragt, kehrt er sofort und lautlos zurueck - die Marke steht
+# unter ${XDG_STATE_HOME:-~/.local/state}/zepos/, wie die von
+# zepos-session. Sonst oeffnet er GENAU DAS Fenster, das auch der Klick
+# im Dock oeffnet, und fragt darin.
+#
+# `sleep 8` und damit NACH der Leiste, nicht neben ihr. Die Zeile
+# darueber gibt AGS drei Sekunden, und AGS baut danach Leiste und Dock
+# auf; ein Terminal, das waehrenddessen aufgeht, landet auf einem
+# Schreibtisch, den der Nutzer noch nicht sieht. Es kostet nur bei der
+# ersten Anmeldung etwas: in jedem anderen Fall wartet hier ein Befehl,
+# der ohnehin sofort zurueckkehrt.
+exec-once = sleep 8 && zepos-claude-code --erstanmeldung
+
 # Die Tapete, so frueh wie es geht.
 #
 # Hier stand `sleep 2 && ...`, und GEMESSEN am 12.08.2026 wartete es auf

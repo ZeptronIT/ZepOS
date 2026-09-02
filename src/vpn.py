@@ -783,7 +783,8 @@ def _antwort(runner: Runner, argv: list[str]) -> tuple[int | None, str]:
     return completed.returncode, (completed.stdout or "")
 
 
-def configured_addresses(runner: Runner = subprocess.run) -> dict[str, str]:
+def configured_addresses(runner: Runner = subprocess.run
+                         ) -> dict[str, str] | None:
     """Every address on this machine, mapped to its address/prefix form.
 
     `ip -o addr show` prints one address per line:
@@ -793,9 +794,29 @@ def configured_addresses(runner: Runner = subprocess.run) -> dict[str, str]:
     so the token after `inet` or `inet6` is the answer, and the map is
     keyed by the bare address because that is what the state file holds
     while `ip addr del` needs the prefix.
+
+    `None` HEISST "NICHT GEFRAGT" - SEIT DEM 02.09.2026
+        Eine leere Abbildung heisst "diese Maschine hat keine Adresse",
+        und das ist eine Aussage. Bis zu diesem Tag lief jeder
+        Fehlschlag von `ip` darauf hinaus: _run() gab "" zurueck, die
+        Schleife fand nichts, und heraus kam `{}` - nicht zu unter-
+        scheiden von der Antwort.
+
+        `ip` schreibt seine Liste mit rc=0, auch wenn sie leer ist. Ein
+        Rueckgabewert ungleich 0 ist darum KEIN "nichts gefunden",
+        sondern ein Fehler, und dasselbe gilt fuer ein fehlendes oder
+        haengendes `ip`. Beides ergibt None.
+
+        Beide Aufrufer muessen ZUERST auf None pruefen: `if not found`
+        faellt fuer `{}` und `None` gleich aus, und genau diese
+        Verwechslung meldete in vpn-control.sh eine Trennung als
+        erfolgreich, bei der niemand nachgesehen hatte.
     """
+    rueckgabe, bericht = _antwort(runner, ["ip", "-o", "addr", "show"])
+    if rueckgabe != 0:
+        return None
     found: dict[str, str] = {}
-    for line in _run(runner, ["ip", "-o", "addr", "show"]).splitlines():
+    for line in bericht.splitlines():
         fields = line.split()
         for index, field in enumerate(fields[:-1]):
             if field in ("inet", "inet6"):
@@ -804,17 +825,35 @@ def configured_addresses(runner: Runner = subprocess.run) -> dict[str, str]:
     return found
 
 
-def address_present(address: str, runner: Runner = subprocess.run) -> str:
+def address_present(address: str,
+                    runner: Runner = subprocess.run) -> str | None:
     """The address/prefix under which `address` is configured, or "".
 
     An exact comparison against the addresses the kernel reports, not a
     match against a shape. This is the whole replacement for the six
     prefix greps: the question "is the tunnel's address up" can
     only be asked once something has said which address that is.
+
+    DREI ANTWORTEN UND NICHT ZWEI - SEIT DEM 02.09.2026
+        ""    die Adresse liegt nicht an. Eine Auskunft.
+        None  es liess sich nicht feststellen. Das Fehlen einer.
+
+        Zwei falsche Werte, die nicht dasselbe heissen, und beide sind
+        in einer Wahrheitspruefung falsch - `if not cidr` faellt fuer
+        sie gleich aus. Jeder Aufrufer muss darum ZUERST auf `is None`
+        pruefen. Das ist unbequem und trotzdem richtig herum: die
+        bequeme Fassung hat in vpn-control.sh eine Trennung als
+        erfolgreich gemeldet, bei der `ip` gar nicht gelaufen war.
+
+        NACH NICHTS ZU FRAGEN IST KEIN AUSFALL: ohne `address` gibt es
+        keine Frage, also "" und nicht None - und kein Unterprozess.
     """
     if not address:
         return ""
-    return configured_addresses(runner).get(address, "")
+    angelegt = configured_addresses(runner)
+    if angelegt is None:
+        return None
+    return angelegt.get(address, "")
 
 
 def state_path(runtime_dir: str | None = None) -> Path:
@@ -844,13 +883,40 @@ def read_state(path: Path | None = None) -> dict[str, Any] | None:
     return document if isinstance(document, dict) else None
 
 
-def charon_running(runner: Runner = subprocess.run) -> bool:
+def charon_running(runner: Runner = subprocess.run) -> bool | None:
+    """Ob charon laeuft - oder None, wenn es sich nicht sagen liess.
+
+    DIE RUECKGABEWERTE VON pgrep(1), UND WARUM NUR EINER "NEIN" HEISST
+        pgrep(1) fuehrt sie unter EXIT STATUS: 0 heisst "mindestens ein
+        Treffer", 1 heisst "kein Treffer", 2 heisst "Fehler in der
+        Befehlszeile", 3 heisst "kein Speicher". Nur die EINS ist die
+        Antwort "charon laeuft nicht"; die anderen sagen etwas ueber
+        pgrep und nichts ueber charon. Dazu kommen ein fehlendes pgrep
+        (`OSError`) und eines, das in den Zeitablauf laeuft.
+
+        Bis zum 02.09.2026 stand hier `return completed.returncode == 0`
+        mit einem `except ...: return False` davor - alle fuenf Lagen
+        ergaben "charon laeuft nicht", und tunnel_status() machte daraus
+        `stale`, also die Behauptung "du haeltst dich fuer geschuetzt
+        und bist es nicht".
+
+    WARUM DIESE FUNKTION `bool | None` GIBT UND NICHT ZWEI FUNKTIONEN
+        Eine zweite, dreiwertige neben einer zweiwertigen waere die
+        Stelle, an der ein spaeterer Aufrufer die bequeme nimmt und den
+        Fund von neuem einbaut. Es gibt nur diesen einen Weg, und er
+        zwingt zum Hinsehen: `if not charon_running(...)` ist fuer None
+        wahr, also muss jeder Aufrufer zuerst `is None` pruefen.
+    """
     try:
         completed = runner(["pgrep", "-f", "charon"],
                            capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode == 0:
+        return True
+    if completed.returncode == 1:
         return False
-    return completed.returncode == 0
+    return None
 
 
 def tunnel_status(path: Path | None = None,
@@ -871,22 +937,139 @@ def tunnel_status(path: Path | None = None,
     machine that has never dialled anything, and reporting a permanent
     fault on such a machine is the mirror image of the bug being removed.
 
+    UNKNOWN, seit dem 02.09.2026: eines der beiden ERFRAGTEN
+    Beweisstuecke war nicht zu bekommen.
+
     The address is returned whenever one was recorded, including for
     STALE - the disconnect path needs it precisely then, to take a
     virtual address off an interface that charon never released.
+
+    ---------------------------------------------------------------
+    DIE DREI BEWEISSTUECKE, UND WAS GILT, WENN EINES FEHLT
+    ---------------------------------------------------------------
+
+    GEMESSEN am 01.09.2026, Aufzeichnung mit `virtual_ip`, charon
+    laeuft, Adresse liegt an:
+
+        alles antwortet -> ('connected','10.9.0.2')
+        `ip` fehlt      -> ('stale','10.9.0.2')
+        `ip` Zeitablauf -> ('stale','10.9.0.2')
+        `ip` rc=1       -> ('stale','10.9.0.2')
+        `pgrep` fehlt   -> ('stale','10.9.0.2')
+
+    `stale` ist keine Verlegenheitsantwort. Es ist die SCHAERFSTE
+    Behauptung, die dieses Programm ueber den Schutz eines Nutzers
+    macht - "der Tunnel steht und traegt nichts", also "du haeltst dich
+    fuer geschuetzt und bist es nicht". Das Schild malt sie im
+    Kritischrot, und der Griff TRENNT darauf hin. Ein fehlendes `ip`
+    genuegte, um einen gesunden Tunnel abzubauen.
+
+    1. DIE AUFZEICHNUNG ist die Praemisse und kostet keinen
+       Unterprozess.
+           Es wird eine Datei gelesen, kein Programm gerufen. Sie kann
+           darum nicht in dem Sinne unbeantwortbar sein, um den es hier
+           geht. Dass read_state() "fehlt", "unlesbar" und "halb
+           geschrieben" zu einer Antwort zusammenfasst, ist eine ANDERE
+           und aeltere Entscheidung, und sie hat ihre eigene Begruendung
+           dort (tmpfs, in einem Stueck geschrieben). Sie wird hier
+           nicht angetastet - bewacht von
+           tests/src/test_vpn_config.py::
+           test_an_unreadable_record_is_no_record.
+
+           Ohne Aufzeichnung wird GAR NICHT gefragt. Das spart nicht nur
+           zwei Unterprozesse je Takt; es ist auch die Wahrheit: eine
+           Maschine, die nie gewaehlt hat, ist getrennt und nicht
+           unbekannt.
+
+    2. CHARON und 3. DIE ADRESSE kosten je einen Unterprozess, und beide
+       koennen unbeantwortbar sein.
+           Sie sind nicht dasselbe. "Die Aufzeichnung sagt verbunden,
+           aber niemand kann pruefen ob charon laeuft" laesst offen, ob
+           ueberhaupt ein Tunnel existiert. "charon laeuft, aber niemand
+           kann die Adresse pruefen" weiss immerhin, dass ein
+           Tunnelprozess lebt - offen bleibt nur, ob er traegt.
+
+           FUER DEN LESER IST ES DASSELBE, und darum ist es EIN Wort.
+           Vier Leser teilen sich eine Zeile Text; jeder von ihnen hat
+           genau eine Entscheidung zu treffen, und beide Male lautet die
+           einzige ehrliche Auskunft "niemand weiss, ob dein Verkehr
+           geschuetzt ist". Ein fuenftes Wort fuer "teilweise unbekannt"
+           waere eine Unterscheidung, auf die kein Leser anders handeln
+           koennte - und alle vier muessten sie mittragen.
+
+    WELCHE RICHTUNG DIE SICHERE IST
+        Bei wireguard_status() war sie klar: dort erzeugte die
+        Blindheit eine FEHLENTWARNUNG ("getrennt", also "ungeschuetzt"),
+        und die kostet Vertraulichkeit.
+
+        Hier zeigt sie in die andere Richtung - ein FEHLALARM -, und ein
+        Fehlalarm ist harmloser. Harmlos ist er nicht, aus zwei Gruenden:
+
+          - Der GRIFF haengt daran. `toggle` trennt auf `stale`, ein
+            haengendes `ip` genuegte also fuer einen Abbau.
+          - Ein Schild, das rot wird, weil `ip` klemmt, wird nach dem
+            dritten Mal nicht mehr gelesen. Ein Warnzeichen, dem niemand
+            glaubt, ist schlechter als keines - und es ist dasselbe
+            Schild, das im Ernstfall gelesen werden muss.
+
+        `unknown` ist in beide Richtungen richtig, weil es gar keine
+        Fehlrichtung hat: es behauptet nichts.
+
+    DIE VERWORFENE ALTERNATIVE: NUR DEN GRIFF AENDERN
+        Naheliegend war, `toggle` nicht mehr auf `stale` trennen zu
+        lassen. Sie traegt nicht, und zwar aus drei Gruenden:
+
+          - Sie flickt EINEN von vier Lesern. Das falsche Wort floesse
+            weiter zum Schild, zur Netzuebersicht und zum
+            VPN-Fenster.
+          - Sie nimmt dem Griff etwas Richtiges weg. Ein halb
+            abgestuerzter Tunnel MUSS getrennt und nicht als "nicht
+            verbunden" behandelt werden, sonst baut das Verbinden auf
+            xfrm-Policies, Routen und einer virtuellen Adresse auf, die
+            niemand abgeraeumt hat.
+          - Sie ist ueberfluessig, sobald die Ursache weg ist. Kann kein
+            Messfehler mehr `stale` erzeugen, IST `stale` wieder das,
+            was es behauptet - und der Griff darf darauf trennen.
+            Gemessen von tests/src/test_vpn_tunnel_unbekannt.py::
+            test_kein_messfehler_erzeugt_noch_eine_behauptung.
+
+    DIE ADRESSE ZU `unknown`
+        Wird MITGEGEBEN - anders als bei wireguard_status(), wo `unknown`
+        keine traegt. Dort waere sie geraten; hier ist sie
+        AUFGESCHRIEBEN und das einzige der drei Beweisstuecke, das in
+        diesem Zweig bekannt ist. Sie wegzulassen hiesse, das eine
+        Bekannte auch noch wegzuwerfen - und der Trennpfad braucht sie
+        genau dann.
+
+        Auf dem SCHILD steht sie trotzdem nicht. Dieselbe Regel wie fuer
+        `stale`, und dort steht sie ausgeschrieben.
     """
     state = read_state(path)
     if not state:
         return DISCONNECTED, ""
 
     recorded = str(state.get("virtual_ip") or "").strip()
-    if not charon_running(runner):
+
+    # `is None` ZUERST, bei beiden. `if not charon_running(...)` waere
+    # fuer None wahr und machte aus "nicht feststellbar" wieder
+    # "charon ist tot" - genau der Fehler, der hier abgelegt wird.
+    lebt = charon_running(runner)
+    if lebt is None:
+        return UNKNOWN, recorded
+    if not lebt:
         return STALE, recorded
-    if recorded and not address_present(recorded, runner):
-        return STALE, recorded
+
+    if recorded:
+        angelegt = address_present(recorded, runner)
+        if angelegt is None:
+            return UNKNOWN, recorded
+        if not angelegt:
+            return STALE, recorded
     # No recorded address means the gateway assigned none. There is
     # nothing to verify against the interfaces, and the record plus a
-    # live charon is then all the evidence that exists.
+    # live charon is then all the evidence that exists. Es wird dann auch
+    # NICHT gefragt - ein `ip`, das gar nicht laeuft, darf einen Zweig
+    # ohne Frage nicht unbekannt machen.
     return CONNECTED, recorded
 
 
@@ -2785,7 +2968,8 @@ USAGE = """usage: vpn.py --virtual-address | --tunnel-health
                        COMPLETELY through the tunnel. Reads the settings,
                        changes nothing, always exits 0.
   --address-present A  print A's address/prefix if it is configured on an
-                       interface; exit 1 if it is not.
+                       interface; exit 1 if it is not; exit 2 if it could
+                       not be established (no `ip`, or `ip` failed).
   --wg-import FILE     read a wg-quick configuration, store its secrets
                        at 0600 and print the settings section as JSON.
                        exit 0 taken over whole, 3 taken over with lines
@@ -3361,7 +3545,33 @@ def main(argv: Sequence[str] | None = None) -> int:
         if len(arguments) < 2:
             sys.stderr.write(USAGE)
             return 64
+        # DREI RUECKGABEWERTE SEIT DEM 02.09.2026, und der dritte ist
+        # der, wegen dem es diesen Umbau gibt.
+        #
+        #     0  die Adresse liegt an (und steht auf stdout)
+        #     1  sie liegt nicht an
+        #     2  es liess sich nicht feststellen
+        #
+        # Bis dahin gab es nur 0 und 1, und jeder Fehlschlag von `ip`
+        # wurde zur 1. Der eine Aufrufer, bei dem das teuer ist, steht
+        # in vpn-control-config.template::disconnect_vpn - die
+        # ERFOLGSPRUEFUNG der Trennung:
+        #
+        #     if [ -n "$VPN_VIP" ] && vpn_query --address-present ...
+        #
+        # Ein haengendes `ip` hiess dort "die Adresse ist weg", also
+        # "Erfolgreich getrennt" - waehrend sie womoeglich noch anlag
+        # und der Nutzer weiter im fremden Netz war. Genau der Fehler,
+        # den der Kommentar an jener Stelle schon einmal beschreibt.
         cidr = address_present(arguments[1])
+        if cidr is None:
+            # Auf stderr und nicht auf stdout: stdout traegt die
+            # Adresse, und ein Aufrufer, der sie einliest, soll hier
+            # nichts einlesen.
+            sys.stderr.write(
+                f"cannot tell whether {arguments[1]} is configured: "
+                "`ip -o addr show` did not answer\n")
+            return 2
         if not cidr:
             return 1
         print(cidr)
