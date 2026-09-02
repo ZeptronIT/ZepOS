@@ -129,6 +129,72 @@ export function zepRow(opts: {
   // `zep-row-nav`, ags-style.template) - genau die Faehigkeit, die
   // `aktion` schon vorgemacht hat.
   navEintrag?: boolean
+  /**
+   * `ende` ist selbst BEDIENBAR und gehoert deshalb NEBEN die klickbare
+   * Huelle, nicht hinein.
+   *
+   * NACHGETRAGEN am 01.09.2026, und die Zahl davor ist eine MESSUNG und
+   * keine Ueberlegung.
+   *
+   * WAS GEMESSEN WURDE (tests/render/test_zeprow_verschachtelung.py, am
+   * abgebildeten Fenster im verschachtelten Compositor, mit echten
+   * Tasten ueber wtype: zweimal Tabulator auf den Schalter, dann
+   * Leertaste). Die Zahlen sind die der GEGENPROBE - sie entstehen
+   * jederzeit neu, indem man `endeBedienbar` in ags-vpn.template
+   * ausbaut:
+   *
+   *     4000ms --fokus-gelesen-- fokus=GtkSwitch[zep-toggle]
+   *     4448ms KNOPF-clicked     fokus=GtkSwitch[zep-toggle]
+   *
+   *     Der Fokus lag auf dem SCHALTER, gefeuert hat die ZEILE, und
+   *     `notify::active` kam kein einziges Mal. Der Tabulator erreicht
+   *     den Schalter (die Fokuskette lautet
+   *     `GtkButton[zep-row-click] > GtkSwitch[zep-toggle] > ...`), aber
+   *     die Leertaste dort blaettert in die Einzelheiten statt zu
+   *     schalten.
+   *
+   *     Auf Deutsch: wer die Maus nicht benutzen kann, kann eine
+   *     VPN-Verbindung nicht ein- und ausschalten. Die Zeile ist der
+   *     einzige Ort, an dem der Schalter steht.
+   *
+   * WORAN ES LAG
+   *     Ein Gtk.Button ist in GTK4 kein Behaelter fuer bedienbare
+   *     Kinder. Steckt der Schalter IN der Huelle, liegt die Huelle in
+   *     seiner Ereigniskette darueber und faengt die Taste ab.
+   *
+   * WAS DIESE BETRIEBSART TUT
+   *     Sie haengt `ende` als GESCHWISTER der Huelle in die Zeile statt
+   *     hinein:
+   *
+   *         Vorgabe:  Button[.zep-row-click] > Box[.zep-row] > [.., ende]
+   *         hier:     Box[.zep-row] > [ Button[.zep-row-click] > [..],
+   *                                     ende ]
+   *
+   *     Die Zeile bleibt als Ganzes klickbar - `.zep-row` ist weiterhin
+   *     der Kasten, der gezeichnet wird, und der Klick auf Symbol, Text
+   *     und Luecke geht weiter an `aktion`. Nur das bedienbare Kind
+   *     liegt nicht mehr darunter.
+   *
+   * WARUM EINE OPTION UND KEINE NEUE VORGABE
+   *     GEZAEHLT am 02.09.2026 ueber alle src/templates/*.template
+   *     (tests/src/test_zeprow_zaehlung.py): von SECHZEHN zepRow-
+   *     Aufrufen setzt GENAU EINER `aktion` und `ende` zugleich -
+   *     ags-vpn.template. Bluetooth, Netz, Seitenleiste,
+   *     Kontrollzentrum, Dock, Home und die Verbindungseinstellungen
+   *     setzen nur `aktion` und haengen kein bedienbares Kind in ihre
+   *     Zeile; ags-settings.template setzt fuenfmal nur `ende` ohne
+   *     `aktion`. Eine neue Vorgabe aenderte also fuenfzehn Aufrufer,
+   *     um einen zu reparieren.
+   *
+   *     Der Weg der Vorgabe bleibt darum ZEICHEN FUER ZEICHEN derselbe
+   *     Baum wie vorher - siehe die Zuordnung unten, die genau dafuer
+   *     zwei getrennte Zusammenbauten hat statt eines mit Bedingungen
+   *     darin.
+   *
+   * WIRKT NUR ZUSAMMEN MIT `aktion` UND `ende`. Ohne Huelle gibt es
+   * nichts zu trennen, ohne `ende` nichts zu verschieben.
+   */
+  endeBedienbar?: boolean
 }): Gtk.Widget {
   const zeile = new Gtk.Box({ spacing: 0 })
   zeile.add_css_class("zep-row")
@@ -153,7 +219,6 @@ export function zepRow(opts: {
   // darum hier behoben und nicht nur fuer `navEintrag`.
   const symbol = new Gtk.Label({ label: opts.symbol, valign: Gtk.Align.CENTER })
   symbol.add_css_class("zep-row-icon")
-  zeile.append(symbol)
 
   const texte = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
@@ -177,22 +242,72 @@ export function zepRow(opts: {
     if (!opts.vollerText) unter.set_max_width_chars({{STYLE_MEASURE_LINE}})
     texte.append(unter)
   }
-  zeile.append(texte)
 
   const luecke = new Gtk.Box({ hexpand: true })
-  zeile.append(luecke)
 
-  if (opts.ende) zeile.append(opts.ende)
+  // ZWEI GETRENNTE ZUSAMMENBAUTEN UND KEIN EINZELNER MIT BEDINGUNGEN
+  // DARIN - siehe `endeBedienbar` am Funktionskopf.
+  //
+  //     Der Weg der Vorgabe unten haengt Symbol, Texte, Luecke und
+  //     `ende` in GENAU DIESER Reihenfolge in `zeile` und wickelt
+  //     `zeile` dann in die Huelle. Das ist Zeichen fuer Zeichen der
+  //     Baum, den fuenfzehn Aufrufer heute bekommen - ein Zusammenbau mit
+  //     `if`s darin haette dieselbe Reihenfolge nur BEHAUPTET.
+  const getrennt = Boolean(opts.aktion && opts.ende && opts.endeBedienbar)
 
-  if (!opts.aktion) return zeile
+  if (!getrennt) {
+    zeile.append(symbol)
+    zeile.append(texte)
+    zeile.append(luecke)
+    if (opts.ende) zeile.append(opts.ende)
 
-  // Eine einzige Huelle, ohne eigene Flaeche - siehe die Begruendung am
-  // Funktionskopf (`aktion`).
-  const knopf = new Gtk.Button({ can_focus: true })
-  knopf.add_css_class("zep-row-click")
-  knopf.set_child(zeile)
-  knopf.connect("clicked", opts.aktion)
-  return knopf
+    if (!opts.aktion) return zeile
+
+    // Eine einzige Huelle, ohne eigene Flaeche - siehe die Begruendung
+    // am Funktionskopf (`aktion`).
+    const knopf = new Gtk.Button({ can_focus: true })
+    knopf.add_css_class("zep-row-click")
+    knopf.set_child(zeile)
+    knopf.connect("clicked", opts.aktion)
+    return knopf
+  }
+
+  // DIE GETRENNTE BETRIEBSART
+  //
+  //     `zeile` ist hier der AEUSSERE Kasten und traegt weiterhin
+  //     `.zep-row` - sie ist es, die gezeichnet wird, und Zeigergrund,
+  //     Rundung und der Zustand "ausgewaehlt" bleiben damit unveraendert
+  //     dieselbe Flaeche wie in der Vorgabe.
+  //
+  //     Die Huelle bekommt NUR Symbol, Texte und Luecke; `ende` wird ihr
+  //     Geschwister. Damit liegt kein bedienbares Kind mehr unter einem
+  //     Gtk.Button, und die Leertaste auf dem Schalter erreicht den
+  //     Schalter.
+  //
+  //     `hexpand` auf beiden: die Huelle nimmt den Platz bis zum `ende`,
+  //     sonst sass der Klickbereich nur unter dem Text und die Luecke
+  //     daneben waere tot - genau das, was `luecke` verhindern soll.
+  const huelle = new Gtk.Button({ can_focus: true, hexpand: true })
+  huelle.add_css_class("zep-row-click")
+  // Die zweite Klasse traegt Zeigerdruck und Tastaturfokus. Die zwei
+  // Regeln zu `.zep-row-click` haben einen Nachfahrenpfeil auf
+  // `.zep-row` und treffen hier nichts mehr, weil die Zeile in dieser
+  // Betriebsart UEBER der Huelle liegt statt darunter. GEMESSEN am
+  // 01.09.2026, was ohne sie bleibt: GTKs eigener Rahmen (128,165,211)
+  // statt $accent (#33C9EE) und gar keine Fuellung. Herleitung bei
+  // `.zep-row-click-getrennt` in ags-style.template.
+  huelle.add_css_class("zep-row-click-getrennt")
+  huelle.connect("clicked", opts.aktion!)
+
+  const inhalt = new Gtk.Box({ spacing: 0, hexpand: true })
+  inhalt.append(symbol)
+  inhalt.append(texte)
+  inhalt.append(luecke)
+  huelle.set_child(inhalt)
+
+  zeile.append(huelle)
+  zeile.append(opts.ende!)
+  return zeile
 }
 
 // Der Schalter. Gtk.Switch und kein selbstgebauter Knopf: er bringt

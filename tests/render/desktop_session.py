@@ -829,8 +829,29 @@ class Session:
         assert WALLPAPER.is_file(), f"{WALLPAPER} fehlt"
         self.spawn(["swaybg", "-i", str(WALLPAPER), "-m", "fill"])
 
-    def shell(self, bundle_path: Path, config: Path) -> subprocess.Popen:
+    def shell(self, bundle_path: Path, config: Path,
+              **extra: str) -> subprocess.Popen:
         """Die erzeugte Oberflaeche starten - Leiste, Dock, Ueberlagerungen.
+
+        `**extra` NACHGETRAGEN am 01.09.2026, und die Entscheidung gehoert
+        hierher
+            tests/render/test_ansehen_aendert_nichts.py braucht einen
+            eigenen PATH fuer die Oberflaeche: ein Verzeichnis mit
+            Attrappen fuer `nmcli` und `swanctl` davor, damit ein Lauf
+            belegen kann, dass das blosse ANSEHEN einer Verbindung nichts
+            an ihr aendert - und zwar ohne dass dabei ein Befehl die
+            Maschine erreichen kann, auf der die Suite laeuft.
+
+            Der andere Weg waere gewesen, dort `spawn()` direkt zu rufen.
+            Dann stuenden die zwei Zeilen, die diese Funktion ausmachen -
+            und vor allem die Begruendung fuer
+            HYPRLAND_INSTANCE_SIGNATURE unten - ein zweites Mal in einer
+            Testdatei. Zwei Kopien einer Startroutine sind zwei Kopien,
+            die auseinanderlaufen; die, die niemand anfasst, ist dann die,
+            die still etwas anderes startet.
+
+            Ein Durchreichparameter ist die kleinere Aenderung: jeder
+            bestehende Aufrufer bleibt Zeichen fuer Zeichen derselbe.
 
         HYPRLAND_INSTANCE_SIGNATURE GEHOERT IN DIESE UMGEBUNG, und das ist
         gemessen
@@ -853,7 +874,8 @@ class Session:
         assert signature, "der verschachtelte Compositor hat keine Kennung"
         return self.spawn([str(bundle_path)],
                           XDG_CONFIG_HOME=str(config),
-                          HYPRLAND_INSTANCE_SIGNATURE=signature)
+                          HYPRLAND_INSTANCE_SIGNATURE=signature,
+                          **extra)
 
     def move_cursor(self, x: int, y: int) -> None:
         """Den Zeiger auf den abgebildeten Schirm setzen.

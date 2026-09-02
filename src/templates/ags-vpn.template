@@ -1255,6 +1255,33 @@ export const vpnSeite: ShellSeite = {
             zeigeDetail()
           },
           ende: zepToggle(steht, (an) => { void schalte(eintrag, an) }),
+          // DER SCHALTER GEHOERT NEBEN DIE KLICKBARE HUELLE, NICHT
+          // HINEIN - NACHGETRAGEN am 01.09.2026
+          //
+          //     Diese Zeile ist die EINZIGE im ganzen Baum, die zepRow
+          //     mit `aktion` UND `ende` zugleich ruft (gezaehlt in
+          //     tests/src/test_zeprow_zaehlung.py). Damit steckte
+          //     hier - und nur hier - ein bedienbares Kind in einem
+          //     Gtk.Button.
+          //
+          //     GEMESSEN am abgebildeten Fenster mit echten Tasten
+          //     (tests/render/test_zeprow_verschachtelung.py). Die
+          //     Zahlen sind die der GEGENPROBE - sie entstehen neu,
+          //     sobald man `endeBedienbar` unten ausbaut:
+          //
+          //         4000ms --fokus-gelesen-- fokus=GtkSwitch[zep-toggle]
+          //         4448ms KNOPF-clicked     fokus=GtkSwitch[zep-toggle]
+          //
+          //     Der Fokus lag auf dem SCHALTER, gefeuert hat die ZEILE,
+          //     und `notify::active` kam kein einziges Mal. Wer die Maus
+          //     nicht benutzen kann, konnte diese Verbindung damit
+          //     ueberhaupt nicht schalten.
+          //
+          //     Die Herleitung der Betriebsart steht bei `endeBedienbar`
+          //     in ags-kit.template. Sichtbar aendert sich nichts:
+          //     `.zep-row` bleibt der gezeichnete Kasten, und die Zeile
+          //     bleibt als Ganzes klickbar.
+          endeBedienbar: true,
         }))
       }
     }
