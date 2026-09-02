@@ -810,8 +810,40 @@ bind = $mainMod SHIFT, H, exec, zepos-menu --show all
 # Window Management
 # @Fenster: Fenster schliessen
 bind = $mainMod SHIFT, X, killactive
+# HIER STAND `togglefloating`, und der Dispatcher macht die Arbeit auch
+# weiter - er steht nur nicht mehr allein.
+#
+# GEMELDET am 01.09.2026, zweimal: "die kitty terminals oben der header
+# wo x minimieren und vollbild ist keinen abstand zum oberen rand" und
+# "fenster die schweben mit super v sieht man auf dem header oben recht
+# bei dem x ein flackern des headers".
+#
+# GEMESSEN am 02.09.2026 an einem verschachtelten Hyprland 0.56.2 mit
+# dieser Oberflaeche und diesem hyprbars, 1920x1080, ausgelieferte
+# Groesse - dieselbe Taste, dasselbe Fenster:
+#
+#     gekachelt      Kopf oben  108   = 84 reserviert + 24 gaps_out
+#     nach SUPER+V   Kopf oben -124   208 Punkte ueber dem Rand,
+#                                     auf dem Bild nicht mehr zu finden
+#
+# Der Fehler liegt in Hyprlands fitBoxInWorkArea(): sie schiebt einen zu
+# hohen Kasten oben heraus, weil nach dem zweiten Klemmschritt kein
+# max() mehr steht. src/bin/zepos-float-toggle traegt die Rechnung, die
+# Quellzeilen und den Grund, warum eine Fensterregel das NICHT kann -
+# Hyprlands Groessenausdruecke kennen monitor_w und monitor_h, aber die
+# Sperrzone der Leiste kennen sie nicht.
+#
+# Der Befehl schaltet um und sieht danach nach. Ein Fenster, das schon
+# auf den Schirm passt, laesst er unangetastet.
+#
+# Die Beschreibung steht UNMITTELBAR ueber der bind-Zeile und nicht ueber
+# diesem Block: src/keybinds.py liest sie als die letzte
+# `# @Gruppe: Text`-Zeile davor, und tests/src/test_keybinds.py haelt
+# das fest. Mit dem Begruendungsblock dazwischen war die Taste in keiner
+# Uebersicht und in keiner Suche zu finden - gemessen, vier
+# fehlgeschlagene Zusicherungen am 02.09.2026.
 # @Fenster: Fenster schweben lassen oder wieder einkacheln
-bind = $mainMod, V, togglefloating
+bind = $mainMod, V, exec, zepos-float-toggle
 # @Fenster: Pseudo-Kachelung fuer dieses Fenster
 bind = $mainMod, P, pseudo
 # @Fenster: Teilung waagerecht oder senkrecht

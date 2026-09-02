@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""SUPER+V - und der Fensterkopf bleibt auf dem Schirm.
+
+WAS GEMELDET WURDE
+    Der Nutzer am 01.09.2026, zweimal am selben Tag und, wie sich
+    gemessen hat, ueber dasselbe Ereignis:
+
+      "irgendwie haben seit der neusten version die kitty terminals oben
+       der header wo x minimieren und vollbild ist keinen abstand zum
+       oberen rand"
+
+      "fenster die schweben mit super v sieht man auf dem header oben
+       recht bei dem x ein flackern des headers voll komisch"
+
+WAS GEMESSEN IST, am 02.09.2026 an einem verschachtelten Hyprland 0.56.2
+mit dieser Oberflaeche und diesem hyprbars, 1920x1080, ausgelieferte
+Groesse (tests/render/test_fensterkopf.py fuehrt genau das aus):
+
+    Schirm            1920x1080, reserved [0, 84, 0, 84]
+    Arbeitsflaeche    y 84..996, Hoehe 912
+    bar_height 38, border_size 1, gaps_out 24
+
+    gekacheltes kitty      at (4025, 147)  1870x824
+                           Kopf oben 108 = 84 + 24     RICHTIG
+    dasselbe, roh geschwebt
+                           at (3999, -85)  1920x1080
+                           Kopf oben -124              208 PUNKTE
+                                                       UEBER DEM RAND
+    dasselbe ueber diesen Befehl
+                           at (4001, 123)  1918x872
+                           Kopf oben 84                AN DER KANTE
+
+    Und am Bild dasselbe: im rohen Fall stand die Farbe der Kopfleiste
+    in keiner einzigen Zeile, im reparierten ab Zeile 84 - der Kante der
+    Arbeitsflaeche. Dass beide Aussagen etwas wert sind, prueft
+    test_das_bild_zeigt_den_kopf_dort_wo_hyprctl_ihn_meldet: was die
+    Abfrage als Lage meldet, muss die Farbsuche dort wiederfinden.
+
+WO DAS ENTSTEHT, UND ES IST NICHT DIESES PROJEKT
+    Hyprlands src/layout/algorithm/floating/default/
+    DefaultFloatingAlgorithm.cpp, fitBoxInWorkArea(). Sie klemmt in
+    zwei Schritten und in dieser Reihenfolge:
+
+        targetBox.y = std::max(targetBox.y, WORK_AREA.y);
+        if (targetBox.y + targetBox.h > WORK_AREA.y + WORK_AREA.h)
+            targetBox.y = WORK_AREA.y + WORK_AREA.h - targetBox.h;
+
+    Nach dem zweiten Schritt steht kein max() mehr. Ein Kasten, der
+    HOEHER ist als die Arbeitsflaeche, wird deshalb oben herausgeschoben
+    - genau um seinen Ueberschuss. Die Rechnung geht auf den Punkt auf:
+    targetBox.h = 1080 + 39 + 1 = 1120, und 84 + 912 - 1120 = -124.
+
+    Der Kasten ist deshalb zu hoch, weil movedTarget() fuer ein Fenster,
+    das gerade noch gekachelt war, die gemerkte Schwebegroesse nimmt -
+    hier die des ganzen Schirms - und `fitBoxInWorkArea` nur SCHIEBT,
+    nicht SCHRUMPFT.
+
+    Der Kopf ist dabei nur der sichtbare Verlierer: die 39 Punkte sind
+    bar_height + border_size, und `getWindowExtentsUnified(
+    RESERVED_EXTENTS | INPUT_EXTENTS)` zaehlt sie mit. Ohne hyprbars
+    ragt derselbe Kasten um 170 Punkte heraus, dann eben ohne Kopf.
+
+WARUM DAS BEIDE MELDUNGEN ERKLAERT
+    Es ist ein Ereignis. Wer SUPER+V drueckt, sieht den Kopf an den
+    oberen Rand springen ("keinen abstand zum oberen rand"); wer die
+    Taste zum Pruefen zweimal drueckt, sieht ihn erscheinen und
+    verschwinden ("ein flackern des headers"). Das X sitzt dabei in der
+    Ecke, in der beides zusammenfaellt: bei 1920 Breite auf x 3999 liegt
+    der rechte Fensterrand einen Punkt vor dem Schirmrand.
+
+    NICHT gemessen ist ein Flackern im engeren Sinn. Zeiger auf dem X,
+    Animationen an, vier Sekunden: 0 % Rechenzeit im Compositor und
+    keine Abweichung zwischen zwoelf aufeinanderfolgenden Aufnahmen.
+    Ein Zeichenpfad, der sich selbst beschaedigt, gibt es dort nicht.
+
+WARUM KEINE FENSTERREGEL, und das ist der Grund fuer eine eigene Datei
+    `max-size` koennte einen Kasten deckeln, aber nicht auf die richtige
+    Zahl. Hyprlands Groessenausdruecke kennen zwei Groessen - Window.cpp
+    Zeile 2010/2011 legt `monitor_w` und `monitor_h` an, und das ist
+    alles. Die SPERRZONE steht in keiner davon: die Leiste dieses
+    Schreibtischs reserviert oben 84 Punkte und das Dock unten 84, und
+    beide Zahlen haengen am Groessenregler des Nutzers und daran, ob auf
+    diesem Schirm ueberhaupt ein Dock liegt. Eine Regel muesste sie
+    abschreiben; dieser Befehl liest sie.
+
+WARUM NACH DEM UMSCHALTEN UND NICHT STATT DESSEN
+    `togglefloating` bleibt der Dispatcher, der die Arbeit macht. Hier
+    wird nur nachgesehen, was dabei herausgekommen ist, und nur das
+    korrigiert, was nicht auf den Schirm passt. Ein Fenster, das schon
+    hineinpasst, wird NICHT angefasst - sonst wuerde SUPER+V jede
+    gemerkte Schwebegroesse ueberschreiben, und das ist eine
+    Verschlechterung fuer jeden, den dieser Fehler nie getroffen hat.
+
+WARUM bar_height GELESEN UND NICHT EINGESETZT WIRD
+    Weil sie sich zur Laufzeit aendert. ~/.local/bin/hyprbars-toggle
+    setzt sie auf 0 (SUPER+ALT+B), und src/plugins.py laesst den ganzen
+    hyprbars-Block weg, wenn das Objekt fehlt - dann gibt es die Option
+    nicht. Beide Faelle beantwortet `hyprctl getoption` von selbst; ein
+    {{STYLE_HYPRBARS_HEIGHT}} waere in beiden falsch.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+
+# Vier Zahlen, so wie Hyprland sie ausgibt. HyprCtl.cpp Zeile 281/282
+# schreibt sie in dieser Reihenfolge - links, oben, rechts, unten -, und
+# eine Verwechslung von oben und unten waere ein Fenster, das nach jedem
+# SUPER+V unter das Dock rutscht.
+LINKS, OBEN, RECHTS, UNTEN = 0, 1, 2, 3
+
+
+def hyprctl(*arguments: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["hyprctl", *arguments],
+                          capture_output=True, text=True, timeout=5)
+
+
+def frage(*arguments: str):
+    """Eine JSON-Abfrage, oder None.
+
+    None und kein Abbruch: dieser Befehl haengt an einer Taste. Wenn
+    hyprctl nicht antwortet, hat der Nutzer schon groessere Sorgen als
+    die Lage seines Fensterkopfes, und eine Ausnahme auf der
+    Standardfehlerausgabe sieht dort niemand.
+    """
+    try:
+        result = hyprctl("-j", *arguments)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+def option(name: str) -> int:
+    """Eine ganzzahlige Einstellung, oder 0, wenn es sie nicht gibt.
+
+    0 ist hier keine Notluege, sondern die richtige Antwort: `hyprctl
+    getoption plugin:hyprbars:bar_height` scheitert genau dann, wenn das
+    Plugin nicht geladen ist - und dann ist ueber dem Fenster wirklich
+    kein Kopf.
+    """
+    data = frage("getoption", name)
+    if not isinstance(data, dict):
+        return 0
+    wert = data.get("int")
+    return int(wert) if isinstance(wert, (int, float)) else 0
+
+
+def main() -> int:
+    vorher = frage("activewindow")
+    if not isinstance(vorher, dict) or not vorher.get("address"):
+        # Kein Fenster im Griff. Das Umschalten waere ohnehin wirkungslos.
+        return 0
+    adresse = vorher["address"]
+
+    ergebnis = hyprctl("dispatch", "togglefloating", f"address:{adresse}")
+    if ergebnis.returncode != 0:
+        print(ergebnis.stderr.strip(), file=sys.stderr)
+        return 1
+
+    fenster = None
+    for kandidat in frage("clients") or []:
+        if kandidat.get("address") == adresse:
+            fenster = kandidat
+            break
+    if not isinstance(fenster, dict) or not fenster.get("floating"):
+        # Eingekachelt. Die Lage bestimmt jetzt das Layout, nicht dieser
+        # Befehl - und das Layout rechnet die Sperrzone von selbst mit
+        # (gemessen: Kopf oben 108 bei einer Arbeitsflaeche ab 84,
+        # Unterschied 24 = gaps_out).
+        return 0
+
+    schirm = None
+    for kandidat in frage("monitors") or []:
+        if kandidat.get("id") == fenster.get("monitor"):
+            schirm = kandidat
+            break
+    if not isinstance(schirm, dict):
+        return 0
+    reserviert = schirm.get("reserved") or [0, 0, 0, 0]
+    if len(reserviert) != 4:
+        return 0
+
+    leiste = option("plugin:hyprbars:bar_height")
+    rahmen = option("general:border_size")
+
+    # Die Arbeitsflaeche, in denselben logischen Punkten, in denen
+    # `clients` seine at/size ausgibt.
+    flaeche_x = schirm["x"] + reserviert[LINKS]
+    flaeche_y = schirm["y"] + reserviert[OBEN]
+    flaeche_b = schirm["width"] - reserviert[LINKS] - reserviert[RECHTS]
+    flaeche_h = schirm["height"] - reserviert[OBEN] - reserviert[UNTEN]
+
+    # Der Kasten, den at/size beschreiben, ist die HAUPTFLAECHE des
+    # Fensters - ohne Rahmen und ohne Kopf. Gemessen am 02.09.2026:
+    # gekachelt at.y 147 bei Arbeitsflaeche ab 84, gaps_out 24,
+    # border_size 1, bar_height 38, und 84 + 24 + 1 + 38 = 147. Was
+    # ringsum noch Platz braucht, ist also der Rahmen an allen vier
+    # Seiten und der Kopf zusaetzlich oben.
+    breite, hoehe = fenster["size"]
+    grenz_b = max(1, flaeche_b - 2 * rahmen)
+    grenz_h = max(1, flaeche_h - leiste - 2 * rahmen)
+
+    if breite > grenz_b or hoehe > grenz_h:
+        breite = min(breite, grenz_b)
+        hoehe = min(hoehe, grenz_h)
+        hyprctl("dispatch", "resizewindowpixel",
+                f"exact {breite} {hoehe},address:{adresse}")
+
+    # Und nun die Lage. Erst die Untergrenze, dann die Obergrenze - und
+    # zwar in DIESER Reihenfolge geklemmt, mit max() zuletzt. Genau das
+    # fehlt in fitBoxInWorkArea(), und ohne das letzte max() waere dieser
+    # Befehl derselbe Fehler ein zweites Mal.
+    x, y = fenster["at"]
+    x = min(x, flaeche_x + flaeche_b - breite - rahmen)
+    y = min(y, flaeche_y + flaeche_h - hoehe - rahmen)
+    x = max(x, flaeche_x + rahmen)
+    y = max(y, flaeche_y + leiste + rahmen)
+
+    if (x, y) != tuple(fenster["at"]):
+        hyprctl("dispatch", "movewindowpixel",
+                f"exact {x} {y},address:{adresse}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
