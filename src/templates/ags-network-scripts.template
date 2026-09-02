@@ -143,6 +143,21 @@ vpn_info() {
             echo "Unvollständig"
             return
             ;;
+        # `unknown`, das vierte Wort des Vertrags seit dem 01.09.2026:
+        # nmcli hat NICHT geantwortet - es fehlt, es haengt, oder
+        # NetworkManager laeuft nicht (rc=8).
+        #
+        # MIT EIGENEM ZWEIG UND NICHT DURCHGEFALLEN, und das ist keine
+        # Sorgfaltspflicht, sondern der ganze Punkt: der Rueckfall
+        # darunter fragt NetworkManager ein ZWEITES Mal - genau den
+        # Dienst, der eben nicht geantwortet hat. Er faende nichts,
+        # liefe bis ans Ende und schriebe "Aus". "Aus" heisst "es laeuft
+        # nichts", und das ist die Behauptung, gegen die es den vierten
+        # Zustand ueberhaupt gibt.
+        unknown)
+            echo "Unbekannt"
+            return
+            ;;
     esac
     # Fallback: check NetworkManager VPN
     #

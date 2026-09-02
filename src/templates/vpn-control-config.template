@@ -77,18 +77,29 @@ vpn_query() {
     python3 "$ZEPOS_SYSTEM_ROOT/vpn.py" "$@"
 }
 
-# connected | stale | disconnected, und die notierte Adresse dazu.
+# connected | stale | disconnected | unknown, und die notierte Adresse
+# dazu.
 #
 # Hier stand ein `grep` ueber `ip addr show` auf den Adressbereich eines
 # bestimmten Gateways. Fuer jedes andere war die Antwort dauerhaft
 # "getrennt", und das kostete mehr als eine falsche Anzeige: das Trennen
 # stieg gleich zu Beginn mit "Already disconnected" aus, ohne irgendetwas
 # abzubauen, und meldete Erfolg.
+#
+# DIE LEERE ANTWORT HEISST SEIT DEM 01.09.2026 "unknown" UND NICHT MEHR
+# "disconnected"
+#     Hier stand `${VPN_STATE:-disconnected}`, und das war derselbe
+#     Fehler eine Ebene hoeher als der, den src/vpn.py an diesem Tag
+#     ablegt: vpn.py gar nicht ausfuehrbar, kein python3, ein Abbruch
+#     mitten im Lesen - alles wurde zu "der Tunnel steht nicht". Das
+#     Wort dafuer gibt es jetzt, und es zu benutzen kostet nichts:
+#     `disconnected` behaelt genau die Faelle, in denen vpn.py es
+#     GESCHRIEBEN hat.
 read_vpn_state() {
     local line
     line=$(vpn_query --status 2>/dev/null) || line=""
     VPN_STATE="${line%% *}"
-    VPN_STATE="${VPN_STATE:-disconnected}"
+    VPN_STATE="${VPN_STATE:-unknown}"
     case "$line" in
         *" "*) VPN_VIP="${line#* }" ;;
         *)     VPN_VIP="" ;;
@@ -329,6 +340,13 @@ disconnect_vpn() {
     # abzubauen. Laeuft charon, ist der Abbau faellig, auch wenn wir
     # nichts notiert haben: dann liegen xfrm-Policies, Routen und
     # womoeglich eine virtuelle Adresse herum, die niemand mehr abraeumt.
+    #
+    # "unknown" faellt hier ABSICHTLICH nicht unter die Abkuerzung, und
+    # zwar in die sichere Richtung: wer `disconnect` tippt, hat sich
+    # entschieden, und "wir wissen es nicht" ist kein Grund, ihm
+    # "Already disconnected" zu antworten und nichts abzubauen. Genau
+    # dieses Vorzeitig-Aussteigen ist der Fehler, den der Absatz
+    # darueber schon einmal beschreibt.
     if [ "$VPN_STATE" = "disconnected" ] && ! pgrep -f "charon" > /dev/null 2>&1; then
         notify_send "normal" "VPN Status" "Already disconnected"
         return 0
@@ -489,8 +507,29 @@ disconnect_vpn() {
 # Ein halb abgestuerzter Tunnel wird getrennt und nicht als "nicht
 # verbunden" behandelt: sonst baut das Verbinden auf Resten auf, die
 # niemand abgeraeumt hat.
+#
+# UND EIN UNBEKANNTER ZUSTAND WIRD WEDER DAS EINE NOCH DAS ANDERE -
+# SEIT DEM 01.09.2026
+#     Ein Umschalter braucht eine Ausgangslage. Bis zu diesem Tag
+#     bekam er immer eine, weil ein nicht antwortendes nmcli
+#     "disconnected" hiess: der Griff verband dann, sinnlos, aber
+#     wenigstens harmlos. Mit dem vierten Wort waere daraus ohne diesen
+#     Zweig das Gegenteil geworden - "nicht disconnected" heisst hier
+#     unten TRENNEN, und ein Griff, der einen vielleicht stehenden
+#     Tunnel abbaut, weil gerade niemand nachsehen kann, ist genau der
+#     Schaden, gegen den der Zustand eingefuehrt wurde.
+#
+#     Also wird nichts getan und gesagt, warum. Wer trotzdem handeln
+#     will, hat `connect` und `disconnect` - zwei Befehle, die sagen,
+#     was sie meinen, statt es aus einem unbekannten Zustand zu raten.
 toggle_vpn() {
     read_vpn_state
+    if [ "$VPN_STATE" = "unknown" ]; then
+        log_message "VPN-Zustand unbekannt - nicht umgeschaltet"
+        notify_send "critical" "VPN Status" \
+            "Zustand unbekannt: NetworkManager antwortet nicht. Niemand weiß, ob dein Verkehr geschützt ist."
+        return 1
+    fi
     if [ "$VPN_STATE" = "disconnected" ]; then
         connect_vpn
     else
@@ -510,9 +549,13 @@ case "${1:-toggle}" in
         toggle_vpn
         ;;
     status)
-        # Alle drei Zustaende, nicht zwei: "stale" ist der halb
+        # Alle VIER Zustaende, nicht zwei: "stale" ist der halb
         # abgestuerzte Tunnel, und ihn als "connected" auszugeben war die
-        # Auskunft, wegen der niemand neu verbunden hat.
+        # Auskunft, wegen der niemand neu verbunden hat. "unknown" ist
+        # seit dem 01.09.2026 das vierte Wort und geht hier UNVERAENDERT
+        # durch - dieses Skript ist eine Durchreiche und keine zweite
+        # Meinung; wer das Wort auf drei einebnete, haette den Fall
+        # wieder verloren, fuer den es eingefuehrt wurde.
         read_vpn_state
         echo "$VPN_STATE"
         ;;

@@ -142,6 +142,58 @@ class UnusableSettings(ValueError):
 def default_connection() -> dict[str, Any]:
     """EINE VPN-Verbindung, wie sie unkonfiguriert aussieht.
 
+    DIE EINE VORGABENTABELLE - SEIT DEM 01.09.2026, UND VORHER VIER
+        Bis zu diesem Tag standen die Vorgaben EINER VPN-Verbindung an
+        vier Stellen dieses Baums:
+
+            settings.py::default_connection()      9 oben, 35 Blatt
+            user_settings.py::DEFAULT_CONNECTION  15 oben, 52 Blatt
+            style_definition.py                   27 Aufrufe, jeder mit
+                                                  eingetipptem Vorgabewert
+            vpn.py                                11 Modulkonstanten
+
+        GEMESSEN am 01.09.2026 durch Vergleich der vier Mengen: die
+        WERTE stimmten ueberall ueberein, die Tabellen waren
+        verschieden LANG. Siebzehn Blattschluessel - `username`,
+        `remember_username`, `xauth_enabled`, `debug`, die acht unter
+        `phase1` und die fuenf unter `phase2` - standen nur in
+        user_settings.py.
+
+        Was das kostete, stand seit dem 21.08.2026 als Satz in
+        tests/src/test_vpn_wireguard.py und war nie nachgemessen
+        worden: "sonst lehnt `zepos-settings set` einen Pfad ab, den
+        das Fenster daneben schreibt." Genau das tat es. src/cli.py
+        prueft einen Pfad gegen DIESE Tabelle, also antwortete
+        `zepos-settings set vpn.phase1.version 1` mit "no such setting"
+        - fuer einen Schluessel, den das Einstellungsfenster ohne
+        Weiteres schrieb und den vpn.py beim Bau der swanctl.conf las.
+
+    WARUM DIESE TABELLE DIE QUELLE IST UND NICHT EINE DER ANDEREN
+        Sie steht im Modul, dem die DATEI gehoert: settings.py fuehrt
+        den Dateinamen, die Fassungsnummer, load(), save() und die
+        Wanderung. Welche Schluessel eine Verbindung hat, ist eine
+        Aussage ueber das Dateiformat und gehoert neben die Fassung,
+        die es beschreibt.
+
+        Sie ist ausserdem die einzige der vier, auf die alle anderen
+        zeigen koennen, ohne dass ein Ring entsteht: user_settings.py,
+        style_definition.py und vpn.py fuehren settings.py bereits
+        heute in ihren Importen, umgekehrt keines. Waere
+        DEFAULT_CONNECTION in user_settings.py die Quelle geworden,
+        muesste settings.py sein eigenes Format bei einem Modul
+        erfragen, das seine Datei liest - und vpn.py, das ohne
+        user_settings.py auskommt, haette es dazunehmen muessen.
+
+        Und sie ist eine FUNKTION, keine Tabelle im Modulkopf. Jeder
+        Aufrufer bekommt eine eigene Abbildung und darf sie veraendern;
+        DEFAULT_CONNECTION war ein dict auf Modulebene, das alle Leser
+        einer Sitzung teilten. Denselben Grund nennt DEFAULT_SETTINGS
+        in src/user_settings.py fuer seine Kopie der Farben.
+
+        Bewacht von tests/src/test_vpn_vorgaben.py, und zwar
+        ausfuehrend: die Tests dort rufen jeden der vier Wege auf und
+        vergleichen, was herauskommt.
+
     HIESS BIS ZUM 22.08.2026 `defaults()["vpn"]` UND IST ZEICHEN FUER
     ZEICHEN DASSELBE
         Der Abschnitt ist nicht umgebaut, er ist eine Ebene tiefer
@@ -172,7 +224,15 @@ def default_connection() -> dict[str, Any]:
         # geraten werden - siehe src/vpn.py::vpn_kind().
         "kind": "ipsec",
         "server": "",
+        # Der Kontoname am Gegenueber. Leer wie jeder Wert, der ein Netz
+        # oder eine Person benennt: das Original lieferte den seinen mit
+        # aus, und eine fremde Installation kam damit halb angemeldet an.
+        "username": "",
         "connection_name": "work",
+        # Merkt sich den Kontonamen zwischen zwei Verbindungen. Wahr,
+        # weil das Fenster ihn sonst bei jedem Verbinden neu erfragt -
+        # das PASSWORT steht davon unberuehrt und wird nie gespeichert.
+        "remember_username": True,
         "dns": {"servers": [], "search_domain": ""},
         "test_host": "",
         "routed_networks": [],
@@ -183,6 +243,47 @@ def default_connection() -> dict[str, Any]:
         # goes dark. The origin had its own home subnet, and the
         # German interface name it used, written into the script.
         "bypass_networks": [],
+        # IPsec Phase 1 (IKE) und Phase 2 (ESP). Die Werte sind NICHT
+        # identifizierend - sie benennen kein Netz und keine Person,
+        # sondern was ausgehandelt wird -, und deshalb stehen sie
+        # ausgefuellt hier: wer Server und Netz eintraegt, bekommt einen
+        # Tunnel, der zustande kommt, ohne dreizehn Regler zu verstehen.
+        #
+        # IKEv2 im Hauptmodus. `aggressive` ist ein IKEv1-Begriff, und
+        # das Verbindungsskript schreibt die Zeile nur fuer version 1 -
+        # siehe src/vpn.py::swanctl_config().
+        #
+        # Bis zum 01.09.2026 standen diese dreizehn Werte NUR in
+        # user_settings.py, waehrend src/cli.py seine Pfadpruefung gegen
+        # diese Tabelle hier fuehrte. `zepos-settings set
+        # vpn.phase1.version 1` war damit "no such setting" fuer einen
+        # Schluessel, den das Fenster daneben schrieb. Der Kopf dieser
+        # Funktion fuehrt es aus.
+        "phase1": {
+            "version": 2,
+            "aggressive": False,
+            "proposals": "aes256-sha256-ecp521",
+            "keylife": 86400,
+            "dpd_delay": 30,
+            "dpd_timeout": 120,
+            "encap": True,
+            "mobike": False,
+        },
+        "phase2": {
+            "rekey_time": 43200,
+            "life_time": 43200,
+            "mode": "tunnel",
+            "replay_window": 32,
+            "esp_proposals": "aes256-sha256-ecp521",
+        },
+        # XAuth (IKEv1) - aus, weil es zu IKEv2 nicht gehoert und die
+        # Vorgabe oben IKEv2 ist. Wer es einschaltet, wird beim
+        # Verbinden nach einem zweiten Geheimnis gefragt.
+        "xauth_enabled": False,
+        # Ausfuehrliche Ausgabe des Verbindungsskripts. Aus, weil die
+        # ausfuehrliche Ausgabe Aushandlungsdaten enthaelt und in einem
+        # Protokoll landet, das der Nutzer weiterreicht.
+        "debug": False,
         # WireGuard, seit dem 21.08.2026 die zweite Bauart. Rein
         # ADDITIV, und `schema_version` bleibt darum 1: load()
         # weist jede andere Version ab, eine Wanderung gibt es

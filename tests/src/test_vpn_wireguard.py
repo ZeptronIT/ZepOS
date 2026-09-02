@@ -60,26 +60,17 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
 
-def _user_settings_connection() -> dict:
-    """DEFAULT_SETTINGS, geladen wie /usr/share/zepos es laedt.
-
-    `from src.user_settings import ...` geht nicht: das Modul importiert
-    `brand`, `sizes` und `theme` FLACH, so wie sie neben ihm im
-    installierten Paket liegen - als Paketmitglied gibt es die nicht.
-    Derselbe Kniff wie _modal_width_l() in
-    tests/render/test_schale_stil.py, aus demselben Grund: die
-    Erwartung soll aus DERSELBEN Quelle kommen wie die erzeugte Datei.
-    """
-    import sys
-    sys.path.insert(0, str(SRC))
-    try:
-        import user_settings
-        # DEFAULT_CONNECTION und nicht mehr DEFAULT_SETTINGS["vpn"]:
-        # der VPN-Abschnitt traegt seit dem 22.08.2026 eine Liste, die
-        # Vorgaben EINER Verbindung stehen eine Ebene tiefer.
-        return user_settings.DEFAULT_CONNECTION
-    finally:
-        sys.path.remove(str(SRC))
+# HIER STAND BIS ZUM 01.09.2026 _user_settings_connection()
+#
+#     Ein Helfer, der user_settings.DEFAULT_CONNECTION so lud, wie
+#     /usr/share/zepos es laedt - flach, weil das Modul `brand`, `sizes`
+#     und `theme` als Nachbarn importiert. Sein einziger Aufrufer war
+#     der Vergleich der beiden Vorgabentabellen, und den gibt es nicht
+#     mehr: seit der Zusammenlegung IST DEFAULT_CONNECTION der Aufruf
+#     von settings.default_connection(), der Vergleich hielt eine
+#     Tabelle gegen sich selbst. Der Helfer geht mit ihm - stehen zu
+#     lassen, was nichts mehr aufruft, ist die naechste Stelle, an der
+#     jemand eine Zusicherung vermutet, wo keine ist.
 
 # Ein Schluessel in der Form, die WireGuard benutzt: 32 Byte Base64, und
 # damit mit `=` als Fuellzeichen am Ende. GENAU DAS ist die Falle, die
@@ -205,25 +196,67 @@ def test_the_old_configuration_produces_the_very_same_swanctl_file():
     assert "gw.example.invalid" in before
 
 
-def test_both_default_tables_carry_the_same_wireguard_keys():
-    """Zwei Vorgabentabellen, ein Schema.
+def test_der_einleser_schreibt_keinen_schluessel_den_die_vorgabe_nicht_kennt():
+    """Was `zepos-vpn import` anlegt, muss `zepos-settings set` kennen.
 
-    src/settings.py::defaults() und src/user_settings.py::DEFAULT_SETTINGS
-    fuehren beide einen vpn-Abschnitt, und sie fuehren ihn seit jeher
-    VERSCHIEDEN LANG (die zweite kennt phase1/phase2/xauth, die erste
-    nicht). Was sie beide fuehren, muessen sie gleich fuehren - sonst
-    lehnt `zepos-settings set` einen Pfad ab, den das Fenster daneben
-    schreibt.
+    HIER STAND BIS ZUM 01.09.2026 EIN VERGLEICH EINER TABELLE MIT SICH
+    SELBST
+        Der Test hiess test_both_default_tables_carry_the_same_wireguard_keys
+        und hielt settings.default_connection() gegen
+        user_settings.DEFAULT_CONNECTION. Seine Begruendung war richtig
+        und steht darum unveraendert weiter unten: "sonst lehnt
+        `zepos-settings set` einen Pfad ab, den das Fenster daneben
+        schreibt."
+
+        Nur trug er sie seit der Zusammenlegung nicht mehr.
+        DEFAULT_CONNECTION IST seitdem der Aufruf von
+        default_connection() - die beiden Seiten des Vergleichs waren
+        dieselbe Tabelle. GEMESSEN am 01.09.2026: der Test blieb gruen,
+        gleichgueltig was in der Tabelle steht. Ein gruener Test, der
+        nichts zusichert, ist schlimmer als kein Test, weil er den Platz
+        belegt, an dem jemand nach der Zusicherung sucht.
+
+        Die Zusicherung selbst ist nicht weggefallen, nur eine ihrer
+        beiden Haelften. Dass die Befehlszeile JEDEN Schluessel der
+        Tabelle annimmt, misst seit dem 01.09.2026
+        tests/src/test_vpn_vorgaben.py::
+        test_die_befehlszeile_erreicht_jeden_schluessel_der_vorgabe.
+
+    WAS DORT NICHT GEMESSEN WIRD UND DARUM HIER STEHT
+        Der Einleser ist die dritte Partei. Er baut den
+        `wireguard`-Abschnitt aus einer wg-quick-Datei, und er ist der
+        einzige Schreiber, der ihn OHNE die Tabelle fuellt. Traegt er
+        einen Schluessel, den sie nicht kennt, lehnt `zepos-settings set
+        vpn.wireguard.<x>` einen Pfad ab, den der Einleser gerade
+        angelegt hat - genau der alte Fehler, nur mit einem anderen
+        Schreiber. Fehlt ihm einer, den sie fuehrt, kommt eine
+        importierte Verbindung unvollstaendig an.
+
+        Verglichen werden SCHLUESSEL und nicht Werte: der Einleser
+        traegt ein, was in der Datei stand, die Tabelle traegt die
+        Vorgabe. Gleiche Werte waeren hier das Falsche.
+
+        NICHT gemessen, weil nirgends erklaert: die Schluessel EINER
+        Gegenstelle. Die Tabelle fuehrt `"peers": []`, eine leere Liste
+        sagt ueber die Form ihrer Eintraege nichts, und ein Test kann
+        nur vergleichen, was zwei Seiten behaupten.
     """
-    # BEIDE HEISSEN SEIT DEM 22.08.2026 default_connection() bzw.
-    # DEFAULT_CONNECTION: der Abschnitt ist eine Ebene tiefer
-    # gerutscht, weil `vpn` jetzt eine Liste traegt. Verglichen wird
-    # unveraendert dasselbe - EINE Verbindung gegen EINE Verbindung.
-    lean = settings_default_connection()
-    full = _user_settings_connection()
-    assert lean["kind"] == full["kind"] == "ipsec"
-    assert lean["wireguard"] == full["wireguard"]
-    assert lean["wireguard"]["private_key_file"] == ""
+    importiert = wireguard_document(parse_wg_conf(CONF, "wg0.conf"))
+    tabelle = settings_default_connection()["wireguard"]
+
+    assert set(importiert) == set(tabelle), (
+        f"nur im Einleser: {sorted(set(importiert) - set(tabelle))}; "
+        f"nur in der Vorgabe: {sorted(set(tabelle) - set(importiert))}")
+    # Die Gegenprobe, damit hier nicht zwei leere Mengen gegeneinander
+    # stehen - genau die Art gruener Aussage, die diesen Test ersetzt hat.
+    assert "private_key_file" in tabelle
+
+    # Unveraendert aus dem alten Test: die Vorgabe traegt keinen
+    # Dateinamen, und die Bauart einer nicht eingerichteten Verbindung
+    # ist "ipsec" - jede Installation von vor dem 21.08.2026 kennt
+    # `kind` nicht und muss auf ihrem bisherigen Pfad bleiben.
+    assert tabelle["private_key_file"] == ""
+    assert settings_default_connection()["kind"] == "ipsec"
 
 
 # --------------------------------------------------------------------
