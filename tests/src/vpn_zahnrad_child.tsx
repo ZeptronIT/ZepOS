@@ -173,12 +173,26 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, T_MESSEN, () => {
   const reihenfolgen: string[] = []
   const huellenlage: string[] = []
   const namen: string[] = []
+  // BEDIENBARKEIT JE ZEILE - UND BEIDE IM SELBEN LAUF ABGELESEN.
+  //
+  //     Bei `unknown` sperrt der SCHALTER (der vierte VPN-Zustand), das
+  //     ZAHNRAD nicht. Die zwei Marken gehoeren darum in denselben Lauf:
+  //     nur so ist gemessen, dass es an derselben Liste, im selben
+  //     Augenblick, wirklich auseinandergeht. Zwei getrennte Laeufe
+  //     koennten beide "gesperrt" oder beide "bedienbar" melden, ohne
+  //     dass der Unterschied auffiele.
+  const zahnradBedienbar: string[] = []
+  const schalterBedienbar: string[] = []
   for (const zeile of reihen) {
     const gruppe = suche(zeile, (w) => w.has_css_class("vpn-row-ende"))
     const zahnrad = suche(zeile, (w) => w.has_css_class("vpn-row-settings"))
     zahnraeder.push(zahnrad ? "ja" : "nein")
     huellenlage.push(unterDerHuelle(zahnrad))
     namen.push(zahnrad ? (zahnrad.get_tooltip_text() ?? "") : "")
+    zahnradBedienbar.push(zahnrad ? String(zahnrad.get_sensitive()) : "?")
+    const zeilenSchalter = suche(zeile, (w) => w instanceof Gtk.Switch)
+    schalterBedienbar.push(
+      zeilenSchalter ? String(zeilenSchalter.get_sensitive()) : "?")
 
     // DIE REIHENFOLGE IN DER GRUPPE, und sie ist eine Ansage: "Symbol -
     // Name/Unterzeile - ZAHNRAD - Schalter". Der Schalter bleibt an der
@@ -197,6 +211,8 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, T_MESSEN, () => {
   mark("zahnrad-unter-huelle", huellenlage.join(","))
   mark("ende-reihenfolge", reihenfolgen.join(","))
   mark("zahnrad-name", namen.join(" / "))
+  mark("zahnrad-bedienbar", zahnradBedienbar.join(","))
+  mark("schalter-bedienbar", schalterBedienbar.join(","))
 
   // ---- Das Ziel der ZWEITEN Zeile -----------------------------------
   //

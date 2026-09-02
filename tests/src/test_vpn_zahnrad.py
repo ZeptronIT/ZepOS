@@ -87,11 +87,27 @@ AKTIVE_KENNUNG = "c1"
 ZIEL_KENNUNG = "c2"
 ZIEL_NAME = _HARNESS.ARBEIT
 
+# Die Laeufe: Name -> (was betaetigt wird, welches Wort vpn.py druckt).
+#
+# `unbekannt` betaetigt NICHTS und ist trotzdem kein Leerlauf: dort wird
+# abgelesen, was der vierte VPN-Zustand (`unknown`, vpn.STATUS_WORDS in
+# src/vpn.py) mit den beiden Bedienelementen macht. Der Schalter sperrt,
+# das Zahnrad nicht - die Begruendung steht bei `zeilenEnde` in
+# ags-vpn.template und wird hier GEMESSEN.
+LAEUFE = {
+    "zahnrad": ("zahnrad", "disconnected"),
+    "schalter": ("schalter", "disconnected"),
+    "nichts": ("nichts", "disconnected"),
+    "unbekannt": ("nichts", "unknown"),
+}
+
+# Die Laeufe, in denen es um die BETAETIGUNG geht. `unbekannt` bleibt
+# draussen: dort ist der Zustand die Frage, nicht der Griff.
 ZIELE = ("zahnrad", "schalter", "nichts")
 
 
-def _lauf(wurzel: Path, ziel: str):
-    """Ein Lauf, in dem `ziel` betaetigt wird."""
+def _lauf(wurzel: Path, ziel: str, wort: str = "disconnected"):
+    """Ein Lauf, in dem `ziel` betaetigt wird und vpn.py `wort` druckt."""
     server_befehl = _HARNESS.broadwayd()
     if server_befehl is None:
         pytest.skip("gtk4-broadwayd fehlt; es kommt mit dem Paket gtk4")
@@ -99,7 +115,7 @@ def _lauf(wurzel: Path, ziel: str):
     # GEBAUT WIRD MIT DEM ECHTEN `ags` (ausserhalb dieser Umgebung), und
     # NUR DER LAUF bekommt die Attrappe. `ags bundle` ist der Uebersetzer
     # und muss echt sein; `ags request` ist die Wirkung und darf es nicht.
-    buendel, _system = _HARNESS._baue(wurzel, kind=KIND)
+    buendel, _system = _HARNESS._baue(wurzel, kind=KIND, wort=wort)
     attrappen, ags_protokoll = _HARNESS._ags_attrappe(wurzel)
 
     laufzeit = wurzel / "run"
@@ -148,9 +164,9 @@ def _lauf(wurzel: Path, ziel: str):
 
 @pytest.fixture(scope="module")
 def laeufe(tmp_path_factory) -> dict:
-    """Drei Laeufe, einer je Ziel. `ags bundle` kostet Sekunden."""
-    return {ziel: _lauf(tmp_path_factory.mktemp(f"zahnrad-{ziel}"), ziel)
-            for ziel in ZIELE}
+    """Vier Laeufe. `ags bundle` kostet Sekunden, darum modulweit."""
+    return {name: _lauf(tmp_path_factory.mktemp(f"zahnrad-{name}"), ziel, wort)
+            for name, (ziel, wort) in LAEUFE.items()}
 
 
 def _bericht(lauf) -> str:
@@ -194,11 +210,17 @@ def test_ohne_druck_setzt_die_seite_von_sich_aus_nichts_ab(laeufe):
 
 def test_in_jedem_lauf_ist_wirklich_gedrueckt_worden(laeufe):
     """Sonst waere "keine Wirkung" von "keine Betaetigung" nicht zu
-    unterscheiden."""
-    for ziel, lauf in laeufe.items():
+    unterscheiden.
+
+    Gelesen wird das Ziel aus LAEUFE und nicht der Name des Laufs: der
+    Lauf `unbekannt` betaetigt `nichts`, und das Fahrtenbuch sagt, was
+    es getan hat, nicht wie der Lauf heisst.
+    """
+    for name, lauf in laeufe.items():
+        ziel = LAEUFE[name][0]
         assert f"--gedrueckt:{ziel}--" in lauf.marke("fahrtenbuch"), (
-            f"{ziel}: im Fahrtenbuch steht nicht, dass gedrueckt "
-            f"wurde\n{_bericht(lauf)}")
+            f"{name}: im Fahrtenbuch steht nicht, dass `{ziel}` "
+            f"betaetigt wurde\n{_bericht(lauf)}")
 
 
 # ----------------------------------------------------------------------
@@ -338,3 +360,67 @@ def test_der_schalter_oeffnet_keine_einstellungen(laeufe):
     assert "ZAHNRAD-clicked" not in lauf.marke("fahrtenbuch"), (
         "das Umlegen des Schalters hat das Zahnrad mit ausgeloest\n"
         + _bericht(lauf))
+
+
+# ----------------------------------------------------------------------
+# Der vierte VPN-Zustand: der Schalter sperrt, das Zahnrad nicht
+# ----------------------------------------------------------------------
+
+def test_bei_unbekannt_sperrt_der_schalter_und_das_zahnrad_nicht(laeufe):
+    """DIE ENTSCHEIDUNG ZU `unknown`, GEMESSEN STATT BEGRUENDET.
+
+    Bei `unknown` weiss niemand, ob der Tunnel steht. Der Schalter nimmt
+    darum keine Eingabe an - "aus" waere eine Behauptung ueber den
+    Verkehr des Nutzers, die in diesem Moment niemand belegen kann
+    (Herleitung bei `bedienbar` in ags-kit.template).
+
+    DAS ZAHNRAD BLEIBT BEDIENBAR, und das ist die andere Entscheidung.
+    Es behauptet nichts ueber den Zustand der Verbindung: es fuehrt zu
+    ihren Einstellungen, und die sind auch dann zu lesen und zu aendern,
+    wenn der Zustand unbekannt ist. Wer bei ausgefallenem
+    NetworkManager nachsehen will, warum, braucht diesen Weg
+    ausgerechnet DANN - ihn zu sperren waere die Sperre am falschen
+    Ende.
+
+    BEIDES IM SELBEN LAUF, an derselben Liste, im selben Augenblick.
+    Zwei getrennte Laeufe koennten beide "gesperrt" oder beide
+    "bedienbar" melden, ohne dass der Unterschied auffiele - dann waere
+    es wieder eine Behauptung ueber ein Widget statt einer Messung.
+    """
+    lauf = laeufe["unbekannt"]
+    assert lauf.marke("schalter-bedienbar") == "false,false", (
+        "bei `unknown` nimmt mindestens ein Schalter noch Eingaben an - "
+        "er zeigt dann \"aus\", obwohl niemand weiss, was ein Umlegen "
+        f"bewirkt\n{_bericht(lauf)}")
+    assert lauf.marke("zahnrad-bedienbar") == "true,true", (
+        "bei `unknown` ist mindestens ein Zahnrad gesperrt. Damit kommt "
+        "der Nutzer ausgerechnet dann nicht an die Einstellungen, wenn "
+        "er nachsehen will, warum sein Zustand unbekannt ist - die "
+        f"Sperre gehoert an den Schalter, nicht an den Weg dorthin.\n"
+        f"{_bericht(lauf)}")
+
+
+def test_ohne_unbekannt_ist_beides_bedienbar(laeufe):
+    """Die Gegenprobe, und sie ist der eigentliche Beweis.
+
+    "Bei unknown sperrt der Schalter" waere auch dann erfuellt, wenn er
+    IMMER sperrte - dann waere nicht die Sperre eingefuehrt, sondern die
+    Bedienbarkeit abgeschafft. Und "das Zahnrad bleibt bedienbar" waere
+    auch erfuellt, wenn `unknown` gar nicht angekommen waere.
+    """
+    lauf = laeufe["nichts"]
+    assert lauf.marke("schalter-bedienbar") == "true,true", (
+        "bei `disconnected` ist ein Schalter gesperrt - die Sperre "
+        f"gehoert allein zu `unknown`\n{_bericht(lauf)}")
+    assert lauf.marke("zahnrad-bedienbar") == "true,true", (
+        f"bei `disconnected` ist ein Zahnrad gesperrt\n{_bericht(lauf)}")
+
+    # Und dass die zwei Laeufe sich WIRKLICH unterscheiden - ohne diesen
+    # Vergleich waere nicht belegt, dass `unknown` ueberhaupt angekommen
+    # ist.
+    unbekannt = laeufe["unbekannt"]
+    assert (unbekannt.marke("schalter-bedienbar")
+            != lauf.marke("schalter-bedienbar")), (
+        "die Schalter lesen bei `unknown` und bei `disconnected` "
+        "dasselbe - dann hat das Fenster das vierte Wort nicht "
+        f"bemerkt\n{_bericht(unbekannt)}")
