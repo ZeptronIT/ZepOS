@@ -1213,9 +1213,34 @@ export const vpnSeite: ShellSeite = {
 
     // Settings button. Rolle still: oeffnet ein anderes Fenster, reine
     // Navigation (dieselbe Einordnung wie netBtn/vpnBtn, Task D).
+    //
+    // BLEIBT, OBWOHL SEIT DEM 02.09.2026 JEDE LISTENZEILE EIN ZAHNRAD
+    // TRAEGT - und das ist geprueft, nicht uebersehen.
+    //
+    //     Zwei Wege zum selben Fenster sind in Ordnung, drei sind
+    //     Unordnung. Drei sind es hier nicht: GEZAEHLT ueber alle
+    //     Zuweisungen an `connectedView.set_visible` und
+    //     `formView.set_visible` - vier Paare, und JEDES setzt die
+    //     beiden gegensaetzlich. Die zwei Ansichten sind nie zugleich
+    //     sichtbar, dieser Knopf und `formSettingsBtn` also nie
+    //     zugleich da.
+    //
+    //     Es sind damit nicht zwei Wege, sondern EINER, der zweimal
+    //     gezeichnet werden muss, weil die Einzelheit zwei einander
+    //     ausschliessende Gesichter hat. Je Ort genau ein Weg: aus der
+    //     Liste das Zahnrad der Zeile, aus der Einzelheit dieses hier.
+    //
+    //     Und ersetzbar ist er nicht: wer nach dem Verbinden in der
+    //     Einzelheit steht, muesste sonst erst zurueck in die Liste -
+    //     also genau der Umweg, ueber den der Nutzer geklagt hat, nur
+    //     in der anderen Richtung.
     const connectedSettingsBtn = zepButton(ICONS.settings, "still",
       // Die Einzelheiten DIESER Verbindung, nicht die Liste - siehe
       // openVpnSettings() oben (01.09.2026).
+      //
+      // `gewaehlteId` ist HIER richtig und in der Liste falsch: in der
+      // Einzelheit gibt es genau eine gemeinte Verbindung, und das ist
+      // die gewaehlte. In der Liste ist die gemeinte die der Zeile.
       () => openVpnSettings(gewaehlteId))
 
     connectedView.append(connectedIcon)
@@ -1333,6 +1358,80 @@ export const vpnSeite: ShellSeite = {
       for (const eintrag of vpnListe) {
         const steht = eintrag.id === laufendeId
           && currentStatus.status === "connected"
+
+        // DAS ZAHNRAD IN DER ZEILE - NACHGETRAGEN am 02.09.2026
+        //
+        //     Nutzermeldung, woertlich: "ich kann uebrigens in der liste
+        //     kein einstellung icon pro vpn sehen um direkt zur vpn zu
+        //     gelangen stattdessen muss ich es aktivieren und dann komme
+        //     ich auf die vpn bzw einstellungen statt direkt dort
+        //     hinzugelangen", und praezisiert: "ich will neben dem
+        //     toggle auch ein icon fuer einstellung haben das zahnrad".
+        //
+        //     Das Zahnrad gab es ZWEIMAL, und beide sassen in der
+        //     EINZELHEIT: connectedSettingsBtn in `connectedView`,
+        //     formSettingsBtn in `formView`. Aus der Liste fuehrte
+        //     darum kein Weg dorthin, der nicht ueber die Einzelheit
+        //     ging - Zeile klicken, Zahnrad suchen, klicken. Drei
+        //     Schritte fuer eine Absicht, und welches der zwei Zahnraeder
+        //     erschien, hing am Zustand der Verbindung.
+        //
+        //     `eintrag.id` UND NICHT `gewaehlteId`, und das ist der
+        //     ganze Unterschied: `gewaehlteId` ist die Verbindung, die
+        //     die Einzelheit gerade ZEIGT. Aus der Liste heraus ist das
+        //     eine andere als die, deren Zahnrad man drueckt - genau der
+        //     Fehler, den `1499455` fuer die zwei Zahnraeder in der
+        //     Einzelheit schon einmal behoben hat.
+        const zahnrad = zepButton(ICONS.settings, "still",
+          () => openVpnSettings(eintrag.id))
+        zahnrad.add_css_class("vpn-row-settings")
+        // Ein Zeichen ohne Wort braucht einen Namen, und der Name muss
+        // die Verbindung NENNEN: in einer Liste stehen mehrere gleich
+        // aussehende Zahnraeder untereinander, und "Einstellungen"
+        // allein sagt nicht, wessen.
+        zahnrad.set_tooltip_text(format(_("Settings for {name}"),
+                                        { name: eintrag.name }))
+
+        // EINE Gtk.Box ALS `ende`, UND NICHT `ende` ALS LISTE
+        //
+        //     `ende` nimmt EIN Widget. Eine Box IST eines - damit
+        //     bleibt ags-kit.template unangetastet und die fuenfzehn
+        //     anderen zepRow-Aufrufer Zeichen fuer Zeichen dieselben.
+        //     Ein zweiter Weg (`ende?: Gtk.Widget | Gtk.Widget[]`) haette
+        //     eine Verzweigung IM geteilten Bauteil gebraucht, fuer
+        //     genau einen Aufrufer, und dieselbe Baumform ergeben.
+        //
+        //     Und die Form ist genau die, die hier gebraucht wird:
+        //     `endeBedienbar` haengt das GANZE `ende` neben die
+        //     klickbare Huelle statt hinein (Herleitung dort). Beide
+        //     Bedienelemente liegen damit ausserhalb des Gtk.Button -
+        //     die Eigenschaft, an der die Leertaste am 01.09.2026
+        //     geklemmt hat, gilt fuer das Zahnrad ohne Zutun mit.
+        //
+        //     Reihenfolge Zahnrad, dann Schalter: der Schalter ist das,
+        //     was oft gedrueckt wird, und er bleibt an der Kante, wo er
+        //     schon war - wer ihn blind trifft, soll ihn weiter blind
+        //     treffen.
+        const zeilenEnde = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+        zeilenEnde.add_css_class("vpn-row-ende")
+        zeilenEnde.append(zahnrad)
+        // BEI `unknown` NIMMT DER SCHALTER KEINE EINGABE AN -
+        // NACHGETRAGEN am 02.09.2026.
+        //
+        //     `steht` ist dann `false`, und "aus" waere genau die
+        //     falsche Behauptung, die der vierte Zustand eine Etage
+        //     hoeher gerade abstellt: das Fenster sagte "niemand
+        //     weiss es" und zeigte daneben "aus". Ein unbedienbarer
+        //     Schalter behauptet nichts. Die Herleitung steht bei
+        //     `bedienbar` in ags-kit.template.
+        //
+        //     DAS ZAHNRAD BLEIBT BEDIENBAR. Es behauptet nichts ueber
+        //     den Zustand der Verbindung - es fuehrt zu ihren
+        //     Einstellungen, und die sind auch dann zu lesen und zu
+        //     aendern, wenn niemand weiss, ob der Tunnel steht.
+        zeilenEnde.append(zepToggle(steht, (an) => { void schalte(eintrag, an) },
+                                    currentStatus.status !== "unknown"))
+
         listenBox.append(zepRow({
           symbol: steht ? ICONS.vpn : ICONS.vpnOff,
           titel: eintrag.name,
@@ -1349,18 +1448,10 @@ export const vpnSeite: ShellSeite = {
             // Liste, und genau das war der Platzmangel.
             zeigeDetail()
           },
-          // BEI `unknown` NIMMT DER SCHALTER KEINE EINGABE AN -
-          // NACHGETRAGEN am 02.09.2026.
-          //
-          //     `steht` ist dann `false`, und "aus" waere genau die
-          //     falsche Behauptung, die der vierte Zustand eine Etage
-          //     hoeher gerade abstellt: das Fenster sagte "niemand
-          //     weiss es" und zeigte daneben "aus". Ein unbedienbarer
-          //     Schalter behauptet nichts. Die Herleitung steht bei
-          //     `bedienbar` in ags-kit.template.
-          ende: zepToggle(steht, (an) => { void schalte(eintrag, an) },
-                          currentStatus.status !== "unknown"),
-          // DER SCHALTER GEHOERT NEBEN DIE KLICKBARE HUELLE, NICHT
+          // Zahnrad UND Schalter, beide in einer Box - die Herleitung
+          // steht oben bei `zeilenEnde`.
+          ende: zeilenEnde,
+          // DAS ENDE GEHOERT NEBEN DIE KLICKBARE HUELLE, NICHT
           // HINEIN - NACHGETRAGEN am 01.09.2026
           //
           //     Diese Zeile ist die EINZIGE im ganzen Baum, die zepRow
@@ -1410,6 +1501,10 @@ export const vpnSeite: ShellSeite = {
     disconnectedLabel = new Gtk.Label({ label: _("Not connected"), xalign: 0 })
     disconnectedLabel.add_css_class("vpn-status-label")
 
+    // Das zweite Gesicht desselben Weges - die Herleitung, warum es
+    // neben dem Zahnrad der Listenzeile bleibt, steht bei
+    // `connectedSettingsBtn`. Kurz: dieser hier und der dort sind nie
+    // zugleich sichtbar, also nicht zwei Wege, sondern einer.
     const formSettingsBtn = zepButton(ICONS.settings, "still",
       () => openVpnSettings(gewaehlteId))
 

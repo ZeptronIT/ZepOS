@@ -100,14 +100,26 @@ RENDERED = {
 # ein Muster, das nichts mehr findet, entfernte stillschweigend nichts
 # und die Gegenprobe waere gruen, ohne etwas ausgebaut zu haben.
 #
-# NACHGEZOGEN am 02.09.2026, und der Test hat GENAU DAS getan, wofuer er
-# gebaut ist: der Aufruf bekam ein drittes Argument (`bedienbar`, siehe
-# ags-kit.template) und steht seither auf ZWEI Zeilen. Die Gegenprobe
-# fiel sofort aus - mit ihrem eigenen Fehlschlagtext ("SCHALTER_ZEILE
-# nachziehen") -, statt still nichts mehr auszubauen.
+# ZWEIMAL NACHGEZOGEN am 02.09.2026, und beide Male hat der Test GENAU
+# DAS getan, wofuer er gebaut ist - er fiel mit seinem eigenen
+# Fehlschlagtext ("SCHALTER_ZEILE nachziehen") aus, statt still nichts
+# mehr auszubauen:
+#   1. der Aufruf bekam ein drittes Argument (`bedienbar`, siehe
+#      ags-kit.template) und stand seither auf ZWEI Zeilen;
+#   2. das Zahnrad kam in die Zeile, `ende` wurde damit eine Gtk.Box,
+#      und der Schalter haengt seither nicht mehr an der Eigenschaft
+#      `ende:`, sondern an einem `append` auf diese Box.
+#
+# WARUM DER SCHNITT AN EINEM `append` BESSER LIEGT ALS AN `ende:`
+#     Was hier herausgeschnitten wird, muss sich OHNE Uebersetzungsfehler
+#     entfernen lassen, sonst scheitert `ags bundle` und die Gegenprobe
+#     misst einen Bauabbruch statt eine fehlende Wirkung. Ein `append`
+#     ist eine ganze Anweisung - weg damit, und die Box traegt eben nur
+#     das Zahnrad. Eine Zuweisung (`const schalter = ...`) waere nicht so
+#     schneidbar gewesen; darum steht der zepToggle-Aufruf IM append.
 SCHALTER_ZEILE = (
-    "          ende: zepToggle(steht, (an) => { void schalte(eintrag, an) },\n"
-    "                          currentStatus.status !== \"unknown\"),")
+    "        zeilenEnde.append(zepToggle(steht, (an) => { void schalte(eintrag, an) },\n"
+    "                                    currentStatus.status !== \"unknown\"))")
 
 # Die zwei Verbindungen. Zwei BAUARTEN, weil genau das die Bestellung
 # war ("bei wireguard, weil ich dort mehrere vpns habe ... das gleiche
@@ -211,6 +223,43 @@ def _stub_vpn_tool(system_root: Path, wort: str = "disconnected") -> None:
     (system_root / "vpn.py").write_text(
         "# SPDX-License-Identifier: GPL-3.0-or-later\n"
         f'print("{wort}")\n', encoding="utf-8")
+
+
+def _ags_attrappe(wurzel: Path) -> tuple[Path, Path]:
+    """Ein `ags`, das seine Aufrufzeile aufschreibt. Zurueck: Ordner, Datei.
+
+    Der Ordner gehoert VOR /usr/bin in den PATH des Kindes.
+
+    WOFUER, UND ES IST ZUERST EINE SICHERHEITSBEDINGUNG
+        Seit dem 02.09.2026 traegt jede Zeile der VPN-Liste ein Zahnrad,
+        und das ruft `openVpnSettings(eintrag.id)` - also
+        `ags request vpn-settings:<kennung>`. Ein ECHTES `ags request`
+        spricht ueber den Astal-Socket eine LAUFENDE Oberflaeche an. Ein
+        Messlauf darf dort niemals landen, auch nicht versehentlich und
+        auch nicht, wenn jemand spaeter den Aufruf in der Vorlage
+        aendert.
+
+        Die Attrappe reicht darum NICHTS durch und ruft kein `exec`: sie
+        verhindert den Aufruf ersatzlos und schreibt ihn auf.
+
+        Und sie ist gleichzeitig die MESSUNG - die Kennung steht
+        hinterher Zeichen fuer Zeichen in der Datei. Ohne sie liesse
+        sich "das Zahnrad oeffnet DIESE Verbindung" nur behaupten.
+
+    NUR DER LAUF bekommt sie, nicht `_baue`: `ags bundle` ist der
+    Uebersetzer und muss das echte sein.
+    """
+    ordner = wurzel / "attrappen"
+    ordner.mkdir(parents=True, exist_ok=True)
+    protokoll = wurzel / "ags-aufrufe"
+    werkzeug = ordner / "ags"
+    werkzeug.write_text(
+        "#!/bin/sh\n"
+        "# SPDX-License-Identifier: GPL-3.0-or-later\n"
+        f'printf "%s\\n" "$*" >> "{protokoll}"\n',
+        encoding="utf-8")
+    werkzeug.chmod(0o755)
+    return ordner, protokoll
 
 
 def _render(target: Path, system_root: Path) -> None:

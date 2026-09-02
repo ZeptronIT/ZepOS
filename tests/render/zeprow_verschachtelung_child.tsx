@@ -30,12 +30,26 @@
 //     2. WOHIN EIN ZEIGERDRUCK GEHT - `Gtk.Widget.pick()`. Das ist kein
 //        Ersatz: pick() IST die Funktion, mit der GTK4 entscheidet,
 //        welches Widget ein Zeigerereignis bekommt.
-//     3. DIE TASTATUR, mit echten Tasten. Das Kind setzt den Fokus
-//        nacheinander auf den Schalter und auf die Zeile und schreibt
-//        JEDES `clicked` und JEDES `notify::active` mit Zeitstempel und
-//        dem Widget mit, das gerade den Fokus hatte. Der Test drueckt
+//     3. DIE TASTATUR, mit echten Tasten. Das Kind schreibt JEDES
+//        `clicked` und JEDES `notify::active` mit Zeitstempel und dem
+//        Widget mit, das gerade den Fokus hatte. Der Test drueckt
 //        dazwischen die Leertaste. Damit steht am Ende da, was eine
 //        Taste WIRKLICH ausloest - und an welchem Widget.
+//
+// DREI ZIELE SEIT DEM 02.09.2026, VORHER ZWEI
+//     Die Zeile traegt seither DREI Bedienelemente: die klickbare
+//     Huelle, das Zahnrad (`.vpn-row-settings`) und den Schalter. Der
+//     Nutzer hat das Zahnrad bestellt ("ich will neben dem toggle auch
+//     ein icon fuer einstellung haben das zahnrad"), und damit stellt
+//     sich dieselbe Frage ein drittes Mal: erreicht der Tabulator es,
+//     und tut die Leertaste dort DAS SEINE - statt die Zeile
+//     aufzublaettern oder den Tunnel zu schalten.
+//
+//     Die gemessene Fokuskette je Zeile (02.09.2026):
+//
+//         GtkButton[zep-row-click.zep-row-click-getrennt]
+//         > GtkButton[zep-btn.zep-btn-still.vpn-row-settings.text-button]
+//         > GtkSwitch[zep-toggle]
 //
 // WAS SICH NICHT MESSEN LIESS
 //     Ob die Geste des Schalters die Sequenz beansprucht und den Knopf
@@ -145,10 +159,28 @@ const loop = GLib.MainLoop.new(null, false)
 // Der Fahrplan, in Millisekunden. Grosszuegig: die Seite fragt beim
 // Sichtbarwerden einen Unterprozess, und die zweite Zuteilungsrunde
 // braucht einen Bildrahmen.
+//
+// UND ALLES MUSS VOR 5000ms DURCH SEIN - GEMESSEN am 02.09.2026
+//
+//     `UPDATE_INTERVAL = 5000` in ags-vpn.template: fuenf Sekunden nach
+//     dem Sichtbarwerden laeuft `updateStatusDisplay()` das erste Mal
+//     und ruft `zeichneListe()`. Die Liste wird abgeraeumt und neu
+//     gebaut - die Widgets, an die unten die Mitschrift gehaengt wird,
+//     sind danach weg, und der Tastaturfokus mit ihnen.
+//
+//     Ein Anlauf mit T_FOKUS=5000 und der Leertaste bei 5,4s hat das
+//     vorgefuehrt: im Fahrtenbuch stand nur noch
+//
+//         5000ms --fokus-gelesen-- fokus=GtkSwitch[zep-toggle]
+//
+//     Die Taste loeste NICHTS aus, dreimal reproduziert. Der Fahrplan
+//     hat also von T_MESSEN bis 5000ms Platz und keine Millisekunde
+//     mehr. Die drei Tabulatoren (bis zum Schalter) brauchen zusammen
+//     etwa 0,3s - es passt, aber nicht mit beliebiger Luft.
 const T_MESSEN = 2500      // Aufbau, Zuteilung, pick(), Fokuskette
 const T_FOKUS = 4000       // der Test hat bis hier getabbt; nur ABLESEN
-const T_LESEN = 6000       // der Test drueckt dazwischen die Taste
-const T_ENDE = 6500
+const T_LESEN = 4800       // der Test drueckt dazwischen die Taste
+const T_ENDE = 4900        // noch vor dem Neuzeichnen bei 5000ms
 
 // EIN ZIEL JE LAUF, UND DAS IST EINE MESSUNG UND KEINE BEQUEMLICHKEIT
 //
@@ -170,6 +202,10 @@ const ZIEL = GLib.getenv("ZEPOS_ZIEL") ?? "schalter"
 
 let schalter: Gtk.Switch | null = null
 let knopf: Gtk.Button | null = null
+// NACHGETRAGEN am 02.09.2026: das Zahnrad je Zeile. Es ist das dritte
+// Bedienelement in derselben Zeile, und damit dieselbe Frage noch
+// einmal - welches Widget bekommt die Taste, und was loest sie aus.
+let zahnrad: Gtk.Button | null = null
 
 GLib.timeout_add(GLib.PRIORITY_DEFAULT, T_MESSEN, () => {
   const liste = suche(seite, (w) => w.has_css_class("vpn-connection-list"))
@@ -200,6 +236,9 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, T_MESSEN, () => {
   //     Die Liste enthaelt die Huelle in BEIDEN Betriebsarten.
   knopf = suche(liste, (w) => w.has_css_class("zep-row-click")) as Gtk.Button | null
   const titel = suche(zeile, (w) => w.has_css_class("zep-row-title"))
+  // Das Zahnrad derselben Zeile. Ueber die Klasse, die ags-vpn.template
+  // vergibt - `instanceof Gtk.Button` traefe auch die Huelle.
+  zahnrad = suche(zeile, (w) => w.has_css_class("vpn-row-settings")) as Gtk.Button | null
 
   /** Liegt `w` unter einem Widget mit der Klasse `.zep-row-click`? */
   const unterDerHuelle = (w: Gtk.Widget | null): string => {
@@ -213,8 +252,15 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, T_MESSEN, () => {
 
   mark("schalter", beschreibe(schalter))
   mark("knopf", beschreibe(knopf))
+  mark("zahnrad", beschreibe(zahnrad))
   mark("kette-schalter", kette(schalter))
+  mark("kette-zahnrad", kette(zahnrad))
   mark("schalter-im-knopf", unterDerHuelle(schalter))
+  // Das Zahnrad haengt in derselben Box wie der Schalter, und die haengt
+  // NEBEN der Huelle - `endeBedienbar` in ags-kit.template. Steckte es
+  // darin, traefe es genau der Mangel vom 01.09.2026: Tabulator kommt
+  // hin, Leertaste loest die ZEILE aus.
+  mark("zahnrad-im-knopf", unterDerHuelle(zahnrad))
   mark("titel-im-knopf", unterDerHuelle(titel))
   mark("knopf-klasse", knopf && knopf.has_css_class("zep-row-click")
     ? "zep-row-click" : "andere")
@@ -265,25 +311,45 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, T_MESSEN, () => {
     w ? `${w.get_width()}x${w.get_height()} abgebildet=${w.get_mapped()}` : "nichts"
   mark("lage-schalter", lage(schalter))
   mark("lage-titel", lage(titel))
+  mark("lage-zahnrad", lage(zahnrad))
   mark("lage-liste", lage(liste))
 
   // ---- Wohin ein Zeigerdruck geht ----------------------------------
   const aufSchalter = mitte(schalter)
   const aufTitel = mitte(titel)
+  const aufZahnrad = mitte(zahnrad)
   mark("punkt-schalter", aufSchalter ? aufSchalter.map(Math.round).join(",") : "-")
   mark("punkt-titel", aufTitel ? aufTitel.map(Math.round).join(",") : "-")
+  mark("punkt-zahnrad", aufZahnrad ? aufZahnrad.map(Math.round).join(",") : "-")
 
   const trefferSchalter = aufSchalter
     ? window.pick(aufSchalter[0], aufSchalter[1], Gtk.PickFlags.DEFAULT) : null
   const trefferTitel = aufTitel
     ? window.pick(aufTitel[0], aufTitel[1], Gtk.PickFlags.DEFAULT) : null
+  const trefferZahnrad = aufZahnrad
+    ? window.pick(aufZahnrad[0], aufZahnrad[1], Gtk.PickFlags.DEFAULT) : null
   mark("pick-schalter", beschreibe(trefferSchalter))
   mark("pick-schalter-kette", kette(trefferSchalter))
   mark("pick-titel", beschreibe(trefferTitel))
   mark("pick-titel-kette", kette(trefferTitel))
+  mark("pick-zahnrad", beschreibe(trefferZahnrad))
+  mark("pick-zahnrad-kette", kette(trefferZahnrad))
 
   mark("pick-schalter-unter-knopf", unterDerHuelle(trefferSchalter))
   mark("pick-titel-unter-knopf", unterDerHuelle(trefferTitel))
+  mark("pick-zahnrad-unter-knopf", unterDerHuelle(trefferZahnrad))
+  // Trifft der Punkt in der Mitte des Zahnrads das Zahnrad selbst (oder
+  // ein Kind davon)? GTK setzt seine Beschriftung als eigenes Label
+  // darunter - gefragt ist also die KETTE und nicht die Gleichheit.
+  const inZahnrad = (w: Gtk.Widget | null): string => {
+    let lauf: Gtk.Widget | null = w
+    while (lauf) {
+      if (lauf.has_css_class("vpn-row-settings")) return "ja"
+      lauf = lauf.get_parent()
+    }
+    return "nein"
+  }
+  mark("pick-zahnrad-im-zahnrad", inZahnrad(trefferZahnrad))
 
   // ---- Die Fokuskette ----------------------------------------------
   window.set_focus(null)
@@ -298,6 +364,8 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, T_MESSEN, () => {
     stationen.some((s) => s.startsWith("GtkSwitch")) ? "ja" : "nein")
   mark("knopf-per-tab-erreichbar",
     stationen.some((s) => s.indexOf("zep-row-click") >= 0) ? "ja" : "nein")
+  mark("zahnrad-per-tab-erreichbar",
+    stationen.some((s) => s.indexOf("vpn-row-settings") >= 0) ? "ja" : "nein")
 
   // DEN FOKUS WIEDER WEGNEHMEN, und das ist kein Aufraeumen.
   //
@@ -315,6 +383,7 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, T_MESSEN, () => {
   // notify::active fuellen.
   if (knopf) knopf.connect("clicked", () => eintragen("KNOPF-clicked"))
   if (schalter) schalter.connect("notify::active", () => eintragen("SCHALTER-notify"))
+  if (zahnrad) zahnrad.connect("clicked", () => eintragen("ZAHNRAD-clicked"))
   return false
 })
 

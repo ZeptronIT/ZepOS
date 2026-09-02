@@ -2614,6 +2614,29 @@ modelbutton {
   margin-bottom: {{STYLE_SPACE_12}};
 }
 
+// DAS ZAHNRAD IN DER LISTENZEILE - NACHGETRAGEN am 02.09.2026, auf
+// Ansage des Nutzers ("ich will neben dem toggle auch ein icon fuer
+// einstellung haben das zahnrad").
+//
+//     `.zep-btn` bringt `padding: 0 {{STYLE_SPACE_16}}` mit, und das
+//     ist das Mass fuer einen Knopf MIT WORT. Ein Zahnrad ist ein
+//     Zeichen: derselbe Rand liesse es neben dem Schalter breiter
+//     aussehen als es ist und schoebe den Schalter von der Kante weg,
+//     an der er blind zu treffen sein soll.
+//
+//     Die MINDESTHOEHE bleibt, wie `.zep-btn` sie setzt - sie ist die
+//     Trefferflaeche, und die wird nicht kleiner, nur weil das Zeichen
+//     schmaler ist als ein Wort.
+//
+//     `.vpn-row-ende` (die Box um Zahnrad und Schalter) traegt
+//     ABSICHTLICH keine Regel: ihr Abstand steht als `spacing` an der
+//     Box selbst, weil zepRow sie als EIN Widget bekommt. Die Klasse
+//     ist der Griff, an dem die Messung die Gruppe findet - dieselbe
+//     Rolle, die `.vpn-connection-list` fuer die Liste hat.
+.vpn-row-settings {
+  padding: 0 {{STYLE_SPACE_8}};
+}
+
 // IM EINSTELLUNGSFENSTER (.vpn-connection-picker)
 //     Bis zum 01.09.2026 eine WAAGERECHTE Leiste ueber der
 //     Reiterleiste, mit derselben Trennlinie wie .zep-sidebar. Seit dem

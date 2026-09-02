@@ -124,6 +124,14 @@ def test_nur_ein_einziger_aufrufer_verschachtelt_ueberhaupt():
     Waere es eines Tages ein zweiter Aufrufer, gilt dieser Satz nicht
     mehr - dann ist die Verschachtelung ein Problem des Bauteils, und
     diese Zusicherung sagt es laut.
+
+    NACHGEPRUEFT am 02.09.2026, nachdem das Zahnrad in die VPN-Zeile kam:
+    die Zahl stimmt unveraendert. Gezaehlt werden AUFRUFER, und der eine
+    haengt seither ZWEI Bedienelemente in sein `ende` - eine Gtk.Box mit
+    Zahnrad und Schalter darin. Aus einem `ende` werden davon nicht zwei,
+    und zepRow hat es nicht bemerkt: der Diff von ags-kit.template ist
+    leer. Waeren es zwei `ende` geworden (`ende` als Liste), stuende hier
+    eine andere Zahl - das war ein Grund fuer die Box.
     """
     aufrufe = _zeprow_aufrufe()
     beide = sorted(name for name, felder in aufrufe.items()
