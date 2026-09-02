@@ -46,10 +46,33 @@ WAS GEMESSEN WIRD
     1. der Aufbau: steckt der Schalter wirklich in der klickbaren Huelle?
     2. wohin ein Zeigerdruck geht - `Gtk.Widget.pick()`, die Funktion,
        mit der GTK4 das selbst entscheidet;
-    3. was eine ECHTE Leertaste tut - einmal mit dem Fokus auf dem
-       Schalter, einmal mit dem Fokus auf der Zeile, jedes Mal mit einem
+    3. was eine ECHTE Leertaste tut - je einmal mit dem Fokus auf dem
+       Schalter, auf dem Zahnrad und auf der Zeile, jedes Mal mit einem
        Fahrtenbuch, das jedes `clicked` und jedes `notify::active` mit
        Zeitstempel und Fokus mitschreibt.
+
+DREI GRIFFE SEIT DEM 02.09.2026, VORHER ZWEI
+    Der Nutzer hat ein Zahnrad je Zeile bestellt ("ich will neben dem
+    toggle auch ein icon fuer einstellung haben das zahnrad"). Damit
+    stehen DREI Bedienelemente in derselben Zeile, und die Frage dieser
+    Datei stellt sich ein drittes Mal.
+
+    Die drei Laeufe werden GEGENEINANDER gehalten
+    (test_jeder_der_drei_griffe_tut_NUR_das_seine): jede Zusicherung
+    fuer sich sagt nur, dass ein Griff das Seine tut: erst der Vergleich
+    schliesst aus, dass einer AUCH das der anderen tut - und genau das
+    war der Mangel vom 01.09.2026.
+
+    Was das Zahnrad ausloest, wird nicht behauptet, sondern
+    mitgeschrieben: eine `ags`-Attrappe vor /usr/bin haelt die
+    Aufrufzeile fest (`_ags_attrappe` im geliehenen Aufbau). Sie ist
+    zugleich die Sicherheitsbedingung - ein echtes `ags request` spricht
+    eine LAUFENDE Oberflaeche an.
+
+    WELCHE Verbindung das Zahnrad oeffnet, misst diese Datei NICHT:
+    gedrueckt wird die erste Zeile, und `active` zeigt ebenfalls auf sie
+    (siehe ERSTE_KENNUNG). Das tut tests/src/test_vpn_zahnrad.py an der
+    zweiten.
 
 WAS SICH NICHT MESSEN LIESS, UND DAS GEHOERT HIERHER
     Ob die Geste des Schalters die Sequenz BEANSPRUCHT und den Knopf
@@ -81,6 +104,7 @@ SICHERHEIT
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -108,29 +132,82 @@ pytestmark = pytest.mark.allow_subprocess
 
 KIND = Path(__file__).resolve().parent / "zeprow_verschachtelung_child.tsx"
 
+# DIE OBERGRENZE DIESES GANZEN FAHRPLANS: 5,0 SEKUNDEN
+#
+#     `UPDATE_INTERVAL = 5000` in ags-vpn.template. Fuenf Sekunden nach
+#     dem Sichtbarwerden laeuft `updateStatusDisplay()` das erste Mal,
+#     und das ruft `zeichneListe()` - die Liste wird ABGERAEUMT und neu
+#     gebaut. Damit sind die Widgets weg, an die das Kind seine
+#     Mitschrift gehaengt hat, und der Tastaturfokus ist weg.
+#
+#     GEMESSEN am 02.09.2026, und zwar auf dem Umweg: der Fahrplan war
+#     erst nach hinten gerueckt (Leertaste bei 5,4 s), weil ich die
+#     Ursache eines flatterhaften Fehlschlags falsch geraten hatte.
+#     Ergebnis - dreimal derselbe Lauf, dreimal dieselben vier
+#     Fehlschlaege, und im Fahrtenbuch stand nur noch
+#
+#         5000ms --fokus-gelesen-- fokus=GtkSwitch[zep-toggle]
+#
+#     Die Taste bei 5,4 s hat NICHTS mehr ausgeloest. Sie traf einen
+#     Schalter, den es in dieser Form nicht mehr gab.
+#
+#     ALLES muss darum vor 5,0 s liegen: Abzuege, Tabulatoren,
+#     Leertaste UND das Ablesen. Wer diese Zahlen anfasst, hat 2,5 s
+#     (T_MESSEN im Kind) bis 5,0 s Platz - keine Sekunde mehr.
+NEUZEICHNEN_S = 5.0
+
 # Wann der Test die Leertaste drueckt, in Sekunden nach dem Start des
-# Kindes. Mitten in dem Fenster, das der Fahrplan des Kindes dafuer offen
-# laesst (T_FOKUS 4 s bis T_LESEN 6 s) - reichlich Luft nach beiden
-# Seiten.
-TASTE_S = 4.7
-LAUFZEIT_S = 9.0
+# Kindes - zwischen dem Ablesen des Fokus (T_FOKUS, 4,0 s) und dem
+# Ablesen des Fahrtenbuchs (T_LESEN, 4,8 s), mit 0,7 s Luft vor dem
+# Neuzeichnen.
+TASTE_S = 4.3
+LAUFZEIT_S = 5.6
 
 # Die zwei Bildabzuege um den Fokuswechsel herum. Das Kind nimmt den
 # Fokus nach seiner Fokuskette wieder weg (bei T_MESSEN, 2,5 s); VOR_S
 # liegt also im fokuslosen Fenster, NACH_S nach den Tabulatoren und vor
 # der Leertaste.
 VOR_S = 3.0
-TAB_S = 3.4
-NACH_S = 4.3
+TAB_S = 3.1
+NACH_S = 4.1
+
+# WANN DAS KIND DEN FOKUS ABLIEST - hier abgeschrieben aus `T_FOKUS` im
+# Kind, damit der Test es VERGLEICHEN kann.
+#
+#     Mit dem Zahnrad sind es bis zum Schalter DREI Tabulatoren statt
+#     zwei, und die muessen alle vor diesem Termin durch sein. Gemessen
+#     brauchen sie zusammen etwa 0,3 s (`3.1s Tab; 3.3s Tab; 3.4s Tab`),
+#     es bleiben also 0,6 s Luft - unter Last kann das knapp werden.
+#
+#     Darum wird es ZUGESICHERT und nicht gehofft (siehe
+#     test_in_jedem_lauf_sind_wirklich_tasten_gedrueckt_worden): laeuft
+#     ein Tabulator hinter diesen Termin, sagt der Lauf es, statt zwei
+#     Bilder mit demselben Fokus zu vergleichen und "kein Fokusrahmen"
+#     zu melden.
+KIND_T_FOKUS_S = 4.0
 
 # WIEVIEL TABULATOREN BIS ZUM ZIEL - abgelesen an der Fokuskette, die
-# dieselbe Datei misst (Marke `fokuskette`, gemessen am 01.09.2026):
+# dieselbe Datei misst (Marke `fokuskette`).
+#
+# GEMESSEN am 01.09.2026, als die Zeile zwei Bedienelemente hatte:
 #
 #     GtkButton[zep-row-click] > GtkSwitch[zep-toggle]
 #     > GtkButton[zep-row-click] > GtkSwitch[zep-toggle] > ...
 #
-# Vom fokuslosen Fenster aus fuehrt ein Tabulator auf die Huelle der
-# ersten Zeile und ein zweiter auf ihren Schalter.
+# NEU GEMESSEN am 02.09.2026, nachdem das Zahnrad dazukam - und dieser
+# Test hat GENAU DAS getan, wofuer die Zahlen hier stehen: zwei
+# Zusicherungen fielen LAUT aus, weil der zweite Tabulator seither auf
+# dem ZAHNRAD landet und nicht mehr auf dem Schalter. Nichts ist still
+# durchgegangen.
+#
+#     GtkButton[zep-row-click.zep-row-click-getrennt]
+#     > GtkButton[zep-btn.zep-btn-still.vpn-row-settings.text-button]
+#     > GtkSwitch[zep-toggle]
+#     > (dasselbe noch einmal fuer die zweite Zeile) ...
+#
+# Vom fokuslosen Fenster aus fuehrt also ein Tabulator auf die Huelle
+# der ersten Zeile, ein zweiter auf ihr Zahnrad, ein dritter auf ihren
+# Schalter.
 #
 # MIT ECHTEN TASTEN UND NICHT MEHR MIT grab_focus() - die Begruendung
 # steht im Kind bei T_FOKUS und ist eine Messung: GTK4 setzt
@@ -138,14 +215,25 @@ NACH_S = 4.3
 # gekommen ist. Mit grab_focus() blieb das Bild darum in JEDEM Fall
 # unveraendert, auch bei tadellosem Stil - eine Messung, die fuer jede
 # Lage dieselbe Antwort gibt, misst nichts.
-ZIELTABS = {"zeile": 1, "schalter": 2}
+ZIELTABS = {"zeile": 1, "zahnrad": 2, "schalter": 3}
 
-# ZWEI LAEUFE, EINER JE ZIEL - und das ist eine Messung und keine
-# Bequemlichkeit. Der erste Anlauf am 01.09.2026 wollte beide in einem
-# Lauf messen; der zweite Teil hat nichts gemessen, weil die Taste auf
-# dem Schalter die ZEILE ausgeloest, auf die Einzelheiten umgeblattert
-# und die Liste damit abgeraeumt hatte. Die Begruendung steht im Kind.
-ZIELE = ("schalter", "zeile")
+# EIN LAUF JE ZIEL - und das ist eine Messung und keine Bequemlichkeit.
+# Der erste Anlauf am 01.09.2026 wollte zwei Ziele in EINEM Lauf messen;
+# der zweite Teil hat nichts gemessen, weil die Taste auf dem Schalter
+# die ZEILE ausgeloest, auf die Einzelheiten umgeblattert und die Liste
+# damit abgeraeumt hatte. Die Begruendung steht im Kind.
+ZIELE = ("schalter", "zahnrad", "zeile")
+
+# WAS DIESER LAUF AM ZAHNRAD NICHT MESSEN KANN, UND DAS GEHOERT HIERHER
+#     Gedrueckt wird das Zahnrad der ERSTEN Zeile (`suche` findet sie
+#     zuerst), und `active` zeigt in `_einstellungen` ebenfalls auf die
+#     erste (c1). Ob die Vorlage `eintrag.id` oder `gewaehlteId`
+#     weiterreicht, ist hier darum NICHT zu unterscheiden - beide ergeben
+#     c1. Diese Unterscheidung misst tests/src/test_vpn_zahnrad.py, und
+#     zwar an der ZWEITEN Zeile.
+#
+#     Hier wird die TASTE gemessen und nicht die Kennung.
+ERSTE_KENNUNG = "c1"
 
 
 def _spur_lesen(text: str) -> dict[str, str]:
@@ -211,12 +299,27 @@ def _lauf(wurzel: Path, buendel: Path, ziel: str, css: Path) -> dict:
     protokoll = wurzel / f"kind-{ziel}.log"
     tasten: list[str] = []
 
+    # DIE `ags`-ATTRAPPE, UND SIE IST HIER ZUERST EINE
+    # SICHERHEITSBEDINGUNG
+    #     Seit dem 02.09.2026 kann eine Leertaste in dieser Zeile das
+    #     Zahnrad treffen, und das setzt `ags request vpn-settings:...`
+    #     ab. Ein ECHTES `ags request` spricht ueber den Astal-Socket
+    #     eine laufende Oberflaeche an. Die verschachtelte Sitzung hat
+    #     ein eigenes XDG_RUNTIME_DIR, ein Aufruf faende dort also
+    #     nichts - aber "faende nichts" ist eine Herleitung, und die
+    #     Attrappe ist eine Zusicherung. Sie reicht nichts durch.
+    #
+    #     Und sie ist gleichzeitig die Messung: was die Taste ausgeloest
+    #     hat, steht hinterher Zeichen fuer Zeichen in der Datei.
+    attrappen, ags_protokoll = _HARNESS._ags_attrappe(wurzel / f"ags-{ziel}")
+
     with Session(1280, 900) as sitzung:
         sitzung.start_bus()
         sitzung.hyprctl("keyword", "cursor:invisible", "true")
         sitzung.move_cursor(640, 450)
         kind = sitzung.spawn(
             [str(buendel)], log=protokoll,
+            PATH=f"{attrappen}:{os.environ.get('PATH', '/usr/bin')}",
             ZEPOS_USER_ROOT=str(wurzel / "zepos"),
             ZEPOS_TRACE=str(spur),
             ZEPOS_ZIEL=ziel,
@@ -289,7 +392,10 @@ def _lauf(wurzel: Path, buendel: Path, ziel: str, css: Path) -> dict:
 
     return {"spur": _spur_lesen(text), "roh": text, "log": log,
             "tasten": tasten, "ziel": ziel,
-            "bild_vor": bild_vor, "bild_nach": bild_nach}
+            "bild_vor": bild_vor, "bild_nach": bild_nach,
+            "ags_aufrufe": (
+                ags_protokoll.read_text(encoding="utf-8").splitlines()
+                if ags_protokoll.exists() else [])}
 
 
 @pytest.fixture(scope="module")
@@ -334,6 +440,7 @@ def messung(laeufe) -> dict:
 def _bericht(messung: dict) -> str:
     return (f"Ziel: {messung['ziel']}"
             + "\nTasten: " + "; ".join(messung["tasten"])
+            + "\nags-Aufrufe: " + repr(messung.get("ags_aufrufe"))
             + "\nSpur:\n" + messung["roh"]
             + "\nProtokoll:\n" + messung["log"][-2000:])
 
@@ -358,7 +465,7 @@ def test_die_seite_steht_und_ist_zugeteilt(messung):
             f"nichts:\n{_bericht(messung)}")
 
 
-def test_in_beiden_laeufen_sind_wirklich_tasten_gedrueckt_worden(laeufe):
+def test_in_jedem_lauf_sind_wirklich_tasten_gedrueckt_worden(laeufe):
     """JEDER wtype-Aufruf muss ohne Fehler zurueckgekommen sein.
 
     Sonst waere "keine Reaktion" von "keine Taste" nicht zu
@@ -378,6 +485,26 @@ def test_in_beiden_laeufen_sind_wirklich_tasten_gedrueckt_worden(laeufe):
             assert "rc=0" in eintrag, _bericht(lauf)
         assert lauf["spur"].get("ziel") == ziel, _bericht(lauf)
 
+        # UND SIE MUESSEN ALLE DURCH SEIN, BEVOR DAS KIND ABLIEST.
+        #
+        #     Der letzte Tabulator ist der vorletzte Eintrag - danach
+        #     kommt nur noch die Leertaste. Liegt er hinter
+        #     KIND_T_FOKUS_S, dann hat das Kind den Fokus abgelesen,
+        #     waehrend noch getabbt wurde: `fokus-auf-ziel` zeigte dann
+        #     eine Station zu frueh, und die Bildvergleiche verglichen
+        #     zwei Bilder mit demselben Fokus. Genau so entstanden am
+        #     02.09.2026 zwei Fehlschlaege, die beim naechsten Lauf
+        #     verschwanden. Dieser Vergleich sagt es, statt es zu
+        #     verschweigen.
+        letzter_tab = lauf["tasten"][-2] if ZIELTABS[ziel] else None
+        if letzter_tab is not None:
+            sekunden = float(letzter_tab.split("s ")[0])
+            assert sekunden < KIND_T_FOKUS_S, (
+                f"der letzte Tabulator fiel auf {sekunden}s, das Kind "
+                f"liest den Fokus aber schon bei {KIND_T_FOKUS_S}s ab. "
+                "Der Fahrplan ist zu eng - TAB_S vorziehen oder T_FOKUS "
+                f"im Kind nach hinten setzen.\n{_bericht(lauf)}")
+
 
 def test_die_tabulatoren_landen_wirklich_auf_dem_ziel(laeufe):
     """Die Gegenprobe zur Tabulatorzaehlung.
@@ -392,6 +519,11 @@ def test_die_tabulatoren_landen_wirklich_auf_dem_ziel(laeufe):
     assert laeufe["schalter"]["spur"].get(
         "fokus-auf-ziel", "").startswith("GtkSwitch"), _bericht(
             laeufe["schalter"])
+    # Und das dritte Ziel. Es traegt `zep-btn` mit, darum wird auf die
+    # eigene Klasse geprueft und nicht auf den Typ: `GtkButton` ist auch
+    # die Huelle.
+    assert laeufe["zahnrad"]["spur"].get("fokus-auf-ziel", "").find(
+        "vpn-row-settings") >= 0, _bericht(laeufe["zahnrad"])
 
 
 # ----------------------------------------------------------------------
@@ -597,6 +729,131 @@ def test_die_leertaste_auf_der_zeile_oeffnet_und_schaltet_nicht(laeufe):
     assert "SCHALTER-notify" not in buch, (
         "die Leertaste auf der Zeile hat AUCH den Schalter umgelegt:\n"
         f"{buch}\n{_bericht(lauf)}")
+
+
+# ----------------------------------------------------------------------
+# Das Zahnrad - der dritte Griff in derselben Zeile (02.09.2026)
+# ----------------------------------------------------------------------
+
+def test_das_zahnrad_liegt_nicht_in_der_klickbaren_huelle(messung):
+    """Sonst waere es genau der Mangel, der am 01.09.2026 den Schalter traf.
+
+    Ein bedienbares Kind IN einem Gtk.Button: der Tabulator erreicht es,
+    die Leertaste dort loest aber die ZEILE aus. Fuer das Zahnrad faellt
+    das mit `endeBedienbar` ohne Zutun weg, weil `ende` als GANZES neben
+    der Huelle haengt - hier steht, dass es auch wirklich so ist.
+    """
+    spur = messung["spur"]
+    assert spur.get("zahnrad", "nichts").startswith("GtkButton"), (
+        "in der Zeile ist gar kein Zahnrad zu finden - dann misst alles "
+        f"darunter nichts:\n{_bericht(messung)}")
+    assert spur.get("zahnrad-im-knopf") == "nein", (
+        "das Zahnrad steckt in der klickbaren Huelle der Zeile\n"
+        + _bericht(messung))
+
+
+def test_ein_druck_auf_das_zahnrad_erreicht_das_zahnrad(messung):
+    """`pick()` ist die Funktion, mit der GTK4 selbst entscheidet, welches
+    Widget ein Zeigerereignis bekommt.
+
+    Ein echtes Zeigerereignis laesst sich auf dieser Maschine nicht
+    erzeugen (Dateikopf). `pick()` ist darum kein Ersatz, sondern die
+    Frage selbst - nur ohne Ereignis gestellt.
+    """
+    spur = messung["spur"]
+    lage = spur.get("lage-zahnrad", "")
+    breite = lage.split("x")[0] if "x" in lage else "0"
+    assert breite.isdigit() and int(breite) > 0, (
+        f"das Zahnrad hat keine Zuteilung ({lage!r}) - ohne sie ist der "
+        f"Punkt darunter eine Zahl ueber nichts:\n{_bericht(messung)}")
+    assert spur.get("pick-zahnrad-im-zahnrad") == "ja", (
+        "ein Druck in die Mitte des Zahnrads trifft nicht das Zahnrad, "
+        f"sondern {spur.get('pick-zahnrad')!r}\n{_bericht(messung)}")
+    assert spur.get("pick-zahnrad-unter-knopf") == "nein", (
+        "der Druck aufs Zahnrad geht durch die klickbare Huelle - dann "
+        f"oeffnet er die Einzelheit mit:\n{_bericht(messung)}")
+
+
+def test_das_zahnrad_ist_mit_dem_tabulator_erreichbar(messung):
+    """Alle drei Griffe muessen ohne Maus erreichbar sein.
+
+    Das Zahnrad ist der einzige Weg von der Liste DIREKT in die
+    Einstellungen einer Verbindung - ist es nur mit der Maus zu
+    erreichen, gibt es diesen Weg fuer einen Teil der Nutzer nicht.
+    """
+    spur = messung["spur"]
+    assert spur.get("zahnrad-per-tab-erreichbar") == "ja", (
+        "der Tabulator kommt nicht am Zahnrad vorbei\n" + _bericht(messung))
+    # Und die zwei anderen bleiben erreichbar - eine Reihenfolge, die
+    # eines von dreien verschluckt, waere schlimmer als die alte.
+    assert spur.get("knopf-per-tab-erreichbar") == "ja", _bericht(messung)
+    assert spur.get("schalter-per-tab-erreichbar") == "ja", _bericht(messung)
+
+
+def test_die_leertaste_auf_dem_zahnrad_oeffnet_die_einstellungen(laeufe):
+    """DIE ZUSICHERUNG ZUR NUTZERMELDUNG, mit einer echten Taste.
+
+    "ich will neben dem toggle auch ein icon fuer einstellung haben das
+    zahnrad" - und der Weg dorthin darf nicht ueber die Einzelheit
+    fuehren, das war die Klage.
+
+    Was die Taste ausgeloest hat, steht nicht als Behauptung da: die
+    `ags`-Attrappe schreibt die Aufrufzeile mit, und dort muss
+    `request vpn-settings:...` stehen.
+    """
+    lauf = laeufe["zahnrad"]
+    spur = lauf["spur"]
+    assert spur.get("fokus-auf-ziel", "").find("vpn-row-settings") >= 0, (
+        f"der Fokus lag gar nicht auf dem Zahnrad:\n{_bericht(lauf)}")
+    buch = spur.get("nach-der-taste", "")
+    assert "ZAHNRAD-clicked" in buch, (
+        "die Leertaste auf dem Zahnrad loest es NICHT aus. Steht im "
+        "Fahrtenbuch stattdessen KNOPF-clicked, dann liegt das Zahnrad "
+        "unter der klickbaren Huelle - derselbe Mangel, den der Schalter "
+        f"am 01.09.2026 hatte.\nFahrtenbuch: {buch}\n{_bericht(lauf)}")
+    erwartet = f"request vpn-settings:{ERSTE_KENNUNG}"
+    assert any(erwartet == aufruf for aufruf in lauf["ags_aufrufe"]), (
+        f"kein Aufruf lautet {erwartet!r} - die Taste hat das Zahnrad "
+        "ausgeloest, aber die Einstellungen gehen nicht auf.\n"
+        + _bericht(lauf))
+
+
+def test_jeder_der_drei_griffe_tut_NUR_das_seine(laeufe):
+    """Die drei Laeufe GEGENEINANDER, und das ist der eigentliche Beweis.
+
+    Jede Zusicherung darueber sagt fuer sich, dass ein Griff das Seine
+    tut. Erst der Vergleich schliesst aus, dass ein Griff AUCH das der
+    anderen tut - und genau das war der Mangel vom 01.09.2026: die Taste
+    auf dem Schalter loeste die Zeile aus.
+
+    Gelesen wird je Lauf, welche der drei Eintragungen im Fahrtenbuch
+    steht. Erwartet ist genau eine.
+    """
+    marken = {"zeile": "KNOPF-clicked",
+              "zahnrad": "ZAHNRAD-clicked",
+              "schalter": "SCHALTER-notify"}
+    gemessen = {}
+    for ziel, lauf in laeufe.items():
+        buch = lauf["spur"].get("nach-der-taste", "")
+        gemessen[ziel] = sorted(
+            name for name, eintrag in marken.items() if eintrag in buch)
+
+    for ziel in marken:
+        assert gemessen[ziel] == [ziel], (
+            f"die Leertaste auf `{ziel}` hat {gemessen[ziel]} ausgeloest, "
+            f"erwartet war genau [{ziel!r}].\nGemessen ueber alle drei "
+            f"Laeufe: {gemessen}\n{_bericht(laeufe[ziel])}")
+
+    # Und die Einstellungen gehen NUR beim Zahnrad auf. "Das Zahnrad
+    # oeffnet sie" waere auch erfuellt, wenn jeder Griff sie oeffnete.
+    for ziel, lauf in laeufe.items():
+        anfragen = [a for a in lauf["ags_aufrufe"] if "vpn-settings" in a]
+        if ziel == "zahnrad":
+            assert anfragen, _bericht(lauf)
+        else:
+            assert anfragen == [], (
+                f"die Leertaste auf `{ziel}` hat die Einstellungen "
+                f"geoeffnet: {anfragen}\n{_bericht(lauf)}")
 
 
 # ----------------------------------------------------------------------

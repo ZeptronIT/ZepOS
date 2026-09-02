@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
-"POT-Creation-Date: 2026-09-02 09:28+0200\n"
+"POT-Creation-Date: 2026-09-02 11:42+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -589,7 +589,7 @@ msgstr ""
 msgid "New window"
 msgstr ""
 
-#: src/templates/ags-dock.template:1238 src/templates/ags-dock.template:1356
+#: src/templates/ags-dock.template:1238 src/templates/ags-dock.template:1414
 #: src/templates/ags-home.template:893
 msgid "Remove from dock"
 msgstr ""
@@ -602,11 +602,11 @@ msgstr ""
 msgid "Add to Home"
 msgstr ""
 
-#: src/templates/ags-dock.template:1361 src/templates/ags-home.template:899
+#: src/templates/ags-dock.template:1419 src/templates/ags-home.template:899
 msgid "Add to dock"
 msgstr ""
 
-#: src/templates/ags-dock.template:1368
+#: src/templates/ags-dock.template:1426
 msgid "Close"
 msgstr ""
 
@@ -711,7 +711,7 @@ msgstr ""
 msgid "Enter the Wi-Fi password ..."
 msgstr ""
 
-#: src/templates/ags-network.template:934 src/templates/ags-vpn.template:1554
+#: src/templates/ags-network.template:934 src/templates/ags-vpn.template:1659
 msgid "Connect"
 msgstr ""
 
@@ -1506,7 +1506,7 @@ msgid "Both"
 msgstr ""
 
 #: src/templates/ags-vpn-settings.template:2387
-#: src/templates/ags-vpn.template:1420
+#: src/templates/ags-vpn.template:1525
 msgid "Username"
 msgstr ""
 
@@ -1607,13 +1607,13 @@ msgid "Back to the VPN connection"
 msgstr ""
 
 #: src/templates/ags-vpn-settings.template:2817
-#: src/templates/ags-vpn.template:1332
+#: src/templates/ags-vpn.template:1357
 msgid "VPN connections"
 msgstr ""
 
 #: src/templates/ags-vpn-settings.template:2830
 #: src/templates/ags-vpn-settings.template:2939
-#: src/templates/ags-vpn.template:1653
+#: src/templates/ags-vpn.template:1758
 msgid "New connection"
 msgstr ""
 
@@ -1622,7 +1622,7 @@ msgid "Add connection"
 msgstr ""
 
 #: src/templates/ags-vpn-settings.template:2892
-#: src/templates/ags-vpn.template:1666
+#: src/templates/ags-vpn.template:1771
 msgid "All connections"
 msgstr ""
 
@@ -1655,7 +1655,7 @@ msgstr ""
 msgid "Server: {server}"
 msgstr ""
 
-#: src/templates/ags-vpn.template:725 src/templates/ags-vpn.template:1587
+#: src/templates/ags-vpn.template:725 src/templates/ags-vpn.template:1692
 msgid "Peer: {endpoint}"
 msgstr ""
 
@@ -1675,7 +1675,7 @@ msgstr ""
 msgid "Nobody knows whether your traffic is protected."
 msgstr ""
 
-#: src/templates/ags-vpn.template:802 src/templates/ags-vpn.template:1400
+#: src/templates/ags-vpn.template:802 src/templates/ags-vpn.template:1501
 msgid "Not connected"
 msgstr ""
 
@@ -1703,47 +1703,51 @@ msgstr ""
 msgid "Connected"
 msgstr ""
 
-#: src/templates/ags-vpn.template:1289
+#: src/templates/ags-vpn.template:1314
 msgid "Only one VPN can be connected at a time - {name} is being disconnected."
 msgstr ""
 
-#: src/templates/ags-vpn.template:1325
+#: src/templates/ags-vpn.template:1350
 msgid "No connection configured yet - add one."
 msgstr ""
 
-#: src/templates/ags-vpn.template:1426
+#: src/templates/ags-vpn.template:1392
+msgid "Settings for {name}"
+msgstr ""
+
+#: src/templates/ags-vpn.template:1531
 msgid "Username ..."
 msgstr ""
 
-#: src/templates/ags-vpn.template:1437
+#: src/templates/ags-vpn.template:1542
 msgid "Password"
 msgstr ""
 
-#: src/templates/ags-vpn.template:1443
+#: src/templates/ags-vpn.template:1548
 msgid "Password ..."
 msgstr ""
 
-#: src/templates/ags-vpn.template:1478
+#: src/templates/ags-vpn.template:1583
 msgid "2FA token (optional)"
 msgstr ""
 
-#: src/templates/ags-vpn.template:1484
+#: src/templates/ags-vpn.template:1589
 msgid "6-digit code ..."
 msgstr ""
 
-#: src/templates/ags-vpn.template:1496
+#: src/templates/ags-vpn.template:1601
 msgid "Remember username"
 msgstr ""
 
-#: src/templates/ags-vpn.template:1534 src/templates/ags-vpn.template:1585
+#: src/templates/ags-vpn.template:1639 src/templates/ags-vpn.template:1690
 msgid "WireGuard identifies itself with keys - there is nothing to type here."
 msgstr ""
 
-#: src/templates/ags-vpn.template:1584
+#: src/templates/ags-vpn.template:1689
 msgid "This OpenVPN connection identifies itself with certificates - there is nothing to type here."
 msgstr ""
 
-#: src/templates/ags-vpn.template:1588
+#: src/templates/ags-vpn.template:1693
 msgid "No peer configured yet - open the settings."
 msgstr ""
 
