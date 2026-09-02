@@ -432,11 +432,31 @@ hyprland_attempt() {
 #     gar nicht erst hochgekommen ist.
 #
 #     Die Wahl steht dann zwischen einer grafischen Anmeldung auf einem
-#     Schirm und einer Textanmeldung auf der Konsole. Auf mehreren
-#     Schirmen bleibt es beim alten Verhalten - die Maske liegt auf dem
-#     ersten Ausgang -, aber ein Rueckfall, der einen Schirm richtig
-#     bedient, ist kein Rueckschritt gegenueber einem, der gar keins
-#     hat.
+#     Schirm und einer Textanmeldung auf der Konsole. Ein Rueckfall, der
+#     einen Schirm richtig bedient, ist kein Rueckschritt gegenueber
+#     einem, der gar keins hat.
+#
+#     AUF MEHREREN SCHIRMEN BLEIBT ES DABEI BEIM ALTEN FEHLER, und hier
+#     stand bis zum 01.09.2026 "die Maske liegt auf dem ersten Ausgang".
+#     Das war eine Beruhigung, die sich nicht halten laesst. GEMESSEN am
+#     01.09.2026 an cage 0.3.1 auf dem headless-Backend mit zwei
+#     Ausgaengen: cage legte HEADLESS-2 an den Ursprung und HEADLESS-1
+#     daneben, und das Fenster lag auf HEADLESS-2 - also auf dem
+#     ZWEITEN. Welcher Ausgang bedient wird, sucht cage sich aus, und
+#     genau das war der Fehler, der diesen Umbau ausgeloest hat.
+#
+#     Behoben wird es hier NICHT, und das ist eine Entscheidung mit
+#     Grund. Fuer denselben cage-Fehler hat das Installationsmedium eine
+#     Loesung bekommen - alle Ausgaenge ueber zwlr_output_manager_v1 auf
+#     dieselbe Stelle legen, siehe iso/profile-release/airootfs/usr/
+#     local/bin/zepos-live-schirme. Sie kostet dort ein zusaetzliches
+#     Paket (wlr-randr) und einen Prozess, der mitlaeuft, und sie zeigt
+#     auf kleineren Schirmen einen Ausschnitt statt eines verkleinerten
+#     Bildes. Hier waere das der schlechtere Tausch: dieser Zweig laeuft
+#     NUR, wenn Hyprland gar nicht erst hochkommt, und Hyprland spiegelt
+#     richtig - seitenverhaeltnistreu eingepasst statt beschnitten. Ein
+#     Paket auf jedem installierten System fuer den Rueckfall eines
+#     Rueckfalls lohnt das nicht.
 #
 # WAS HIER NICHT MEHR STEHT: DER ERSTE cage-VERSUCH
 #     Bis zum 01.09.2026 lief cage zweimal - erst mit dem gewoehnlichen

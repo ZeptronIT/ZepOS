@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WOZU DIESE DATEI IN EINEM TESTVERZEICHNIS LIEGT
+
+      tests/render/test_live_spiegel.py misst, ob das ausgelieferte
+      /usr/local/bin/zepos-live-schirme zwei Ausgaenge eines echten cage
+      wirklich auf dasselbe Bild bringt. Dafuer braucht es einen Client,
+      der wlr-output-management spricht - im Betrieb ist das wlr-randr.
+
+      Auf der Werkstattmaschine am 01.09.2026 lag wlr-randr nicht, und
+      das Paket mit dieser Protokollbeschreibung auch nicht:
+      `find / -name 'wlr-*.xml'` fand nichts, `pacman -Q wlr-protocols`
+      nichts. Ohne beides uebersprang der Test - und damit war die
+      TRAGENDE Behauptung des ganzen Fixes, "zwei Ausgaenge an derselben
+      Stelle zeigen dasselbe Bild", von keinem Lauf gedeckt.
+
+      Also steht die Beschreibung hier, und tests/render/
+      live_schirme_client.c baut daraus den kleinsten Client, der die
+      Frage beantworten kann.
+
+  WAS SIE BEWEIST UND WAS NICHT
+
+      Sie kann keinen falschen gruenen Lauf erzeugen, und das ist der
+      Grund, warum eine von Hand geschriebene Protokollbeschreibung hier
+      vertretbar ist. Stimmt eine Opcode-Reihenfolge nicht, gibt es einen
+      Protokollfehler oder eine Konfiguration, die der Compositor
+      ablehnt; in beiden Faellen bleibt der zweite Ausgang leer und der
+      Test FAELLT. Ein Lauf, der besteht, hat den Compositor wirklich
+      umgestellt.
+
+      NICHT gedeckt ist die Textform, in der das echte wlr-randr seine
+      Ausgaenge auflistet. Der Client schreibt die dokumentierte Form; ob
+      wlr-randr Byte fuer Byte dieselbe schreibt, kann diese Maschine
+      nicht sagen. Das Skript stuetzt sich deshalb auf genau eine
+      Eigenschaft dieser Form - "Kopfzeilen sind nicht eingerueckt" - und
+      tut bei allem anderen nichts. Siehe seinen Kopf.
+
+  Diese Datei wird NICHT ausgeliefert. Sie ist Testwerkzeug und liegt
+  darum unter tests/, nicht unter iso/ oder src/.
+-->
+<protocol name="wlr_output_management_unstable_v1">
+  <copyright>
+    Copyright 2019 Purism SPC
+
+    Permission to use, copy, modify, distribute, and sell this software
+    and its documentation for any purpose is hereby granted without fee,
+    provided that the above copyright notice appear in all copies.
+  </copyright>
+
+  <interface name="zwlr_output_manager_v1" version="4">
+    <request name="create_configuration">
+      <arg name="id" type="new_id" interface="zwlr_output_configuration_v1"/>
+      <arg name="serial" type="uint"/>
+    </request>
+    <request name="stop"/>
+    <event name="head">
+      <arg name="head" type="new_id" interface="zwlr_output_head_v1"/>
+    </event>
+    <event name="done">
+      <arg name="serial" type="uint"/>
+    </event>
+    <event name="finished"/>
+  </interface>
+
+  <interface name="zwlr_output_head_v1" version="4">
+    <request name="release" type="destructor" since="3"/>
+    <event name="name">
+      <arg name="name" type="string"/>
+    </event>
+    <event name="description">
+      <arg name="description" type="string"/>
+    </event>
+    <event name="physical_size">
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </event>
+    <event name="mode">
+      <arg name="mode" type="new_id" interface="zwlr_output_mode_v1"/>
+    </event>
+    <event name="enabled">
+      <arg name="enabled" type="int"/>
+    </event>
+    <event name="current_mode">
+      <arg name="mode" type="object" interface="zwlr_output_mode_v1"/>
+    </event>
+    <event name="position">
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+    </event>
+    <event name="transform">
+      <arg name="transform" type="int"/>
+    </event>
+    <event name="scale">
+      <arg name="scale" type="fixed"/>
+    </event>
+    <event name="finished"/>
+    <event name="make" since="2">
+      <arg name="make" type="string"/>
+    </event>
+    <event name="model" since="2">
+      <arg name="model" type="string"/>
+    </event>
+    <event name="serial_number" since="2">
+      <arg name="serial_number" type="string"/>
+    </event>
+    <event name="adaptive_sync" since="4">
+      <arg name="state" type="uint"/>
+    </event>
+  </interface>
+
+  <interface name="zwlr_output_mode_v1" version="3">
+    <request name="release" type="destructor" since="3"/>
+    <event name="size">
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </event>
+    <event name="refresh">
+      <arg name="refresh" type="int"/>
+    </event>
+    <event name="preferred"/>
+    <event name="finished"/>
+  </interface>
+
+  <interface name="zwlr_output_configuration_v1" version="4">
+    <request name="enable_head">
+      <arg name="id" type="new_id" interface="zwlr_output_configuration_head_v1"/>
+      <arg name="head" type="object" interface="zwlr_output_head_v1"/>
+    </request>
+    <request name="disable_head">
+      <arg name="head" type="object" interface="zwlr_output_head_v1"/>
+    </request>
+    <request name="apply"/>
+    <request name="test"/>
+    <request name="destroy" type="destructor"/>
+    <event name="succeeded"/>
+    <event name="failed"/>
+    <event name="cancelled"/>
+  </interface>
+
+  <interface name="zwlr_output_configuration_head_v1" version="4">
+    <request name="set_mode">
+      <arg name="mode" type="object" interface="zwlr_output_mode_v1"/>
+    </request>
+    <request name="set_custom_mode">
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+      <arg name="refresh" type="int"/>
+    </request>
+    <request name="set_position">
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+    </request>
+    <request name="set_transform">
+      <arg name="transform" type="int"/>
+    </request>
+    <request name="set_scale">
+      <arg name="scale" type="fixed"/>
+    </request>
+    <request name="set_adaptive_sync" since="4">
+      <arg name="state" type="uint"/>
+    </request>
+  </interface>
+</protocol>

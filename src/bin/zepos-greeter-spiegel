@@ -57,6 +57,35 @@
 #     Naheliegend waere gewesen, alle bis auf einen abzuschalten. Das
 #     waere derselbe schwarze Schirm mit einer anderen Begruendung. Ein
 #     Spiegel ZEIGT.
+#
+# UND WAS BEI UNGLEICH GROSSEN SCHIRMEN PASSIERT - NACHGETRAGEN am
+# 01.09.2026, weil es im Bericht zu Aufgabe 75 als offen stehenblieb
+#     Es passiert das Richtige, und das ist nicht selbstverstaendlich.
+#     src/render/Renderer.cpp:1961-1988 (renderMirrored) der
+#     ausgelieferten Fassung 0.56.1 rechnet
+#
+#         scale = min(eigene.x / quelle.x, eigene.y / quelle.y)
+#
+#     legt daraus eine Box in Quellgroesse mal scale, setzt sie mit
+#
+#         box.x = (eigene.x - box.w) / 2
+#         box.y = (eigene.y - box.h) / 2
+#
+#     in die Mitte und loescht den Rest vorher auf Schwarz
+#     (CClearPassElement mit CHyprColor(0,0,0,0)).
+#
+#     Im Klartext: das Bild der Quelle wird SEITENVERHAELTNISTREU
+#     eingepasst, mittig, mit schwarzen Balken daneben oder darueber. Es
+#     wird nichts abgeschnitten und nichts verzerrt - die Anmeldemaske
+#     steht auf JEDEM Schirm vollstaendig, auch auf einem kleineren oder
+#     anders geformten. Es ist also kein Mangel, sondern die Bauform,
+#     die man sich gewuenscht haette.
+#
+#     Das unterscheidet diesen Weg von dem, den das Installationsmedium
+#     nehmen muss: cage kann nicht spiegeln, dort werden die Ausgaenge
+#     nur UEBEREINANDERGELEGT, und ein kleinerer Schirm zeigt dann einen
+#     Ausschnitt. Der Vergleich steht ausgeschrieben in
+#     iso/profile-release/airootfs/usr/local/bin/zepos-live-schirme.
 set -u
 
 # Wie oft nachgesehen wird. Zwei Sekunden: schnell genug, dass niemand
