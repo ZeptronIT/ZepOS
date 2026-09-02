@@ -4,6 +4,23 @@
 # GEMELDET am 13.08.2026: "beim suchen in dem launcher auch claude code
 # anzeigen bei auswahl wird ein terminal geoeffnet mit claude code"
 #
+# DIESER EINTRAG IST SEIT DEM 01.09.2026 DAS EINZIGE, WAS ZepOS ZU
+# CLAUDE CODE AUSLIEFERT
+#     Bis dahin lag er in packaging/zepos-claude-code/ neben einem
+#     Rezept, das Anthropics Programm selbst in ein signiertes
+#     ZepOS-Paket baute - 91831121 Bytes, das groesste im Repository.
+#     Der Nutzer hat das gestuerzt: "ich will das packet nicht als meins
+#     verkaufen". Die ganze Begruendung steht im Kopf von
+#     src/bin/zepos-claude-code.
+#
+#     WAS DAS FUER DIESEN EINTRAG BEDEUTET: er zeigt jetzt auf ein
+#     Programm, das auf einer frischen Maschine noch NICHT da ist. Das
+#     waere Spec 7.4 - ein Knopf, der nichts oeffnet -, wenn er sich
+#     damit begnuegte, das zu melden. Er tut es nicht:
+#     /usr/bin/zepos-claude-code fragt und installiert nach, wenn
+#     `claude` fehlt. Der Eintrag ist damit keine Sackgasse, sondern der
+#     Weg hin.
+#
 # WARUM `kitty -e` UND NICHT `Terminal=true`
 #     Terminal=true waere die vorgesehene Art, ein Programm der
 #     Kommandozeile in einem Terminal zu starten - und sie funktioniert
@@ -13,24 +30,24 @@
 #     "Fuer die Anwendung benoetigtes Terminal konnte nicht gefunden
 #     werden" - mit kitty UND foot auf dem PATH. Der Knopf im Fuss
 #     oeffnete deshalb nichts, bis er auf `kitty -e` umgestellt wurde.
-#     Dieser Eintrag macht es von vornherein richtig.
 #
 #     --hold NICHT: Claude Code laeuft, bis der Mensch es beendet;
 #     danach soll das Fenster zugehen wie jedes andere Terminal auch.
 #
-# WARUM HIER NICHT MEHR `claude` STEHT, SONDERN zepos-claude-code
+# WARUM HIER NICHT `claude` STEHT, SONDERN zepos-claude-code
 #     GEMELDET am 17.08.2026: der Klick zeigt nichts. `kitty -e claude`
 #     bindet das Fenster an das Programm - endet claude nach einer
 #     Fehlerzeile, ist die Zeile mit dem Fenster weg. GEMESSEN an der
-#     ausgelieferten Binaerdatei (2.1.233): `claude --gibtsnicht`
+#     damals ausgelieferten Binaerdatei (2.1.233): `claude --gibtsnicht`
 #     schreibt EINE Zeile und gibt 1 zurueck.
 #
-#     /usr/bin/zepos-claude-code liegt jetzt dazwischen. Es haelt das
+#     /usr/bin/zepos-claude-code liegt deshalb dazwischen. Es haelt das
 #     Fenster genau dann offen, wenn der Rueckgabewert einen Fehlschlag
 #     meldet, und laesst es sonst zugehen - die Unterscheidung, die
-#     --hold nicht treffen kann. Der ganze Grund steht in seinem Kopf.
+#     --hold nicht treffen kann. Seit dem 01.09.2026 traegt dasselbe
+#     Skript den zweiten Auftrag: nachinstallieren, wenn nichts da ist.
 #
-# WARUM Icon NICHT MEHR utilities-terminal IST
+# WARUM Icon NICHT utilities-terminal IST
 #     GEMELDET am 17.08.2026: im Dock sind zwei Eintraege nicht
 #     auseinanderzuhalten. GEMESSEN am Abnahmebild
 #     iso/out/run-release-installed/key-41-15-super-q-terminal.png: dort
@@ -46,19 +63,12 @@
 #     der Nutzer hat am 17.08.2026 genau das beanstandet: "ich will das
 #     das logo von claude benutzt wird statt ein roboter arm".
 #
-#     Jetzt steht hier das ECHTE Zeichen von Claude Code, mitgeliefert
-#     vom Paket. Woher es kommt und warum es nicht gezeichnet, sondern
-#     geholt wurde, steht im Rezept unter "DAS ZEICHEN".
+#     Hier steht deshalb das ECHTE Zeichen von Claude Code. Woher es
+#     kommt, wem es gehoert und warum es auch nach dem Fall des Pakets
+#     bleiben darf, steht in src/system/claude-code-icons/HERKUNFT -
+#     kurz: ein Zeichen ZEIGT AUF ein Programm, es IST nicht das
+#     Programm, und es hat keine Fassung, die veralten koennte.
 #
-#     DAS SCHLAEGT EINE REGEL, DIE IN DIESEM BAUM SONST GILT:
-#     settings/zepos-settings.desktop begruendet, warum ein
-#     selbstgezeichnetes Zeichen im Starter neben lauter Zeichen aus
-#     einem Satz das einzige ist, das nicht dazugehoert. Der Unterschied
-#     ist, dass dies KEIN selbstgezeichnetes Zeichen ist: es ist das
-#     Zeichen, unter dem dieses Programm ueberall sonst auftritt. Ein
-#     Symbolthema kann es gar nicht fuehren - Papirus hat kein Zeichen
-#     fuer Claude, so wie es keines fuer irgendein anderes Programm hat,
-#     das seine Marke selbst mitbringt. Genau dafuer gibt es hicolor.
 # WARUM --class, UND WARUM StartupWMClass DARUNTER
 #
 # GEMELDET am 17.08.2026: "ich sehe das claude roboter icon auch zweimal
@@ -93,7 +103,7 @@
 Type=Application
 Name=Claude Code
 GenericName=KI-Assistent auf der Kommandozeile
-Comment=Anthropics Assistent fuer Programmieren und Systemarbeit
+Comment=Anthropics Assistent für Programmieren und Systemarbeit – wird beim ersten Aufruf über npm geholt
 Exec=kitty --class zepos-claude-code -e zepos-claude-code
 TryExec=/usr/bin/zepos-claude-code
 Icon=zepos-claude-code

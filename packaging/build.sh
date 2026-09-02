@@ -86,11 +86,20 @@ readonly PACKAGES=(
     zepos-hyprclipx
     zepos-hyprzones
     hyprland-plugins
-    # Vor zepos-apps, weil dessen depends darauf zeigt: hier steht die
-    # Reihenfolge, in der gebaut und ins Repo gelegt wird, und ein Paket,
-    # dessen Abhaengigkeit noch nicht im Repo liegt, laesst sich beim
-    # Bauen nicht aufloesen.
-    zepos-claude-code
+    # HIER STAND zepos-claude-code, vor zepos-apps, weil dessen depends
+    # darauf zeigte. Beides ist am 01.09.2026 gefallen - der Nutzer:
+    # "ich will das packet nicht als meins verkaufen". Die ganze
+    # Begruendung steht in packaging/zepos-apps/PKGBUILD an der Stelle,
+    # an der der Name in depends stand.
+    #
+    # UND ES IST DER GROESSTE EINZELNE WEGFALL, DEN DIESES REPOSITORY
+    # JE HATTE: 91831121 Bytes als
+    # zepos-claude-code-2.1.233-4-x86_64.pkg.tar.zst, 87,58 MiB - mehr
+    # als die Haelfte der 147 MiB, die packaging/out/pages insgesamt
+    # wog. GitHub warnte bei jedem Push ("larger than GitHub's
+    # recommended maximum file size of 50.00 MB") und lehnt bei 100 MB
+    # ganz ab; das Paket lag bei 87,6 % dieser Grenze. Das jetzt
+    # groesste ist zepos-hyprland mit 53266906 Bytes.
     zepos-apps
     zepos-apps-office
     zepos-apps-devel

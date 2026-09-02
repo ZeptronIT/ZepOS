@@ -211,9 +211,28 @@ $overlay-border: $border;
 }
 
 // Die Liste im Klappfenster. Der Popover selbst ist schon gestylt
-// (siehe `popover > contents` weiter unten); hier steht nur, dass die
-// Zeilen darin nicht kleben.
-.cc-geraetewahl-liste { min-width: {{STYLE_MODAL_WIDTH_S}}; }
+// (siehe `popover > contents` weiter unten), und eine BREITE steht hier
+// bewusst nicht.
+//
+// HIER STAND EINE, UND SIE WAR EIN FEHLER (02.09.2026)
+//     `min-width: {{STYLE_MODAL_WIDTH_S}}` - der Platzhalter ist
+//     ABSICHTLICH ohne Einheit, weil alle seine Leser in einem
+//     TypeScript-Zahlenkontext stehen; src/style_definition.py schreibt
+//     bei seiner Erklaerung woertlich "nie in einer CSS-Regel". Gerendert
+//     wurde daraus `min-width: 500`, und GTK meldete
+//     `CSS Error :108:14 Unit is missing`.
+//
+//     WIE DER FEHLER ENTSTAND, weil das die eigentliche Lehre ist: ich
+//     hatte im Stylesheet nach `{{STYLE_MODAL_WIDTH_S}}` gesucht, um zu
+//     pruefen, ob der Platzhalter dort ueblich ist - und fand meine
+//     EIGENE, gerade geschriebene Zeile. Ein Zeugnis fuer sich selbst.
+//
+//     Kein `px` als Ausweg: kein anderes Aufklappfenster dieses
+//     Schreibtischs setzt eine Breite. Das Rechtsklickmenue des Fusses
+//     und das des Home richten sich nach ihrem Inhalt, und ein Popover,
+//     das breiter ist als seine breiteste Zeile, waere Leerraum neben
+//     Geraetenamen. Die Zeilen darin sind zepRow-Zeilen und bringen ihre
+//     Polsterung selbst mit.
 
 // Die Huelle, die zepRow() (ags-kit.template) um sich selbst legt, wenn
 // `aktion` gesetzt ist - NACHGETRAGEN am 19.08.2026 (Bericht Aufgabe
@@ -286,6 +305,71 @@ $overlay-border: $border;
   }
 
   &:focus-visible > .zep-row {
+    background: $item-hover;
+    outline: 2px solid $accent;
+    outline-offset: -2px;
+  }
+}
+
+// DIESELBEN ZWEI ZUSTAENDE FUER DIE GETRENNTE BETRIEBSART VON zepRow -
+// NACHGETRAGEN am 01.09.2026.
+//
+// WARUM ES SIE BRAUCHT
+//     Setzt ein Aufrufer `endeBedienbar` (heute nur die VPN-Liste,
+//     Herleitung in ags-kit.template), dann haengt zepRow sein `ende`
+//     NEBEN die Huelle statt hinein - damit die Leertaste auf dem
+//     Schalter den Schalter erreicht und nicht die Zeile. Der Baum
+//     kehrt sich dabei um:
+//
+//         Vorgabe:  Button[.zep-row-click] > Box[.zep-row]
+//         getrennt: Box[.zep-row] > Button[.zep-row-click]
+//
+//     Die zwei Regeln darueber haben einen Nachfahrenpfeil. `> .zep-row`
+//     verlangt die Zeile als UNMITTELBARES Kind der Huelle - in der
+//     getrennten Betriebsart ist sie ihr ELTERNTEIL. Beide Regeln
+//     treffen dort also nichts mehr.
+//
+// GEMESSEN am 01.09.2026, und der Befund war nicht der erwartete
+// (tests/render/test_zeprow_verschachtelung.py, echte Tabulatortasten
+// ueber wtype, Bildvergleich vor/nach dem Fokuswechsel):
+//
+//     ohne diesen Block   2px-Rahmen, 1188x46, Farbe (128,165,211)
+//                         KEINE Aenderung im Inneren des Rechtecks
+//     $accent ist         #33C9EE = (51,201,238)
+//
+//     Ein Rahmen war also DA - aber es war GTKs eigener (das gedeckte
+//     Blau von Adwaita), nicht der Akzent dieses Projekts, und die
+//     Fuellung mit $item-hover fehlte ganz. Der Tastaturfokus blieb
+//     damit sichtbar; verloren ging die ABSICHT - und lautlos, denn
+//     eine Regel, die nichts trifft, sagt nichts.
+//
+//     Der gedrueckte Zustand hatte diesen Trost nicht: fuer ihn bringt
+//     GTK bei einer durchsichtigen Huelle nichts mit.
+//
+// WARUM AN DER HUELLE UND NICHT AN .zep-row
+//     Weil GTK4 `:active` und `:focus-visible` an genau EINEM Widget
+//     setzt - dem Knopf - und sie nicht nach unten weiterreicht (die
+//     Herleitung dazu steht oben). Nach oben zu waehlen ginge nur mit
+//     `:has()`, und das kennt GTK4s CSS nicht. Bleibt: die Huelle malt
+//     selbst.
+//
+//     Das ist zugleich das ehrlichere Bild. Die Huelle reicht in dieser
+//     Betriebsart vom linken Rand bis an das `ende` - genau so weit,
+//     wie ein Druck auf sie auch WIRKT. Der Schalter daneben traegt
+//     seinen eigenen Rahmen, wenn er an der Reihe ist.
+//
+// `.zep-row` bleibt hier UNANGETASTET. Das ist Absicht: seit dem
+// 02.09.2026 borgt sich `.cc-geraetewahl` (Kontrollzentrum) dieselbe
+// Klasse an einem Gtk.MenuButton - eine Aenderung an `.zep-row` traefe
+// diese Stelle mit, eine Aenderung hier nicht.
+.zep-row-click-getrennt {
+  border-radius: {{STYLE_RADIUS_CARD}};
+
+  &:active {
+    background: rgba($surface, 0.75);
+  }
+
+  &:focus-visible {
     background: $item-hover;
     outline: 2px solid $accent;
     outline-offset: -2px;
@@ -2621,6 +2705,23 @@ modelbutton {
   &.disconnected { color: $subtext; }
   &.connecting { color: {{STYLE_COLOR_VPN_CONNECTING}}; }
   &.error { color: $red; }
+
+  // "Niemand weiss es" - NACHGETRAGEN am 02.09.2026, zum vierten Wort
+  // des Vertrags (vpn.UNKNOWN in src/vpn.py).
+  //
+  //     $yellow ist STYLE_COLOR_WARNING und KEINE neue Farbe: die
+  //     Leiste traegt fuer denselben Zustand dieselbe (Klasse
+  //     `vpn-unknown`, bar-vpn-config.template). Sie ist dort die
+  //     einzige Zustandsfarbe ueber 4.5:1 in BEIDEN Themen (6.78 bzw.
+  //     5.14 im schlechtesten Fall) - der Grund, aus dem sie dort
+  //     gewaehlt wurde, gilt hier unveraendert.
+  //
+  //     NICHT $red: rot heisst in diesem Fenster "kaputt" (`.error`,
+  //     der halb stehende Tunnel). Unbekannt ist nicht kaputt.
+  //
+  //     NICHT $subtext: das ist die Farbe von "nicht verbunden" - und
+  //     genau diese Verwechslung soll der Zustand ja beenden.
+  &.unknown { color: $yellow; }
 }
 
 .vpn-status-label {

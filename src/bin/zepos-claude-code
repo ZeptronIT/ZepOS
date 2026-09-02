@@ -1,0 +1,553 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Claude Code auf ZepOS: der Eintrag im Starter, der Weg zur
+# Installation und der Weg zur naechsten Fassung - in einem Befehl.
+#
+# ZepOS LIEFERT CLAUDE CODE NICHT MEHR AUS, UND DAS IST DER GRUND
+#
+#     ENTSCHIEDEN vom Nutzer am 01.09.2026: "ich will claude nicht mit
+#     liefern bei zepos es muss per bash command dazu installiert werden
+#     sodass es ausfuehrbar ist aber ich will das packet nicht als meins
+#     verkaufen [...] weil jetzt bekommt es keine updates".
+#
+#     Bis dahin baute packaging/zepos-claude-code/PKGBUILD ein Paket aus
+#     dem npm-Archiv @anthropic-ai/claude-code-linux-x64 - 324598650
+#     Bytes entpackt, 91831121 Bytes als signiertes Paket, das groesste
+#     im ganzen Repository. Drei Gruende haben es gestuerzt, und der
+#     erste ist der wichtigste:
+#
+#     1. HERKUNFT. Ein Paket namens zepos-claude-code, gebaut und
+#        signiert von ZepOS, ist die Weitergabe fremder, proprietaerer
+#        Software unter einem eigenen Namen. plugins/LICENSE traegt
+#        genau diese Unterscheidung schon einmal aus, fuer hyprlaunch
+#        und hyprclipx: die Erlaubnis, etwas zu BAUEN, ist nicht die
+#        Erlaubnis, eine KOPIE davon zu verbreiten. Was ZepOS hier
+#        weitergab, stand unter LicenseRef-Anthropic-Commercial-Terms
+#        und gehoerte nie ihm.
+#
+#     2. DIE FASSUNG. GEMESSEN am 01.09.2026: das Paket stand auf
+#        2.1.233, npm lieferte 2.1.257 - vierundzwanzig Fassungen
+#        weiter. Claude Code meldet dem Nutzer voellig zu Recht "update
+#        available", und ZepOS war schuld. Ein Paket nagelt fest, was
+#        sein Hersteller woechentlich nachlegt.
+#
+#     3. DERSELBE SATZ WIE BEI RUFLO. packaging/zepos-apps/PKGBUILD
+#        sagt an der Stelle, an der zepos-ruflo stand: "Ohne Netz tut
+#        Ruflo gar nichts - und Unabhaengigkeit vom Netz ist der EINZIGE
+#        Vorteil, den Vorinstallieren gegenueber `npm i -g` ueberhaupt
+#        hat." Claude Code spricht selbst mit der Anthropic-
+#        Schnittstelle. Der Satz gilt Wort fuer Wort auch fuer ihn.
+#
+#     WAS BLEIBT, IST ZepOS' EIGENE ARBEIT: dieser Befehl, der Eintrag
+#     im Starter (src/system/zepos-claude-code.desktop) und das Zeichen.
+#     Ein Eintrag, der auf ein Programm ZEIGT, ist keine Weitergabe des
+#     Programms - und damit der Eintrag keine Falle ist, INSTALLIERT er,
+#     was er startet, wenn es fehlt. Das ist der ganze Sinn der
+#     Unterscheidung unten zwischen `starten` und `install`.
+#
+# WARUM EIN BEFEHL UND NICHT DREI
+#     Weil es EIN Fenster ist. Der Eintrag im Starter ruft
+#     `kitty -e zepos-claude-code`; was darin passiert - starten,
+#     nachinstallieren, aktualisieren -, haengt an dem, was die Maschine
+#     gerade hat, und nicht daran, welchen Namen jemand getippt hat.
+#     Drei Befehle waeren drei Fenster und drei Gelegenheiten, dass eines
+#     davon nie jemand findet.
+set -u
+
+PROGRAMM="claude"
+
+# Der Name im npm-Verzeichnis. NICHT @anthropic-ai/claude-code-linux-x64
+# - das ist die Binaerdatei, die das alte Rezept direkt holte, weil ein
+# Paketbau reproduzierbar sein muss. `npm i -g` darf dagegen genau das
+# tun, wofuer es da ist: den Nachlader holen, die Plattform messen und
+# die passende Binaerdatei selbst dazulegen. Sein eigener Kopf sagt es:
+# "Detects the platform, finds the matching native binary from
+# optionalDependencies, and copies it over the bin/claude.exe
+# placeholder."
+PAKET="@anthropic-ai/claude-code"
+
+# Wo die Frage "wurde schon einmal gefragt" beantwortet wird. Dieselbe
+# Ablage wie die Marken von src/bin/zepos-session
+# (${XDG_STATE_HOME:-$HOME/.local/state}/zepos/), weil es dieselbe Art
+# Wissen ist: etwas, das diese Sitzung ueber dieses Konto weiss und das
+# ein Neustart nicht vergessen soll.
+MARKE="${XDG_STATE_HOME:-$HOME/.local/state}/zepos/claude-code-angeboten"
+
+# --------------------------------------------------------------------
+# Das Fenster offen halten, bis jemand es gelesen hat
+# --------------------------------------------------------------------
+# UNVERAENDERT UEBERNOMMEN aus dem Starter des gefallenen Pakets, samt
+# seiner Messung vom 17.08.2026.
+#
+#     GEMELDET: der Klick im Dock zeigt nichts. Er zeigte etwas - nur zu
+#     kurz, um es zu lesen. `kitty -e claude` bindet die Lebensdauer des
+#     FENSTERS an die des Programms; endet claude nach einer Zeile, ist
+#     die Zeile mit dem Fenster weg. GEMESSEN an 2.1.233:
+#
+#         $ claude --gibtsnicht
+#         error: unknown option '--gibtsnicht'
+#         Rueckgabewert 1
+#
+#     `kitty --hold` ist die falsche Antwort: es haelt IMMER offen, also
+#     auch nach einem gewollten Ende - dann steht ein totes Terminal auf
+#     dem Schreibtisch, das der Nutzer von Hand schliessen muss, jedes
+#     Mal. Die Unterscheidung, die --hold fehlt, ist der Rueckgabewert.
+#
+# `[ -t 0 ]` davor, weil dieses Skript nicht immer an einem Terminal
+# haengt. Ohne Eingabe kaeme `read` sofort zurueck, die Schleife waere
+# wirkungslos und die Meldung stuende trotzdem da - also wird sie in dem
+# Fall gar nicht erst gedruckt. Gemessen in der eigenen Testsuite, die
+# dieses Skript ohne Terminal aufruft.
+halten() {
+    local ende="$1"
+
+    if [ ! -t 0 ]; then
+        exit "$ende"
+    fi
+
+    printf '\n%s\n%s\n' \
+        "Claude Code hat mit Rückgabewert $ende aufgehört. Die Ursache steht darüber." \
+        "[Eingabetaste] schließt dieses Fenster."
+    read -r _ || true
+    exit "$ende"
+}
+
+# --------------------------------------------------------------------
+# Die drei Lagen vor jedem npm-Lauf, und JEDE bekommt ihren eigenen Satz
+# --------------------------------------------------------------------
+# Dieselbe Regel, die in src/templates/ags-control-center.template bei
+# der Geraeteliste steht: kein Fehlschlag ohne Unterscheidung. Wer kein
+# npm hat, wer kein Netz hat und wer als root laeuft, hat DREI
+# verschiedene Probleme, und zwei davon kann er in einer Minute selbst
+# beheben. Eine gemeinsame Meldung ("Installation fehlgeschlagen")
+# schickte ihn in die falsche Richtung.
+
+# 1. Kein npm.
+#
+# ZepOS liefert nodejs-lts-krypton und npm als Abhaengigkeiten von
+# zepos-desktop aus (siehe dort, "die JavaScript-Laufzeit"), auf einem
+# ausgelieferten ZepOS ist dieser Fall also nicht zu erreichen. Er ist
+# trotzdem kein toter Zweig: dieser Befehl liegt in zepos-config, und
+# zepos-config ist ABSICHTLICH ohne npm installierbar - sein Kopf
+# begruendet, warum seine depends kurz bleiben. Wer nur den Generator
+# will, bekommt ihn ohne JavaScript-Laufzeit, und dieser Befehl misst
+# npm, statt es vorauszusetzen.
+kein_npm() {
+    printf '%s\n%s\n%s\n' \
+        "ZepOS: npm liegt nicht im PATH - ohne npm gibt es keinen Weg zu Claude Code." \
+        "Auf einem ausgelieferten ZepOS bringt zepos-desktop es mit (nodejs-lts-krypton und npm)." \
+        "Nachträglich:  pacman -S nodejs-lts-krypton npm" >&2
+}
+
+# 2. Kein Netz.
+#
+# `npm ping` und keine eigene Messung mit curl: es fragt GENAU die
+# Registry, aus der der naechste Befehl laedt - mit dem Praefix, dem
+# Spiegel und dem Stellvertreter, die auf DIESER Maschine konfiguriert
+# sind. Eine eigene Messung gegen registry.npmjs.org waere eine Antwort
+# auf eine andere Frage als die, die gleich gestellt wird.
+netz_da() {
+    npm ping >/dev/null 2>&1
+}
+
+# DIE ZAHL IN DER MELDUNG IST GEMESSEN UND NICHT GESCHAETZT: das
+# gefallene Paket trug GENAU DIESE Binaerdatei und war
+# zstd-komprimiert 91831121 Bytes gross (entpackt 324598650). Der
+# npm-Weg laedt dieselbe Datei, nur gzip-komprimiert - also eher mehr
+# als weniger. "Rund 90 MB" ist damit eine untere Schranke und keine
+# Beschoenigung; wer auf einer Mobilfunkverbindung sitzt, soll die
+# Groessenordnung VOR dem Ladevorgang kennen.
+kein_netz() {
+    printf '%s\n%s\n%s\n' \
+        "ZepOS: die npm-Registry ist nicht erreichbar - Claude Code kommt von dort." \
+        "Das Programm ist rund 90 MB groß und wird bei jeder Installation geladen;" \
+        "ohne Netzverbindung gibt es hier nichts zu holen. Verbinde dich und ruf den Befehl erneut auf." >&2
+}
+
+# 3. Als root.
+#
+# UND DAS IST DIE MESSUNG, DIE AUCH ERKLAERT, WARUM DER INSTALLER DAS
+# NICHT TUN KANN. /etc/npmrc (aus src/system/npmrc, geliefert von
+# zepos-config) setzt `prefix=${HOME}/.local`. Als root ist ${HOME}
+# /root, das Programm laege also unter /root/.local/bin/claude - in
+# einem Verzeichnis, das dem Nutzer nicht gehoert und nicht in seinem
+# PATH steht. Ein Lauf, der durchgeht und nichts erreichbar macht, ist
+# schlimmer als einer, der abbricht.
+#
+# Der zweite Grund steht in packaging/zepos-apps/PKGBUILD an der Stelle,
+# an der zepos-ruflo fiel: ein npm-Lauf als root landete frueher in
+# /usr/lib/node_modules/ und kollidierte dort mit Archs eigenen semver
+# und nodejs-nopt - er schreibt an pacman vorbei.
+ist_root() {
+    [ "$(id -u)" -eq 0 ]
+}
+
+als_root() {
+    printf '%s\n%s\n%s\n' \
+        "ZepOS: dieser Befehl gehört dem Konto, das Claude Code benutzt - nicht root." \
+        "/etc/npmrc setzt npms Präfix auf \${HOME}/.local; als root landete das Programm" \
+        "unter /root/.local/bin und wäre für niemanden im PATH. Ruf ihn als dein Konto auf." >&2
+}
+
+# --------------------------------------------------------------------
+# Ist es da, und welche Fassung
+# --------------------------------------------------------------------
+ist_da() {
+    command -v "$PROGRAMM" >/dev/null 2>&1
+}
+
+# Die Fassung, oder leer. `|| true` und ein Zeitfenster, weil dies eine
+# BESCHRIFTUNG ist und keine Zusicherung: ein `claude --version`, das
+# haengt, darf nicht den Befehl aufhalten, der gerade sagen will, dass
+# alles in Ordnung ist.
+fassung() {
+    timeout 10 "$PROGRAMM" --version 2>/dev/null | head -1 || true
+}
+
+# --------------------------------------------------------------------
+# npm laufen lassen - der eine Ort, an dem es passiert
+# --------------------------------------------------------------------
+# Die Ausgabe von npm wird NICHT verschluckt. Sie ist das einzige, was
+# waehrend eines 90-MB-Ladevorgangs zeigt, dass etwas passiert, und im
+# Fehlerfall steht die Ursache darin und in keiner Zusammenfassung, die
+# dieses Skript daraus machen koennte.
+npm_holen() {
+    printf '%s\n\n' "ZepOS: npm install -g $PAKET"
+    npm install -g "$PAKET"
+}
+
+# Was nach einem erfolgreichen npm-Lauf noch schiefgegangen sein kann.
+#
+# npm meldet 0, und `claude` liegt trotzdem nicht im PATH: dann zeigt
+# der Praefix woandershin - eine eigene ~/.npmrc gewinnt gegen
+# /etc/npmrc, und das ist ausdruecklich so gewollt (siehe src/system/
+# npmrc). Der Nutzer soll das ERFAHREN und nicht raten, warum `claude`
+# "command not found" sagt.
+nachher_pruefen() {
+    if ist_da; then
+        printf '\n%s\n%s\n' \
+            "ZepOS: Claude Code ist installiert - $(fassung)" \
+            "Aufruf:  claude"
+        return 0
+    fi
+
+    printf '\n%s\n%s\n%s\n' \
+        "ZepOS: npm meldet Erfolg, aber '$PROGRAMM' liegt nicht im PATH." \
+        "npm legt global unter seinem Präfix ab; hier ist das:  $(npm prefix -g 2>/dev/null)" \
+        "Steht dessen bin/ nicht im PATH, hilft ein Eintrag in ~/.npmrc oder in ~/.zshrc.d/." >&2
+    return 1
+}
+
+# --------------------------------------------------------------------
+# install - der Weg hin
+# --------------------------------------------------------------------
+befehl_install() {
+    if ist_root; then
+        als_root
+        return 5
+    fi
+
+    if ist_da; then
+        printf '%s\n%s\n' \
+            "ZepOS: Claude Code ist bereits installiert - $(fassung)" \
+            "Eine neuere Fassung holt:  zepos-claude-code update"
+        return 0
+    fi
+
+    if ! command -v npm >/dev/null 2>&1; then
+        kein_npm
+        return 3
+    fi
+
+    if ! netz_da; then
+        kein_netz
+        return 4
+    fi
+
+    npm_holen || return $?
+    nachher_pruefen
+}
+
+# --------------------------------------------------------------------
+# update - der Weg weiter
+# --------------------------------------------------------------------
+# EIN EIGENER UNTERBEFEHL UND NICHT DERSELBE NOCH EINMAL, und der Grund
+# ist der Nutzer selbst: die fehlenden Aktualisierungen waren einer
+# seiner drei Gruende, das Paket fallen zu lassen. Ein Weg, den es zwar
+# gibt, den aber niemand FINDET, haette den Grund nicht behoben, sondern
+# nur verschoben. Deshalb steht `update` in --help, in `status`, in der
+# Meldung von `install`, wenn schon alles da ist, und in beiden READMEs.
+#
+# Technisch ist es derselbe npm-Aufruf: `npm i -g <paket>` ohne
+# Fassungsangabe holt immer `latest` und ersetzt eine aeltere. Das ist
+# kein Grund, dem Nutzer denselben Namen fuer zwei Absichten zuzumuten.
+befehl_update() {
+    if ist_root; then
+        als_root
+        return 5
+    fi
+
+    if ! command -v npm >/dev/null 2>&1; then
+        kein_npm
+        return 3
+    fi
+
+    if ! ist_da; then
+        printf '%s\n%s\n' \
+            "ZepOS: Claude Code ist auf dieser Maschine nicht installiert - es gibt nichts zu aktualisieren." \
+            "Installieren:  zepos-claude-code install" >&2
+        return 6
+    fi
+
+    if ! netz_da; then
+        kein_netz
+        return 4
+    fi
+
+    printf '%s\n' "ZepOS: installiert ist $(fassung) - npm holt die neueste Fassung."
+    npm_holen || return $?
+    nachher_pruefen
+}
+
+# --------------------------------------------------------------------
+# status - drei Zeilen, die eine Frage beantworten
+# --------------------------------------------------------------------
+befehl_status() {
+    if ist_da; then
+        printf '%s\n%s\n' \
+            "Claude Code:  installiert, $(fassung)" \
+            "Neuere Fassung:  zepos-claude-code update"
+        return 0
+    fi
+
+    if command -v npm >/dev/null 2>&1; then
+        printf '%s\n%s\n' \
+            "Claude Code:  nicht installiert" \
+            "Installieren:  zepos-claude-code install"
+        return 1
+    fi
+
+    printf '%s\n%s\n' \
+        "Claude Code:  nicht installiert" \
+        "npm fehlt auch - ohne npm gibt es keinen Weg dorthin (pacman -S nodejs-lts-krypton npm)"
+    return 1
+}
+
+# --------------------------------------------------------------------
+# starten - was der Eintrag im Starter tut
+# --------------------------------------------------------------------
+# HIER STAND DIE SACKGASSE, BIS ZUM 01.09.2026:
+#
+#     "ZepOS: 'claude' ist auf dieser Maschine nicht installiert.
+#      Das Paket dazu heisst zepos-claude-code."
+#
+# Das war richtig, solange es das Paket gab. Jetzt gibt es keines mehr,
+# und ein Eintrag im Starter, der auf ein fehlendes Programm zeigt und
+# dazu einen Paketnamen nennt, waere Spec 7.4 - ein Knopf, der nichts
+# oeffnet. Der Eintrag INSTALLIERT statt zu klagen, und er FRAGT vorher,
+# weil rund 90 MB ueber die Leitung des Nutzers gehen und nicht ueber
+# unsere. Woher die Zahl kommt, steht bei kein_netz().
+befehl_starten() {
+    if ! ist_da; then
+        anbieten || halten $?
+    fi
+
+    "$PROGRAMM" "$@"
+    local rueckgabe=$?
+
+    # WELCHE RUECKGABEWERTE "GEWOLLT BEENDET" HEISSEN
+    #     0    das uebliche Ende - /exit, Strg+D, ein fertiger Auftrag.
+    #     130  Strg+C. 128+SIGINT(2), die Rechnung, mit der jede Schale
+    #          einen abgebrochenen Vordergrundprozess meldet.
+    #     143  128+SIGTERM(15) - das Fenster wurde geschlossen oder die
+    #          Sitzung faehrt herunter. Da ist niemand mehr, der liest.
+    #
+    #     Alles andere ist ein Fehlschlag, und ein Fehlschlag hat eine
+    #     Meldung, die schon auf diesem Bildschirm steht.
+    case "$rueckgabe" in
+        0|130|143) exit "$rueckgabe" ;;
+    esac
+
+    halten "$rueckgabe"
+}
+
+# Die Frage vor dem Laden.
+#
+# OHNE TERMINAL WIRD NICHT GEFRAGT UND NICHT GELADEN. Ein Skript, das
+# aus einem anderen Skript heraus laeuft, hat niemanden, der antwortet;
+# `read` kaeme sofort leer zurueck, und aus einer Frage wuerde ein
+# stillschweigendes Ja auf einen 90-MB-Ladevorgang. Wer ohne Terminal
+# installieren will, ruft `zepos-claude-code install` - dort ist die
+# Absicht im Befehl und nicht in einer Antwort, die niemand gegeben hat.
+anbieten() {
+    if [ ! -t 0 ]; then
+        printf '%s\n%s\n' \
+            "ZepOS: Claude Code ist nicht installiert." \
+            "Ohne Terminal wird nicht gefragt - installieren:  zepos-claude-code install" >&2
+        return 127
+    fi
+
+    printf '%s\n%s\n\n' \
+        "Claude Code ist auf dieser Maschine noch nicht installiert." \
+        "ZepOS liefert es nicht mit - es kommt von npm, und von dort bekommst du immer die neueste Fassung."
+
+    local antwort=""
+    printf '%s' "Jetzt holen? Rund 90 MB über deine Leitung. [J/n] "
+    read -r antwort || true
+
+    case "$antwort" in
+        ""|[JjYy]*) ;;
+        *)
+            printf '\n%s\n%s\n' \
+                "Abgebrochen. Nichts geladen, nichts geändert." \
+                "Später:  zepos-claude-code install"
+            exit 0 ;;
+    esac
+
+    printf '\n'
+    befehl_install || return $?
+    printf '\n'
+    return 0
+}
+
+# --------------------------------------------------------------------
+# --erstanmeldung - "bei der Installation mit installiert"
+# --------------------------------------------------------------------
+# DIE ENTSCHEIDUNG, UND SIE IST DIE SCHWERSTE AN DIESER AUFGABE
+#
+#     GEMELDET am 01.09.2026: "es soll bei installation mit installiert
+#     werden genauso wie ruflo aber als bash command install script".
+#
+#     WARUM NICHT IM INSTALLER SELBST. Drei Messungen, jede fuer sich
+#     ausreichend:
+#
+#     1. installer/core/translate.py ruft seine Zusatzbefehle als
+#        `arch-chroot -S <ziel> bash <datei>` auf - ALS ROOT. /etc/npmrc
+#        setzt prefix=${HOME}/.local, und ${HOME} ist dort /root. Das
+#        Programm laege unter /root/.local/bin/claude und waere fuer das
+#        Konto des Nutzers weder im PATH noch lesbar. Genau diese Lage
+#        weist als_root() oben zurueck.
+#
+#     2. Dieselbe Datei begruendet, was ein Fehlschlag an dieser Stelle
+#        kostet: "run_custom_user_commands() ruft [...] ueber SysCommand,
+#        und SysCommand wirft bei einem Rueckgabewert != 0. In guided.py
+#        steht danach - und nur danach - installation.genfstab(). Ein
+#        hier scheiternder Befehl kostet also nicht das Thema, sondern
+#        die /etc/fstab, und das ist ein System, das nicht mehr bootet."
+#        Die Erreichbarkeit von registry.npmjs.org zur Bedingung dafuer
+#        zu machen, ob eine Maschine startet, ist kein Tausch, den
+#        irgendjemand eingehen wuerde.
+#
+#     3. Auch der frueheste Punkt IM SYSTEM ist falsch: src/bin/
+#        zepos-session laeuft VOR dem Compositor, auf schwarzem
+#        Bildschirm, und die Sitzung wartet auf ihn. Ein 90-MB-
+#        Ladevorgang dort waere eine erste Anmeldung, die eine Minute
+#        lang nichts zeigt - und "sichtbare Rueckmeldung" war die
+#        Bedingung.
+#
+#     WARUM NICHT DAS NETZ das Argument ist: es ist keines. Der
+#     Installer VERLANGT ohnehin ein Netz - installer/core/preflight.py,
+#     base_system_problem(): "eine Installation ganz ohne Netz gibt es
+#     heute nicht", weil die Arch-Basis in jedem Fall ueber die Leitung
+#     kommt. Was gegen den Installer spricht, sind root und der
+#     Fehlschlag, nicht die Verbindung.
+#
+#     WAS ES STATT DESSEN IST: die erste Anmeldung, EINMAL, in einem
+#     sichtbaren Fenster - und in GENAU DEM Fenster, das auch der Klick
+#     im Dock oeffnet. Ein zweiter Weg mit einem zweiten Aussehen waere
+#     ein zweiter Ort, an dem etwas schiefgehen kann.
+#
+#     UND DAS IST DER EINE FALL, IN DEM "nach der naechsten Anmeldung"
+#     KEINE AUSREDE IST. Der Nutzer hat frueher in dieser Sitzung
+#     verlangt, dass Dinge nicht erst nach der naechsten Anmeldung
+#     passieren. Das zielt auf Aenderungen, die JETZT wirken koennten
+#     und es nicht tun. Hier gibt es kein Jetzt: vor der ersten Anmeldung
+#     existiert das Konto des Nutzers mit seinem HOME und seinem PATH
+#     ueberhaupt noch nicht, und ohne die beiden hat `npm i -g` keinen
+#     Ort. Die erste Anmeldung ist nicht die naechste Gelegenheit, sie
+#     ist die ERSTE.
+#
+# WARUM EINE MARKE UND KEIN ZWEITER VERSUCH
+#     Dieselbe Regel, die src/bin/zepos-session fuer GENERATED_STAMP
+#     aufschreibt: "Sonst versucht es jede weitere Anmeldung wieder,
+#     jedes Mal mit denselben 30 Sekunden schwarzem Bildschirm". Ein
+#     Angebot, das bei jeder Anmeldung wiederkommt, ist keine Hilfe,
+#     sondern eine Belaestigung - und der Eintrag im Dock steht ohnehin
+#     jeden Tag da.
+#
+#     Die Marke wird VOR dem Fenster gesetzt und nicht danach. Wer
+#     "nein" sagt, hat geantwortet; wer ohne Netz dasitzt, bekommt seine
+#     Meldung und danach seine Ruhe.
+befehl_erstanmeldung() {
+    # Schon da: nichts zu tun, nichts zu sagen. Der haeufigste Fall auf
+    # jeder zweiten Anmeldung, und er muss der billigste sein.
+    ist_da && return 0
+
+    # Schon gefragt.
+    [ -e "$MARKE" ] && return 0
+
+    # Ohne npm gibt es nichts anzubieten, und ohne kitty kein Fenster,
+    # in dem man es anboete. In BEIDEN Faellen: KEINE Meldung und KEINE
+    # Marke - wer eines der beiden nachtraeglich installiert, soll das
+    # Angebot noch bekommen. Eine Marke, die eine nie gestellte Frage
+    # als beantwortet verbucht, ist die teuerste Art, still zu sein.
+    command -v npm >/dev/null 2>&1 || return 0
+    command -v kitty >/dev/null 2>&1 || return 0
+
+    # Als root wird gar nicht erst gefragt - siehe als_root(). Eine
+    # Sitzung als root ist auf ZepOS keine vorgesehene Lage, und ein
+    # Fenster, das dort aufginge, koennte nur absagen.
+    ist_root && return 0
+
+    mkdir -p "${MARKE%/*}" 2>/dev/null || true
+    : >"$MARKE" 2>/dev/null || true
+
+    # Dasselbe Fenster wie der Eintrag im Starter, mit derselben
+    # Fensterklasse - sonst bekaeme es im Dock einen eigenen Knopf
+    # (belongsTo() in src/templates/ags-dock.template vergleicht die
+    # Klasse mit dem Namen des Eintrags).
+    #
+    # setsid -f, weil dies aus einem exec-once des Compositors kommt:
+    # ein Kind, das an der Startzeile haengt, haelt sie auf.
+    setsid -f kitty --class zepos-claude-code -e zepos-claude-code \
+        >/dev/null 2>&1 || true
+    return 0
+}
+
+# --------------------------------------------------------------------
+# Die Hilfe
+# --------------------------------------------------------------------
+befehl_hilfe() {
+    cat <<'ENDE'
+zepos-claude-code - Claude Code auf ZepOS
+
+  zepos-claude-code            startet Claude Code; ist es nicht da,
+                               fragt es und holt es nach
+  zepos-claude-code install    holt Claude Code ueber npm
+  zepos-claude-code update     holt die neueste Fassung
+  zepos-claude-code status     sagt, was installiert ist
+  zepos-claude-code --help     diese Hilfe
+
+ZepOS liefert Claude Code NICHT mit. Es ist Anthropics proprietäres
+Programm unter eigener Lizenz, und es kommt aus dem npm-Verzeichnis:
+
+  npm i -g @anthropic-ai/claude-code
+
+Das ist genau das, was `install` tut - ohne root, weil /etc/npmrc npms
+Präfix auf ~/.local setzt und ~/.local/bin ohnehin im PATH liegt.
+Deshalb bekommst du von dort immer die neueste Fassung statt einer, die
+ein Paket eingefroren hat.
+ENDE
+}
+
+case "${1-}" in
+    install)          shift; befehl_install "$@"; exit $? ;;
+    update)           shift; befehl_update "$@"; exit $? ;;
+    status)           shift; befehl_status "$@"; exit $? ;;
+    --erstanmeldung)  shift; befehl_erstanmeldung "$@"; exit $? ;;
+    -h|--help|help)   befehl_hilfe; exit 0 ;;
+    # Alles andere gehoert claude selbst. "$@" und nicht $@: eine Frage
+    # mit Leerzeichen darin ist EIN Argument.
+    *)                befehl_starten "$@" ;;
+esac

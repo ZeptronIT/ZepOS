@@ -106,14 +106,43 @@ function anspruch(w: Gtk.Widget | null): string {
   return `${breite}x${hoehe}`
 }
 
-/** Die anklickbaren Zeilen der Liste: zepRow mit `aktion` ist ein
- * Gtk.Button mit der Klasse `zep-row-click` (siehe ags-kit.template). */
+/** Die anklickbaren Zeilen der Liste: die Huelle mit der Klasse
+ * `zep-row-click`, an der zepRow seine `aktion` haengt.
+ *
+ * JE ZEILE WIRD AUCH EINE EBENE TIEFER GESUCHT, und das ist seit dem
+ * 01.09.2026 noetig.
+ *
+ *     zepRow haengt sein `ende` seither NEBEN die Huelle statt hinein,
+ *     wenn `endeBedienbar` gesetzt ist (Herleitung bei `endeBedienbar`
+ *     in ags-kit.template; die VPN-Liste ist der einzige Aufrufer). Die
+ *     Huelle liegt damit auf verschiedenen Ebenen:
+ *
+ *         ohne `endeBedienbar`:  Liste > Button[.zep-row-click]
+ *         mit  `endeBedienbar`:  Liste > Box[.zep-row] > Button[..]
+ *
+ *     GEMESSEN am 01.09.2026: eine Suche nur ueber die unmittelbaren
+ *     Kinder fand nach dem Umbau `zeilen:0`, und damit meldeten vier
+ *     Zusicherungen dieser Datei einen Mangel, den es nicht gab - die
+ *     Liste stand da, nur eine Ebene tiefer.
+ *
+ *     Gesucht wird die Klasse und nicht `instanceof Gtk.Button`: die
+ *     Klasse ist das, was zepRow ZUSICHERT, der Typ ist es nicht.
+ */
 function zeilenKnoepfe(): Gtk.Button[] {
   const gefunden: Gtk.Button[] = []
   let kind = liste ? liste.get_first_child() : null
   while (kind) {
-    if (kind instanceof Gtk.Button && kind.has_css_class("zep-row-click")) {
-      gefunden.push(kind)
+    if (kind.has_css_class("zep-row-click")) {
+      gefunden.push(kind as Gtk.Button)
+    } else {
+      let enkel = kind.get_first_child()
+      while (enkel) {
+        if (enkel.has_css_class("zep-row-click")) {
+          gefunden.push(enkel as Gtk.Button)
+          break
+        }
+        enkel = enkel.get_next_sibling()
+      }
     }
     kind = kind.get_next_sibling()
   }
