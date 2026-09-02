@@ -400,6 +400,61 @@ def test_the_graphical_greeter_is_tried_first_and_the_text_one_not_at_all(tmp_pa
     assert result.returncode == 0, result.stderr
 
 
+def test_the_login_screen_shows_no_red_notice_about_the_missing_watchdog():
+    """Der Nutzer am 02.09.2026: "hyprland was started without
+    start-hyprland rote meldung bei login".
+
+    Die Meldung kommt von Hyprland selbst. GEMESSEN am Quelltext der
+    Fassung, die ZepOS ausliefert (hyprland-0.56.1, Compositor.cpp:903):
+
+        if (!m_watchdogWriteFd.isValid() && !*PNOWATCHDOG)
+            ... addNotification(..., CHyprColor{1.0, 0.1, 0.1, 1.0}, ...)
+
+    Also reines Rot, 15 Sekunden, mitten auf dem Anmeldebildschirm - und
+    PNOWATCHDOG ist misc:disable_watchdog_warning (Compositor.cpp:879).
+
+    WARUM DIESE ZUSICHERUNG EIN PAAR PRUEFT UND NICHT EINE ZEILE. Die
+    Meldung verschwindet auf zwei Wegen: den offiziellen Starter
+    verwenden, oder die Warnung abschalten. Der erste Weg ist hier
+    verboten, denn start-hyprland ist eine `while (true)`-Schleife, die
+    Hyprland nach einem unsauberen Ende neu startet (start/src/main.cpp
+    derselben Fassung, Zeile 107-121) - damit kaeme der Rueckfall auf
+    cage und tuigreet in zepos-greeter nie mehr dran. Wer den Starter
+    hier trotzdem einbaut, soll an dieser Stelle darueber stolpern und
+    nicht an einem Anmeldebildschirm, der in einer Schleife haengt.
+    """
+    greeter = _read(GREETER)
+    config = _read(LOGIN / "greeter-hyprland.conf")
+
+    befehle = "\n".join(zeile for zeile in greeter.splitlines()
+                        if not zeile.lstrip().startswith("#"))
+    direkt = re.search(r"(?<![-\w])Hyprland\s+-c\s", befehle) is not None
+    ueber_starter = "start-hyprland" in befehle
+
+    assert direkt != ueber_starter, (
+        "zepos-greeter startet den Compositor weder erkennbar direkt noch "
+        "erkennbar ueber start-hyprland - diese Zusicherung liest die "
+        "falsche Zeile und misst nichts mehr")
+
+    misc = re.search(r"^misc \{(.*?)^\}", config, re.M | re.S)
+    assert misc, "greeter-hyprland.conf hat keinen misc-Block mehr"
+    geschaltet = re.search(r"^\s*disable_watchdog_warning\s*=\s*true\s*$",
+                           misc.group(1), re.M) is not None
+
+    if direkt:
+        assert geschaltet, (
+            "zepos-greeter startet Hyprland direkt, also ohne Wachhund. "
+            "Ohne misc:disable_watchdog_warning = true in "
+            "greeter-hyprland.conf legt Hyprland 0.56 dafuer eine rote "
+            "Einblendung ueber den Anmeldebildschirm.")
+    else:
+        assert not geschaltet, (
+            "der Compositor kommt jetzt ueber start-hyprland hoch, damit "
+            "kann die Warnung nicht mehr erscheinen - "
+            "misc:disable_watchdog_warning behauptet in "
+            "greeter-hyprland.conf eine Startweise, die es nicht gibt")
+
+
 @pytest.mark.allow_subprocess
 def test_the_text_greeter_takes_over_when_no_compositor_comes_up(tmp_path):
     """Spec 8.5, und die Erkennung laeuft ueber den tatsaechlichen
