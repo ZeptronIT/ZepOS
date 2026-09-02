@@ -38,6 +38,27 @@ DER PREIS
     nacheinander), rund eine Minute. Siehe test_geometry.py fuer die
     Begruendung, warum das trotzdem billiger ist als eine falsche
     Gewissheit.
+
+WARUM DIESE DATEI ECHTE PROZESSE STARTEN DARF
+    Ihr Gegenstand ist das GEZEICHNETE Fenster und nicht die Vorlage,
+    die es beschreibt. Ein Bild davon entsteht nur, wenn ein Compositor
+    es wirklich malt: gestartet werden darum ein verschachteltes
+    Hyprland, ein Bus, `ags bundle` und die erzeugte Oberflaeche. Genau
+    das ist der Grund, aus dem diese Datei ueberhaupt existiert (siehe
+    oben: 2911 gruene Tests, von denen keiner je ein Fenster gezeichnet
+    hatte) - eine Fassung ohne echte Prozesse koennte nur wieder die
+    Vorlage lesen, also gerade das, was hier NICHT geprueft werden soll.
+
+    Die Sitzung des Nutzers bleibt dabei unberuehrt: eigener
+    HYPRLAND_INSTANCE_SIGNATURE, eigener headless-Ausgang, alles unter
+    einem Baum von tmp_path_factory (siehe desktop_session.Session).
+
+    `pytestmark` UND NICHT EIN MARKER JE LAUF, und das ist gemessen und
+    nicht Geschmack: die Sitzung entsteht in einer MODULWEITEN
+    Vorrichtung, und pytest speichert den Fehlschlag einer Vorrichtung
+    zwischen. Eine Freigabe je Lauf waere damit reihenfolgeabhaengig -
+    laeuft ein unmarkierter Lauf zuerst, faellt auch der markierte. Auf
+    Modulebene ist es in jeder Reihenfolge gruen.
 """
 from __future__ import annotations
 
@@ -55,6 +76,8 @@ from tests.render import measure                      # noqa: E402
 from tests.render.desktop_session import (             # noqa: E402
     Session, bundle, render_configuration, required_tools, workspaces_file,
 )
+
+pytestmark = pytest.mark.allow_subprocess
 
 SETTLE = 6.0
 POPOVER_SETTLE = 2.5

@@ -74,6 +74,25 @@ DER PREIS
     Ein verschachtelter Compositor je Lauf, rund 25 Sekunden - dieselbe
     Rechnung wie in test_schale_stil.py daneben, und aus demselben
     Grund.
+
+WARUM DIESE DATEI ECHTE PROZESSE STARTEN DARF
+    Die Frage lautet, ob die Seitenleiste beim Blaettern STEHENBLEIBT -
+    eine Frage ueber Zuteilung und ueber gemalte Bildpunkte, nicht ueber
+    Quelltext. Beantworten kann sie nur ein Fenster, das wirklich
+    existiert: gestartet werden darum ein verschachteltes Hyprland, ein
+    Bus und `ags bundle` fuer die Sonde, die die ECHTE Fabrik aus dem
+    erzeugten Baum benutzt. Eine Fassung ohne Prozesse koennte nur einen
+    Nachbau messen, und damit die falsche Sache.
+
+    Die Sitzung des Nutzers bleibt unberuehrt: eigener
+    HYPRLAND_INSTANCE_SIGNATURE, eigener headless-Ausgang, alles unter
+    einem Baum von tmp_path_factory (siehe desktop_session.Session).
+
+    `pytestmark` und nicht ein Marker je Lauf: die Sitzung entsteht in
+    einer MODULWEITEN Vorrichtung, und pytest speichert den Fehlschlag
+    einer Vorrichtung zwischen. Eine Freigabe je Lauf waere
+    reihenfolgeabhaengig - laeuft ein unmarkierter Lauf zuerst, faellt
+    auch der markierte.
 """
 from __future__ import annotations
 
@@ -92,6 +111,8 @@ from tests.render import measure                      # noqa: E402
 from tests.render.desktop_session import (             # noqa: E402
     Session, render_configuration, required_tools, workspaces_file,
 )
+
+pytestmark = pytest.mark.allow_subprocess
 
 KIND = Path(__file__).resolve().parent / "schale_haftet_child.ts"
 

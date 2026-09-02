@@ -74,6 +74,28 @@ WARUM AUF PROTOKOLLZEILEN GEWARTET WIRD UND NICHT AUF DIE UHR
 DER PREIS
     Ein verschachtelter Compositor, rund 35 Sekunden - dieselbe Rechnung
     wie in den beiden Nachbardateien und aus demselben Grund.
+
+WARUM DIESE DATEI ECHTE PROZESSE STARTEN DARF
+    Der ganze Zweck dieser Datei ist, NICHT zu glauben, dass die Fabrik
+    sich unveraendert verhaelt, sondern es an zwei laufenden Fenstern
+    nachzusehen (siehe oben). Das geht nur mit einem Compositor, der sie
+    malt: gestartet werden ein verschachteltes Hyprland, ein Bus und
+    `ags bundle` fuer die Sonde, die `./widget/Shortcuts` und
+    `./utils/overlay` aus dem ERZEUGTEN Baum laedt.
+
+    Der Bezugslauf gegen die Vorlage von `main` - der eigentliche Beweis
+    dieser Datei - braucht diese Prozesse zweimal, einmal je Baum. Ohne
+    echte Prozesse gaebe es ihn nicht, und damit keinen Nachweis.
+
+    Die Sitzung des Nutzers bleibt unberuehrt: eigener
+    HYPRLAND_INSTANCE_SIGNATURE, eigener headless-Ausgang, alles unter
+    einem Baum von tmp_path_factory (siehe desktop_session.Session).
+
+    `pytestmark` und nicht ein Marker je Lauf: die Sitzung entsteht in
+    einer MODULWEITEN Vorrichtung, und pytest speichert den Fehlschlag
+    einer Vorrichtung zwischen. Eine Freigabe je Lauf waere
+    reihenfolgeabhaengig - laeuft ein unmarkierter Lauf zuerst, faellt
+    auch der markierte.
 """
 from __future__ import annotations
 
@@ -92,6 +114,8 @@ from tests.render import measure                      # noqa: E402
 from tests.render.desktop_session import (             # noqa: E402
     Session, render_configuration, required_tools, workspaces_file,
 )
+
+pytestmark = pytest.mark.allow_subprocess
 
 KIND = Path(__file__).resolve().parent / "ohne_sidebar_child.ts"
 
