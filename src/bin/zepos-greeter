@@ -438,12 +438,36 @@ hyprland_attempt() {
 #
 #     AUF MEHREREN SCHIRMEN BLEIBT ES DABEI BEIM ALTEN FEHLER, und hier
 #     stand bis zum 01.09.2026 "die Maske liegt auf dem ersten Ausgang".
-#     Das war eine Beruhigung, die sich nicht halten laesst. GEMESSEN am
-#     01.09.2026 an cage 0.3.1 auf dem headless-Backend mit zwei
-#     Ausgaengen: cage legte HEADLESS-2 an den Ursprung und HEADLESS-1
-#     daneben, und das Fenster lag auf HEADLESS-2 - also auf dem
-#     ZWEITEN. Welcher Ausgang bedient wird, sucht cage sich aus, und
-#     genau das war der Fehler, der diesen Umbau ausgeloest hat.
+#     Das war eine Beruhigung, die sich nicht halten laesst.
+#
+#     GEMESSEN am 01.09.2026 an cage 0.3.1-1 auf dem headless-Backend mit
+#     zwei Ausgaengen, aufgenommen ueber cages eigenes wlr-screencopy und
+#     Pixel fuer Pixel ausgezaehlt:
+#
+#         HEADLESS-2  Position 0,0     185 Farben - das Fenster
+#         HEADLESS-1  Position 1280,0    1 Farbe  - leer
+#
+#     Also lag die Flaeche auf dem ZWEITEN Ausgang, nicht auf dem ersten.
+#     Welcher es ist, sucht cage sich aus, und genau das war der Fehler,
+#     der diesen Umbau ausgeloest hat.
+#
+#     WAS DAVON GEMESSEN IST UND WAS GEFOLGERT - die Trennung gehoert
+#     hierhin, weil der Kommentar, den sie ersetzt, an genau dieser
+#     Stelle zu weit ging:
+#
+#       * Gemessen wurde am Aufbau des Installationsmediums,
+#         `cage -- foot --fullscreen ...`, nicht an diesem Zweig hier.
+#         Der Versuchsaufbau steht in tests/render/test_live_spiegel.py
+#         und laeuft bei jedem Testlauf mit.
+#       * Gefolgert ist, dass es fuer `cage -s -d -- regreet` genauso
+#         gilt. -s schaltet den Konsolenwechsel frei, -d spart die
+#         Fensterdekoration; beide sagen nichts ueber die Anordnung der
+#         Ausgaenge. Die entsteht aus der Betriebsart -m, und die ist
+#         hier wie dort die Vorgabe `extend`.
+#
+#     Der Unterschied ist wichtig: das ist ein BEKANNTER Fehler dieses
+#     Zweiges, kein ungeprueftes Restrisiko. Wer ihn beheben will, muss
+#     nicht erst nachmessen, ob es ihn gibt.
 #
 #     Behoben wird es hier NICHT, und das ist eine Entscheidung mit
 #     Grund. Fuer denselben cage-Fehler hat das Installationsmedium eine
