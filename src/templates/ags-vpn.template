@@ -192,6 +192,10 @@ const ICONS = {
   // dasselbe Zeichen, das ags-network.template seit dem 18.08.2026
   // fuer denselben Weg benutzt.
   back: "{{ICON_BACK}}",
+  // Der Zustand "niemand weiss es" (02.09.2026). Dasselbe Zeichen, das
+  // die Leiste dafuer traegt (ICON_UNKNOWN in bar-vpn-config.template) -
+  // Fenster und Leiste sollen denselben Zustand gleich aussehen lassen.
+  question: "{{ICON_QUESTION}}",
 }
 
 const SCRIPTS = {
@@ -505,7 +509,17 @@ function loadVpnSettings() {
 let vpnSettings = loadVpnSettings()
 
 interface VpnStatus {
+  // `unknown` NACHGETRAGEN am 02.09.2026 - das vierte Wort des Vertrags
+  // (vpn.STATUS_WORDS in src/vpn.py).
+  //
+  //     Es heisst NICHT "nicht verbunden", sondern "niemand weiss, ob
+  //     dein Verkehr geschuetzt ist". Vier Lagen fielen vorher zu EINEM
+  //     Wort zusammen - nmcli fehlt, Zeitablauf, NetworkManager laeuft
+  //     nicht (rc=8), die Verbindung gibt es nicht (rc=10) - und nur
+  //     die letzte davon IST eine Auskunft. Die anderen drei sind das
+  //     Fehlen einer, und `unknown` ist der Name dafuer.
   status: "connected" | "disconnected" | "connecting" | "error" | "stale"
+    | "unknown"
   ip: string | null
   connectionName?: string
   installedChildren?: number
@@ -645,11 +659,41 @@ async function getVpnStatus(): Promise<VpnStatus> {
         installedChildren: state?.installed_children,
       }
     }
-    // Auch das, was ein leerer oder unlesbarer Bericht heisst: ohne
-    // Auskunft wird nichts behauptet.
-    return { status: "disconnected", ip: null }
+    // "disconnected" IST eine Auskunft, und nur sie darf so heissen.
+    //
+    //     `vpn.py --status` sagt dieses Wort, wenn es NACHGESEHEN hat
+    //     und nichts stand (rc=10, "die Verbindung gibt es nicht").
+    //     Das ist etwas anderes als "es liess sich nicht nachsehen".
+    if (reported === "disconnected") {
+      return { status: "disconnected", ip: null }
+    }
+
+    // ALLES UEBRIGE IST `unknown`, UND DAS IST DER GANZE PUNKT DIESES
+    // ZWEIGES - NACHGETRAGEN am 02.09.2026.
+    //
+    //     Hier stand bis heute `return { status: "disconnected" }`, mit
+    //     dem Kommentar "ohne Auskunft wird nichts behauptet". Genau
+    //     das tat die Zeile aber: "nicht verbunden" IST eine Behauptung,
+    //     und es ist die gefaehrliche Richtung. Wer "getrennt" liest,
+    //     verhaelt sich, als sei er ungeschuetzt - unangenehm, aber
+    //     harmlos. Wer in Wahrheit ungeschuetzt ist und "geschuetzt"
+    //     liest, verliert Daten. Die Zeile hat in der harmlosen
+    //     Richtung geirrt und trotzdem geirrt.
+    //
+    //     Hierher faellt zweierlei:
+    //       * `reported === "unknown"` - vpn.py hat selbst gesagt, dass
+    //         es nichts weiss (NetworkManager laeuft nicht, nmcli fehlt,
+    //         Zeitablauf).
+    //       * ein leerer oder unbekannter Bericht - `execAsync` ist in
+    //         sein `.catch(() => "")` gelaufen, oder der Vertrag
+    //         (vpn.STATUS_WORDS) hat ein fuenftes Wort bekommen, das
+    //         diese Datei nicht kennt. In beiden Faellen ist die
+    //         ehrliche Antwort dieselbe: wir wissen es nicht.
+    return { status: "unknown", ip: null }
   } catch {
-    return { status: "disconnected", ip: null }
+    // Auch ein Fehler beim Lesen der Zustandsdatei ist kein Beleg
+    // dafuer, dass nichts steht.
+    return { status: "unknown", ip: null }
   }
 }
 
@@ -695,8 +739,52 @@ async function updateStatusDisplay() {
     disconnectedIcon.remove_css_class("connected")
     disconnectedIcon.remove_css_class("connecting")
     disconnectedIcon.remove_css_class("disconnected")
+    disconnectedIcon.remove_css_class("unknown")
     disconnectedIcon.add_css_class("error")
     disconnectedLabel.set_text(_("VPN incomplete – please reconnect"))
+    connectBtn.set_sensitive(true)
+    connectedView.set_visible(false)
+    formView.set_visible(true)
+  } else if (currentStatus.status === "unknown") {
+    // NIEMAND WEISS ES - und der Text muss das AUSSPRECHEN, nicht nur
+    // die Farbe. NACHGETRAGEN am 02.09.2026.
+    //
+    //     "NetworkManager antwortet nicht" allein liesse den Leser
+    //     selbst schliessen, was das fuer seinen Verkehr heisst - und
+    //     der naheliegende Schluss ("dann laeuft wohl nichts") ist genau
+    //     der falsche. Also steht beides da: was passiert ist, und was
+    //     daraus folgt.
+    //
+    //     WOERTLICH DIESELBEN ZWEI SAETZE WIE IN DER LEISTE
+    //     (bar-vpn-config.template, Zweig `vpn.UNKNOWN`). Fenster und
+    //     Leiste beschreiben denselben Zustand; sagten sie es
+    //     verschieden, muesste der Leser raten, ob er dasselbe meint.
+    //
+    //     Zeichen und Farbe ebenso aus der Leiste geborgt: ICON_QUESTION
+    //     und die Warnfarbe. Keine neue Farbe - STYLE_COLOR_WARNING ist
+    //     die einzige Zustandsfarbe der Leiste, die in BEIDEN Themen
+    //     ueber 4.5:1 liegt (6.78 bzw. 5.14 im schlechtesten Fall).
+    disconnectedIcon.set_text(ICONS.question)
+    disconnectedIcon.remove_css_class("connected")
+    disconnectedIcon.remove_css_class("connecting")
+    disconnectedIcon.remove_css_class("disconnected")
+    disconnectedIcon.remove_css_class("error")
+    disconnectedIcon.add_css_class("unknown")
+    //     ZWEI msgids UND KEINER MIT `\n` DARIN, und das ist gemessen:
+    //     gettext schreibt einen msgid mit eingebettetem Zeilenumbruch
+    //     immer in der MEHRZEILIGEN Form (`msgid ""` plus
+    //     Fortsetzungszeilen), auch mit --no-wrap. Im ganzen Katalog
+    //     gibt es davon sonst KEINEN einzigen ausser dem Kopfeintrag,
+    //     und tests/src/test_ags_i18n.py sucht die einzeilige Form
+    //     woertlich. Ein Satz mit `\n` waere hier also nicht
+    //     uebersetzbar gewesen, ohne den Test umzuschreiben - und der
+    //     Test hat recht, denn er bildet die Gewohnheit des Katalogs ab.
+    //
+    //     Zusammengesetzt wird darum erst NACH dem Uebersetzen - so,
+    //     wie die Leiste ihren Kurzhinweis ebenfalls aus Teilen baut.
+    disconnectedLabel.set_text(
+      _("VPN status unknown – NetworkManager is not responding.")
+      + "\n" + _("Nobody knows whether your traffic is protected."))
     connectBtn.set_sensitive(true)
     connectedView.set_visible(false)
     formView.set_visible(true)
@@ -706,6 +794,10 @@ async function updateStatusDisplay() {
     disconnectedIcon.remove_css_class("connected")
     disconnectedIcon.remove_css_class("connecting")
     disconnectedIcon.remove_css_class("error")
+    // `unknown` mit abraeumen: die Klassen bleiben sonst am Label
+    // haengen, und ein spaeteres "nicht verbunden" traege die Warnfarbe
+    // des Zustands davor weiter.
+    disconnectedIcon.remove_css_class("unknown")
     disconnectedIcon.add_css_class("disconnected")
     disconnectedLabel.set_text(_("Not connected"))
     connectBtn.set_sensitive(true)
@@ -759,6 +851,7 @@ export const vpnSeite: ShellSeite = {
       disconnectedIcon.remove_css_class("connected")
       disconnectedIcon.remove_css_class("disconnected")
       disconnectedIcon.remove_css_class("error")
+      disconnectedIcon.remove_css_class("unknown")
       disconnectedIcon.add_css_class("connecting")
       disconnectedLabel.set_text(_("Connecting ..."))
       connectBtn.set_sensitive(false)
@@ -817,6 +910,7 @@ export const vpnSeite: ShellSeite = {
       disconnectedIcon.remove_css_class("connected")
       disconnectedIcon.remove_css_class("disconnected")
       disconnectedIcon.remove_css_class("error")
+      disconnectedIcon.remove_css_class("unknown")
       disconnectedIcon.add_css_class("connecting")
       disconnectedLabel.set_text(_("Connecting ..."))
       connectBtn.set_sensitive(false)
@@ -896,6 +990,7 @@ export const vpnSeite: ShellSeite = {
       disconnectedIcon.remove_css_class("connected")
       disconnectedIcon.remove_css_class("disconnected")
       disconnectedIcon.remove_css_class("error")
+      disconnectedIcon.remove_css_class("unknown")
       disconnectedIcon.add_css_class("connecting")
       disconnectedLabel.set_text(_("Connecting ..."))
       connectBtn.set_sensitive(false)
@@ -1254,7 +1349,17 @@ export const vpnSeite: ShellSeite = {
             // Liste, und genau das war der Platzmangel.
             zeigeDetail()
           },
-          ende: zepToggle(steht, (an) => { void schalte(eintrag, an) }),
+          // BEI `unknown` NIMMT DER SCHALTER KEINE EINGABE AN -
+          // NACHGETRAGEN am 02.09.2026.
+          //
+          //     `steht` ist dann `false`, und "aus" waere genau die
+          //     falsche Behauptung, die der vierte Zustand eine Etage
+          //     hoeher gerade abstellt: das Fenster sagte "niemand
+          //     weiss es" und zeigte daneben "aus". Ein unbedienbarer
+          //     Schalter behauptet nichts. Die Herleitung steht bei
+          //     `bedienbar` in ags-kit.template.
+          ende: zepToggle(steht, (an) => { void schalte(eintrag, an) },
+                          currentStatus.status !== "unknown"),
           // DER SCHALTER GEHOERT NEBEN DIE KLICKBARE HUELLE, NICHT
           // HINEIN - NACHGETRAGEN am 01.09.2026
           //

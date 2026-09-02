@@ -2686,6 +2686,23 @@ modelbutton {
   &.disconnected { color: $subtext; }
   &.connecting { color: {{STYLE_COLOR_VPN_CONNECTING}}; }
   &.error { color: $red; }
+
+  // "Niemand weiss es" - NACHGETRAGEN am 02.09.2026, zum vierten Wort
+  // des Vertrags (vpn.UNKNOWN in src/vpn.py).
+  //
+  //     $yellow ist STYLE_COLOR_WARNING und KEINE neue Farbe: die
+  //     Leiste traegt fuer denselben Zustand dieselbe (Klasse
+  //     `vpn-unknown`, bar-vpn-config.template). Sie ist dort die
+  //     einzige Zustandsfarbe ueber 4.5:1 in BEIDEN Themen (6.78 bzw.
+  //     5.14 im schlechtesten Fall) - der Grund, aus dem sie dort
+  //     gewaehlt wurde, gilt hier unveraendert.
+  //
+  //     NICHT $red: rot heisst in diesem Fenster "kaputt" (`.error`,
+  //     der halb stehende Tunnel). Unbekannt ist nicht kaputt.
+  //
+  //     NICHT $subtext: das ist die Farbe von "nicht verbunden" - und
+  //     genau diese Verwechslung soll der Zustand ja beenden.
+  &.unknown { color: $yellow; }
 }
 
 .vpn-status-label {

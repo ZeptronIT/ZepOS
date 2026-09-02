@@ -315,9 +315,38 @@ export function zepRow(opts: {
 export function zepToggle(
   an: boolean,
   aktion: (an: boolean) => void,
+  // `bedienbar` NACHGETRAGEN am 02.09.2026, zum vierten VPN-Zustand
+  // (`unknown`, vpn.STATUS_WORDS in src/vpn.py).
+  //
+  // WARUM EIN SCHALTER EINEN DRITTEN ZUSTAND BRAUCHT
+  //     Ein Gtk.Switch hat zwei STELLUNGEN, an und aus, und beide sind
+  //     eine Behauptung. Weiss niemand, ob eine Verbindung steht, ist
+  //     "aus" genauso falsch wie "an" - nur unauffaelliger.
+  //
+  //     Er hat aber einen dritten ZUSTAND: nicht bedienbar. Der
+  //     behauptet nichts, und genau dafuer steht er hier.
+  //
+  //     Ehrlich ist das auch in der HANDLUNG und nicht nur im Bild: bei
+  //     `unknown` weiss niemand, was ein Umlegen bewirken wuerde. Ein
+  //     Schalter, den man nicht druecken kann, ist besser als einer,
+  //     der etwas Unbekanntes tut. Dieselbe Entscheidung hat `toggle`
+  //     in src/vpn.py schon getroffen: bei unknown tut es nichts und
+  //     sagt es. Der Schalter im Fenster ist derselbe Griff in einem
+  //     anderen Gehaeuse.
+  //
+  //     Die Vorlage dafuer steht im Kontrollzentrum: "Ein Regler ohne
+  //     Geraet ist ein Bedienelement ohne Ziel - Spezifikation 7.4. Er
+  //     bleibt stehen (er verschwindet nicht, sonst springt die Seite),
+  //     aber er nimmt keine Eingabe an."
+  //
+  // VORGABE `true`, damit die vier anderen Aufrufer (Bluetooth, Netz
+  // und zweimal die Einstellungen) Zeichen fuer Zeichen dieselben
+  // bleiben.
+  bedienbar: boolean = true,
 ): Gtk.Widget {
   const schalter = new Gtk.Switch({ active: an, valign: Gtk.Align.CENTER })
   schalter.add_css_class("zep-toggle")
+  schalter.set_sensitive(bedienbar)
   schalter.connect("notify::active", () => aktion(schalter.get_active()))
   return schalter
 }
