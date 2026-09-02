@@ -24,15 +24,62 @@
 #     traegt preferences-system. Eine eigene SVG waere ein Symbol, das
 #     neben allen anderen im Starter steht und als einziges nicht aus
 #     demselben Satz kommt.
-Name=Systemeinstellungen
-Comment=Größe, Bildschirme, Leiste, Farben, Wetter, Aktualisierung, Sprache und Zeitzone von ZepOS
+#
+# WARUM JEDER SICHTBARE TEXT SEIT DEM 02.09.2026 ZWEIMAL DASTEHT
+#     Eine .desktop-Datei uebersetzt sich SELBST: der unbezeichnete
+#     Schluessel traegt die AUSGANGSSPRACHE, `Name[de]` und
+#     seinesgleichen die Uebersetzungen, und jeder Leser - Starter,
+#     Menue, Arbeitsumgebung - nimmt den Schluessel zur Sprache seiner
+#     Umgebung und faellt auf den unbezeichneten zurueck.
+#
+#     Bis heute stand hier NUR Deutsch als unbezeichneter Schluessel.
+#     Damit war Deutsch die Ausgangssprache dieser Datei, und wer ZepOS
+#     auf Englisch installierte, fand im Starter "Systemeinstellungen"
+#     mit acht deutschen Aktionen darunter. Derselbe Fehler wie im
+#     Anwendungsstarter (packaging/zepos-hyprlaunch), nur in einem
+#     Dateiformat, das an jedem Katalog vorbeilaeuft - deshalb hat ihn
+#     dort auch keine Katalogpruefung gefunden.
+#
+#     Englisch ist im ganzen Baum die Ausgangssprache; der Kopf von
+#     installer/core/i18n.py fuehrt aus, warum.
+#
+# WAS DAMIT NOCH NICHT ERLEDIGT IST, und es steht hier, damit es nicht
+# als erledigt GILT: das FENSTER selbst spricht weiter nur Deutsch.
+# settings/zepos_settings_gui/ ruft kein gettext - GEZAEHLT am
+# 02.09.2026 sind es 119 Zeichenketten mit Umlaut in sechs Dateien, und
+# das ist eine Untergrenze. Ein englischer Nutzer findet die Anwendung
+# jetzt unter einem englischen Namen und bekommt danach ein deutsches
+# Fenster. Das ist besser als vorher - gefunden wird sie ueberhaupt
+# erst, und der deutsche Nutzer verliert nichts - und es ist nicht
+# fertig. Die Uebersetzung des Fensters ist ein eigener Auftrag.
+Name=System settings
+Name[de]=Systemeinstellungen
+Comment=Size, displays, bar, colours, weather, updates, language and timezone of ZepOS
+Comment[de]=Größe, Bildschirme, Leiste, Farben, Wetter, Aktualisierung, Sprache und Zeitzone von ZepOS
 Exec=/usr/bin/zepos-settings-gui
 TryExec=/usr/bin/zepos-settings-gui
 Icon=preferences-system
 Type=Application
 Terminal=false
 Categories=Settings;DesktopSettings;GTK;
-Keywords=zepos;einstellungen;schrift;groesse;farben;massstab;aktualisierung;settings;bildschirme;monitor;monitore;aufloesung;anordnung;displays;leiste;bar;dock;module;anheften;fuss;taskleiste;sprache;language;uebersetzung;zeit;zeitzone;uhr;uhrzeit;timezone;locale;
+# DIE SUCHWOERTER IN BEIDEN SPRACHEN, seit dem 02.09.2026.
+#
+# Die alte Zeile war eine MISCHUNG: "einstellungen", "schrift",
+# "groesse", "farben" und ein Dutzend weitere deutsche Woerter standen
+# neben "settings", "monitor", "displays" und "locale" - alle im
+# unbezeichneten Schluessel, also in der Ausgangssprache. Wer auf
+# Englisch nach "size", "colours" oder "updates" suchte, fand nichts;
+# wer auf Deutsch suchte, fand alles. Eine halbe Liste, die aussah wie
+# eine ganze.
+#
+# Beide Zeilen sind ABSICHTLICH nicht disjunkt. Ein Suchwort, das in
+# beiden Sprachen dasselbe ist ("zepos", "monitor", "dock", "bar"),
+# gehoert in BEIDE Listen - ein Leser nimmt den bezeichneten
+# Schluessel und sieht im unbezeichneten dann NICHT mehr nach. Wer die
+# gemeinsamen Woerter nur oben stehen liesse, naehme sie dem deutschen
+# Nutzer weg.
+Keywords=zepos;settings;preferences;font;size;scale;colours;colors;theme;update;updates;displays;monitor;monitors;resolution;arrangement;bar;dock;modules;pin;taskbar;language;translation;time;timezone;clock;locale;
+Keywords[de]=zepos;einstellungen;schrift;groesse;farben;massstab;aktualisierung;settings;bildschirme;monitor;monitore;aufloesung;anordnung;displays;leiste;bar;dock;module;anheften;fuss;taskleiste;sprache;language;uebersetzung;zeit;zeitzone;uhr;uhrzeit;timezone;locale;
 StartupNotify=true
 # Die Kennung, unter der das FENSTER auftritt - GTK setzt sie unter
 # Wayland aus der Anwendungskennung, also aus app.APPLICATION_ID.
@@ -71,41 +118,49 @@ StartupWMClass=de.zeptronit.zepos.Settings
 Actions=groesse;bildschirme;leiste;thema;farben;wetter;aktualisierung;sprache;
 
 [Desktop Action groesse]
-Name=Größe
+Name=Size
+Name[de]=Größe
 Exec=/usr/bin/zepos-settings-gui --page groesse
 Icon=preferences-desktop-font-symbolic
 
 [Desktop Action bildschirme]
-Name=Bildschirme
+Name=Displays
+Name[de]=Bildschirme
 Exec=/usr/bin/zepos-settings-gui --page bildschirme
 Icon=video-display-symbolic
 
 [Desktop Action leiste]
-Name=Leiste
+Name=Bar
+Name[de]=Leiste
 Exec=/usr/bin/zepos-settings-gui --page leiste
 Icon=view-list-ordered-symbolic
 
 [Desktop Action thema]
-Name=Thema
+Name=Theme
+Name[de]=Thema
 Exec=/usr/bin/zepos-settings-gui --page thema
 Icon=preferences-desktop-theme-symbolic
 
 [Desktop Action farben]
-Name=Farben
+Name=Colours
+Name[de]=Farben
 Exec=/usr/bin/zepos-settings-gui --page farben
 Icon=applications-graphics-symbolic
 
 [Desktop Action wetter]
-Name=Wetter
+Name=Weather
+Name[de]=Wetter
 Exec=/usr/bin/zepos-settings-gui --page wetter
 Icon=weather-few-clouds-symbolic
 
 [Desktop Action aktualisierung]
-Name=Aktualisierung
+Name=Updates
+Name[de]=Aktualisierung
 Exec=/usr/bin/zepos-settings-gui --page aktualisierung
 Icon=software-update-available-symbolic
 
 [Desktop Action sprache]
-Name=Sprache und Zeit
+Name=Language and time
+Name[de]=Sprache und Zeit
 Exec=/usr/bin/zepos-settings-gui --page sprache
 Icon=preferences-desktop-locale-symbolic

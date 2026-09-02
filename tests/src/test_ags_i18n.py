@@ -42,8 +42,13 @@ WAS "SICHTBAR" HEISST
 """
 from __future__ import annotations
 
+import gettext
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 # Auf diese Datei bezogen und nie auf das Arbeitsverzeichnis - dieselbe
 # Begruendung wie im Kopf von tests/src/test_naming.py: pytest laesst
@@ -812,3 +817,239 @@ def test_die_msgids_sind_englisch():
                 deutsch.append(f"{pfad.name}: {anzeige}")
     assert deutsch == [], (
         "diese msgids sind deutsch statt englisch: " + "; ".join(deutsch))
+
+
+# --------------------------------------------------------------------
+# Das dritte Netz: gemessen wird das ERGEBNIS und nicht die Quelle
+# --------------------------------------------------------------------
+#
+# WAS AM 02.09.2026 DURCH ALLE VORHANDENEN NETZE GEFALLEN IST
+#     Ein Parallelauftrag brachte zwei neue Saetze in den Katalog. Beide
+#     standen danach mit `#, fuzzy` in de.po, und ihr msgstr trug die
+#     Fortsetzungszeilen der alten, EINTEILIGEN Fassung noch angeklebt -
+#     `msgmerge` hatte grob zugeordnet, als aus EINEM msgid mit "\n"
+#     darin ZWEI wurden, und beide vorsichtshalber fuzzy gesetzt.
+#
+#         msgfmt nimmt einen fuzzy markierten Eintrag NICHT in die .mo
+#         auf.
+#
+#     Ueber gettext nachgeschlagen, also so, wie die Oberflaeche fragt:
+#
+#         vorher      -> "VPN status unknown - NetworkManager is not
+#                         responding."   (der msgid, also Englisch)
+#         repariert   -> "VPN-Zustand unbekannt - NetworkManager
+#                         antwortet nicht."
+#
+#     Ausgerechnet dieses Fenster soll einem deutschen Nutzer sagen, dass
+#     niemand weiss, ob sein Verkehr geschuetzt ist. Auf Englisch sagt es
+#     das dem, der kein Englisch liest, gar nicht.
+#
+# WARUM DIE ZWEI NETZE DARUEBER ES NICHT GESEHEN HABEN
+#     test_jeder_eintrag_des_katalogs_ist_uebersetzt() liest den TEXT von
+#     de.po und verlangt einen nicht leeren msgstr. Der war nicht leer -
+#     er war DOPPELT. Und `#, fuzzy` steht eine Zeile DARUEBER und in
+#     keinem seiner Muster.
+#
+#     Das ist die Gattung: geprueft wurde die EINGABE statt des
+#     ERGEBNISSES. Der Katalog sah gepflegt aus, waehrend zwei Saetze der
+#     Oberflaeche englisch blieben. Die zwei Netze bleiben trotzdem
+#     stehen - sie sagen genauer, WELCHER Eintrag fehlt, und sie brauchen
+#     kein msgfmt.
+#
+# WER IN DIESE GRUBE FAELLT
+#     Jeder, der einen msgid AUFTEILT oder UMFORMULIERT und danach
+#     `msgmerge` laufen laesst - also jeder, der einen Satz der
+#     Oberflaeche verbessert. msgmerge markiert seine Vermutung
+#     absichtlich als unsicher; nur sagt niemand hinterher, dass die
+#     Unsicherheit den Eintrag aus dem ausgelieferten Katalog nimmt.
+
+def _po_eintraege(text: str) -> dict[tuple[str, str], str]:
+    """Jeder Eintrag von de.po als (zusatz, msgid) -> msgstr.
+
+    DER ZUSATZ GEHOERT ZUM SCHLUESSEL, und das ist gemessen und nicht
+    Vorsicht. Ein `msgctxt` unterscheidet zwei Eintraege mit DEMSELBEN
+    msgid, und dieser Katalog hat drei davon (GEZAEHLT am 02.09.2026):
+
+        msgid "Open"  ohne Zusatz            -> "Öffnen"   (ags-home)
+        msgid "Open"  mit "wifi security"    -> "Offen"    (ags-network)
+        msgid "L"     mit "monitor ... "     -> "Q"        (ags-wallpaper)
+        msgid "P"     mit "monitor ... "     -> "H"
+
+    Eine erste Fassung dieses Lesers hat den Zusatz uebergangen und
+    genau diese drei als Fehlschlag gemeldet - "de.po sagt 'Offen', der
+    Katalog gibt 'Öffnen'". Der Katalog war richtig, der Leser falsch:
+    er hat zwei verschiedene Eintraege fuer einen gehalten. Wer hier
+    kuerzt, baut eine Zusicherung, die dreimal grundlos rot ist und
+    darum abgeschaltet wird.
+
+    Nur die EINFACHEN Eintraege, keine Mehrzahlformen: die Zuordnung
+    msgid -> genau ein msgstr gilt fuer sie nicht, und
+    test_jeder_eintrag_des_katalogs_ist_uebersetzt() deckt sie schon ab.
+    Der Kopfeintrag (msgid "") faellt heraus - er ist keine Beschriftung,
+    sondern die Angabe zum Zeichensatz.
+
+    Ungebrochen gelesen und nicht zusammengesetzt: de.po und die .pot
+    sind `--no-wrap`, und der Kopf von po/desktop/extract.sh fuehrt aus,
+    warum sie es bleiben muessen.
+    """
+    gefunden: dict[tuple[str, str], str] = {}
+    for treffer in re.finditer(
+            r'^(?:msgctxt "((?:[^"\\]|\\.)*)"\n)?'
+            r'^msgid "((?:[^"\\]|\\.)+)"\n'
+            r'^msgstr "((?:[^"\\]|\\.)*)"$',
+            text, re.M):
+        zusatz, msgid, msgstr = treffer.groups()
+        gefunden[(zusatz or "", msgid)] = msgstr
+    return gefunden
+
+
+def test_kein_eintrag_des_katalogs_ist_ungenau_markiert():
+    """`#, fuzzy` in einem AUSGELIEFERTEN Katalog heisst: still englisch.
+
+    GIBT ES EINEN LEGITIMEN GRUND FUER SO EINEN EINTRAG? Ja, aber nicht
+    hier - und das ist gemessen, nicht vermutet. GEZAEHLT am 02.09.2026:
+
+        po/desktop/zepos-desktop.pot    1 Marke, auf dem KOPFEINTRAG
+        po/desktop/de.po                0
+        po/de.po                        0
+
+    Die eine ist die Ausnahme, und sie steht in einer VORLAGE: xgettext
+    schreibt sie auf den Kopfeintrag jeder .pot, damit ein Werkzeug
+    erkennt, dass dort noch Platzhalter stehen ("FIRST AUTHOR
+    <EMAIL@ADDRESS>, YEAR"). Eine .pot wird nie nachgeschlagen; sie ist
+    die Liste der Fragen und keine Liste der Antworten.
+
+    In einer de.po gibt es diesen Grund nicht. Ein fuzzy markierter
+    Eintrag ist dort eine Uebersetzung, die dasteht und nicht
+    ausgeliefert wird - die schlechteste der drei moeglichen Lagen, weil
+    sie beim Lesen der Datei wie erledigte Arbeit aussieht. Wer eine
+    Vermutung von msgmerge behalten will, prueft sie und nimmt die Marke
+    weg; wer sie nicht prueft, hat keine Uebersetzung.
+
+    Diese Zusicherung liest deshalb den Text. Die naechste baut den
+    Katalog und fragt ihn - sie ist die staerkere, aber diese nennt den
+    Grund beim Namen, und zwar ohne msgfmt.
+    """
+    text = PO_FILE.read_text(encoding="utf-8")
+    ungenau = [zeile for zeile in text.splitlines()
+               if zeile.startswith("#,") and "fuzzy" in zeile]
+    assert ungenau == [], (
+        f"{len(ungenau)} Eintrag/Eintraege in {PO_FILE.name} sind `#, fuzzy` "
+        "markiert. msgfmt laesst solche Eintraege AUS der .mo weg - die "
+        "Uebersetzung steht in der Datei und kommt beim Nutzer nicht an. "
+        "Pruef die Vermutung von msgmerge und nimm die Marke weg, oder "
+        "uebersetz neu.")
+
+
+@pytest.mark.allow_subprocess
+def test_der_gebaute_katalog_gibt_jede_uebersetzung_wirklich_heraus(tmp_path):
+    """DAS ERGEBNIS, nicht die Quelle - und fuer JEDEN Eintrag.
+
+    Gebaut wird mit msgfmt und gefragt wird mit gettext, also mit genau
+    den zwei Werkzeugen, die zwischen de.po und dem Nutzer stehen:
+    po/build.sh ruft msgfmt, und src/templates/ags-i18n.template fragt
+    die Domaene `zepos-desktop` ueber dgettext. Was msgfmt weglaesst,
+    kann diese Zusicherung nicht fuer vorhanden halten.
+
+    VERGLICHEN WIRD MIT DEM ERWARTETEN TEXT und nicht bloss auf
+    "ungleich dem msgid" geprueft. Zwei Gruende, beide gemessen:
+
+      * Ein fuzzy markierter Eintrag gibt den MSGID zurueck. "Ungleich"
+        faende ihn - aber nur, solange die Uebersetzung sich vom
+        Englischen unterscheidet. "VPN" heisst auf Deutsch "VPN", und so
+        ein Eintrag waere dann unpruefbar.
+      * Der doppelte msgstr vom 02.09.2026 war AUCH ungleich dem msgid.
+        Ein Satz, der sich selbst zweimal sagt, ist keine Uebersetzung -
+        gegen den erwarteten Text gehalten faellt er auf, gegen den
+        msgid gehalten nicht.
+
+    DIE ZAHL TUT DIE ARBEIT MIT, und sie ist billig: msgfmt
+    --statistics sagt, wieviele Meldungen uebersetzt und wieviele ungenau
+    sind. GEMESSEN am 02.09.2026 zaehlte der Katalog des
+    Parallelauftrags 434/2, wo er 436/0 haette haben muessen. Eine
+    einzige ungenaue Meldung ist damit sichtbar, auch wenn ihre
+    Uebersetzung zufaellig gleich dem msgid waere.
+
+    WAS DIE ZWEI HAELFTEN JE ABDECKEN, damit niemand eine Luecke dort
+    vermutet, wo keine ist, oder eine uebersieht, wo eine waere.
+    NACHGERECHNET am 02.09.2026:
+
+        msgfmt zaehlt                        445 uebersetzt, 0 ungenau
+        einzeln nachgeschlagen (unten)       443 einfache Eintraege
+        nur ueber die Zahl geprueft            2 Mehrzahl-Eintraege
+        nicht gezaehlt                         1 Kopfeintrag
+
+    Die zwei Mehrzahl-Eintraege gehen NICHT einzeln durch gettext -
+    _po_eintraege() laesst sie aus, weil "ein msgid, ein msgstr" fuer
+    sie nicht gilt. Ungenau markiert waeren sie trotzdem sichtbar, denn
+    dann nennt die Zaehlung oben eine ungenaue Meldung. Was fuer sie
+    fehlt, ist allein die Gegenprobe auf den WORTLAUT je Form; die liest
+    test_jeder_eintrag_des_katalogs_ist_uebersetzt() aus der Quelle.
+    """
+    if shutil.which("msgfmt") is None:
+        pytest.skip("msgfmt fehlt; es kommt mit dem Paket gettext")
+
+    ziel = tmp_path / "de" / "LC_MESSAGES"
+    ziel.mkdir(parents=True)
+    gebaut = subprocess.run(
+        ["msgfmt", "--statistics", "-o", str(ziel / f"{DOMAIN}.mo"),
+         str(PO_FILE)],
+        capture_output=True, text=True)
+    assert gebaut.returncode == 0, (
+        f"msgfmt uebersetzt {PO_FILE.name} nicht:\n{gebaut.stderr}")
+
+    # msgfmt schreibt die Zaehlung auf STDERR, in der Sprache der
+    # Umgebung. Gesucht wird deshalb nach den ZAHLEN und nicht nach den
+    # Woertern: "436 uebersetzte Meldungen" und "436 translated
+    # messages" haben dieselbe erste Zahl, und ein Lauf auf einem
+    # englischen Rechner soll dasselbe messen.
+    zahlen = [int(n) for n in re.findall(r"(\d+)", gebaut.stderr)]
+    assert zahlen, f"msgfmt nennt keine Zaehlung: {gebaut.stderr!r}"
+
+    erwartet = _po_eintraege(PO_FILE.read_text(encoding="utf-8"))
+    assert len(erwartet) > 100, (
+        f"nur {len(erwartet)} Eintraege ausgelesen - 'alles kommt an' ist "
+        "auch die Antwort auf eine leere Liste")
+
+    # "ungenau" und "unuebersetzt" tauchen in der Zaehlung nur auf, wenn
+    # es sie GIBT. Ihr blosses Vorkommen ist deshalb schon der Befund;
+    # welche Zahl davorsteht, sagt die Meldung.
+    assert "fuzz" not in gebaut.stderr and "ungenau" not in gebaut.stderr, (
+        f"msgfmt zaehlt ungenaue Meldungen in {PO_FILE.name} - genau die "
+        f"landen NICHT in der .mo: {gebaut.stderr.strip()}")
+    assert "untransl" not in gebaut.stderr and "unuebersetzt" not in gebaut.stderr, (
+        f"msgfmt zaehlt unuebersetzte Meldungen: {gebaut.stderr.strip()}")
+
+    katalog = gettext.translation(DOMAIN, str(tmp_path), languages=["de"])
+
+    def entmaskiert(rohtext: str) -> str:
+        """Die Maskierungen der .po-Syntax aufloesen.
+
+        Die Rohfassung aus der Datei traegt sie noch, gettext gibt den
+        fertigen Text - verglichen werden muss an derselben Fassung.
+        Diese zwei Folgen sind die, die in diesem Katalog vorkommen.
+        """
+        return rohtext.replace('\\"', '"').replace("\\n", "\n")
+
+    fehlend = []
+    for (zusatz, msgid), msgstr in sorted(erwartet.items()):
+        erwarteter = entmaskiert(msgstr)
+        # Mit Zusatz ueber pgettext, ohne ueber gettext - genau wie die
+        # Vorlagen fragen (`pgettext("wifi security", "Open")` in
+        # ags-network.template). Ein Zusatz ist im .mo Teil des
+        # Schluessels; ihn beim Nachschlagen weglassen faende den
+        # falschen Eintrag oder keinen.
+        if zusatz:
+            geliefert = katalog.pgettext(entmaskiert(zusatz),
+                                         entmaskiert(msgid))
+        else:
+            geliefert = katalog.gettext(entmaskiert(msgid))
+        if geliefert != erwarteter:
+            wo = f"{msgid!r}" if not zusatz else f"{msgid!r} [{zusatz}]"
+            fehlend.append(f"{wo}: de.po sagt {erwarteter!r}, der "
+                           f"gebaute Katalog gibt {geliefert!r}")
+    assert fehlend == [], (
+        f"{len(fehlend)} Uebersetzung(en) stehen in {PO_FILE.name} und "
+        "kommen aus dem gebauten Katalog nicht heraus - fast immer eine "
+        "`#, fuzzy`-Marke, die msgfmt den Eintrag weglassen laesst:\n  "
+        + "\n  ".join(fehlend[:10]))

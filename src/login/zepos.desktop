@@ -17,10 +17,37 @@
 #
 #     Deshalb bietet src/bin/zepos-greeter auch nur DIESEN Eintrag an
 #     und nicht das ganze Verzeichnis - die Begruendung steht dort.
+#
+# WARUM DIE BESCHREIBUNG SEIT DEM 02.09.2026 ZWEIMAL DASTEHT
+#     Eine .desktop-Datei uebersetzt sich SELBST: der unbezeichnete
+#     Schluessel traegt die Ausgangssprache, `Comment[de]` und
+#     seinesgleichen die Uebersetzungen. Jeder Leser - Greeter, Starter,
+#     Arbeitsumgebung - nimmt den Schluessel zur Sprache seiner Umgebung
+#     und faellt auf den unbezeichneten zurueck.
+#
+#     Bis heute stand hier NUR Deutsch, und zwar als unbezeichneter
+#     Schluessel. Damit war Deutsch die Ausgangssprache dieser Datei,
+#     und wer ZepOS auf Englisch installierte, bekam den deutschen Satz.
+#     Derselbe Fehler wie im Anwendungsstarter, nur in einem anderen
+#     Dateiformat - und hier steht er auf dem ANMELDEBILDSCHIRM, also
+#     vor jedem Konto und vor jeder Gelegenheit, etwas umzustellen.
+#
+#     Englisch ist im ganzen Baum die Ausgangssprache (der Kopf von
+#     installer/core/i18n.py fuehrt aus, warum), also gehoert es in den
+#     unbezeichneten Schluessel.
+#
+# `Name` STEHT NUR EINMAL, und das ist kein Versehen: "ZepOS" ist ein
+# EIGENNAME und lautet in jeder Sprache so. Ein `Name[de]` daneben waere
+# eine zweite Stelle, an der derselbe Name kuenftig abweichen kann.
 Name=ZepOS
-Comment=Der ZepOS-Desktop auf Hyprland
+Comment=The ZepOS desktop on Hyprland
+Comment[de]=Der ZepOS-Desktop auf Hyprland
 Exec=/usr/bin/zepos-session
 TryExec=/usr/bin/zepos-session
 Type=Application
 DesktopNames=Hyprland
+# Alle drei Suchwoerter sind Maschinennamen und in jeder Sprache
+# dieselben - deshalb kein `Keywords[de]`. Vergleiche
+# src/system/zepos-claude-code.desktop, wo zwei der Suchwoerter deutsch
+# sind und die Zeile darum doppelt steht.
 Keywords=zepos;hyprland;wayland;

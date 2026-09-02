@@ -49,6 +49,87 @@ def _reset_catalogue():
     activate("en")
 
 
+# Die Zone, in der das vorgegebene Medium laeuft, und die, auf die ein
+# Mensch sie umstellt.
+#
+# PACIFIC/AUCKLAND IST MIT ABSICHT KEINE, DIE EINE SPRACHE NAHELEGT,
+# und wer sie "auf etwas Naheliegenderes" aendern will, soll hier den
+# Grund vorfinden:
+#
+#     Bis zum 02.09.2026 leitete der Assistent die Zeitzone aus der
+#     SPRACHE ab - "de" hiess Europe/Berlin, "en" hiess UTC. Stuende
+#     hier eine dieser beiden, waere dieser Test auch dann noch gruen,
+#     wenn die Ableitung zurueckkaeme: er koennte nicht unterscheiden,
+#     ob der Wert aus /etc/localtime stammt oder aus der Sprachtabelle.
+#
+#     Eine Zone, die zu KEINER der zwei angebotenen Sprachen passt, kann
+#     nur aus /etc/localtime stammen. Das ist der ganze Zweck der Wahl -
+#     der Unterschied zwischen einem Test, der den Rueckfall BEMERKEN
+#     wuerde, und einem, der bloss heute gruen ist.
+#
+# Damit dieser Absatz nicht bloss dasteht, rechnet
+# test_die_vorgegebene_zone_kann_keiner_sprache_entstammen() ihn nach.
+# Ein Kommentar, den niemand liest, haelt keine Entscheidung.
+MEDIUM_ZONE = "Pacific/Auckland"
+ANDERE_ZONE = "Europe/Vienna"
+
+
+@pytest.fixture(autouse=True)
+def _vorgegebenes_medium(tmp_path, monkeypatch):
+    """Eine Zeitzonendatenbank und ein /etc/localtime aus tmp_path.
+
+    WARUM DIESE VORRICHTUNG UEBERHAUPT DA IST, und sie ist AUTOUSE
+        Seit dem 02.09.2026 ist die Vorbelegung der Zeitzone die Zone,
+        in der das Medium LAEUFT (installer.core.timezones.running(),
+        gelesen aus /etc/localtime), und collect() fragt nach, bis der
+        Name einer ist, den die Datenbank kennt.
+
+        Ohne Vorgabe misst jeder Test dieser Datei damit die Maschine des
+        Entwicklers. Zwei Folgen, und die zweite ist die schlimmere:
+
+          * `assert cfg.timezone == "Europe/Berlin"` weiter unten war
+            gruen, WEIL der Symlink dieser Maschine dorthin zeigte. In
+            einer anderen Zone waere er rot geworden, ohne dass etwas
+            kaputt gewesen waere - und er hat ueber die ZUSAGE nichts
+            mehr gesagt.
+          * Auf einer Maschine ohne tzdata gibt running() "UTC" zurueck,
+            known("UTC") ist dort aber falsch. collect() fragt dann
+            erneut, ScriptedIO hat keine Antwort mehr, und JEDER Test
+            dieser Datei, der collect() ruft, endet im IndexError -
+            nicht nur die zwei, die etwas ueber die Zeitzone behaupten.
+
+        Deshalb autouse und nicht ausdruecklich: die Maschinenabhaengig-
+        keit soll aus der ganzen Datei verschwinden und nicht aus zwei
+        Tests.
+
+    Umgelenkt wird ueber TZDIR und ZEPOS_ETC_ROOT, also ueber genau die
+    Variablen, die installer/core/timezones.py selbst dafuer nennt -
+    dieselbe Bauform wie die Vorrichtung `datenbank` in
+    tests/installer/test_zeitzone.py. Ein Test, der stattdessen eine
+    Funktion ueberschreibt, prueft nicht mehr den Weg, den eine
+    Installation geht.
+    """
+    zoneinfo = tmp_path / "zoneinfo"
+    for zone in (MEDIUM_ZONE, ANDERE_ZONE, "UTC"):
+        ziel = zoneinfo / zone
+        ziel.parent.mkdir(parents=True, exist_ok=True)
+        ziel.write_text("TZif", encoding="utf-8")
+    # UTC steht mit dabei, weil mehrere Tests weiter unten eine
+    # InstallConfig mit timezone="UTC" von Hand bauen und validate()
+    # durchlaufen - eine Datenbank ohne UTC machte daraus einen Befund.
+    (zoneinfo / "tzdata.zi").write_text(
+        "".join(f"Z {zone} 0 - X\n"
+                for zone in (MEDIUM_ZONE, ANDERE_ZONE, "UTC")),
+        encoding="utf-8")
+
+    etc = tmp_path / "wurzel"
+    (etc / "etc").mkdir(parents=True)
+    (etc / "etc" / "localtime").symlink_to(zoneinfo / MEDIUM_ZONE)
+
+    monkeypatch.setenv("TZDIR", str(zoneinfo))
+    monkeypatch.setenv("ZEPOS_ETC_ROOT", str(etc))
+
+
 class ScriptedIO:
     """Answers prompts in order from a scripted list.
 
@@ -298,29 +379,97 @@ def test_collect_returns_none_when_no_disk_is_large_enough():
     assert any("large enough" in text for text in io.said)
 
 
+def test_die_vorgegebene_zone_kann_keiner_sprache_entstammen():
+    """Die Wahl von MEDIUM_ZONE, nachgerechnet statt bloss begruendet.
+
+    Diese Zusicherung prueft keinen Programmcode, sondern die
+    VERSUCHSANORDNUNG der zwei Tests darunter - und das ist ihr Zweck.
+    Wer MEDIUM_ZONE auf "Europe/Berlin" oder "UTC" setzt, macht sie
+    beide zu Tests, die den Rueckfall in die Ableitung aus der Sprache
+    nicht mehr bemerken koennen: der erwartete Wert waere dann derselbe,
+    den die gefallene Tabelle geliefert haette.
+
+    Gelesen wird die Tabelle des Assistenten selbst und nicht eine
+    Abschrift: kommt eine dritte Sprache mit einer dritten Vorgabe
+    dazu, gilt diese Zusicherung sofort auch fuer sie.
+    """
+    from installer.tui.app import LANGUAGES
+
+    # Die Zonen, die die Ableitung geliefert HAT - beide sind mit der
+    # dritten Spalte aus LANGUAGES gefallen und stehen deshalb nicht
+    # mehr in der Tabelle. Sie hier zu nennen ist der einzige Weg, ihre
+    # Wiederkehr zu bemerken.
+    assert MEDIUM_ZONE not in ("Europe/Berlin", "UTC"), (
+        f"MEDIUM_ZONE ist {MEDIUM_ZONE!r} - genau eine der Zonen, die "
+        "die alte Ableitung aus der Sprache geliefert hat. Damit koennen "
+        "die zwei Tests darunter nicht mehr unterscheiden, ob der Wert "
+        "aus /etc/localtime kommt oder aus einer Sprachtabelle. Nimm "
+        "eine Zone, die zu keiner angebotenen Sprache passt.")
+
+    # Und sie darf zu keiner Sprache passen, die der Assistent HEUTE
+    # anbietet: eine Zone, deren Land dieselbe Sprache spricht, waere
+    # derselbe blinde Fleck unter einem anderen Namen.
+    laender = {locale.split("_")[-1] for _code, _keymap, locale in LANGUAGES}
+    assert laender == {"DE", "US"}, (
+        f"die angebotenen Sprachumgebungen sind andere geworden: "
+        f"{laender} - pruef, ob MEDIUM_ZONE noch zu keiner von ihnen "
+        "passt")
+    assert not MEDIUM_ZONE.startswith(("Europe/", "America/", "US/")), (
+        f"MEDIUM_ZONE ist {MEDIUM_ZONE!r} und liegt damit in einer "
+        "Gegend, in der eine der angebotenen Sprachen gesprochen wird")
+
+
 def test_collect_uses_the_default_timezone_when_the_user_accepts_it():
+    """Die Vorbelegung ist die Zone des MEDIUMS, und die leere Antwort
+    nimmt sie.
+
+    HIER STAND EINE FESTE ZONE, und sie ist am 02.09.2026 der Vorgabe
+    gewichen: `== "Europe/Berlin"`, geschrieben, als der Assistent die
+    Zeitzone noch aus der SPRACHE ableitete. Nach dem Wegfall der
+    Ableitung war der Satz weiter gruen - aber nur, WEIL /etc/localtime
+    dieser Maschine nach Europe/Berlin zeigte. Er hat damit die Zone des
+    Entwicklers gemessen und behauptet, die Zusage zu pruefen; in einer
+    anderen Zone waere er rot geworden, ohne dass etwas kaputt gewesen
+    waere.
+
+    Jetzt gibt die Vorrichtung `_vorgegebenes_medium` die Zone vor, und
+    zwar eine, die zu KEINER der zwei angebotenen Sprachen passt (siehe
+    MEDIUM_ZONE). Der Wert kann deshalb nur aus /etc/localtime kommen -
+    kaeme die Ableitung aus der Sprache zurueck, faellt dieser Test.
+    """
     io = ScriptedIO(answers=VALID_ANSWERS, choices=VALID_CHOICES)
     cfg = collect(
         io, devices=[VDA_20G], networks=[], wifi_backend=FakeWifiBackend()
     )
-    assert cfg.timezone == "Europe/Berlin"
+    assert cfg.timezone == MEDIUM_ZONE
 
 
 def test_collect_lets_the_user_override_the_timezone():
+    """Und die getippte Zone schlaegt die Vorbelegung.
+
+    ANDERE_ZONE und nicht die Vorbelegung: waeren beide gleich, saehe
+    dieser Test nicht den Unterschied zwischen "uebernommen" und
+    "ueberschrieben". Dieselbe Falle, die in diesem Auftragsbuendel schon
+    einen Anheft-Test getroffen hat, in dem beide Namen immer gleich
+    waren.
+    """
     io = ScriptedIO(
         answers=[
             "plattenkennwort", "plattenkennwort",
             "zepos", "lars",
             "langgenug", "langgenug",
             "rootlanggenug", "rootlanggenug",
-            "Europe/Vienna", "",
+            ANDERE_ZONE, "",
         ],
         choices=[0, 0, 0, 0, 0, 0],
     )
     cfg = collect(
         io, devices=[VDA_20G], networks=[], wifi_backend=FakeWifiBackend()
     )
-    assert cfg.timezone == "Europe/Vienna"
+    assert cfg.timezone == ANDERE_ZONE
+    assert ANDERE_ZONE != MEDIUM_ZONE, (
+        "die zwei Zonen sind gleich geworden - dann misst dieser Test "
+        "nicht mehr, dass die Eingabe die Vorbelegung schlaegt")
 
 
 def test_collect_english_selection_yields_english_keymap_and_locale():

@@ -339,6 +339,12 @@ def shipped(system_root: Path | None = None) -> list[str]:
 # Namen gezeigt.
 _DESKTOP_NAME = re.compile(r"^Name=(.+)$", re.M)
 
+# Und dieselbe Angabe auf Deutsch. Sie gibt es seit dem 02.09.2026:
+# die eigenen .desktop-Dateien tragen ihren sichtbaren Text seither
+# zweisprachig, `Name=` englisch und `Name[de]=` deutsch (die
+# Begruendung steht in settings/zepos-settings.desktop).
+_DESKTOP_NAME_DE = re.compile(r"^Name\[de\]=(.+)$", re.M)
+
 
 def _label_in_checkout(root: Path, entry: str) -> str:
     """Wie der Anwendungseintrag `entry` heisst, wenn er im Baum liegt.
@@ -348,11 +354,40 @@ def _label_in_checkout(root: Path, entry: str) -> str:
     fremder .desktop-Dateien, und ein rekursiver Lauf haette dort die
     Beschriftung eines fremden Programms gefunden und fuer unsere
     gehalten.
+
+    DAS DEUTSCHE ZUERST, seit dem 02.09.2026, UND WARUM DAS HIER KEINE
+    ERZWUNGENE ANZEIGESPRACHE IST
+        Diese Beschriftung wird EINMAL BEIM BAUEN in
+        /usr/share/zepos/shipped-bar.json geschrieben und kann die
+        Sprache des Nutzers deshalb nicht kennen - ein Paket entsteht in
+        einem Chroot, lange vor jeder Anmeldung. Sie ist damit die eine
+        Angabe in diesem Baum, die sich nicht zur Laufzeit entscheiden
+        laesst.
+        Gelesen wird sie an genau EINER Stelle: der Anheftungsauswahl im
+        Einstellungsfenster (settings/zepos_settings_gui/bar.py ueber
+        settings.shipped_bar()). Dieses Fenster spricht heute
+        ausschliesslich Deutsch - es ruft kein gettext, GEZAEHLT am
+        02.09.2026 sind es 119 deutsche Zeichenketten in sechs Dateien.
+        Der deutsche Name ist also nicht eine Bevorzugung, sondern die
+        Sprache der einzigen Flaeche, die diesen Wert anzeigt.
+
+        WAS SICH AENDERN MUSS, WENN DAS FENSTER UEBERSETZT: dann traegt
+        shipped-bar.json die falsche Sprache fuer jeden, der nicht
+        Deutsch liest, und der Wert muss zweisprachig hinein (oder das
+        Fenster liest die .desktop-Datei selbst ueber GIO, das die
+        Sprache der Sitzung von sich aus beachtet). Diese Zeilen sind
+        die Stelle, die das dann anfassen muss.
+
+        `Name=` bleibt der Rueckfall - fuer die Eintraege ohne
+        Uebersetzung, und das sind alle mit einem Eigennamen ("Claude
+        Code") und alle fremden.
     """
     for candidate in sorted(root.parent.glob(f"*/{entry}.desktop")):
-        match = _DESKTOP_NAME.search(candidate.read_text(encoding="utf-8"))
-        if match:
-            return match.group(1).strip()
+        text = candidate.read_text(encoding="utf-8")
+        for muster in (_DESKTOP_NAME_DE, _DESKTOP_NAME):
+            match = muster.search(text)
+            if match:
+                return match.group(1).strip()
     return ""
 
 
