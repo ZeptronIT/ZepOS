@@ -72,6 +72,15 @@
 #     Zeichenpfad, der sich selbst beschaedigt, laesst den Compositor
 #     nie einschlafen; hier schlief er.
 #
+#     UND EINMAL MIT SCHIRMFAKTOR, weil es dafuer einen Grund gab:
+#     renderBarButtonsText() rechnet die Trefferflaeche eines Knopfes in
+#     LOGISCHEN Punkten (BARBUF aus assignedBoxGlobal().w und HEIGHT),
+#     renderBarButtons() zeichnet den Kreis in SKALIERTEN. Bei Faktor 1
+#     fallen beide zusammen, sonst nicht. Gemessen an einem zweiten
+#     Ausgang 2560x1440 bei scale 1.6: ebenfalls 0 % Rechenzeit und 0
+#     abweichende Bildpaare, und 40 Zeigerschritte quer ueber die
+#     Knoepfe kosten 0,01 s.
+#
 #     Die ECHTE Ursache lag nicht in diesem Plugin, sondern in Hyprlands
 #     fitBoxInWorkArea() - der Fensterkopf wurde 208 Punkte ueber die
 #     Arbeitsflaeche hinausgeschoben. src/bin/zepos-float-toggle traegt
