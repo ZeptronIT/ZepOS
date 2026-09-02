@@ -512,8 +512,22 @@ export const bluetoothSeite: ShellSeite = {
         //
         // Was hier steht, muss WAHR sein: "wird gesucht" nur, solange
         // wirklich gesucht wird.
+        // WAEHREND DER SUCHE STEHT SEIT DEM 02.09.2026 EINE HANDLUNG
+        // DABEI, und sie ist der Grund, aus dem eine Kopplung sonst
+        // scheitert, ohne dass jemand weiss warum:
+        //
+        //     Ein Geraet ist nur sichtbar, wenn es im KOPPLUNGSMODUS
+        //     ist - bei einer Maus meist eine Taste an der Unterseite,
+        //     oft mit langem Druecken. Wer das nicht weiss, sieht
+        //     "Suche laeuft …", danach "kein Geraet bekannt", und hat
+        //     nichts falsch gemacht ausser dem einen, das ihm niemand
+        //     gesagt hat.
+        //
+        //     "Suche laeuft" bleibt daneben stehen: es sagt, DASS
+        //     gerade etwas passiert, und der Hinweis sagt, WAS der
+        //     Mensch dazu tun muss. Jedes allein waere die Haelfte.
         emptyLabel.set_text(suchtGerade
-          ? _("Searching …")
+          ? `${_("Searching …")}\n${_("Put the device into pairing mode - usually a button on its underside")}`
           : !schonGelesen
             ? _("Reading devices …")
             : _("No device known - search for devices"))
@@ -598,8 +612,27 @@ export const bluetoothSeite: ShellSeite = {
       // Der Zustand IN WORTEN und die Adresse daneben. Die Adresse ist
       // das, was zwei gleich benannte Kopfhoerer unterscheidet, und der
       // Zustand das, was der Klick gleich aendert.
-      const zustand = device.connected ? "Verbunden"
-        : device.paired ? "Gekoppelt" : "Gefunden"
+      //
+      // DURCH DEN KATALOG SEIT DEM 02.09.2026. Die drei Woerter standen
+      // hier deutsch, obwohl diese Datei _() seit langem einbindet - sie
+      // sind durch BEIDE Netze von tests/src/test_ags_i18n.py gefallen:
+      //
+      //   durch das STRUKTURELLE, weil das Literal ueber eine VARIABLE
+      //     in die Senke laeuft. Unten steht bei `unterzeile:` ein
+      //     Template-Literal, und dessen Woerter nimmt die Einsetzung
+      //     weg; an der Senke ist von "Verbunden" nichts mehr zu sehen.
+      //   durch das SPRACHLICHE, weil seine Wortliste die INFINITIVE
+      //     kannte ("Verbinden", "Trennen") und nicht die PARTIZIPIEN.
+      //
+      // Beide Loecher sind am selben Tag zugegangen, und die Zusicherung
+      // war ROT, bevor diese Zeile geaendert wurde - sie wird es ohne
+      // sie wieder.
+      //
+      // "Connected" gab es im Katalog schon: ags-vpn.template
+      // beschriftet damit dieselbe Sache. Ein zweiter Eintrag fuer
+      // dasselbe Wort waeren zwei Uebersetzungen, die auseinanderlaufen.
+      const zustand = device.connected ? _("Connected")
+        : device.paired ? _("Paired") : _("Found")
 
       // zepRow nimmt die Nebenzeile nur als Text entgegen - eine frische
       // Zeile je Aufruf ist darum der einzige Weg, sie spaeter zu aendern
@@ -630,23 +663,19 @@ export const bluetoothSeite: ShellSeite = {
           // Waehrend der Aufruf laeuft, sagt die Zeile es. Ein Knopf, der
           // nach dem Klick zwei Sekunden lang aussieht wie vorher, sieht
           // aus wie einer, der nichts tut.
-          // WARUM HIER KEIN EIGENER SATZ FUER DAS KOPPELN STEHT, und das
-          // ist eine offene Stelle und kein Versehen (02.09.2026)
+          // DREI ZUSTAENDE UND DREI SAETZE, seit dem 02.09.2026.
           //
-          //     Richtig waere waehrend des Koppelns "Koppeln …" und
-          //     nicht "Verbinde …" - der Nutzer soll in genau diesem
-          //     Moment wissen, dass jetzt sein Geraet nachfragen kann.
-          //     Ein neuer msgid braucht aber einen Eintrag in
-          //     po/desktop/de.po, und tests/src/test_ags_i18n.py haelt
-          //     das als Vertrag fest ("msgids ohne Katalogeintrag").
-          //     Der Katalog wird erzeugt (po/desktop/extract.sh) und
-          //     gehoert in dieser Sitzung einem anderen Auftrag.
-          //
-          //     Also der vorhandene Satz, bis der Katalog die drei
-          //     Saetze hat. Die FUNKTION haengt nicht daran: gekoppelt
-          //     wird unten so oder so.
+          // Hier stand "Verbinde …" auch dann, wenn gerade GEKOPPELT
+          // wurde - und das ist der Moment, in dem der Nutzer wissen
+          // muss, dass jetzt sein Geraet nachfragen kann. Der Satz
+          // fehlte, weil er einen Katalogeintrag braucht und der
+          // Katalog einem anderen Auftrag gehoerte; die offene Stelle
+          // war hier ausdruecklich vermerkt statt stillschweigend
+          // gelassen. Der Eintrag steht jetzt (po/desktop/de.po,
+          // "Pairing …"), also steht auch der Satz.
           row.set_child(rowContent(
-            device.connected ? _("Disconnecting …") : _("Connecting …")))
+            device.connected ? _("Disconnecting …")
+              : device.paired ? _("Connecting …") : _("Pairing …")))
           row.set_sensitive(false)
           try {
             if (device.connected) {
@@ -733,26 +762,31 @@ export const bluetoothSeite: ShellSeite = {
             }
           } catch (e) {
             console.error("Bluetooth:", device.address, e)
-            // Auch hier der vorhandene Satz und nicht der richtige -
-            // dieselbe offene Stelle wie oben, und hier tut sie mehr
-            // weh: "is it paired?" ist bei einem Geraet, das gerade
-            // eben zu koppeln VERSUCHT wurde, die falsche Frage. Der
-            // Satz, der hier hingehoert, nennt den Kopplungsknopf am
-            // Geraet. Er braucht einen Katalogeintrag.
-            row.set_child(rowContent(device.connected
-              ? _("Disconnecting failed")
-              : _("Connecting failed - is it paired?")))
+            // "is it paired?" WAR BEI EINEM GERAET, DAS GERADE EBEN ZU
+            // KOPPELN VERSUCHT WURDE, DIE FALSCHE FRAGE - die Antwort
+            // ist "nein, und genau das hat gerade nicht geklappt". Was
+            // der Mensch stattdessen braucht, ist die Handlung: die
+            // Kopplungstaste am Geraet druecken und es noch einmal
+            // versuchen. Bei einer Maus sitzt sie meist unten.
+            row.set_child(rowContent(
+              device.connected ? _("Disconnecting failed")
+                : device.paired
+                  ? _("Connecting failed - is it paired?")
+                  : _("Pairing failed - hold the pairing button and try again")))
           }
           row.set_sensitive(true)
           updateDisplay()
         },
       }) as Gtk.Button
-      // Der Kurzhinweis sagt bei einem gefundenen Geraet noch
-      // "verbinden", wo "koppeln und verbinden" richtig waere - dritte
-      // Stelle derselben offenen Katalogfrage, siehe oben.
+      // Der Kurzhinweis nennt seit dem 02.09.2026, was der Klick
+      // WIRKLICH tut: bei einem nur gefundenen Geraet koppelt er UND
+      // verbindet, und "verbinden" allein verschwieg die Haelfte.
       row.set_tooltip_text(device.connected
         ? format(_("Disconnect {device}"), { device: device.name })
-        : format(_("Connect to {device}"), { device: device.name }))
+        : device.paired
+          ? format(_("Connect to {device}"), { device: device.name })
+          : format(_("Pair with {device} and connect"),
+                   { device: device.name }))
 
       return row
     }

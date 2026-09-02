@@ -53,6 +53,7 @@ WAS SEIT DEM 21.08.2026 DAZUGEKOMMEN IST
 """
 from __future__ import annotations
 
+import gettext
 import json
 import os
 import shutil
@@ -68,6 +69,38 @@ from tests.src.test_bar_headless import (
     CHILD_TIMEOUT, Run, _DISPLAYS, _bundle, _desktop_entries)
 from tests.src.test_dock_minimized import (
     FakeCompositor, MINIMIZED, MINIMIZED_ID, SICHTBAR, _client)
+
+# DIESE DATEI STARTET WIRKLICH PROZESSE, und das ist ihr Gegenstand.
+#
+# WARUM, sachlich und nicht als Tatsachenbehauptung: gemessen wird das
+# GEZEICHNETE Menue. Dazu wird die Schale wirklich gebaut
+# (icon_manager.py ueber _bundle), ein Anzeigeserver gestartet
+# (broadwayd), ein Kind mit gjs ausgefuehrt, ein Programm namens "gimp"
+# als echter Prozess angelegt - weil anheftbar() /proc/<pid>/comm liest
+# und eine erfundene PID darauf nicht antwortet - und settings.py als
+# echter Schreiber gerufen. Eine Nachbildung davon maesse die
+# Nachbildung; genau diese Begruendung steht im Kopf oben, und
+# tests/src/test_launcher_pin.py fuehrt sie fuer denselben Fall aus.
+#
+# "startet Unterprozesse" waere KEIN Grund - der Grund ist, dass ihr
+# Gegenstand ohne sie nicht existiert.
+#
+# AUF MODULEBENE UND NICHT JE LAUF, und das ist gemessen und nicht
+# Bequemlichkeit: eine Freigabe je Lauf ist REIHENFOLGEABHAENGIG. Laeuft
+# ein unmarkierter Lauf zuerst, faellt auch der markierte, weil pytest
+# den Fehlschlag der Vorrichtung zwischenspeichert - und die
+# Vorrichtungen hier sind modulweit. Mit `pytestmark` ist es in jeder
+# Reihenfolge gruen; vierzehn Dateien dieses Projekts tragen es schon.
+#
+# WAS ES HEUTE NOCH NICHT AENDERT: die Wache in tests/conftest.py ist
+# FUNKTIONSWEIT, und eine modulweite Vorrichtung entsteht davor - sie
+# sieht die Aufrufe dieser Datei also ohnehin nicht (GEMESSEN von einem
+# Parallelauftrag: 1656 entwischte Prozessstarts in 37 Vorrichtungen,
+# davon 11 hier). Diese Zeile ist Vorbau fuer den Umbau, der das Loch
+# schliesst - und sie ist trotzdem richtig, weil die Wache nicht
+# verbietet, Prozesse zu starten, sondern verlangt, dass es ERKLAERT
+# ist.
+pytestmark = pytest.mark.allow_subprocess
 
 CHILD = Path(__file__).resolve().parent / "dock_menue_child.tsx"
 
@@ -112,6 +145,91 @@ sys.path.insert(0, str(SRC))
 import apps as _apps_modul  # noqa: E402
 
 SHIPPED = _apps_modul.shipped(SRC)
+
+# --------------------------------------------------------------------
+# DIE SPRACHE DIESES LAUFS - vorgegeben, seit dem 02.09.2026
+# --------------------------------------------------------------------
+#
+# WAS PASSIERT IST
+#     Am 02.09.2026 kam der Anwendungsstarter an den Katalog, und
+#     seither wird po/desktop/de.po auch wirklich gebaut. Von da an
+#     fielen sechzehn Zusicherungen dieser Datei um:
+#
+#         erwartet:  " Add to dock"
+#         bekommen:  " Zum Dock hinzufügen"
+#
+#     Die Uebersetzung war nicht kaputt - sie kam an. Kaputt war, dass
+#     diese Datei die englischen msgids abgeschrieben hatte und damit
+#     mass, dass es KEINE Uebersetzung gibt.
+#
+# UND DER EIGENTLICHE BEFUND IST SCHAERFER ALS "die Tests sind jetzt
+# deutsch"
+#     GEMESSEN am 02.09.2026 an derselben Fassung dieses Baums:
+#
+#         ohne po/build       26 passed
+#         mit  po/build       16 failed, 10 passed
+#
+#     Dieselbe Datei, dieselben Zusicherungen, zwei Antworten - je
+#     nachdem, ob jemand vorher `po/build.sh` laufen liess. Das ist
+#     keine Sprachfrage mehr, sondern eine verborgene Abhaengigkeit von
+#     einem BAUZUSTAND, den niemand versioniert.
+#
+# WIE DIE SPRACHE UEBERHAUPT HEREINKAM, obwohl `umgebung` unten eine
+# GESCHLOSSENE Umgebung ist und kein LANG setzt
+#     Weil die Schale sie seit dem 02.09.2026 nicht mehr aus der
+#     Umgebung nimmt. src/templates/ags-i18n.template liest
+#     /etc/locale.conf SELBST - und zwar mit Absicht: die Umgebung einer
+#     Sitzung ist eine Abschrift von der Anmeldung und damit veraltet,
+#     sobald jemand die Sprache umstellt. Der Kopf der Vorlage fuehrt es
+#     aus.
+#
+#     Die Folge fuer einen Testlauf: eine geschlossene Umgebung
+#     ISOLIERT die Sprache nicht mehr. Das Kind las die Datei der
+#     Maschine, auf der der Test lief. GEMESSEN: mit
+#     ZEPOS_ETC_ROOT auf ein Verzeichnis ohne locale.conf waren alle 26
+#     wieder gruen.
+#
+# WAS HIER DESHALB STEHT, und warum ENGLISCH und nicht "keine Datei"
+#     Vorgegeben wird die Maschine, nicht ihr Fehlen: eine locale.conf,
+#     die ENGLISCH sagt. Englisch ist die Ausgangssprache dieses Baums,
+#     die msgids SIND der englische Text, und fuer "en" gibt es keinen
+#     Katalog - dgettext gibt den msgid zurueck. Das gilt auf JEDER
+#     Maschine, auch auf einer, die en_US.UTF-8 gar nicht erzeugt hat:
+#     schlaegt setlocale fehl, bleibt es bei "C", und auch dort gibt es
+#     keinen Katalog. Beide Wege enden beim msgid.
+#
+#     Auf das FEHLEN der Datei zu setzen waere schwaecher - es haengt
+#     an zwei Abwesenheiten (keine Datei UND kein LANG in der Umgebung)
+#     statt an einer Aussage.
+#
+# WAS DAMIT GEPRUEFT WIRD UND WAS NICHT
+#     Diese Datei prueft das MENUE - welche Punkte, in welcher
+#     Reihenfolge, mit welcher Wirkung. Dass die Uebersetzung ankommt,
+#     ist eine andere Frage; sie steht in
+#     test_das_menue_spricht_die_sprache_der_maschine() weiter unten,
+#     wo sie das Thema ist, und im Katalog selbst
+#     (tests/src/test_ags_i18n.py).
+MASCHINENSPRACHE = "en_US.UTF-8"
+
+# Und die Sprache, gegen die die eine Zusicherung prueft, dass der
+# Katalog wirklich bis in dieses Menue durchschlaegt.
+UEBERSETZTE_SPRACHE = "de_DE.UTF-8"
+UEBERSETZTER_CODE = "de"
+DOMAENE = "zepos-desktop"
+
+
+def _maschine_mit_sprache(root: Path, sprache: str) -> Path:
+    """Ein /etc/locale.conf, das GENAU diese Sprache sagt.
+
+    Dieselbe Datei und derselbe Vorsatz, den die Schale liest
+    (ZEPOS_ETC_ROOT in ags-i18n.template, wortgleich zu src/region.py).
+    Ein Test, der stattdessen LANG in die Umgebung setzte, pruefte den
+    Weg, den die Schale seit dem 02.09.2026 gerade NICHT mehr geht.
+    """
+    etc = root / "maschine" / "etc"
+    etc.mkdir(parents=True, exist_ok=True)
+    (etc / "locale.conf").write_text(f"LANG={sprache}\n", encoding="utf-8")
+    return etc.parent
 
 
 def _einstellungen(root: Path, pins: list[str],
@@ -204,7 +322,9 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
           home: list[str] | None = None,
           fremd: list[str] | None = None,
           kennung: str | None = None,
-          abgelegt: bool = False) -> dict:
+          abgelegt: bool = False,
+          sprache: str = MASCHINENSPRACHE,
+          katalog: Path | None = None) -> dict:
     """Ein Lauf des Kindes gegen einen Compositor und eine echte Datei.
 
     Zurueck kommen die Spur des Kindes, die Befehle an den Compositor UND
@@ -299,12 +419,25 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
         # paths.user_root(), und der Fuss reicht die Umgebung an seinen
         # Unterprozess durch.
         "ZEPOS_USER_ROOT": str(wurzel),
+        # DIE SPRACHE DIESES LAUFS, vorgegeben ueber die Datei, die die
+        # Schale wirklich liest - siehe MASCHINENSPRACHE oben. Ohne diese
+        # Zeile las das Kind die locale.conf der Maschine, auf der der
+        # Test lief, und dieselbe Zusicherung gab je nach Rechner und je
+        # nach Bauzustand eine andere Antwort.
+        "ZEPOS_ETC_ROOT": str(_maschine_mit_sprache(root, sprache)),
         "ZEPOS_TRACE": str(trace),
         "ZEPOS_CSS": str(ags / "bar.css"),
         "ZEPOS_MENUES": "|".join(menues),
         "ZEPOS_WAEHLE": wahl,
         "ZEPOS_WARTEN": "2500" if fremd else "",
     }
+    if katalog is not None:
+        # Nur fuer den einen Lauf, der die Uebersetzung PRUEFT. Ohne
+        # diese Angabe sucht die Schale in /usr/share/locale und in
+        # po/build - und ob dort etwas liegt, haengt daran, ob jemand
+        # vorher po/build.sh laufen liess. Genau diese Abhaengigkeit
+        # soll hier nicht wieder hereinkommen.
+        umgebung["ZEPOS_LOCALEDIR"] = str(katalog)
     try:
         if fremd:
             kind = subprocess.Popen(
@@ -862,3 +995,116 @@ def test_ein_gleichnamiger_eintrag_bleibt_beim_programmnamen(anheften):
     assert _pinliste(anheften) == ANGEHEFTET + ["gimp"]
     assert "gimp" in anheften["wirksam-dock"]["pins"], (
         f"verworfen: {anheften['wirksam-dock']['discarded']}")
+
+
+# --------------------------------------------------------------------
+# Und dass die Uebersetzung wirklich bis hierher durchschlaegt
+# --------------------------------------------------------------------
+
+@pytest.mark.allow_subprocess
+def test_das_menue_spricht_die_sprache_der_maschine(bundle, tmp_path_factory):
+    """DIE ANDERE HAELFTE, und sie steht mit Absicht in EINER Zusicherung.
+
+    DER MARKER OBEN GEHOERT DAZU und ist keine Aufweichung: diese
+    Zusicherung startet wirklich zwei Prozesse - msgfmt, um den Katalog
+    zu bauen, und das uebersetzte Kind, um das Menue aufzuklappen.
+    Genau dafuer gibt es ihn. Die uebrigen Laeufe dieser Datei kommen
+    ohne ihn durch, weil ihre Vorrichtungen modulweit sind und damit vor
+    der Wache entstehen; hier faellt der Aufruf im Testkoerper und wird
+    gesehen.
+
+    Alles darueber gibt die Sprache auf ENGLISCH vor (siehe
+    MASCHINENSPRACHE) und prueft damit das MENUE: welche Punkte, in
+    welcher Reihenfolge, mit welcher Wirkung. Das ist richtig - eine
+    Struktur, die von der Sprache abhaengt, waere eine Struktur, die
+    niemand messen kann.
+
+    Nur waere damit etwas verloren, das vorher versehentlich mitgeprueft
+    wurde: DASS der Katalog dieses Menue ueberhaupt erreicht. Genau das
+    ist am 02.09.2026 sichtbar geworden - sechzehn Zusicherungen fielen
+    um, WEIL die Uebersetzung ankam. Sie kam an, und niemand hatte
+    darauf gezielt.
+
+    Diese Zeilen zielen darauf. Sie geben die Maschine auf DEUTSCH vor,
+    legen einen frisch gebauten Katalog daneben, und verlangen die
+    deutschen Woerter.
+
+    GEGEN DEN KATALOG UND NICHT GEGEN ABGESCHRIEBENE ZEICHENKETTEN:
+    erwartet wird, was gettext zu den msgids sagt, nachgeschlagen in
+    genau dem .mo, das dem Kind mitgegeben wird. Eine getippte Erwartung
+    ("Zum Dock hinzufügen") waere dieselbe Falle wie vorher, nur mit
+    deutschem Inhalt - sie wuerde beim naechsten Umformulieren des
+    Katalogs rot, ohne dass etwas kaputt ist.
+    """
+    if shutil.which("msgfmt") is None:
+        pytest.skip("msgfmt fehlt; es kommt mit dem Paket gettext")
+
+    root = tmp_path_factory.mktemp("menue-sprache")
+    katalog = root / "katalog"
+    ziel = katalog / UEBERSETZTER_CODE / "LC_MESSAGES"
+    ziel.mkdir(parents=True)
+    quelle = SRC.parent / "po" / "desktop" / f"{UEBERSETZTER_CODE}.po"
+    subprocess.run(["msgfmt", "-o", str(ziel / f"{DOMAENE}.mo"), str(quelle)],
+                   check=True, capture_output=True)
+
+    uebersetzung = gettext.translation(
+        DOMAENE, str(katalog), languages=[UEBERSETZTER_CODE])
+
+    # DIESELBEN DREI PUNKTE, DIE
+    # test_eine_anheftung_bietet_drei_punkte() auf Englisch prueft -
+    # dieselbe Ausgangslage (firefox liegt auf dem Home) und dieselbe
+    # Reihenfolge. So stehen die zwei Zusicherungen als Paar da: die
+    # eine misst die Struktur, diese die Sprache, und beide reden ueber
+    # dasselbe Menue.
+    msgids = ("New window", "Remove from Home", "Remove from dock")
+    zeichen = (NEW_WINDOW_ICON, HOME_ICON, UNPIN_ICON)
+    erwartet = [f"{bild} {uebersetzung.gettext(msgid)}"
+                for bild, msgid in zip(zeichen, msgids)]
+
+    # DIE GEGENPROBE ZUR GEGENPROBE: hat der Katalog ueberhaupt etwas
+    # getan? Gaebe er die msgids unveraendert zurueck, waere die
+    # Zusicherung unten von der englischen darueber nicht zu
+    # unterscheiden - sie waere gruen und maesse nichts.
+    unveraendert = [m for m in msgids if uebersetzung.gettext(m) == m]
+    assert unveraendert == [], (
+        f"der gebaute Katalog gibt {unveraendert} unveraendert zurueck - "
+        "dann prueft diese Zusicherung nichts. Fast immer eine "
+        "`#, fuzzy`-Marke, die msgfmt den Eintrag weglassen laesst; "
+        "tests/src/test_ags_i18n.py sagt, welcher Eintrag es ist.")
+
+    ergebnis = _lauf(bundle, root, menues=("Firefox",), home=["firefox"],
+                     sprache=UEBERSETZTE_SPRACHE, katalog=katalog)
+
+    assert _menue(ergebnis, "Firefox") == erwartet, (
+        "der Katalog erreicht den Fuss nicht, oder er erreicht ihn "
+        "anders als po/desktop/de.po es sagt.\n" + ergebnis["lauf"].trace)
+
+
+def test_die_vorgegebene_sprache_ist_wirklich_die_ausgangssprache():
+    """Die Versuchsanordnung, nachgerechnet statt bloss begruendet.
+
+    Wer MASCHINENSPRACHE auf "de_DE.UTF-8" setzt - weil "diese Maschine
+    ja deutsch ist" -, macht die sechzehn Zusicherungen darueber wieder
+    zu Tests, die von einem Bauzustand abhaengen: mit gebautem Katalog
+    kaeme Deutsch, ohne ihn Englisch, und beides gegen dieselbe
+    abgeschriebene Erwartung.
+
+    Geprueft wird gegen region.SOURCE_LANGUAGE und nicht gegen ein
+    getipptes "en": die Ausgangssprache ist eine Aussage dieses Baums
+    und steht dort, wo sie begruendet ist.
+    """
+    sys.path.insert(0, str(SRC))
+    try:
+        import region
+    finally:
+        sys.path.remove(str(SRC))
+
+    assert MASCHINENSPRACHE.split("_")[0] == region.SOURCE_LANGUAGE, (
+        f"MASCHINENSPRACHE ist {MASCHINENSPRACHE!r}, die Ausgangssprache "
+        f"dieses Baums ist {region.SOURCE_LANGUAGE!r}. Nur in der "
+        "Ausgangssprache geben die msgids sich selbst zurueck - in jeder "
+        "anderen haengt die Antwort daran, ob ein Katalog gebaut ist.")
+    assert UEBERSETZTE_SPRACHE.split("_")[0] != region.SOURCE_LANGUAGE, (
+        "die uebersetzte Sprache IST die Ausgangssprache - dann prueft "
+        "test_das_menue_spricht_die_sprache_der_maschine() nichts")
+    assert UEBERSETZTER_CODE == UEBERSETZTE_SPRACHE.split("_")[0]

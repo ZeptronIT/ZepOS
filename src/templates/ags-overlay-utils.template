@@ -665,6 +665,86 @@ export function waehleDatei(
 }
 
 // ============================================================================
+// DER WAECHTER FUER WAAGERECHTEN UEBERHANG
+// ============================================================================
+//
+// NACHGETRAGEN am 19.08.2026 (Aufgabe 19). GEMELDET: "ich will auch nicht
+// horizontal scrollen in diesem ags fenster" - ein Fehler, den dieser
+// Aufbau selbst erst spaet zeigt: `hscrollbar_policy: AUTOMATIC` blendet
+// die Leiste NUR ein, wenn der Inhalt tatsaechlich breiter ist als das
+// Fenster - im Quelltext steht davon nichts, es faellt nur auf dem Bild
+// auf. GEMESSEN damals: general 63px, network 27px, bluetooth 77px zu
+// breit fuer ihre Seite, jede Seite mit einer eigenen Ursache.
+//
+// Meldet NUR den Fehlbetrag, nicht jede Messung - `notify::upper` feuert
+// bei jedem Seitenwechsel neu (der Stapel in createShellWindow tauscht
+// seinen sichtbaren Inhalt aus), und die meisten Seiten passen. Ein Log,
+// das bei jedem Aufklappen jedes der zwoelf Fenster eine Zeile schriebe,
+// waere Rauschen; eine Zeile GENAU DANN, wenn der Inhalt tatsaechlich
+// nicht passt, ist ein Befund.
+//
+// SEIT DEM 02.09.2026 EINE EIGENE FUNKTION UND NICHT MEHR EINGENAEHT, UND
+// DAS IST KEINE AUFRAEUMARBEIT
+//     Die Schale hat an diesem Tag ihre EIGENE Bildlaufflaeche um den
+//     Seitenstapel bekommen (siehe createShellWindow, "DIE SEITE
+//     BLAETTERT SELBST"). Damit gibt es im Fenster einer Schale ZWEI
+//     Flaechen, und der waagerechte Ueberhang einer Seite kommt bei der
+//     INNEREN an, nicht mehr bei der der Fabrik.
+//
+//     GEMESSEN am 02.09.2026, im erzeugten Baum unter /tmp ein Boden
+//     `.zep-shell-flaeche { min-width: 900px }` nachgetragen und die
+//     Schale dreimal aufgemacht: mit dem Waechter NUR an der Flaeche der
+//     Fabrik meldete das Protokoll NULL Zeilen, obwohl die Seite 900
+//     Punkte Boden hatte und die Sprosse 854 uebriglaesst.
+//
+//     Das ist die gefaehrlichste Sorte Fehler, die dieser Umbau haette
+//     machen koennen: tests/render/test_schale_stil.py::test_keine_seite_
+//     der_schale_scrollt_waagerecht liest genau dieses Protokoll und
+//     waere fuer immer gruen geblieben, ohne noch etwas zu messen. Der
+//     Waechter haengt darum an BEIDEN Flaechen - und weil er dafuer
+//     zweimal gebraucht wird, steht er hier als Funktion statt zweimal
+//     abgeschrieben.
+//
+//     Mit dem zweiten Waechter meldet derselbe Aufbau wieder:
+//         Ueberlagerung "control": Inhalt 950px, Sichtfenster 645px -
+//         305px breiter als das Fenster erlaubt.
+function beobachteWaagerechtenUeberhang(
+    name: string, hadj: Gtk.Adjustment): void {
+  hadj.connect("notify::upper", () => {
+    const inhalt = hadj.get_upper()
+    const sichtfenster = hadj.get_page_size()
+    const ueberschuss = inhalt - sichtfenster
+    if (ueberschuss > 0) {
+      // BEIDE ZAHLEN UND NICHT NUR IHRE DIFFERENZ - NACHGETRAGEN am
+      // 21.08.2026
+      //
+      //     Hier stand nur der Fehlbetrag. GEMESSEN an vpn-settings, im
+      //     verschachtelten Compositor: die Zeile meldete "237px
+      //     breiter", und die beiden Zahlen dahinter waren
+      //     `Inhalt 676 / Sichtfenster 439`. Das Sichtfenster war also
+      //     439 und nicht die 854, die Sprosse L uebriglaesst - die
+      //     Meldung stammte aus der ERSTEN Zuteilung, bevor die
+      //     Layer-Shell-Flaeche ihre Groesse hatte, und beschrieb einen
+      //     Zustand, den niemand je zu sehen bekommt.
+      //
+      //     Mit dem blossen Fehlbetrag ist dieser Fall von einem echten
+      //     Ueberhang NICHT ZU UNTERSCHEIDEN: 237 sieht aus wie ein
+      //     Befund. Mit beiden Zahlen ist er es nicht mehr - ein
+      //     Sichtfenster, das kleiner ist als die Sprosse des Fensters,
+      //     ist eine Momentaufnahme und kein Fehler.
+      //
+      //     `Inhalt` ist ausserdem die Zahl, die man BRAUCHT, um zu
+      //     entscheiden, auf welche Sprosse ein Fenster gehoert. Der
+      //     Fehlbetrag allein sagt nur, dass es nicht passt.
+      //     tests/render/test_vpn_breite.py misst genau daran.
+      console.log(`Ueberlagerung "${name}": Inhalt ${Math.round(inhalt)}px, `
+        + `Sichtfenster ${Math.round(sichtfenster)}px - `
+        + `${Math.round(ueberschuss)}px breiter als das Fenster erlaubt.`)
+    }
+  })
+}
+
+// ============================================================================
 // DIE FABRIK FUER AUFKLAPPFENSTER
 // ============================================================================
 
@@ -850,54 +930,12 @@ export function createOverlayWindow(config: OverlayConfig): OverlayWidget {
   scroller.set_child(content)
   outerBox.append(scroller)
 
-  // NACHGETRAGEN am 19.08.2026 (Aufgabe 19). GEMELDET: "ich will auch
-  // nicht horizontal scrollen in diesem ags fenster" - ein Fehler, den
-  // dieser Aufbau selbst erst spaet zeigt: `hscrollbar_policy: AUTOMATIC`
-  // (siehe oben) blendet die Leiste NUR ein, wenn der Inhalt tatsaechlich
-  // breiter ist als das Fenster - im Quelltext steht davon nichts, es
-  // faellt nur auf dem Bild auf. GEMESSEN (Bericht dieser Aufgabe):
-  // general 63px, network 27px, bluetooth 77px zu breit fuer ihre
-  // Seite, jede Seite mit einer eigenen Ursache.
-  //
-  // Meldet NUR den Fehlbetrag, nicht jede Messung - `notify::upper`
-  // feuert bei jedem Seitenwechsel neu (der Stapel in createShellWindow
-  // tauscht seinen sichtbaren Inhalt aus), und die meisten Seiten passen.
-  // Ein Log, das bei jedem Aufklappen jedes der zwoelf Fenster eine Zeile
-  // schriebe, waere Rauschen; eine Zeile GENAU DANN, wenn der Inhalt
-  // tatsaechlich nicht passt, ist ein Befund.
-  const hadj = scroller.get_hadjustment()
-  hadj.connect("notify::upper", () => {
-    const inhalt = hadj.get_upper()
-    const sichtfenster = hadj.get_page_size()
-    const ueberschuss = inhalt - sichtfenster
-    if (ueberschuss > 0) {
-      // BEIDE ZAHLEN UND NICHT NUR IHRE DIFFERENZ - NACHGETRAGEN am
-      // 21.08.2026
-      //
-      //     Hier stand nur der Fehlbetrag. GEMESSEN an vpn-settings, im
-      //     verschachtelten Compositor: die Zeile meldete "237px
-      //     breiter", und die beiden Zahlen dahinter waren
-      //     `Inhalt 676 / Sichtfenster 439`. Das Sichtfenster war also
-      //     439 und nicht die 854, die Sprosse L uebriglaesst - die
-      //     Meldung stammte aus der ERSTEN Zuteilung, bevor die
-      //     Layer-Shell-Flaeche ihre Groesse hatte, und beschrieb einen
-      //     Zustand, den niemand je zu sehen bekommt.
-      //
-      //     Mit dem blossen Fehlbetrag ist dieser Fall von einem echten
-      //     Ueberhang NICHT ZU UNTERSCHEIDEN: 237 sieht aus wie ein
-      //     Befund. Mit beiden Zahlen ist er es nicht mehr - ein
-      //     Sichtfenster, das kleiner ist als die Sprosse des Fensters,
-      //     ist eine Momentaufnahme und kein Fehler.
-      //
-      //     `Inhalt` ist ausserdem die Zahl, die man BRAUCHT, um zu
-      //     entscheiden, auf welche Sprosse ein Fenster gehoert. Der
-      //     Fehlbetrag allein sagt nur, dass es nicht passt.
-      //     tests/render/test_vpn_breite.py misst genau daran.
-      console.log(`Ueberlagerung "${config.name}": Inhalt ${Math.round(inhalt)}px, `
-        + `Sichtfenster ${Math.round(sichtfenster)}px - `
-        + `${Math.round(ueberschuss)}px breiter als das Fenster erlaubt.`)
-    }
-  })
+  // Der Waechter fuer waagerechten Ueberhang - die Herleitung steht bei
+  // beobachteWaagerechtenUeberhang() weiter oben. Er haengt an DIESER
+  // Bildlaufflaeche, und seit dem 02.09.2026 haengt ein zweiter an der
+  // eigenen Flaeche der Schale (siehe createShellWindow unten): sonst
+  // waere er fuer die Schalenseiten blind geworden.
+  beobachteWaagerechtenUeberhang(config.name, scroller.get_hadjustment())
 
   win.set_child(outerBox)
 
@@ -1494,12 +1532,136 @@ export function createShellWindow(config: ShellConfig): ShellWidget {
       seitenStapel.set_visible_child_name(aktivId)
       zeichneSidebar()
 
+      // DIE SEITE BLAETTERT SELBST, DIE SEITENLEISTE BLEIBT STEHEN -
+      // NACHGETRAGEN am 02.09.2026
+      //
+      // GEMELDET: "uebrigens frage ich mich warum die seitenleiste in
+      // unseren ags fenster die sidebar nicht sticky ist bei scroll
+      // scrollen wir alles runter".
+      //
+      // WORAN ES LAG
+      //     Die Fabrik legt EINE Gtk.ScrolledWindow um alles, was
+      //     buildContent() zurueckgibt (siehe scroller weiter oben) -
+      //     und dieser Rumpf hier IST die Seitenleiste plus die Seite.
+      //     Die Seitenleiste lag damit im Sichtfenster der Fabrik und
+      //     fuhr beim Blaettern mit hinaus. Kein Fehler der Fabrik: sie
+      //     kann nicht wissen, dass ein Teil ihres Inhalts eine feste
+      //     Spalte ist, die stehenbleiben soll. Nur DIESE Stelle weiss
+      //     es, also entscheidet sie es.
+      //
+      // WARUM EINE EIGENE BILDLAUFFLAECHE HIER UND KEINE BETRIEBSART AN
+      // DER FABRIK
+      //     createOverlayWindow() baut heute ZWOELF Fenster (GEZAEHLT am
+      //     02.09.2026, `grep -rn "createOverlayWindow({"` und
+      //     `createShellWindow({` ueber src/templates/*.template). ZEHN
+      //     davon geben EIN Inhaltswidget zurueck, das ganz blaettern
+      //     soll: Kalender, Meldungen, Bluetooth-Agent, Datentraeger,
+      //     Akku, Abmelden, VPN-Einstellungen, Hintergrundbild,
+      //     Tastenkuerzel, Stil-Editor. Die anderen ZWEI sind Schalen
+      //     (Kontrollzentrum und Einstellungsfenster) und kommen beide
+      //     durch DIESE Funktion - eine Seitenleiste hat also genau der
+      //     Weg hier und kein anderer.
+      //
+      //     Eine Betriebsart "der Inhalt blaettert selbst" haette der
+      //     Fabrik ausserdem ihre
+      //     Kernzusicherung genommen: ein Gtk.Window wird nie kleiner
+      //     als die MINDESTgroesse seines Kindes, und die
+      //     Bildlaufflaeche der Fabrik ist das Einzige, was den
+      //     Hoehendeckel aus MODAL_SHARE ueberhaupt wirken laesst (siehe
+      //     der Block bei `scroller`). Ohne sie riss eine lange Seite
+      //     das Fenster wieder auf.
+      //
+      //     So bleibt die Bildlaufflaeche der Fabrik LIEGEN und wird zum
+      //     letzten Ausweg: sie greift nur noch, wenn das Fenster nicht
+      //     einmal fuer die SEITENLEISTE hoch genug ist (ein sehr
+      //     flacher Schirm). Im Normalfall meldet die Flaeche hier eine
+      //     kleine Mindesthoehe weiter, das Sichtfenster der Fabrik
+      //     reicht dafuer, und ihre Leiste bleibt aus.
+      //
+      //     GEMESSEN am 02.09.2026 (tests/render/test_schale_haftet.py,
+      //     1920x1080, eine Seite mit 40 Zeilen), je Flaeche
+      //     upper/Sichtfenster:
+      //
+      //         Flaeche der Fabrik    731 / 731    keine Leiste
+      //         Flaeche hier         2996 / 731    blaettert
+      //
+      //     Also GENAU EINE gemappte senkrechte Leiste im Fenster. Auf
+      //     einem 620 Punkte hohen Schirm (Fenster 465, Sichtfenster
+      //     386) steht die Fabrik bei 386/386 - auch dort greift ihr
+      //     Ausweg nicht, weil die Seitenleiste hineinpasst.
+      //
+      //     ZUM VERGLEICH DERSELBE AUFBAU OHNE DIE FLAECHE HIER
+      //     (Gegenprobe, dieselbe Sonde, zwei Zeilen im ERZEUGTEN
+      //     overlay.ts zurueckgedreht): eine einzige Flaeche, 2996/731,
+      //     und die Seitenleiste 2996 Punkte hoch zugeteilt statt 731 -
+      //     sie hing im Blaetterinhalt statt neben ihm und fuhr beim
+      //     Blaettern um 2265 Punkte mit hinaus.
+      //
+      // WAAGERECHT BEIDE AUF AUTOMATIC, UND DER WAECHTER HAENGT AN BEIDEN
+      //
+      //     DER ERSTE ENTWURF STAND HIER AUF NEVER, UND ER WAR AUS ZWEI
+      //     GRUENDEN FALSCH - AUFGESCHRIEBEN, WEIL DER ZWEITE NICHT
+      //     OFFENSICHTLICH IST:
+      //
+      //     1. tests/src/test_modal_second_open.py verbietet
+      //        `hscrollbar_policy: Gtk.PolicyType.NEVER` in DIESER Datei,
+      //        und zwar mit einer Messung vom 17.08.2026: NEVER heisst
+      //        nicht "keine Leiste", sondern "der Inhalt bestimmt die
+      //        Breite" - die Flaeche gibt dann die MINDESTbreite ihres
+      //        Kindes nach oben weiter, und ein Gtk.Window wird nie
+      //        schmaler als sein Kind. Damals stand das Fenster deshalb
+      //        930 breit da, wo 495 gestellt worden waren.
+      //     2. Auch ohne dieses Verbot waere NEVER hier der falsche
+      //        Weg, denn es verschiebt die Entscheidung ueber die
+      //        Fensterbreite wieder zum Inhalt zurueck - genau das, was
+      //        `fuelltDieSprosse` und der Deckel gerade eingesammelt
+      //        haben.
+      //
+      //     AUTOMATIC hat dafuer eine Nebenwirkung, und sie ist die
+      //     gefaehrliche Seite dieses ganzen Umbaus: der waagerechte
+      //     Ueberhang einer Seite kommt jetzt bei DIESER Flaeche an und
+      //     nicht mehr bei der der Fabrik. GEMESSEN am 02.09.2026, mit
+      //     einem Boden `.zep-shell-flaeche { min-width: 900px }` im
+      //     erzeugten style.scss und dem Waechter NUR an der Fabrik:
+      //     NULL Protokollzeilen. tests/render/test_schale_stil.py::
+      //     test_keine_seite_der_schale_scrollt_waagerecht liest genau
+      //     dieses Protokoll und waere fuer immer gruen geblieben.
+      //
+      //     Der Waechter haengt deshalb auch hier - siehe
+      //     beobachteWaagerechtenUeberhang() oben. Mit ihm meldet
+      //     derselbe Aufbau wieder:
+      //
+      //         Ueberlagerung "control": Inhalt 950px,
+      //         Sichtfenster 645px - 305px breiter als das Fenster erlaubt.
+      //
+      //     950 = 900 Boden + 2 x SPACE_16 Polsterung; 645 ist, was von
+      //     der Sprosse nach Seitenleiste und Rinne fuer die Seite
+      //     uebrigbleibt. Beide Zahlen beschreiben damit die SEITE und
+      //     nicht mehr das ganze Fenster - genauer als vorher, und der
+      //     Ausdruck, an dem test_vpn_breite.py haengt, ist derselbe.
+      //
+      // overlay_scrolling: false aus demselben Grund wie bei der Fabrik:
+      // die Leiste liegt NEBEN der Seite und nimmt echten Platz, statt
+      // ueber der letzten Zeile zu schweben.
+      const seitenBildlauf = new Gtk.ScrolledWindow({
+        hscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+        propagate_natural_width: true,
+        propagate_natural_height: true,
+        overlay_scrolling: false,
+        hexpand: true,
+        vexpand: true,
+      })
+      seitenBildlauf.set_child(seitenStapel)
+      beobachteWaagerechtenUeberhang(
+        config.name, seitenBildlauf.get_hadjustment())
+
       // Seitenleiste links, aktive Seite rechts - ein Gtk.Box in seiner
       // Standardausrichtung HORIZONTAL reicht dafuer, ohne dass hier ein
       // Wert dafuer benannt werden muesste.
       const rumpf = new Gtk.Box({ spacing: 0 })
       rumpf.append(sidebarSlot)
-      rumpf.append(seitenStapel)
+      rumpf.append(seitenBildlauf)
       return rumpf
     },
   })
