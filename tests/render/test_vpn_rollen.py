@@ -82,6 +82,13 @@ BREITE, HOEHE = 1920, 1200
 FUELLZEILEN = ("    fuelltDieSprosse: true,\n"
                "    fuelltDieHoehe: true,\n")
 
+# Die modulweiten Vorrichtungen `vorher` und `nachher` zeichnen das
+# VPN-Fenster zweimal in einer verschachtelten Sitzung. Zu Aufgabe 76
+# stand da "nicht direkt reproduziert, die Rechnung passt aber" - eine
+# Rechnung, die passt, ist keine Reproduktion. Waagerechtes Rollen sieht
+# man nur, wenn wirklich gerollt wird.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _lauf(bau: Path, ohne_fuellen: bool) -> dict:
     """Das Fenster einmal in den Einzelheiten oeffnen und zusehen."""

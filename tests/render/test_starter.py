@@ -135,6 +135,12 @@ KLICKFRIST = 25.0
 # pruefte diese Datei ihre eigene Erwartung.
 STARTER_VORLAGE = ROOT / "src" / "templates" / "ags-starter-button.template"
 
+# Die modulweite Vorrichtung `starter` startet die Schale mit `ags` in
+# einer verschachtelten Sitzung. Alle drei Aussagen der Bestellung -
+# er steht da, er faehrt mit, er wirkt - sind bemalte Punkte
+# beziehungsweise eine Wirkung im laufenden Compositor.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _rueckfall_der_vorlage() -> list[str]:
     """STARTER_FALLBACK, so wie die Vorlage es fuehrt."""

@@ -112,6 +112,13 @@ LAUFZEIT_S = 24.0
 # so ist im Protokoll zu sehen, WANN er da war.
 PORTAL = Path("/usr/lib/xdg-desktop-portal")
 
+# Die modulweiten Vorrichtungen `zweitesmal` und `mit_portal` gehen den
+# Weg des Nutzers ein zweites Mal, mit `ags bundle` und einer
+# verschachtelten Sitzung. Die Datei daneben war gruen, waehrend der
+# Fehler noch da war; nur ein echter Waehler in einem echten Compositor
+# konnte den Unterschied zeigen.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _sonde(protokoll: str, marke: str) -> dict[str, str] | None:
     """Die Meldung `SONDE:<marke>:a=1:b=2` als Abbildung - oder None.

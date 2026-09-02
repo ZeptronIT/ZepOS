@@ -74,6 +74,13 @@ WRONG = "das-eine-falsche"
 
 TOOLS = ("Hyprland", "gcc", "pkg-config", "unshare")
 
+# Die modulweite Vorrichtung `zepos_lock` startet ein echtes Hyprland,
+# darin das echte zepos-lock, und schickt Tasten mit `wtype`. Hier
+# glaubt nichts dem Programm: gelesen wird die Zeile
+# "zepos-lock: gesperrt" auf seinem stdout, und die gibt es nur, wenn es
+# wirklich laeuft. Ein Overlay sieht auf jedem Foto wie eine Sperre aus.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _why_not() -> str | None:
     missing = nested.missing_tools(*TOOLS)

@@ -65,6 +65,13 @@ DOCK = "zepos-dock"
 # welches Symbol ein Programm mitbringt.
 TERMINAL = "foot"
 
+# Die modulweite Vorrichtung `breite` misst die BEMALTE Breite des
+# Fusses in einer verschachtelten Sitzung. Kopflos war die Antwort immer
+# gruen, und zwar zu Recht: der Inhalt hat nie falsch gerechnet, die
+# Flaeche blieb trotzdem stehen. Die Breite einer Layer-Flaeche kennt
+# nur der Compositor.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _reserviert_unten(sitzung: Session) -> int:
     daten = sitzung.hyprctl_json("monitors") or []

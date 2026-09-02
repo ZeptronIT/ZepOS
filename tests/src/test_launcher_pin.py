@@ -90,10 +90,18 @@ int main(int argc, char** argv) {
 }
 """
 
+# Die modulweite Vorrichtung `sonde` UEBERSETZT AppDiscovery.cpp aus dem
+# gepatchten Baum und laesst das Ergebnis gegen die echte Bruecke
+# laufen. Ein Uebersetzer und ein Kindprozess sind hier nicht Beiwerk,
+# sondern der Gegenstand: dass der Menuepunkt etwas BEWIRKT, laesst sich
+# in die Sitzung von test_launcher_menue.py nicht hineinklicken.
+pytestmark = pytest.mark.allow_subprocess
+
 
 # ---------------------------------------------------------------------
 # Aufbau
 # ---------------------------------------------------------------------
+
 
 def _pakete() -> tuple[list[str], list[str]]:
     namen = ["gio-unix-2.0", "json-glib-1.0"]

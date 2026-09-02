@@ -121,6 +121,12 @@ RUNDEN = 3
 # nicht die Dauer gemessen, sondern der Gleichlauf.
 FRIST = 4.0
 
+# Die modulweite Vorrichtung `einfahrt` schickt ein echtes
+# `ags request dock` in eine verschachtelte Sitzung und nimmt vorher und
+# nachher auf. Ob der Abschaltknopf MITfaehrt, ist ein Unterschied
+# zwischen zwei Bildern; im Quelltext steht er nicht.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _verfolge(sitzung: Session, erwarte_da: bool) -> dict[str, int]:
     """Bei der WIEVIELTEN Abfrage jede Flaeche ihren Zustand erreicht hat.

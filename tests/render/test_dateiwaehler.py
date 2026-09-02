@@ -106,6 +106,13 @@ EBENE_UEBERLAGERUNG = "3"
 OEFFNEN_MS = 4000
 ABBRUCH_MS = 9000
 
+# Die modulweiten Vorrichtungen `roh` und `repariert` uebersetzen je ein
+# Kind mit `ags bundle` und lassen es in einer verschachtelten Sitzung
+# aufgehen. Der Dateiwaehler von GTK4 ist ein xdg_toplevel, die Flaeche
+# darunter eine Layer-Flaeche auf OVERLAY: welches von beiden der Nutzer
+# sieht, entscheidet allein der Compositor.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _ebene(sitzung: Session, namensraum: str) -> str | None:
     """Auf welcher Ebene die Flaeche gerade liegt - oder None.

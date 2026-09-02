@@ -66,6 +66,12 @@ EBENEN = {"0": "background", "1": "bottom", "2": "top", "3": "overlay"}
 
 NAMENSRAUM = "zepos-home"
 
+# Die modulweite Vorrichtung `gemessen` startet eine verschachtelte
+# Sitzung und ruft dazu src/settings.py als Kind, um ein Symbol
+# wegzunehmen. Ebene, Groesse und Klickdurchlass des Homes sind alle
+# drei Aussagen ueber den Compositor und keine ueber ein Widget.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _ebenen(sitzung) -> dict[str, str]:
     """Namensraum -> Ebene, nur fuer den abgebildeten Schirm.

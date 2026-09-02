@@ -88,10 +88,15 @@ RUHE = 3.0
 # Dieselbe Begruendung wie in tests/src/test_own_plugins.py.
 FAKTOR = 1.538
 
-
 # ---------------------------------------------------------------------
 # Der Aufbau
 # ---------------------------------------------------------------------
+# Die modulweite Vorrichtung `lauf` startet Hyprland, swaybg und den
+# Starter, schickt echte Tasten mit `wtype` und nimmt mit `grim` auf.
+# Dass Rechtsklick beim Starter nicht ging, war die Meldung; ob er jetzt
+# geht, sagt nur ein Compositor, der die Taste wirklich bekommt.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _erzeuge(ziel: Path, faktor: float) -> None:
     """Die zwei erzeugten Dateien des Starters, mit dem ECHTEN Prozessor.

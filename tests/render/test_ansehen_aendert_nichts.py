@@ -116,6 +116,13 @@ AENDERND = (
 AENDERNDE_FAHNEN = ("--initiate", "--terminate", "--load-all",
                     "--load-conns", "--load-creds")
 
+# Die modulweite Vorrichtung `messung` startet eine verschachtelte
+# Sitzung samt eigenem dbus-daemon, uebersetzt die Schale mit
+# `ags bundle` und nimmt danach Bilder auf. Gemessen wird, ob das
+# ANSEHEN einer VPN-Verbindung die Datei veraendert - das setzt voraus,
+# dass die Schale wirklich laeuft und wirklich etwas schreiben KOENNTE.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _attrappen(verzeichnis: Path, protokoll: Path) -> str:
     """`nmcli` und `swanctl`, die nichts tun und alles aufschreiben.

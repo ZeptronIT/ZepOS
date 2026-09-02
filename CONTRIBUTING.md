@@ -68,11 +68,20 @@ real Hyprland skip themselves when those are absent.
 
 ### The isolation guard
 
-`tests/conftest.py` installs two autouse fixtures for the whole suite:
+`tests/conftest.py` installs both guards for the whole suite from one
+hookwrapper around `pytest_runtest_protocol`:
 
 - no test may spawn a real process;
 - no test may write outside a temporary directory — where "write" includes
   deleting, renaming, re-permissioning and symlinking.
+
+It is a hookwrapper and not a fixture because pytest builds a run's fixtures
+*inside* that hook, so the guards are in place before every fixture of every
+scope. As two autouse fixtures they were function-scoped and therefore ran
+*after* every module-scoped one: measured on 02.09.2026, 1656 process starts
+from 37 higher-scoped fixtures in 22 files went past them, and the write
+guard — the one that stands between a test and `/dev/sda` — had the same hole
+for the same reason.
 
 The installer drives `iwctl`, `archinstall` and NetworkManager. Without the
 guard, a careless test could overwrite your live network profiles or delete
@@ -93,6 +102,23 @@ that uses it therefore runs its child under `env -i` with a stub directory as
 the entire `PATH`, with `HOME`, `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`
 redirected inside `tmp_path`, and asserts afterwards that no command was
 missing. Follow that pattern; do not invent a looser one.
+
+**A fixture with a scope above `function` needs the declaration on the
+MODULE**, not on the individual runs:
+
+```python
+pytestmark = pytest.mark.allow_subprocess   # with the reason above it
+```
+
+A marker on single runs frees such a fixture only depending on the ORDER:
+pytest builds a module-scoped fixture for the first run that asks for it and
+caches its failure, so the marked run gets the same error handed to it again
+when an unmarked one came first. Measured — marked run first: 2 passed;
+unmarked run first: 3 errors, including the marked one. Module-wide
+`pytestmark` is green in both orders because pytest puts it on every run of
+the module. Every one of those declarations carries the substantive reason
+in a comment above it: what real program the fixture starts, and why the
+measurement is impossible without it.
 
 ---
 

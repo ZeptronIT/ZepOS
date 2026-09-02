@@ -69,6 +69,12 @@ WECHSEL = 6.0
 JE_SCHIRM = ("zepos-bar", "zepos-dock", "zepos-home", "zepos-power",
              "zepos-starter")
 
+# Die modulweite Vorrichtung `umstecken` steckt in einer verschachtelten
+# Sitzung einen Ausgang dazu und wieder ab. Ein Anstecken ist ein
+# Ereignis des Compositors; dass die Oberflaeche ihm folgt, ist an
+# keiner Vorlage abzulesen - der Nutzer sah einen grauen Bildschirm.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def flaechen_je_schirm(sitzung: Session) -> dict[str, list[str]]:
     """{"WL-1": ["zepos-bar", ...], ...} - was auf welchem Ausgang liegt.
