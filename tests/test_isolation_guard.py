@@ -11,6 +11,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+import sys
 import tempfile
 
 import pytest
@@ -687,6 +688,420 @@ def test_the_installers_own_default_target_trips_the_guard():
         install(cfg, source=PackageSource.ONLINE, dry_run=False,
                 runner=runner, is_uefi=lambda: True,
                 base_problem=lambda: "", clock_wait=lambda: "")
+
+
+# --- die Ausnahme innerhalb von /dev ----------------------------------
+#
+# /dev steht auf der Liste wegen /dev/sda. Aber `subprocess.DEVNULL`
+# laesst CPython `os.open(os.devnull, os.O_RDWR)` rufen, und das ist
+# harmlos. Aufgefallen ist es erst am 02.09.2026, als die Wache frueh
+# genug eingebaut wurde, um es zu sehen: vier Fehler in
+# tests/render/test_dock_breite.py, alle in der Verrohrung von
+# subprocess selbst.
+
+
+@pytest.mark.parametrize("geraet", sorted(conftest.WRITABLE_DEVICES))
+def test_die_verwerfenden_geraete_bleiben_schreibbar(geraet):
+    """Eine Wache, die /dev/null abweist, wird abgeschaltet."""
+    assert conftest._is_protected(geraet) is False
+
+
+def test_ein_wirkliches_geraet_bleibt_geschuetzt():
+    """Die Gegenprobe, und der Grund, warum /dev ueberhaupt dasteht.
+
+    Ohne sie koennte die Ausnahme oben auf ganz /dev ausgeweitet werden
+    und alles bliebe gruen - waehrend die Platte des Nutzers offen
+    liegt.
+    """
+    assert conftest._is_protected("/dev/sda") is True
+    assert conftest._is_protected("/dev/nvme0n1") is True
+
+
+def test_die_ausnahme_vergleicht_ganze_namen_und_keine_praefixe():
+    """Derselbe Fehler, den _within() weiter oben schon beheben musste.
+
+    "/dev/nullX" ist nicht /dev/null. Ein Praefixvergleich in der
+    Ausnahme haette /dev/nvme0n1 nicht getroffen, aber die naechste
+    Erweiterung der Liste haette es.
+    """
+    assert conftest._is_protected("/dev/nullX") is True
+    assert conftest._is_protected("/dev/zeroed") is True
+
+
+def test_die_liste_der_schreibbaren_geraete_bleibt_kurz():
+    """Sie ist eine Ausnahme, kein Sammelbecken.
+
+    /dev/random und /dev/urandom gehoeren ABSICHTLICH nicht dazu: ein
+    Schreibzugriff dorthin speist den Entropievorrat des Kerns und
+    aendert damit sehr wohl etwas. Wer sie hinzufuegt, muss diesen Test
+    anfassen und dabei erklaeren, warum.
+    """
+    assert conftest.WRITABLE_DEVICES == {"/dev/null", "/dev/zero", "/dev/full"}
+
+
+def test_os_open_auf_dev_null_kommt_durch():
+    """Der Weg, an dem es wirklich hing - nicht der Umweg ueber
+    _is_protected(), sondern der geflickte Aufruf selbst."""
+    fd = os.open(os.devnull, os.O_WRONLY)
+    try:
+        assert os.write(fd, b"weg damit") == 9
+    finally:
+        os.close(fd)
+
+
+@pytest.mark.allow_subprocess
+def test_ein_kind_nach_dev_null_umleiten_kommt_durch():
+    """Der Fall, der die Ausnahme ausgeloest hat, ganz durchgespielt.
+
+    Der Marker ist die Sache selbst: subprocess.DEVNULL entsteht erst,
+    wenn wirklich ein Kind gestartet wird. `true` ist absolut benannt,
+    damit nichts auf PATH gesucht wird.
+    """
+    ergebnis = subprocess.run([_TRUE], stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL, timeout=60)
+    assert ergebnis.returncode == 0
+
+
+# --------------------------------------------------------------------
+# Greift die Wache auch VOR einer Vorrichtung hoeheren Bereichs?
+# --------------------------------------------------------------------
+#
+# DAS LOCH, GESCHLOSSEN AM 02.09.2026 (Aufgabe 86)
+#     Beide Wachen waren je eine autouse-Vorrichtung ohne scope, also
+#     funktionsweit, und liefen damit NACH jeder modulweiten
+#     Vorrichtung. Gemessen an zwei instrumentierten Vollaeufen: 1656
+#     Prozessstarts kamen daran vorbei, aus 37 Vorrichtungen in 22
+#     Dateien. Und die SCHREIB-Wache hatte dasselbe Loch aus demselben
+#     Grund - das ist die Wache gegen /dev/sda.
+#
+# WARUM DIESE TESTS EINEN KINDLAUF BRAUCHEN
+#     Die Frage ist nicht, ob die Flicken wirken - das messen die 97
+#     Tests darueber im laufenden Prozess. Die Frage ist, ob die Wache
+#     FRUEH GENUG eingebaut wird, und die Reihenfolge zwischen Hook und
+#     Vorrichtungsaufbau gibt es nur in einer echten pytest-Sitzung. Im
+#     eigenen Prozess liesse sie sich nur behaupten.
+#
+# WARUM JEDER DIESER TESTS EINE GEGENPROBE HAT
+#     Ein Kindlauf, der rot meldet, meldet auch rot, wenn er an einem
+#     Tippfehler stirbt. Darum steht neben jedem "geblockt" ein Lauf
+#     derselben Probe gegen eine Wache, aus der der Hook
+#     HERAUSGENOMMEN ist - und der muss GRUEN sein. Erst beide
+#     zusammen zeigen, dass gemessen wurde, was draufsteht.
+
+
+def _wache_ohne_hook(quelle: str) -> str:
+    """Nimmt den Hook aus der Wache heraus, sonst nichts.
+
+    Umbenennen statt Loeschen: pytest findet einen Hook am NAMEN, und
+    eine anders benannte Funktion mit demselben Rumpf ist fuer pytest
+    keine. Der Rest der Datei - PROTECTED_PREFIXES, _is_protected(), die
+    beiden Einbau-Funktionen - bleibt Zeile fuer Zeile stehen, damit die
+    Gegenprobe sich nur in DIESEM einen Punkt vom Hauptlauf
+    unterscheidet.
+    """
+    ersetzt = quelle.replace("def pytest_runtest_protocol(",
+                             "def _hook_fuer_die_gegenprobe_entfernt(")
+    assert ersetzt != quelle, (
+        "in tests/conftest.py steht kein `def pytest_runtest_protocol(` "
+        "mehr - dann misst die Gegenprobe unten nichts, weil sie gegen "
+        "eine Wache laeuft, aus der nie etwas herausgenommen wurde")
+    return ersetzt
+
+
+def _kindlauf(tmp_path: pathlib.Path, probe: str, *, mit_wache: bool,
+              zusatz: tuple[str, ...] = ()):
+    """Fuehrt `probe` in einer eigenen pytest-Sitzung aus.
+
+    Der Kindlauf bekommt eine KOPIE von tests/conftest.py, weil
+    WORK_TREE aus dem Ort dieser Datei abgeleitet wird: neben der Kopie
+    liegend ist der Arbeitsbaum des Kindes sein eigenes
+    Wegwerfverzeichnis, und ein Schreibzugriff dorthin ist damit
+    geschuetzt, ohne dass irgendetwas Echtes in Reichweite kaeme.
+
+    Umgebung: leer bis auf einen PATH, der auf ein LEERES
+    Stummelverzeichnis zeigt. Der Kind-Python ist absolut benannt, also
+    wird auf PATH nichts gesucht; sucht doch einmal etwas dort, ist es
+    laut statt still. `true` bekommt die Probe deshalb ebenfalls
+    absolut.
+    """
+    lauf = tmp_path / "lauf"
+    lauf.mkdir(parents=True)
+    (tmp_path / "stummel").mkdir(parents=True)
+
+    quelle = (pathlib.Path(conftest.__file__).resolve()
+              .read_text(encoding="utf-8"))
+    (lauf / "conftest.py").write_text(
+        quelle if mit_wache else _wache_ohne_hook(quelle), encoding="utf-8")
+    (lauf / "test_probe.py").write_text(probe, encoding="utf-8")
+
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", str(lauf), "-q",
+         "-p", "no:cacheprovider", "--rootdir", str(lauf), *zusatz],
+        env={"PATH": str(tmp_path / "stummel")},
+        input="", capture_output=True, text=True, timeout=300)
+
+
+# `true` absolut benannt, weil der Kindlauf einen leeren PATH hat. Ohne
+# das waere die Gegenprobe rot, weil das Kind das Programm nicht findet -
+# und nicht, weil eine Wache es geblockt haette. Der Name wird HIER
+# aufgeloest, wo noch ein PATH da ist, und der Fund wird geprueft: ein
+# relativer oder fehlender Pfad wuerde die Gegenprobe still entwerten.
+_TRUE = shutil.which("true")
+assert _TRUE and _TRUE.startswith("/"), (
+    "`true` ist auf dieser Maschine nicht auffindbar - ohne das harmloseste "
+    "Programm der Welt kann die Gegenprobe unten nicht zeigen, dass ein "
+    "Prozessstart ohne Wache wirklich durchkommt")
+
+
+def _probe_prozess(bereich: str) -> str:
+    return (
+        "import subprocess\n"
+        "import pytest\n"
+        "\n"
+        f'@pytest.fixture(scope="{bereich}")\n'
+        "def vorrichtung():\n"
+        f'    return subprocess.run(["{_TRUE}"], capture_output=True).returncode\n'
+        "\n"
+        "def test_die_vorrichtung_hat_wirklich_gestartet(vorrichtung):\n"
+        "    assert vorrichtung == 0\n"
+    )
+
+
+def _probe_schreiben(bereich: str) -> str:
+    return (
+        "import pathlib\n"
+        "import pytest\n"
+        "\n"
+        'ZIEL = pathlib.Path(__file__).resolve().parent / "geschrieben.txt"\n'
+        "\n"
+        f'@pytest.fixture(scope="{bereich}")\n'
+        "def vorrichtung():\n"
+        '    ZIEL.write_text("x", encoding="utf-8")\n'
+        '    return ZIEL.read_text(encoding="utf-8")\n'
+        "\n"
+        "def test_die_vorrichtung_hat_wirklich_geschrieben(vorrichtung):\n"
+        '    assert vorrichtung == "x"\n'
+    )
+
+
+# Je Fall: die Probe, und die Meldung, die der Kindlauf tragen MUSS.
+# Auf die Meldung zu pruefen ist der Kern - ein Kindlauf, der an einem
+# Tippfehler stirbt, ist auch rot, und ohne diese Zeile waere er von
+# einem Treffer nicht zu unterscheiden.
+_FAELLE = {
+    "prozess-modulweit": (_probe_prozess("module"), "start a real process"),
+    "prozess-sitzungsweit": (_probe_prozess("session"), "start a real process"),
+    "schreiben-modulweit": (_probe_schreiben("module"), "IsolationViolation"),
+    "schreiben-sitzungsweit": (_probe_schreiben("session"), "IsolationViolation"),
+}
+
+
+@pytest.mark.allow_subprocess
+@pytest.mark.parametrize("fall", sorted(_FAELLE))
+def test_die_wache_greift_auch_bei_einer_vorrichtung_hoeheren_bereichs(
+        fall, tmp_path):
+    """Der Hauptlauf: mit Wache muss der Kindlauf FALLEN.
+
+    Der Marker ist keine Aufweichung, sondern die Sache selbst: dieser
+    Test startet wirklich eine zweite pytest-Sitzung, und die startet in
+    der Gegenprobe wirklich `true`. Ohne einen echten Kindlauf gibt es
+    die Reihenfolge nicht, um die es hier geht.
+    """
+    probe, meldung = _FAELLE[fall]
+    ergebnis = _kindlauf(tmp_path, probe, mit_wache=True)
+    ausgabe = ergebnis.stdout + ergebnis.stderr
+
+    assert ergebnis.returncode != 0, (
+        f"der Kindlauf ({fall}) ist mit Wache GRUEN durchgekommen - die "
+        "Vorrichtung lief also wieder vor der Wache:\n" + ausgabe)
+    assert meldung in ausgabe, (
+        f"der Kindlauf ({fall}) ist gefallen, aber nicht an der Wache - "
+        f"'{meldung}' steht nicht in seiner Ausgabe, also misst dieser "
+        "Test etwas anderes als er behauptet:\n" + ausgabe)
+
+
+@pytest.mark.allow_subprocess
+@pytest.mark.parametrize("fall", sorted(_FAELLE))
+def test_gegenprobe_ohne_den_hook_kommt_dieselbe_probe_durch(fall, tmp_path):
+    """Die Gegenprobe, die den Test darueber erst zu einer Messung macht.
+
+    Dieselbe Probe, dieselbe Wache, nur der Hook herausgenommen: jetzt
+    muss der Kindlauf GRUEN sein. Waere er auch dann rot, laege es an der
+    Probe und nicht an der Wache, und der Test darueber wuerde eine
+    Wache bezeugen, die es nicht gibt.
+    """
+    probe, meldung = _FAELLE[fall]
+    ergebnis = _kindlauf(tmp_path, probe, mit_wache=False)
+    ausgabe = ergebnis.stdout + ergebnis.stderr
+
+    assert ergebnis.returncode == 0, (
+        f"die Gegenprobe ({fall}) ist auch OHNE Hook rot - dann liegt es "
+        "an der Probe, und der Hauptlauf darueber beweist nichts:\n"
+        + ausgabe)
+    assert "1 passed" in ausgabe, (
+        f"die Gegenprobe ({fall}) ist gruen, hat aber nicht einen Lauf "
+        "bestanden - womoeglich wurde nur uebersprungen, und dann hat "
+        "die Vorrichtung nie gearbeitet:\n" + ausgabe)
+    assert meldung not in ausgabe, (
+        f"die Gegenprobe ({fall}) meldet trotz entferntem Hook noch "
+        f"'{meldung}':\n" + ausgabe)
+
+
+@pytest.mark.allow_subprocess
+def test_eine_modulweite_erklaerung_wird_nicht_abgewiesen(tmp_path):
+    """Die andere Richtung, und der Grund, warum die 22 Dateien laufen.
+
+    Eine Wache, die berechtigte Arbeit verweigert, wird abgeschaltet.
+    Modulweites `pytestmark` ist die Form, die eine modulweite
+    Vorrichtung freigibt - traegt das Modul sie, muss derselbe Kindlauf
+    gruen sein, obwohl an keinem einzelnen Lauf ein Marker steht.
+    """
+    probe = ("import pytest\n"
+             "pytestmark = pytest.mark.allow_subprocess\n"
+             + _probe_prozess("module"))
+    ergebnis = _kindlauf(tmp_path, probe, mit_wache=True)
+    ausgabe = ergebnis.stdout + ergebnis.stderr
+
+    assert ergebnis.returncode == 0 and "1 passed" in ausgabe, (
+        "modulweites pytestmark gibt die modulweite Vorrichtung nicht "
+        "mehr frei - dann ist die Wache zu streng geworden und die 22 "
+        "Dateien, die genau darauf stehen, sind rot:\n" + ausgabe)
+
+
+@pytest.mark.allow_subprocess
+def test_aus_einer_modulweiten_vorrichtung_heraus_ist_der_marker_auffindbar(
+        tmp_path):
+    """Die VORAUSSETZUNG des Hookwrappers, direkt gemessen.
+
+    Der Hookwrapper flickt, bevor irgendeine Vorrichtung laeuft, und
+    liest die Freigabe am Lauf. Waere das modulweite `pytestmark` von
+    dort aus NICHT zu finden, waere jede der 18 nachgezogenen
+    Erklaerungen wirkungslos - und zwar lautlos, weil ein nicht
+    gefundener Marker genauso aussieht wie ein nicht gesetzter.
+
+    Die Probe fragt deshalb aus der modulweiten Vorrichtung selbst und
+    haelt fest, WAS `request.node` dort ist: nicht der Testknoten,
+    sondern das MODUL. get_closest_marker() steigt von dort die
+    Kette hinauf und findet `pytestmark` trotzdem. Genau das ist der
+    Punkt, an dem der Entwurf haette scheitern koennen.
+    """
+    probe = (
+        "import subprocess\n"
+        "import pytest\n"
+        "\n"
+        "pytestmark = pytest.mark.allow_subprocess\n"
+        "\n"
+        '@pytest.fixture(scope="module")\n'
+        "def vorrichtung(request):\n"
+        "    art = type(request.node).__name__\n"
+        '    marker = request.node.get_closest_marker("allow_subprocess")\n'
+        "    assert marker is not None, (\n"
+        '        f"aus der modulweiten Vorrichtung heraus NICHT gefunden; '
+        'request.node ist ein {art}")\n'
+        f'    rc = subprocess.run(["{_TRUE}"], capture_output=True).returncode\n'
+        "    return art, rc\n"
+        "\n"
+        "def test_der_knoten_ist_das_modul_und_traegt_den_marker(vorrichtung):\n"
+        "    art, rc = vorrichtung\n"
+        '    assert art == "Module", art\n'
+        "    assert rc == 0\n"
+    )
+    ergebnis = _kindlauf(tmp_path, probe, mit_wache=True)
+    ausgabe = ergebnis.stdout + ergebnis.stderr
+
+    assert ergebnis.returncode == 0 and "1 passed" in ausgabe, (
+        "die Voraussetzung des Hookwrappers gilt nicht mehr: aus einer "
+        "modulweiten Vorrichtung heraus ist das modulweite pytestmark "
+        "nicht auffindbar, oder request.node ist dort nicht mehr das "
+        "Modul. Dann sind die nachgezogenen Erklaerungen wirkungslos:\n"
+        + ausgabe)
+
+
+@pytest.mark.allow_subprocess
+def test_beide_marker_sind_bei_pytest_angemeldet(tmp_path):
+    """Ein Marker, den pytest nicht kennt, gibt nichts frei.
+
+    pytest meldet einen unbekannten Marker als PytestUnknownMarkWarning
+    - eine WARNUNG, die in einem Lauf mit 3600 Zeilen niemand liest,
+    waehrend die Freigabe, die daran haengt, nicht mehr greift. Der
+    Kindlauf laeuft deshalb mit `-W error::pytest.PytestUnknownMarkWarning`
+    und benutzt BEIDE Marker: faellt einer aus pytest_configure(), ist
+    das hier ein Fehlschlag statt einer Zeile im Protokoll.
+    """
+    probe = (
+        "import pytest\n"
+        "\n"
+        "@pytest.mark.allow_subprocess\n"
+        "@pytest.mark.allow_system_writes\n"
+        "def test_beide_marker_sind_bekannt():\n"
+        "    pass\n"
+    )
+    ergebnis = _kindlauf(
+        tmp_path, probe, mit_wache=True,
+        zusatz=("-W", "error::pytest.PytestUnknownMarkWarning"))
+    ausgabe = ergebnis.stdout + ergebnis.stderr
+
+    assert ergebnis.returncode == 0 and "1 passed" in ausgabe, (
+        "einer der beiden Marker ist bei pytest nicht angemeldet - dann "
+        "ist er eine Freigabe, die nichts freigibt. Anzumelden sind sie "
+        "in pytest_configure() in tests/conftest.py:\n" + ausgabe)
+
+
+@pytest.mark.allow_subprocess
+def test_ein_marker_am_einzelnen_lauf_gibt_sie_reihenfolgeabhaengig_frei(
+        tmp_path):
+    """Warum die Erklaerung MODULWEIT sein muss und nicht pro Lauf.
+
+    GEMESSEN AM 02.09.2026, in genau dieser Form:
+        markierter Lauf zuerst   -> 2 passed
+        unmarkierter Lauf zuerst -> 3 errors, AUCH der markierte
+
+    pytest legt eine modulweite Vorrichtung beim ERSTEN Lauf an, der sie
+    anfordert, und speichert ihren Fehlschlag zwischen; jeder weitere
+    Lauf bekommt denselben Fehler noch einmal vorgelegt, sein eigener
+    Marker hin oder her. Das ist der Beleg dafuer, dass ein Marker pro
+    Lauf hier keine Freigabe ist, sondern ein Ergebnis, das an der
+    Reihenfolge haengt - und ein Lauf, dessen Ergebnis an der
+    Reihenfolge haengt, ist kein Test.
+
+    Steht hier, weil sonst irgendwann jemand die 22 modulweiten
+    Erklaerungen durch Marker an den einzelnen Laeufen ersetzt, alles
+    gruen sieht und nicht merkt, dass die Reihenfolge es entschieden
+    hat.
+    """
+    kopf = ("import subprocess\n"
+            "import pytest\n"
+            "\n"
+            '@pytest.fixture(scope="module")\n'
+            "def vorrichtung():\n"
+            f'    return subprocess.run(["{_TRUE}"], '
+            "capture_output=True).returncode\n"
+            "\n")
+    markiert = ("@pytest.mark.allow_subprocess\n"
+                "def test_%s_markiert(vorrichtung):\n"
+                "    assert vorrichtung == 0\n")
+    blank = ("def test_%s_ohne_marker(vorrichtung):\n"
+             "    assert vorrichtung == 0\n")
+
+    zuerst_markiert = _kindlauf(
+        tmp_path / "a", kopf + markiert % "a" + "\n" + blank % "b",
+        mit_wache=True)
+    zuerst_blank = _kindlauf(
+        tmp_path / "b", kopf + blank % "a" + "\n" + markiert % "b",
+        mit_wache=True)
+
+    assert zuerst_markiert.returncode == 0, (
+        "markierter Lauf zuerst sollte durchkommen:\n"
+        + zuerst_markiert.stdout + zuerst_markiert.stderr)
+    assert zuerst_blank.returncode != 0, (
+        "unmarkierter Lauf zuerst sollte fallen:\n"
+        + zuerst_blank.stdout + zuerst_blank.stderr)
+    assert "2 errors" in zuerst_blank.stdout + zuerst_blank.stderr, (
+        "erwartet waren ZWEI Fehler - auch der markierte Lauf, weil "
+        "pytest den Fehlschlag der Vorrichtung zwischenspeichert. Faellt "
+        "nur einer, verhaelt pytest sich anders als am 02.09.2026 "
+        "gemessen, und die Begruendung fuer die modulweite Form muss neu "
+        "belegt werden:\n" + zuerst_blank.stdout + zuerst_blank.stderr)
 
 
 # --------------------------------------------------------------------

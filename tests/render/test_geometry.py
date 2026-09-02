@@ -96,6 +96,13 @@ FAELLE = (
 FALLNAMEN = [f"{breite}x{hoehe}@{faktor or 'vorgabe'}"
              for breite, hoehe, faktor in FAELLE]
 
+# Die modulweite Vorrichtung `gemalt` nimmt Kopf und Fuss in einer
+# verschachtelten Sitzung auf. Zwei kopflose Tests waren am 12.08.2026
+# gruen, waehrend die Leiste 59 Punkte bemalte und der Fuss 83: sie
+# konnten es nicht sehen, weil sie Tabellenwerte gegen Tabellenwerte
+# rechneten. Diese Datei fragt den Schirm.
+pytestmark = pytest.mark.allow_subprocess
+
 
 @pytest.fixture(scope="module", params=FAELLE, ids=FALLNAMEN)
 def gemalt(request, tmp_path_factory) -> dict:

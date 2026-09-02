@@ -104,6 +104,13 @@ RAHMEN_UND_LEISTE = 26
 MELDUNG = re.compile(
     r'Ueberlagerung "([^"]+)": Inhalt (\d+)px, Sichtfenster (\d+)px')
 
+# Die modulweiten Vorrichtungen `protokoll`, `protokoll_openvpn` und
+# `bildbeweis` zeichnen das VPN-Fenster in einer verschachtelten Sitzung
+# und nehmen es auf. Der Ueberhang von 42 Punkten ist gemalt; die
+# Rechnung darueber (626 + 50 = 676) sagt, wo er herkommt, aber nicht,
+# dass er da ist.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _modal_width_l() -> int:
     """Die Sprosse aus DERSELBEN Quelle, aus der die Vorlage sie bekommt.

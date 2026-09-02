@@ -74,6 +74,13 @@ BASH = "/bin/bash"
 # _use_is_one_kitty_really_has haelt sie gegen das installierte Programm.
 DIRECTORY_OPTIONS = ("--directory", "--working-directory", "-d")
 
+# Die modulweite Vorrichtung `tree` ruft src/generate_config.sh --all
+# und baut damit den erzeugten Baum, gegen den hier gemessen wird. Die
+# Ursache war eine VERERBUNG des Arbeitsverzeichnisses ueber vier
+# Prozesse, und in keiner Vorlage stand ein `cd`, das sie erklaert
+# haette - sichtbar wird sie erst an den erzeugten Dateien.
+pytestmark = pytest.mark.allow_subprocess
+
 
 @pytest.fixture(scope="module")
 def tree(tmp_path_factory) -> GeneratedTree:

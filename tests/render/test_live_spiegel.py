@@ -74,6 +74,15 @@ FRIST = 25.0
 GROSS = (1280, 720)
 KLEIN = (800, 600)
 
+# Vier Vorrichtungen hoeheren Bereichs, alle mit echten Prozessen: die
+# SITZUNGSWEITE `ausgangs_client` uebersetzt sich mit `wayland-scanner`
+# einen Wayland-Klienten, `spiegelung`, `ungleich` und `ohne_helfer`
+# starten cage mit zwei Ausgaengen, den ausgelieferten Helfer
+# zepos-live-schirme und nehmen je Ausgang mit `grim` auf. Ob ein Bild
+# wirklich auf dem zweiten Schirm landet, ist der ganze Gegenstand -
+# tests/iso/test_live_schirme.py prueft nur, WELCHE Aufrufe fallen.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def fehlt_kiosk() -> list[str]:
     """Was diese Maschine fuer den Kiosk braucht.

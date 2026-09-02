@@ -11,7 +11,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
-"POT-Creation-Date: 2026-09-02 15:33+0200\n"
+"POT-Creation-Date: 2026-09-03 00:13+0200\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -27,13 +27,13 @@ msgid "{script} is not answering: {reason}"
 msgstr "{script} antwortet nicht: {reason}"
 
 #: src/templates/ags-bar.template:2208
-#: src/templates/ags-control-center.template:1898
+#: src/templates/ags-control-center.template:1933
 #: src/templates/ags-disk.template:368
 msgid "Disk space"
 msgstr "Speicherplatz"
 
 #: src/templates/ags-bar.template:2211
-#: src/templates/ags-control-center.template:1895
+#: src/templates/ags-control-center.template:1930
 #: src/templates/ags-wallpaper.template:329
 msgid "Wallpaper"
 msgstr "Hintergrundbild"
@@ -175,14 +175,14 @@ msgid "bluetoothctl is not answering ({error}). Usually the service is not runni
 msgstr "bluetoothctl antwortet nicht ({error}). Meist läuft der Dienst nicht: systemctl enable --now bluetooth.service"
 
 #: src/templates/ags-bluetooth.template:374
-#: src/templates/ags-control-center.template:499
-#: src/templates/ags-control-center.template:1651
+#: src/templates/ags-control-center.template:534
+#: src/templates/ags-control-center.template:1686
 msgid "Bluetooth"
 msgstr "Bluetooth"
 
 #: src/templates/ags-bluetooth.template:376
-#: src/templates/ags-control-center.template:671
-#: src/templates/ags-network.template:441 src/templates/ags-vpn.template:830
+#: src/templates/ags-control-center.template:706
+#: src/templates/ags-network.template:475 src/templates/ags-vpn.template:830
 msgid "CONNECTIONS"
 msgstr "VERBINDUNGEN"
 
@@ -218,65 +218,134 @@ msgstr "{connected} von {total} Geräten verbunden"
 msgid "Turn Bluetooth on to see devices"
 msgstr "Schalte Bluetooth ein, um Geräte zu sehen"
 
-#: src/templates/ags-bluetooth.template:516
+#: src/templates/ags-bluetooth.template:530
+msgid "Put the device into pairing mode - usually a button on its underside"
+msgstr "Bringe das Gerät in den Kopplungsmodus - meist eine Taste an seiner Unterseite"
+
+#: src/templates/ags-bluetooth.template:530
 msgid "Searching …"
 msgstr "Suche läuft …"
 
 # Aufgabe 36, 20.08.2026: der dritte Zustand einer leeren Liste.
 # "Es wird noch gelesen" und "es ist nichts da" sahen bis dahin beide
 # gleich aus, naemlich wie nichts.
-#: src/templates/ags-bluetooth.template:518
+#: src/templates/ags-bluetooth.template:532
 msgid "Reading devices …"
 msgstr "Geräte werden gelesen …"
 
-#: src/templates/ags-bluetooth.template:519
+#: src/templates/ags-bluetooth.template:533
 msgid "No device known - search for devices"
 msgstr "Kein Gerät bekannt - suche nach Geräten"
 
-#: src/templates/ags-bluetooth.template:649
-msgid "Connecting …"
-msgstr "Verbinde …"
+#: src/templates/ags-bluetooth.template:634 src/templates/ags-vpn.template:1186
+msgid "Connected"
+msgstr "Verbunden"
 
-#: src/templates/ags-bluetooth.template:649
+#: src/templates/ags-bluetooth.template:635
+msgid "Found"
+msgstr "Gefunden"
+
+#: src/templates/ags-bluetooth.template:635
+msgid "Paired"
+msgstr "Gekoppelt"
+
+#: src/templates/ags-bluetooth.template:677
 msgid "Disconnecting …"
 msgstr "Trenne …"
 
-#: src/templates/ags-bluetooth.template:743
+#: src/templates/ags-bluetooth.template:678
+msgid "Connecting …"
+msgstr "Verbinde …"
+
+# DIE VIER SAETZE DES KOPPELNS, 02.09.2026 - NOCH OHNE FUNDSTELLE
+#
+# WARUM SIE HIER STEHEN, BEVOR SIE JEMAND AUFRUFT
+#     Das Bluetooth-Fenster rief bis zum 02.09.2026 nur `connect`. Ein
+#     Geraet, das noch nie gekoppelt war, verbindet sich damit nicht -
+#     das Fenster konnte GAR NICHT koppeln. Seit b857209 ruft es
+#     pair/trust/connect, und damit sind drei vorhandene Saetze im
+#     Kopplungsfall falsch:
+#
+#         "Verbinde …"                            waehrend GEKOPPELT wird
+#         "Verbinden fehlgeschlagen - gekoppelt?" nach einem KOPPLUNGSversuch
+#         "Mit {device} verbinden"                wo gekoppelt UND verbunden wird
+#
+#     Die drei bleiben stehen und werden NICHT ersetzt: fuer ein schon
+#     gekoppeltes Geraet sagen sie weiter die Wahrheit. Die vier hier
+#     sind der zweite Weg, nicht der neue.
+#
+#     Der vierte ist der wichtigste und fehlte ganz. Ohne den Hinweis
+#     auf den Kopplungsmodus scheitert eine Kopplung, und der Nutzer
+#     sieht nur, dass nichts passiert - das Geraet hat nie zugehoert.
+#
+# WARUM "Kopple …" UND NICHT "Koppeln …"
+#     Weil die Nachbarn in genau demselben Moment derselben Zeile
+#     "Verbinde …" und "Trenne …" sagen. Erste Person Singular ist in
+#     diesem Katalog die Form der Ansage waehrend eines Klicks; ein
+#     Infinitiv daneben liest sich wie eine Beschriftung und nicht wie
+#     etwas, das gerade laeuft. Der Kommentar in ags-bluetooth.template
+#     schlaegt "Koppeln …" vor - er ist aelter als diese Nachbarschaft.
+#
+# KEINE `#:`-ZEILE, UND DAS IST KEIN VERSEHEN
+#     tests/src/test_ags_i18n.py verlangt fuer jeden _()-Text der
+#     Vorlagen einen Katalogeintrag. Der Eintrag muss also VOR dem
+#     Aufruf dastehen, sonst ist der Zweig, der die Aufrufe einbaut,
+#     unweigerlich rot. `extract.sh` traegt die Fundstelle nach, sobald
+#     ags-bluetooth.template sie ruft; eine getippte Zeilennummer waere
+#     bis dahin eine Angabe, die nicht stimmt.
+#
+#     BIS DAHIN GILT: ein `extract.sh && msgmerge -U` VOR diesem Einbau
+#     kommentiert die vier als obsolet (`#~`) aus - keine Vorlage nennt
+#     sie. Wer msgmerge laufen laesst und danach vier Eintraege
+#     vermisst, findet sie am Ende der Datei und nicht im Nichts.
+#: src/templates/ags-bluetooth.template:678
+msgid "Pairing …"
+msgstr "Kopple …"
+
+#: src/templates/ags-bluetooth.template:772
 msgid "Disconnecting failed"
 msgstr "Trennen fehlgeschlagen"
 
-#: src/templates/ags-bluetooth.template:744
+#: src/templates/ags-bluetooth.template:774
 msgid "Connecting failed - is it paired?"
 msgstr "Verbinden fehlgeschlagen - gekoppelt?"
 
-#: src/templates/ags-bluetooth.template:754
+#: src/templates/ags-bluetooth.template:775
+msgid "Pairing failed - hold the pairing button and try again"
+msgstr "Koppeln fehlgeschlagen - halte die Kopplungstaste gedrückt und versuche es erneut"
+
+#: src/templates/ags-bluetooth.template:785
 msgid "Disconnect {device}"
 msgstr "{device} trennen"
 
-#: src/templates/ags-bluetooth.template:755
+#: src/templates/ags-bluetooth.template:787
 msgid "Connect to {device}"
 msgstr "Mit {device} verbinden"
 
-#: src/templates/ags-bluetooth.template:812
+#: src/templates/ags-bluetooth.template:788
+msgid "Pair with {device} and connect"
+msgstr "Mit {device} koppeln und verbinden"
+
+#: src/templates/ags-bluetooth.template:846
 msgid "DEVICES"
 msgstr "GERÄTE"
 
 # Aufgabe 36, 20.08.2026: die Ansage waehrend des Suchlaufs. Die Dauer
 # steht darin, weil sie feststeht (SUCHDAUER) - wer sie kennt, wartet
 # anders als wer nicht weiss, ob ueberhaupt noch etwas kommt.
-#: src/templates/ags-bluetooth.template:872
+#: src/templates/ags-bluetooth.template:906
 msgid "Searching for devices - {seconds} seconds …"
 msgstr "Geräte werden gesucht - {seconds} Sekunden …"
 
-#: src/templates/ags-bluetooth.template:904
+#: src/templates/ags-bluetooth.template:938
 msgid "Search for devices for {seconds} seconds"
 msgstr "{seconds} Sekunden nach Geräten suchen"
 
-#: src/templates/ags-bluetooth.template:908
+#: src/templates/ags-bluetooth.template:942
 msgid "Read the list again"
 msgstr "Liste neu lesen"
 
-#: src/templates/ags-bluetooth.template:929
+#: src/templates/ags-bluetooth.template:963
 msgid "Open Blueman - pairing, sending files"
 msgstr "Blueman öffnen - Koppeln, Dateien senden"
 
@@ -309,231 +378,241 @@ msgstr "Voriger Monat"
 msgid "Next month"
 msgstr "Nächster Monat"
 
-#: src/templates/ags-control-center.template:504
+#: src/templates/ags-control-center.template:294
+#: src/templates/ags-network.template:322 src/templates/ags-vpn.template:802
+#: src/templates/ags-vpn.template:1501
+msgid "Not connected"
+msgstr "Nicht verbunden"
+
+#: src/templates/ags-control-center.template:327
+msgid "No printer"
+msgstr "Kein Drucker"
+
+#: src/templates/ags-control-center.template:539
 msgid "VPN: {status}"
 msgstr "VPN: {status}"
 
-#: src/templates/ags-control-center.template:544
+#: src/templates/ags-control-center.template:579
 msgid "Network watchdog: {status}"
 msgstr "Netz-Watchdog: {status}"
 
-#: src/templates/ags-control-center.template:552
+#: src/templates/ags-control-center.template:587
 msgid "Helper scripts ({count})"
 msgstr "Hilfsskripte ({count})"
 
-#: src/templates/ags-control-center.template:601
+#: src/templates/ags-control-center.template:636
 msgid "Regenerate the configuration"
 msgstr "Die Konfiguration neu erzeugen"
 
-#: src/templates/ags-control-center.template:605
+#: src/templates/ags-control-center.template:640
 msgid "Try the update again"
 msgstr "Die Aktualisierung noch einmal versuchen"
 
-#: src/templates/ags-control-center.template:615
+#: src/templates/ags-control-center.template:650
 msgid "Update the Arch base - in the terminal, with a prompt"
 msgstr "Die Arch-Basis aktualisieren - im Terminal, mit Rückfrage"
 
-#: src/templates/ags-control-center.template:626
+#: src/templates/ags-control-center.template:661
 msgid "Configure the self-update"
 msgstr "Die Selbstaktualisierung einstellen"
 
-#: src/templates/ags-control-center.template:657
-#: src/templates/ags-control-center.template:1883
+#: src/templates/ags-control-center.template:692
+#: src/templates/ags-control-center.template:1918
 msgid "Hardware"
 msgstr "Hardware"
 
-#: src/templates/ags-control-center.template:672
+#: src/templates/ags-control-center.template:707
 msgid "SYSTEM"
 msgstr "SYSTEM"
 
-#: src/templates/ags-control-center.template:761
+#: src/templates/ags-control-center.template:796
 msgid "Sound"
 msgstr "Ton"
 
-#: src/templates/ags-control-center.template:965
+#: src/templates/ags-control-center.template:1000
 msgid "Output device"
 msgstr "Ausgabegerät"
 
-#: src/templates/ags-control-center.template:970
+#: src/templates/ags-control-center.template:1005
 msgid "Input device"
 msgstr "Eingabegerät"
 
-#: src/templates/ags-control-center.template:1079
+#: src/templates/ags-control-center.template:1114
 msgid "wireplumber is not installed"
 msgstr "wireplumber ist nicht installiert"
 
-#: src/templates/ags-control-center.template:1081
+#: src/templates/ags-control-center.template:1116
 msgid "The sound service is not answering"
 msgstr "Der Tondienst antwortet nicht"
 
-#: src/templates/ags-control-center.template:1083
+#: src/templates/ags-control-center.template:1118
 msgid "The device list is not answering"
 msgstr "Die Geräteliste antwortet nicht"
 
-#: src/templates/ags-control-center.template:1137
+#: src/templates/ags-control-center.template:1172
 msgid "No output device"
 msgstr "Kein Ausgabegerät"
 
-#: src/templates/ags-control-center.template:1139
+#: src/templates/ags-control-center.template:1174
 msgid "Volume muted - {device}"
 msgstr "Lautstärke stumm – {device}"
 
-#: src/templates/ags-control-center.template:1141
+#: src/templates/ags-control-center.template:1176
 msgid "Volume {level}% - {device}"
 msgstr "Lautstärke {level}% – {device}"
 
-#: src/templates/ags-control-center.template:1147
+#: src/templates/ags-control-center.template:1182
 msgid "No input device"
 msgstr "Kein Eingabegerät"
 
-#: src/templates/ags-control-center.template:1149
+#: src/templates/ags-control-center.template:1184
 msgid "Microphone muted - {device}"
 msgstr "Mikrofon stumm – {device}"
 
-#: src/templates/ags-control-center.template:1151
+#: src/templates/ags-control-center.template:1186
 msgid "Microphone {level}% - {device}"
 msgstr "Mikrofon {level}% – {device}"
 
-#: src/templates/ags-control-center.template:1172
+#: src/templates/ags-control-center.template:1207
 msgid "Display"
 msgstr "Anzeige"
 
-#: src/templates/ags-control-center.template:1227
+#: src/templates/ags-control-center.template:1262
 msgid "Brightness {level}%"
 msgstr "Helligkeit {level}%"
 
-#: src/templates/ags-control-center.template:1348
+#: src/templates/ags-control-center.template:1383
 msgid "Control"
 msgstr "Kontrolle"
 
-#: src/templates/ags-control-center.template:1472
+#: src/templates/ags-control-center.template:1507
 msgid "PRIVACY"
 msgstr "DATENSCHUTZ"
 
-#: src/templates/ags-control-center.template:1492
+#: src/templates/ags-control-center.template:1527
 msgid "Microphone:"
 msgstr "Mikrofon:"
 
-#: src/templates/ags-control-center.template:1503
+#: src/templates/ags-control-center.template:1538
 msgid "Mute the microphone"
 msgstr "Mikrofon stummschalten"
 
-#: src/templates/ags-control-center.template:1513
+#: src/templates/ags-control-center.template:1548
 msgid "Camera:"
 msgstr "Kamera:"
 
-#: src/templates/ags-control-center.template:1582
+#: src/templates/ags-control-center.template:1617
 msgid "NETWORK & CONNECTIONS"
 msgstr "NETZ & VERBINDUNGEN"
 
-#: src/templates/ags-control-center.template:1591
+#: src/templates/ags-control-center.template:1626
 msgid "Loading …"
 msgstr "Lade …"
 
-#: src/templates/ags-control-center.template:1600
+#: src/templates/ags-control-center.template:1635
 msgid "Wi-Fi networks - the same page as above"
 msgstr "WLAN-Netzwerke - dieselbe Seite wie oben"
 
-#: src/templates/ags-control-center.template:1630
+#: src/templates/ags-control-center.template:1665
 msgid "VPN: off"
 msgstr "VPN: Aus"
 
-#: src/templates/ags-control-center.template:1661
+#: src/templates/ags-control-center.template:1696
 msgid "Bluetooth devices - the same page as above"
 msgstr "Bluetooth-Geräte - dieselbe Seite wie oben"
 
-#: src/templates/ags-control-center.template:1681
+#: src/templates/ags-control-center.template:1716
 msgid "SOUND & DISPLAY"
 msgstr "TON & BILD"
 
-#: src/templates/ags-control-center.template:1738
+#: src/templates/ags-control-center.template:1773
 msgid "Previous track"
 msgstr "Vorheriger Titel"
 
-#: src/templates/ags-control-center.template:1750
+#: src/templates/ags-control-center.template:1785
 msgid "Pause / resume"
 msgstr "Anhalten / Fortsetzen"
 
-#: src/templates/ags-control-center.template:1752
+#: src/templates/ags-control-center.template:1787
 msgid "Next track"
 msgstr "Nächster Titel"
 
-#: src/templates/ags-control-center.template:1783
+#: src/templates/ags-control-center.template:1818
 msgid "Displays"
 msgstr "Bildschirme"
 
-#: src/templates/ags-control-center.template:1797
+#: src/templates/ags-control-center.template:1832
 msgid "Set arrangement, resolution and refresh rate"
 msgstr "Anordnung, Auflösung und Frequenz einstellen"
 
-#: src/templates/ags-control-center.template:1826
+#: src/templates/ags-control-center.template:1861
 msgid "DESKTOP"
 msgstr "SCHREIBTISCH"
 
-#: src/templates/ags-control-center.template:1862
+#: src/templates/ags-control-center.template:1897
 msgid "Set the location for the weather"
 msgstr "Den Ort für das Wetter einstellen"
 
-#: src/templates/ags-control-center.template:1883
+#: src/templates/ags-control-center.template:1918
 msgid "Open btop"
 msgstr "btop öffnen"
 
-#: src/templates/ags-control-center.template:1887
+#: src/templates/ags-control-center.template:1922
 #: src/templates/ags-shortcuts.template:395
 msgid "Keyboard shortcuts"
 msgstr "Tastenkürzel"
 
-#: src/templates/ags-control-center.template:1888
+#: src/templates/ags-control-center.template:1923
 msgid "Show all keyboard shortcuts"
 msgstr "Alle Tastenkürzel zeigen"
 
-#: src/templates/ags-control-center.template:1891
+#: src/templates/ags-control-center.template:1926
 msgid "Floating windows"
 msgstr "Schwebende Fenster"
 
-#: src/templates/ags-control-center.template:1892
+#: src/templates/ags-control-center.template:1927
 msgid "Restore the saved arrangement"
 msgstr "Die gespeicherte Anordnung wiederherstellen"
 
-#: src/templates/ags-control-center.template:1895
+#: src/templates/ags-control-center.template:1930
 msgid "Choose another image"
 msgstr "Ein anderes Bild wählen"
 
-#: src/templates/ags-control-center.template:1898
+#: src/templates/ags-control-center.template:1933
 msgid "Show how the drives are filled"
 msgstr "Belegung der Laufwerke zeigen"
 
-#: src/templates/ags-control-center.template:1905
+#: src/templates/ags-control-center.template:1940
 msgid "SYSTEM SERVICES"
 msgstr "SYSTEMDIENSTE"
 
-#: src/templates/ags-control-center.template:1914
+#: src/templates/ags-control-center.template:1949
 msgid "Printer"
 msgstr "Drucker"
 
-#: src/templates/ags-control-center.template:1942
+#: src/templates/ags-control-center.template:1977
 msgid "Network watchdog"
 msgstr "Netz-Watchdog"
 
-#: src/templates/ags-control-center.template:1967
+#: src/templates/ags-control-center.template:2002
 msgid "Helper scripts"
 msgstr "Hilfsskripte"
 
-#: src/templates/ags-control-center.template:2002
+#: src/templates/ags-control-center.template:2037
 msgid "Style editor"
 msgstr "Stil-Editor"
 
-#: src/templates/ags-control-center.template:2007
+#: src/templates/ags-control-center.template:2042
 msgid "Appearance and colors - the same window as above"
 msgstr "Aussehen und Farben - dasselbe Fenster wie oben"
 
-#: src/templates/ags-control-center.template:2110
+#: src/templates/ags-control-center.template:2145
 #: src/templates/ags-logout.template:195
 #: src/templates/ags-power-button.template:129
 msgid "Session"
 msgstr "Sitzung"
 
-#: src/templates/ags-control-center.template:2116
+#: src/templates/ags-control-center.template:2151
 msgid "Lock, log out, restart, shut down, suspend or hibernate"
 msgstr "Sperren, Abmelden, Neustart, Herunterfahren, Bereitschaft oder Ruhezustand"
 
@@ -660,43 +739,47 @@ msgstr "Bereitschaft"
 msgid "Hibernate"
 msgstr "Ruhezustand"
 
-#: src/templates/ags-network.template:439
+#: src/templates/ags-network.template:321
+msgid "Wired connection"
+msgstr "Kabelverbindung"
+
+#: src/templates/ags-network.template:473
 msgid "Network"
 msgstr "Netzwerk"
 
-#: src/templates/ags-network.template:502
+#: src/templates/ags-network.template:536
 msgid "Password for \"{ssid}\""
 msgstr "Passwort für \"{ssid}\""
 
-#: src/templates/ags-network.template:627
+#: src/templates/ags-network.template:661
 msgctxt "wifi security"
 msgid "Open"
 msgstr "Offen"
 
-#: src/templates/ags-network.template:648
+#: src/templates/ags-network.template:682
 msgid "Please enter the password"
 msgstr "Bitte Passwort eingeben"
 
-#: src/templates/ags-network.template:651 src/templates/ags-vpn.template:856
+#: src/templates/ags-network.template:685 src/templates/ags-vpn.template:856
 #: src/templates/ags-vpn.template:915 src/templates/ags-vpn.template:995
 msgid "Connecting ..."
 msgstr "Verbinde ..."
 
-#: src/templates/ags-network.template:655 src/templates/ags-vpn.template:868
+#: src/templates/ags-network.template:689 src/templates/ags-vpn.template:868
 #: src/templates/ags-vpn.template:932 src/templates/ags-vpn.template:938
 #: src/templates/ags-vpn.template:1066
 msgid "Connection failed"
 msgstr "Verbindung fehlgeschlagen"
 
-#: src/templates/ags-network.template:693
+#: src/templates/ags-network.template:727
 msgid "{signal}% • {security}"
 msgstr "{signal}% • {security}"
 
-#: src/templates/ags-network.template:695
+#: src/templates/ags-network.template:729
 msgid "open"
 msgstr "offen"
 
-#: src/templates/ags-network.template:763
+#: src/templates/ags-network.template:797
 msgid "Turn Wi-Fi on or off"
 msgstr "WLAN ein- oder ausschalten"
 
@@ -705,87 +788,87 @@ msgstr "WLAN ein- oder ausschalten"
 # laeuft seither im Hintergrund, waehrend die Liste des letzten Laufs
 # schon dasteht. Ohne diese Zeile saehe der Nutzer nur eine Liste, die
 # sich irgendwann von selbst aendert.
-#: src/templates/ags-network.template:849
+#: src/templates/ags-network.template:883
 msgid "Searching for Wi-Fi networks …"
 msgstr "WLAN-Netze werden gesucht …"
 
-#: src/templates/ags-network.template:914
-#: src/templates/ags-network.template:1099
+#: src/templates/ags-network.template:948
+#: src/templates/ags-network.template:1133
 msgid "Back"
 msgstr "Zurück"
 
-#: src/templates/ags-network.template:918
+#: src/templates/ags-network.template:952
 msgid "Password for network"
 msgstr "Passwort für Netzwerk"
 
-#: src/templates/ags-network.template:926
+#: src/templates/ags-network.template:960
 msgid "Enter the Wi-Fi password ..."
 msgstr "WLAN-Passwort eingeben ..."
 
-#: src/templates/ags-network.template:934 src/templates/ags-vpn.template:1659
+#: src/templates/ags-network.template:968 src/templates/ags-vpn.template:1659
 msgid "Connect"
 msgstr "Verbinden"
 
-#: src/templates/ags-network.template:986
+#: src/templates/ags-network.template:1020
 msgid "Wi-Fi networks"
 msgstr "WLAN-Netzwerke"
 
-#: src/templates/ags-network.template:1006
+#: src/templates/ags-network.template:1040
 msgid "Scan again"
 msgstr "Erneut suchen"
 
-#: src/templates/ags-network.template:1029
+#: src/templates/ags-network.template:1063
 msgid "Open network management"
 msgstr "Netzwerkverwaltung öffnen"
 
-#: src/templates/ags-network.template:1130
+#: src/templates/ags-network.template:1164
 msgid "IP address"
 msgstr "IP-Adresse"
 
-#: src/templates/ags-network.template:1163
+#: src/templates/ags-network.template:1197
 msgid "MAC address"
 msgstr "MAC-Adresse"
 
-#: src/templates/ags-network.template:1166
+#: src/templates/ags-network.template:1200
 msgid "The address of this computer's adapter - the one a network asks for when it wants a device registered"
 msgstr "Die Adresse des Netzadapters dieses Rechners - die, nach der ein Netz fragt, das ein Gerät angemeldet haben will"
 
-#: src/templates/ags-network.template:1173
+#: src/templates/ags-network.template:1207
 msgid "temporary"
 msgstr "wechselnd"
 
-#: src/templates/ags-network.template:1179
+#: src/templates/ags-network.template:1213
 msgid "This is not the adapter's own address - NetworkManager put a substitute in its place, so it can change. A registration made with it may stop working."
 msgstr "Das ist nicht die eigene Adresse des Adapters - NetworkManager hat eine Ersatzadresse an ihre Stelle gesetzt, sie kann also wechseln. Eine damit vorgenommene Anmeldung kann aufhören zu gelten."
 
-#: src/templates/ags-network.template:1215
+#: src/templates/ags-network.template:1249
 msgid "Copy the MAC address"
 msgstr "Die MAC-Adresse kopieren"
 
-#: src/templates/ags-network.template:1219
+#: src/templates/ags-network.template:1253
 msgid "Gateway"
 msgstr "Gateway"
 
-#: src/templates/ags-network.template:1221
+#: src/templates/ags-network.template:1255
 #: src/templates/ags-vpn-settings.template:414
 #: src/templates/ags-vpn-settings.template:427
 #: src/templates/ags-vpn-settings.template:434
 msgid "DNS"
 msgstr "DNS"
 
-#: src/templates/ags-network.template:1223
+#: src/templates/ags-network.template:1257
 msgid "Access point"
 msgstr "Zugangspunkt"
 
-#: src/templates/ags-network.template:1227
+#: src/templates/ags-network.template:1261
 msgid "The address of the transmitter this computer is currently on (BSSID)"
 msgstr "Die Adresse des Senders, an dem dieser Rechner gerade hängt (BSSID)"
 
-#: src/templates/ags-network.template:1228
+#: src/templates/ags-network.template:1262
 msgid "Security"
 msgstr "Sicherheit"
 
-#: src/templates/ags-network.template:1246 src/templates/ags-vpn.template:728
+#: src/templates/ags-network.template:1280 src/templates/ags-vpn.template:728
 #: src/templates/ags-vpn.template:1118 src/templates/ags-vpn.template:1211
 msgid "Disconnect"
 msgstr "Trennen"
@@ -1703,10 +1786,6 @@ msgstr "VPN-Zustand unbekannt – NetworkManager antwortet nicht."
 msgid "Nobody knows whether your traffic is protected."
 msgstr "Niemand weiß, ob dein Verkehr geschützt ist."
 
-#: src/templates/ags-vpn.template:802 src/templates/ags-vpn.template:1501
-msgid "Not connected"
-msgstr "Nicht verbunden"
-
 #: src/templates/ags-vpn.template:828
 msgid "VPN"
 msgstr "VPN"
@@ -1726,10 +1805,6 @@ msgstr "PSK nicht gefunden! Bitte in VPN-Einstellungen speichern."
 #: src/templates/ags-vpn.template:1082
 msgid "Disconnecting ..."
 msgstr "Trenne..."
-
-#: src/templates/ags-vpn.template:1186
-msgid "Connected"
-msgstr "Verbunden"
 
 #: src/templates/ags-vpn.template:1314
 msgid "Only one VPN can be connected at a time - {name} is being disconnected."

@@ -129,6 +129,13 @@ GRUEN = (0, 255, 0)
 REGEL_SCHWEBEND = ("match:class ^(floating-default)$, float on, "
                    "center on, size 800 600")
 
+# Die modulweite Vorrichtung `gemessen` startet echte kitty-Fenster in
+# einer verschachtelten Sitzung. Der Abstand des Fensterkopfs zum oberen
+# Rand und das Flackern beim x sind bemalte Punkte - an der Vorlage ist
+# beides nicht zu sehen. Fehlt kitty, ueberspringt die Vorrichtung sich
+# selbst; der Marker gilt fuer den Fall, dass es da ist.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _plugin() -> Path | None:
     aus_umgebung = os.environ.get("ZEPOS_HYPRBARS_SO")

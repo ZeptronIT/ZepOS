@@ -74,6 +74,13 @@ INSTANZ = "zepos-dock-menue"
 # Astal.Keymode, als Zahl - so wie das Kind sie meldet.
 KEYMODE_NONE = "0"
 
+# Die modulweite Vorrichtung `menue` startet die Schale mit `ags` und
+# schickt echte Tasten mit `wtype`. Die Flaeche des Fusses ist
+# 385 x 45 Punkte gross; ob ein Menue daran ueberhaupt aufgehen und
+# ueber den Rand hinausragen kann, entscheidet die Layer-Shell und
+# nicht das Widget.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _buendle(eintrag: Path, ags: Path, ziel: Path) -> Path:
     """Wie bundle() in desktop_session.py, nur fuer einen anderen Eingang."""

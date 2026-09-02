@@ -64,6 +64,13 @@ FENSTER = "vpn-settings"
 # Die Bildschirmgroesse des Nutzers.
 BREITE, HOEHE = 1920, 1200
 
+# Die modulweite Vorrichtung `messung` legt einen headless-Ausgang in
+# 1920x1200 an - der Aufloesung, an der der Nutzer sitzt - und zeichnet
+# die VPN-Liste darin. Der Bildbeweis in 1920x1080 hat diesen Fehler
+# nicht gefunden: ein Bild in falscher Groesse sieht aus wie eine
+# Pruefung. Nach der laufenden Sitzung wird NICHT gefragt.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def _sprosse(name: str) -> int:
     """Eine Sprosse aus DERSELBEN Quelle, aus der die Vorlage sie holt.

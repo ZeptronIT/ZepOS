@@ -91,6 +91,13 @@ FRIST = 25.0
 # Abfrageintervalls oben.
 SETZEN = 4 * float(INTERVALL)
 
+# Die modulweite Vorrichtung `spiegelung` startet ein ECHTES Hyprland
+# und fragt es mit `hyprctl` ab. Ob die Anmeldung auf einem zweiten
+# Ausgang erscheint, ist eine Aussage ueber den Compositor und ueber
+# nichts sonst - genau deshalb war der schwarze Schirm des Nutzers aus
+# dem Quelltext nicht zu sehen.
+pytestmark = pytest.mark.allow_subprocess
+
 
 def required() -> list[str]:
     return missing_tools("Hyprland", "hyprctl", "awk")

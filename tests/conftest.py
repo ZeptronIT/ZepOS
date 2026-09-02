@@ -6,8 +6,8 @@ test could therefore drop the developer's wireless connection, overwrite
 a live NetworkManager profile, or delete part of the machine running the
 tests. All of those break a working system.
 
-Two autouse fixtures make that structurally impossible rather than a
-matter of discipline:
+One hookwrapper around pytest_runtest_protocol makes that structurally
+impossible rather than a matter of discipline:
 
   * no test may spawn a real process
   * no test may write outside a temporary directory - where "write"
@@ -19,12 +19,90 @@ Tests that genuinely need one of these opt in explicitly:
     @pytest.mark.allow_subprocess
     @pytest.mark.allow_system_writes
 
+WAS DIE WACHE UEBERHAUPT VERLANGT
+    Sie verbietet nicht, Prozesse zu starten oder ausserhalb von /tmp zu
+    schreiben. Sie verlangt, dass es ERKLAERT ist. Siebenundachtzig
+    berechtigte Faelle sind kein Problem; unerklaerte sind eins, weil
+    niemand sie beim Lesen von einem Versehen unterscheiden kann.
+
+BEIDE WACHEN HATTEN DASSELBE LOCH, GESCHLOSSEN AM 02.09.2026 (Aufgabe 86)
+    Bis dahin war jede von beiden eine autouse-Vorrichtung OHNE scope,
+    also FUNKTIONSWEIT. pytest baut Vorrichtungen nach
+    Gueltigkeitsbereich auf - session, package, module, class, function -,
+    und damit lief eine funktionsweite Wache NACH jeder modulweiten
+    Vorrichtung. Eine modulweite Vorrichtung startete ihre Prozesse und
+    schrieb ihre Dateien also VOR DER WACHE, und der Marker, der das
+    haette erklaeren muessen, wurde nie gelesen.
+
+    GEMESSEN, zwei instrumentierte Vollaeufe ueber die ganze Suite:
+    1656 Prozessstarts kamen an der Wache vorbei, 1653 davon in der Phase
+    "setup", aus 37 Vorrichtungen (36 modulweit, eine sitzungsweit) in
+    22 Dateien. Nichts davon war ein Versehen - was da startete, war
+    Hyprland, dbus-daemon, `ags bundle`, grim, swaybg, gtk4-broadwayd.
+    Genau deshalb war es gefaehrlich: die Wache liess ausgerechnet die
+    Aufrufe durch, die wirklich etwas anfassen.
+
+    DASS BEIDE WACHEN ES HATTEN, IST DER EIGENTLICHE BEFUND, und eine
+    allein zu flicken waere die halbe Arbeit an der ganzen Einsicht
+    gewesen. Der Fehler steckte nicht in dem, WAS sie flicken, sondern
+    darin, WANN sie eingebaut werden - und das war bei beiden dieselbe
+    Zeile: `@pytest.fixture(autouse=True)`. Die Unterprozess-Wache
+    verhindert, dass ein Test ein Programm startet; die Schreib-Wache
+    verhindert, dass ein Test die PLATTE des Entwicklers anfasst. Die
+    zweite Folge ist die groessere, und sie stand genauso offen. Gemessen
+    an einer modulweiten Vorrichtung mit Path.write_text() auf einen Pfad
+    im geschuetzten Arbeitsbaum: sie erreichte den echten Systemaufruf,
+    derselbe Aufruf im Testkoerper kam als IsolationViolation zurueck.
+
+    Behoben durch einen Hookwrapper um pytest_runtest_protocol. Der laeuft
+    vor JEDER Vorrichtung dieses Laufs, gleich welchen
+    Gueltigkeitsbereichs, weil das Aufbauen der Vorrichtungen INNERHALB
+    dieses Hooks passiert.
+
+    NICHT durch einen Wechsel des Gueltigkeitsbereichs der Wache selbst:
+    eine session- oder packageweite Wache muesste unbedingt blocken, weil
+    der Marker am einzelnen Lauf haengt und beim Aufbau einer
+    sitzungsweiten Vorrichtung noch kein Lauf feststeht. Sie wuerde damit
+    die 87 berechtigten Faelle mitreissen.
+
+WARUM EINE MODULWEITE VORRICHTUNG NUR MODULWEIT FREIGEGEBEN WERDEN KANN
+    Ein Marker am EINZELNEN LAUF gibt eine modulweite Vorrichtung
+    REIHENFOLGEABHAENGIG frei, und das ist gemessen, nicht befuerchtet:
+
+      markierter Lauf zuerst   -> 2 passed
+      unmarkierter Lauf zuerst -> 3 errors, auch der markierte
+
+    pytest legt eine modulweite Vorrichtung beim ERSTEN Lauf an, der sie
+    anfordert, und speichert ihren Fehlschlag zwischen; jeder weitere
+    Lauf bekommt denselben Fehler noch einmal vorgelegt, sein eigener
+    Marker hin oder her. Ein Test, dessen Ergebnis an der Reihenfolge
+    haengt, ist kein Test.
+
+    Modulweites `pytestmark = pytest.mark.allow_subprocess` ist in beiden
+    Reihenfolgen gruen, weil pytest es auf JEDEN Lauf des Moduls legt -
+    der erste Anforderer ist damit immer markiert. Eine modulweite
+    Vorrichtung braucht also eine MODULWEITE Erklaerung. Vierzehn Dateien
+    dieses Baums trugen sie schon, bevor dieses Loch auffiel; die
+    uebrigen wurden am 02.09.2026 nachgezogen, jede mit dem sachlichen
+    Grund in ihrem Modul-Docstring.
+
+WAS DIE WACHE AUCH JETZT NICHT SIEHT
+    Alles, was ausserhalb eines Laufs passiert: Prozessstarts und
+    Schreibzugriffe waehrend des SAMMELNS, also im Kopf eines
+    Testmoduls. Gemessen wurden dabei zwei Aufrufe, beide harmlose
+    Abfragen nach vorhandenen Werkzeugen. Der Hookwrapper haengt am
+    einzelnen Lauf, weil die Freigabe an dessen Marker haengt; ein Modul,
+    das beim Import ein Programm startet, hat noch keinen Lauf, an dem
+    ein Marker sitzen koennte. Wer das schliessen will, braucht eine
+    andere Erklaerungsform als einen Marker - und muss zuerst zeigen,
+    dass es ein Problem gibt.
+
 WHAT allow_subprocess ACTUALLY COSTS
     Not "this test may run `true`". Both guards are per-process
     monkeypatching, and monkeypatching cannot reach into a child. A test
     carrying allow_subprocess therefore hands its child BOTH permissions
     at once: the child may write anywhere the developer's own account
-    may, and _no_system_writes will never hear about it.
+    may, and the write guard will never hear about it.
 
     Eighty-seven tests carry the marker, because the artifacts this
     project generates are shell scripts and the only honest way to test a
@@ -104,6 +182,10 @@ WORK_TREE = pathlib.Path(__file__).resolve().parent.parent
 # to exercise the overlap rules below. Baking it into this tuple at
 # import time would freeze the value of the one entry that has to move.
 PROTECTED_PATHS = tuple(pathlib.Path(prefix) for prefix in PROTECTED_PREFIXES)
+
+# Die Ausnahme innerhalb von /dev. Begruendung an der Stelle, die sie
+# anwendet, unten in _is_protected().
+WRITABLE_DEVICES = frozenset({"/dev/null", "/dev/zero", "/dev/full"})
 
 # Resolved once, at import time, and never asked for again while a guard
 # is active. tempfile.gettempdir() is lazy: its FIRST call probes
@@ -284,6 +366,39 @@ def _is_protected(path: os.PathLike[str] | str | int) -> bool:
     if in_work_tree:
         return True
 
+    # Die drei Namen, die ein Schreibzugriff nicht kaputt machen KANN.
+    #
+    # GEMESSEN AM 02.09.2026 (Aufgabe 86), und zwar erst, nachdem die
+    # Wache frueh genug eingebaut wurde: `subprocess.DEVNULL` laesst
+    # CPython `os.open(os.devnull, os.O_RDWR)` rufen, und /dev steht -
+    # zu Recht - unter den geschuetzten Praefixen. Damit wurde jede
+    # modulweite Vorrichtung abgewiesen, die ein Kind nach /dev/null
+    # umleitet, obwohl daran nichts gefaehrlich ist. Gemessen an
+    # tests/render/test_dock_breite.py: vier Fehler, alle in
+    # desktop_session.start_bus(), alle an der Zeile, mit der
+    # subprocess seine eigene Verrohrung aufbaut.
+    #
+    # Die Antwort darauf ist NICHT allow_system_writes auf diese
+    # Dateien: das schaltet die Wache gegen /dev/sda ab, und /dev/sda
+    # ist der Grund, warum /dev ueberhaupt auf der Liste steht. Es ist
+    # eine Ausnahme fuer genau diese drei Namen.
+    #
+    # EXAKTE NAMEN, KEIN PRAEFIX - "/dev/nullX" ist nicht /dev/null,
+    # und ein Praefixvergleich hier waere derselbe Fehler, den _within()
+    # weiter oben schon einmal beheben musste. Und jeder der drei
+    # verwirft, was man hineinschreibt, statt es zu behalten: /dev/null
+    # und /dev/full nehmen nichts an, /dev/zero gibt nur Nullen zurueck.
+    # /dev/random und /dev/urandom stehen ABSICHTLICH nicht dabei - ein
+    # Schreibzugriff dorthin speist den Entropievorrat des Kerns und
+    # aendert damit sehr wohl etwas.
+    #
+    # Beide Pfade muessen in der Liste stehen, der buchstaebliche und
+    # der aufgeloeste: waere /dev/null auf dieser Maschine ein Verweis
+    # auf etwas anderes, duerfte der Name allein die Ausnahme nicht
+    # erkaufen.
+    if str(resolved) in WRITABLE_DEVICES and str(real) in WRITABLE_DEVICES:
+        return False
+
     # Both the literal path and the symlink-resolved one are checked: a
     # symlink in a harmless-looking place still writes wherever it points.
     return any(
@@ -291,16 +406,45 @@ def _is_protected(path: os.PathLike[str] | str | int) -> bool:
     )
 
 
-@pytest.fixture(autouse=True)
-def _no_real_processes(request: pytest.FixtureRequest, monkeypatch) -> None:
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_protocol(item: pytest.Item, nextitem):
+    """Install both guards around EVERYTHING one run does.
+
+    THIS HOOK IS THE FIX FOR THE HOLE DESCRIBED AT THE TOP OF THIS FILE,
+    and the reason it is a hook rather than a fixture is the ONLY thing
+    that matters about it: pytest sets a run's fixtures up INSIDE this
+    hook, so code placed before the `yield` runs before every fixture of
+    every scope - session, package, module, class and function alike.
+
+    Both guards are installed here, together, because they had the same
+    hole for the same reason and would grow it back the same way. A
+    fixture cannot guard what builds a fixture.
+
+    Teardown of a higher-scoped fixture happens inside the protocol of the
+    LAST run that needed it (pytest decides that from `nextitem`), so it
+    is governed by that run's marker - consistent with its setup, which
+    was governed by the FIRST requesting run's marker. Both are the
+    module's own marker whenever the declaration is modulweit, which is
+    why modulweit is the form these files must use.
+    """
+    guard = pytest.MonkeyPatch()
+    if not item.get_closest_marker("allow_subprocess"):
+        _install_process_guard(guard)
+    if not item.get_closest_marker("allow_system_writes"):
+        _install_write_guard(guard)
+    try:
+        return (yield)
+    finally:
+        guard.undo()
+
+
+def _install_process_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     """Block process execution.
 
     The installer's own design already injects a runner callable, so unit
     tests pass a fake and never reach this. Anything that trips it is
     calling iwctl, archinstall or pacman for real.
     """
-    if request.node.get_closest_marker("allow_subprocess"):
-        return
 
     def blocked(*args, **kwargs):
         raise RuntimeError(
@@ -343,8 +487,7 @@ def _no_real_processes(request: pytest.FixtureRequest, monkeypatch) -> None:
     monkeypatch.setattr(multiprocessing.process.BaseProcess, "start", blocked)
 
 
-@pytest.fixture(autouse=True)
-def _no_system_writes(request: pytest.FixtureRequest, monkeypatch) -> None:
+def _install_write_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     """Block every modifying access to a system directory.
 
     write_profile() takes a target root so tests can point it at tmp_path.
@@ -355,8 +498,6 @@ def _no_system_writes(request: pytest.FixtureRequest, monkeypatch) -> None:
     renaming, re-permissioning and symlinking are patched here too: a
     test could previously not create /etc/hostname, but could delete it.
     """
-    if request.node.get_closest_marker("allow_system_writes"):
-        return
 
     def guard(path, action: str) -> None:
         if _is_protected(path):
