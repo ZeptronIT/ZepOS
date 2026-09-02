@@ -445,13 +445,27 @@ disconnect_vpn() {
     # stand hier ein Muster auf den Adressbereich eines bestimmten
     # Gateways: bei jedem anderen blieb die Adresse liegen, und die
     # naechste Verbindung baute darauf auf.
-    local LEFTOVER_VIP=""
+    #
+    # Ein Rueckgabewert von 2 heisst seit dem 02.09.2026 "nicht
+    # feststellbar" (siehe --address-present in src/vpn.py). Abgeraeumt
+    # wird dann nichts - was auch nichts kostet, denn wenn `ip` die
+    # Adresse nicht AUFZAEHLEN kann, kann es sie erst recht nicht
+    # LOESCHEN. Es wird aber protokolliert: der Unterschied zwischen
+    # "da war nichts abzuraeumen" und "es liess sich nicht nachsehen"
+    # ist genau der, den jemand sucht, der spaeter eine liegengebliebene
+    # Adresse findet. Die Erfolgspruefung weiter unten zieht daraus
+    # ihre eigene Folgerung.
+    local LEFTOVER_VIP="" LEFTOVER_RC=0
     if [ -n "$VPN_VIP" ]; then
-        LEFTOVER_VIP=$(vpn_query --address-present "$VPN_VIP" 2>/dev/null) || LEFTOVER_VIP=""
+        LEFTOVER_VIP=$(vpn_query --address-present "$VPN_VIP" 2>/dev/null)
+        LEFTOVER_RC=$?
+        [ "$LEFTOVER_RC" -eq 0 ] || LEFTOVER_VIP=""
     fi
     if [ -n "$LEFTOVER_VIP" ]; then
         log_message "Removing leftover virtual IP ${LEFTOVER_VIP} from ${ACTIVE_IFACE}"
         run_privileged ip addr del ${LEFTOVER_VIP} dev ${ACTIVE_IFACE} >> "$LOG_FILE" 2>&1 || true
+    elif [ "$LEFTOVER_RC" -gt 1 ]; then
+        log_message "Could not tell whether ${VPN_VIP} is still configured - leaving it alone"
     fi
 
     # Restore original DNS configuration
@@ -473,13 +487,65 @@ disconnect_vpn() {
     # jedem anderen nie zu, also war jede Trennung ein Erfolg - auch die,
     # bei der charon noch lief und die Adresse noch stand. Der Benutzer
     # bekam "Erfolgreich getrennt" und war weiterhin im fremden Netz.
+    #
+    # DERSELBE SATZ GALT BIS ZUM 02.09.2026 NOCH EINMAL, MIT EINER
+    # ANDEREN URSACHE
+    #     `vpn_query --address-present` kannte zwei Rueckgabewerte: 0
+    #     hiess "liegt an", ALLES ANDERE hiess "liegt nicht an". Ein
+    #     fehlendes, haengendes oder fehlschlagendes `ip` fiel damit in
+    #     dieselbe 1 wie eine echte Fehlanzeige - die Pruefung las "die
+    #     Adresse ist weg", meldete "Erfolgreich getrennt" und loeschte
+    #     die Zustandsdatei, waehrend die Adresse womoeglich noch anlag.
+    #
+    #     Wortgleich derselbe Schaden wie oben, und diesmal nicht durch
+    #     eine falsche Antwort, sondern durch eine ausgebliebene, die
+    #     als Antwort gelesen wurde.
+    #
+    #     Jetzt: 0 liegt an, 1 liegt nicht an, ALLES ANDERE heisst
+    #     "nicht feststellbar" - und nicht feststellbar ist KEIN Erfolg.
+    #     Dasselbe fuer pgrep(1): 0 heisst Treffer, 1 heisst kein
+    #     Treffer, alles andere sagt etwas ueber pgrep und nichts ueber
+    #     charon.
+    #
+    #     WARUM IM ZWEIFEL "NICHT GELUNGEN" UND NICHT "GELUNGEN":
+    #     der Erfolgszweig loescht die Zustandsdatei. Danach ist die
+    #     Adresse, die abgeraeumt werden muesste, nirgends mehr notiert,
+    #     und der naechste Verbindungsversuch baut auf ihr auf. Ein zu
+    #     Unrecht gemeldeter Misserfolg kostet eine Meldung; ein zu
+    #     Unrecht gemeldeter Erfolg kostet die einzige Spur.
+    #     DIE REIHENFOLGE BLEIBT, WIE SIE WAR: gab es eine Adresse,
+    #     entscheidet sie allein; nur wenn es nie eine gab, wird nach
+    #     charon gesehen. Das `elif` war kein Zufall, und es hier in ein
+    #     zweites `if` zu verwandeln haette Trennungen scheitern lassen,
+    #     bei denen die Adresse nachweislich weg ist und charon noch ein
+    #     paar Atemzuege braucht.
     DISCONNECT_OK=true
-    if [ -n "$VPN_VIP" ] && vpn_query --address-present "$VPN_VIP" > /dev/null 2>&1; then
-        DISCONNECT_OK=false
-        log_message "Disconnect failed - ${VPN_VIP} is still configured"
-    elif pgrep -f "charon" > /dev/null 2>&1; then
-        DISCONNECT_OK=false
-        log_message "Disconnect failed - charon is still running"
+    if [ -n "$VPN_VIP" ]; then
+        vpn_query --address-present "$VPN_VIP" > /dev/null 2>&1
+        case $? in
+            0)
+                DISCONNECT_OK=false
+                log_message "Disconnect failed - ${VPN_VIP} is still configured"
+                ;;
+            1) ;;
+            *)
+                DISCONNECT_OK=false
+                log_message "Disconnect unverified - could not tell whether ${VPN_VIP} is still configured"
+                ;;
+        esac
+    else
+        pgrep -f "charon" > /dev/null 2>&1
+        case $? in
+            0)
+                DISCONNECT_OK=false
+                log_message "Disconnect failed - charon is still running"
+                ;;
+            1) ;;
+            *)
+                DISCONNECT_OK=false
+                log_message "Disconnect unverified - could not tell whether charon is still running"
+                ;;
+        esac
     fi
 
     if [ "$DISCONNECT_OK" = true ]; then
