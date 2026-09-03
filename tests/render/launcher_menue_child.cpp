@@ -199,6 +199,43 @@ void handle(const std::string& command) {
         return;
     }
 
+    // EINEN PUNKT WIRKLICH AUSLOESEN - seit dem 03.09.2026.
+    //
+    //     Der Nutzer, mehrfach und zuletzt woertlich: "wnen ich
+    //     rechtklick auf ein hyprlaunch item mache und zur dock oder
+    //     home hinzufuegen klappt nicht". Bis heute hat KEIN Lauf einen
+    //     Punkt dieses Menues je ausgeloest - gemessen wurde, dass es
+    //     aufgeht und die richtigen Beschriftungen traegt. Ob der Klick
+    //     etwas bewirkt, stand nirgends.
+    //
+    //     `clicked` und keine Zeigerbewegung: der Knopf traegt seinen
+    //     Rueckruf an genau diesem Signal (LauncherRenderer.cpp,
+    //     g_signal_connect_data(line, "clicked", ...)). Damit misst
+    //     dieser Weg den Rueckruf und nicht GTKs Zeigerverwaltung.
+    if (command.rfind("waehle:", 0) == 0) {
+        const std::string gesucht = command.substr(7);
+        GtkWidget* menu = openMenu();
+        if (!menu) {
+            answer("kein-menue");
+            return;
+        }
+        for (GtkWidget* label : widgetsWithClass(menu, "launcher-menu-label")) {
+            if (!GTK_IS_LABEL(label)) continue;
+            const char* text = gtk_label_get_text(GTK_LABEL(label));
+            if (!text || gesucht != std::string(text)) continue;
+            GtkWidget* knopf = gtk_widget_get_ancestor(label, GTK_TYPE_BUTTON);
+            if (!knopf) {
+                answer("kein-knopf");
+                return;
+            }
+            g_signal_emit_by_name(knopf, "clicked");
+            answer("gewaehlt:" + gesucht);
+            return;
+        }
+        answer("nicht-gefunden:" + gesucht);
+        return;
+    }
+
     if (command == "ende") {
         answer("tschuess");
         if (g_loop) g_main_loop_quit(g_loop);

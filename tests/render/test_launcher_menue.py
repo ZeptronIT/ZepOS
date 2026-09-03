@@ -379,6 +379,46 @@ def lauf(tmp_path_factory) -> dict:
                                        bilder / "2-mit-menue.png")
 
         # Von AUSSEN, ueber den Compositor - das ist der ganze Punkt.
+        # DEN PUNKT AUSLOESEN, seit dem 03.09.2026 - und nachsehen, was
+        # dabei auf die Platte geht.
+        #
+        #     Der Nutzer, mehrfach: "wnen ich rechtklick auf ein
+        #     hyprlaunch item mache und zur dock oder home hinzufuegen
+        #     klappt nicht". Bis heute hat kein Lauf diesen Punkt je
+        #     ausgeloest.
+        #
+        #     Der Menuepunkt heisst hier "Add to dock" und nicht "Zum
+        #     Dock hinzufuegen": diese Sitzung hat keinen gebauten
+        #     Katalog, also gibt gettext den msgid zurueck - dieselbe
+        #     Begruendung wie bei den zwei Zusicherungen daneben.
+        # _erzeuge() legt die Stube neben das Ziel: heim/.config/stube.
+        # DIE DATEI, IN DIE settings.py WIRKLICH SCHREIBT.
+        #
+        #     paths.user_root() folgt XDG_CONFIG_HOME der Umgebung, in
+        #     der es LAEUFT - also der des Starters, nicht der, mit der
+        #     die Konfiguration erzeugt wurde. GEMESSEN am 03.09.2026:
+        #     .config/stube/ blieb unveraendert, .config/zepos/ bekam
+        #     Inhalt. Mein erster Anlauf sah in die falsche Datei und
+        #     haette dem Starter einen Fehler angehaengt, den er nicht
+        #     hat.
+        datei = heim / ".config" / "zepos" / "user-settings.json"
+        vor_der_wahl = datei.read_text(encoding="utf-8") if datei.exists() else ""
+        gewaehlt = kind.frage("waehle:Add to dock")
+        # Der Rueckruf setzt settings.py als Unterprozess ab und wartet
+        # (g_spawn_sync). Die Pause ist trotzdem noetig: der Rueckruf
+        # laeuft in der Schleife des Kindes, und `frage` kommt zurueck,
+        # sobald die Antwort geschrieben ist.
+        time.sleep(2.0)
+        nach_der_wahl = datei.read_text(encoding="utf-8") if datei.exists() else ""
+        # WO LANDET ES WIRKLICH: settings.py schreibt nach
+        # paths.user_root(), und das folgt der Umgebung des STARTERS -
+        # nicht der, mit der die Konfiguration erzeugt wurde. Diese
+        # Suche sagt, welche Datei sich bewegt hat.
+        gefunden = {}
+        for kandidat in sorted(heim.rglob("user-settings.json")):
+            gefunden[str(kandidat.relative_to(heim))] = kandidat.read_text(
+                encoding="utf-8", errors="replace")[:600]
+
         subprocess.run(["wtype", "-k", "Escape"], env=umgebung,
                        capture_output=True, timeout=20)
         time.sleep(RUHE)
@@ -390,6 +430,10 @@ def lauf(tmp_path_factory) -> dict:
         protokoll = kindlog.read_text(encoding="utf-8", errors="replace")
 
     return {
+        "gewaehlt": gewaehlt,
+        "gefunden": gefunden,
+        "vor_der_wahl": vor_der_wahl,
+        "nach_der_wahl": nach_der_wahl,
         "start": start,
         "bereit": bereit,
         "geklickt": geklickt,
@@ -606,3 +650,54 @@ def test_der_lauf_hat_nichts_kritisches_gemeldet(lauf):
     assert not schlimm, (
         "das Menue hinterlaesst Klagen in GTKs Buchfuehrung:\n"
         + "\n".join(schlimm[:20]))
+
+
+# ---------------------------------------------------------------------
+# Ob der Punkt etwas TUT - 03.09.2026
+# ---------------------------------------------------------------------
+
+
+def test_der_punkt_wird_ueberhaupt_ausgeloest(lauf):
+    """Die Vorstufe: findet der Lauf den Knopf und feuert er ihn ab?
+
+    Ohne diese Antwort saegt die Zusicherung darunter am falschen Ast -
+    "nichts geschrieben" hiesse dann nur "nichts geklickt".
+    """
+    assert lauf["gewaehlt"] == "gewaehlt:Add to dock", (
+        f"der Menuepunkt wurde nicht ausgeloest: {lauf['gewaehlt']!r}\n\n"
+        + lauf["protokoll"][-2000:])
+
+
+def test_zum_dock_hinzufuegen_schreibt_wirklich(lauf):
+    """DIE MELDUNG DES NUTZERS, zum ersten Mal gemessen.
+
+    Woertlich, mehrfach, zuletzt am 03.09.2026: "wnen ich rechtklick auf
+    ein hyprlaunch item mache und zur dock oder home hinzufuegen klappt
+    nicht".
+
+    Bis heute hat kein Lauf einen Punkt dieses Menues AUSGELOEST.
+    Gemessen wurde, dass das Menue aufgeht (test_das_menue_geht_...),
+    dass es die richtigen Punkte traegt (test_das_menue_bietet_...) und
+    dass Escape es schliesst. Was ein Klick bewirkt, stand nirgends -
+    und genau dort sitzt die Meldung.
+    """
+    vorher = lauf["vor_der_wahl"]
+    nachher = lauf["nach_der_wahl"]
+    assert nachher, (
+        "nach dem Klick gibt es keine Einstellungsdatei - der Punkt hat "
+        f"nichts geschrieben.\n\n{lauf['protokoll'][-2000:]}")
+    assert nachher != vorher, (
+        "die Einstellungsdatei ist unveraendert - der Menuepunkt hat "
+        f"nichts bewirkt.\n\nvorher:  {vorher[:400]}\n"
+        f"nachher: {nachher[:400]}\n\n{lauf['protokoll'][-2000:]}")
+    assert "dock_pins" in nachher, (
+        "geschrieben wurde etwas, aber keine Anheftung: "
+        f"{nachher[:400]}")
+
+
+def test_wohin_der_starter_schreibt(lauf):
+    """Kein Urteil, eine Auskunft: welche Einstellungsdateien es unter
+    dem Heim gibt und was darin steht."""
+    for pfad, inhalt in lauf["gefunden"].items():
+        print(f"GEFUNDEN {pfad}: {inhalt}")
+    assert lauf["gefunden"], "es gibt gar keine user-settings.json"
