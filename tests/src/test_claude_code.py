@@ -827,26 +827,50 @@ def test_das_rezept_legt_jede_groesse_unter_hicolor_ab():
 # --------------------------------------------------------------------
 
 def test_kein_rezept_baut_claude_code_mehr():
-    """Regel 14: geloescht statt deprecated.
-
-    Und die Zahl gehoert dazu: 91831121 Bytes lagen als
+    """Regel 14, und die Zahl gehoert dazu: 91831121 Bytes lagen als
     zepos-claude-code-2.1.233-4-x86_64.pkg.tar.zst auf gh-pages - das
     groesste Objekt im Repository, 87,58 MiB, und bei jedem Push die
     Warnung "larger than GitHub's recommended maximum file size of
     50.00 MB". Das naechstgroesste ist zepos-hyprland mit 53266906
     Bytes.
-    """
-    verzeichnis = REPOSITORY / "packaging" / "zepos-claude-code"
-    assert not verzeichnis.exists(), (
-        "packaging/zepos-claude-code/ liegt noch da")
 
-    bauplan = (REPOSITORY / "packaging" / "build.sh").read_text(
-        encoding="utf-8")
-    ohne_kommentar = "\n".join(
-        zeile for zeile in bauplan.splitlines()
-        if not zeile.lstrip().startswith("#"))
-    assert "zepos-claude-code" not in ohne_kommentar, (
-        "packaging/build.sh baut weiterhin ein Paket, das es nicht gibt")
+    GEMESSEN WIRD SEIT DEM 03.09.2026 AM REZEPT UND NICHT AM
+    VERZEICHNISNAMEN. Bis dahin stand hier "packaging/zepos-claude-code/
+    darf nicht existieren", und das war ein STELLVERTRETER fuer die
+    Zusage - nicht die Zusage selbst. Der Unterschied ist kein
+    Feinschliff: das Verzeichnis nicht zu haben hat den Nutzer zwei Tage
+    von jeder Aktualisierung abgeschnitten.
+
+        Ein geloeschter Name ist kein zurueckgezogenes Paket. pacman
+        liest `replaces` NUR beim Sysupgrade (PKGBUILD(5)), und der
+        Bereich "zepos" der Selbstaktualisierung setzt `pacman -S` ab -
+        also blieb nur der `conflicts` von zepos-config wirksam, und der
+        bricht ab. Der Nutzer am 03.09.2026: "dort steht zeppos config
+        und zepos claude code are in a conflict und es kann nicht
+        aktualsierst werden".
+
+    Seither liegt dort ein UEBERGANGSPAKET: derselbe Name, leer, mit
+    epoch. Die Zusage ist unveraendert - ZepOS baut und liefert Claude
+    Code nicht aus -, und genau die wird jetzt gemessen: das Rezept hat
+    keine Quelle, holt nichts und baut nichts.
+    tests/packaging/test_uebergangspaket.py haelt die uebrige Form fest.
+    """
+    rezept = REPOSITORY / "packaging" / "zepos-claude-code" / "PKGBUILD"
+    if rezept.exists():
+        ohne = "\n".join(
+            zeile for zeile in rezept.read_text(encoding="utf-8").splitlines()
+            if not zeile.lstrip().startswith("#"))
+        for feld in ("source", "sha256sums", "makedepends"):
+            assert not re.search(rf"^{feld}=", ohne, re.M), (
+                f"das Rezept traegt wieder {feld}= - dann holt oder baut es "
+                f"etwas, und die Zusage vom 01.09.2026 ist gebrochen")
+        for befehl in ("npm", "curl", "wget", "git"):
+            gestartet = [z.strip() for z in ohne.splitlines()
+                         if z.strip().split(" ")[0] == befehl]
+            assert gestartet == [], (
+                f"das Rezept ruft {befehl} auf: {gestartet}")
+        assert "@anthropic-ai" not in ohne, (
+            "das Rezept nennt das npm-Paket wieder in ausfuehrbarem Text")
 
 
 def test_kein_paket_haengt_mehr_an_claude_code():
@@ -856,8 +880,11 @@ def test_kein_paket_haengt_mehr_an_claude_code():
         text = "\n".join(
             zeile for zeile in rezept.read_text(encoding="utf-8").splitlines()
             if not zeile.lstrip().startswith("#"))
-        # replaces=/conflicts= duerfen den Namen tragen: DAS ist die
-        # Zeile, die ihn von einer installierten Maschine holt.
+        # replaces=/conflicts= trugen den Namen bis zum 03.09.2026 -
+        # sie sind gefallen, der Weg ist jetzt das Uebergangspaket. Die
+        # Ausnahme bleibt stehen, weil sie nichts kostet und weil ein
+        # Rezept, das den Namen in replaces schreibt, damit noch nicht
+        # an ihm HAENGT - das ist die Frage dieser Zusicherung.
         ohne_ersatz = re.sub(r"^(replaces|conflicts)=\([^)]*\)", "", text,
                              flags=re.M | re.S)
         assert "'zepos-claude-code'" not in ohne_ersatz, (
@@ -865,19 +892,58 @@ def test_kein_paket_haengt_mehr_an_claude_code():
 
 
 def test_das_alte_paket_wird_von_einer_installierten_maschine_geholt():
-    """OHNE DIESE ZEILE BLIEBEN 309,6 MiB AUF JEDER SCHON INSTALLIERTEN
+    """OHNE EINEN WEG BLIEBEN 309,6 MiB AUF JEDER SCHON INSTALLIERTEN
     MASCHINE LIEGEN.
 
-    Und zwar fuer immer: das gefallene Paket stand auf 2.1.233, jedes
-    ZepOS-Paket traegt die Fassung aus VERSION (heute 0.1.x). Ein
-    gleichnamiger Nachfolger waere fuer pacman AELTER als das
-    Installierte ("local is newer") und wuerde nie eingespielt.
-    `replaces` ist der Weg, den Arch dafuer vorsieht - und `conflicts`
-    daneben, weil die neuen Dateien unter denselben Pfaden liegen.
+    Die Zusage ist dieselbe wie am 01.09.2026, der WEG ist seit dem
+    03.09.2026 ein anderer, und der Grund dafuer ist gemessen worden -
+    an der Maschine des Nutzers, zwei Tage lang.
+
+    WAS HIER STAND UND WARUM ES NICHT GEREICHT HAT
+        `replaces=('zepos-claude-code')` und `conflicts=(...)` in
+        zepos-config. PKGBUILD(5) sagt zu `replaces`: "Sysupgrade is
+        currently the only pacman operation that utilizes this field. A
+        normal sync or upgrade will not use its value." Die
+        Selbstaktualisierung setzt im Bereich "zepos" `pacman -S` ab -
+        also wurde `replaces` nie gelesen, `conflicts` schon, und mit
+        `--noconfirm` bricht pacman ab statt zu fragen. Der Rechner
+        bekam GAR KEINE Aktualisierung mehr.
+
+    WAS JETZT DEN WEG TRAEGT
+        Ein Uebergangspaket unter demselben Namen, leer, mit `epoch=1`.
+        Damit ist die Ablesung eine gewoehnliche Aktualisierung
+        (2.1.233-4 -> 1:0.1.x-1), die auch `pacman -S --needed`
+        ausfuehrt. Das `epoch` ist der Teil, den die alte Begruendung
+        nicht kannte: sie schrieb "ein gleichnamiger Nachfolger waere
+        fuer pacman AELTER" - richtig, und genau dafuer gibt es das
+        Feld.
+
+    Geprueft wird der Weg und nicht ein einzelnes Feld: dass es das
+    Rezept gibt, dass es den Namen traegt, dass sein epoch die alte
+    Fassung schlaegt, und dass zepos-config den Konflikt NICHT mehr
+    traegt - ein `conflicts` auf einen Namen, den dasselbe Repository
+    anbietet, waere derselbe Abbruch noch einmal.
     """
-    rezept = REZEPT.read_text(encoding="utf-8")
+    rezept = REPOSITORY / "packaging" / "zepos-claude-code" / "PKGBUILD"
+    assert rezept.is_file(), (
+        "es gibt keinen Weg von der alten Fassung weg: ohne Rezept ist der "
+        "Name aus dem Repository verschwunden, und pacman kann ein Paket, "
+        "das es nicht mehr gibt, nicht ablesen")
+
+    text = rezept.read_text(encoding="utf-8")
+    assert re.search(r"^pkgname=zepos-claude-code$", text, re.M), (
+        "das Rezept traegt einen anderen Namen - abgelesen wird nur, was "
+        "gleich heisst")
+    assert re.search(r"^epoch=1$", text, re.M), (
+        "ohne epoch haelt pacman 2.1.233-4 fuer neuer als 0.1.x und spielt "
+        "nichts ein")
+
+    config = REZEPT.read_text(encoding="utf-8")
+    ohne = "\n".join(zeile for zeile in config.splitlines()
+                      if not zeile.lstrip().startswith("#"))
     for feld in ("replaces", "conflicts"):
-        treffer = re.search(rf"^{feld}=\((.*?)\)", rezept, re.M | re.S)
-        assert treffer, f"{feld}= fehlt in packaging/zepos-config/PKGBUILD"
-        assert "zepos-claude-code" in treffer.group(1), (
-            f"{feld}= nennt zepos-claude-code nicht: {treffer.group(1)}")
+        treffer = re.search(rf"^{feld}=\((.*?)\)", ohne, re.M | re.S)
+        assert not (treffer and "zepos-claude-code" in treffer.group(1)), (
+            f"zepos-config traegt wieder {feld} auf zepos-claude-code - "
+            f"damit ist die Aktualisierung fuer jede Maschine mit dem alten "
+            f"Paket blockiert, nicht nur die dieses einen Pakets")
