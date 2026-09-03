@@ -526,9 +526,15 @@ class Session:
     des Nutzers.
     """
 
-    def __init__(self, width: int, height: int) -> None:
+    def __init__(self, width: int, height: int,
+                 lua: str | None = None) -> None:
         self.width = width
         self.height = height
+        # Die Lua-Konfiguration, wenn diese Sitzung eine bekommt. Sie
+        # steht im Konstruktor und nicht nur in start(), damit der
+        # `with`-Block sie mitnehmen kann - __enter__ ruft start()
+        # ohne Argumente.
+        self.lua = lua
         # Kurzes Praefix unter /tmp, weil sockaddr_un.sun_path 108 Bytes
         # fasst und der Compositor <runtime>/wayland-N anlegt.
         self.runtime = Path(tempfile.mkdtemp(prefix="zepshot-"))
@@ -594,7 +600,10 @@ class Session:
 
     # -- Start -------------------------------------------------------
 
-    def start(self, timeout: float = 40.0) -> None:
+    def start(self, timeout: float = 40.0, lua: str | None = None,
+              headless: bool = True) -> None:
+        lua = self.lua if lua is None else lua
+        self._headless = headless
         probe = self.runtime / "wayland-99"
         assert len(str(probe)) <= SUN_PATH_MAX, (
             f"{probe} ist {len(str(probe))} Bytes lang, sockaddr_un.sun_path "
@@ -616,6 +625,19 @@ class Session:
                   f"erzeugt (locale-gen). Die Bilder zeigen die C-Sprache - "
                   f"was darauf englisch aussieht, sagt nichts ueber ZepOS.",
                   file=sys.stderr)
+
+        # SEIT DEM 03.09.2026 ZWEI FORMATE, UND DAS IST KEIN LUXUS
+        #     Hyprland 0.56 liest zuerst eine Lua-Konfiguration und nennt
+        #     `.conf` "legacy"; 0.57 nimmt das alte Format ganz heraus
+        #     (TXT_KEY_NOTIF_OUTDATED_CONFIG in Compositor.cpp). Jede
+        #     Hyprland-Konfiguration dieses Baums ist heute `.conf`. Der
+        #     Umbau braucht eine Waage, die BEIDE Seiten wiegen kann -
+        #     dieselbe Sitzung, einmal so und einmal so.
+        if lua is not None:
+            config = self.runtime / "hyprland.lua"
+            config.write_text(lua, encoding="utf-8")
+            self._starte_compositor(config, host, timeout)
+            return
 
         config = self.runtime / "hyprland.conf"
         config.write_text(
@@ -642,6 +664,17 @@ class Session:
             + _decoration_and_glass() + "\n",
             encoding="utf-8")
 
+        self._starte_compositor(config, host, timeout)
+
+    def _starte_compositor(self, config, host, timeout: float) -> None:
+        """Den verschachtelten Compositor hochziehen - unabhaengig davon,
+        in welchem Format seine Konfiguration geschrieben ist.
+
+        Seit dem 03.09.2026 eine eigene Methode, weil start() zwei
+        Formate schreiben kann und der Weg danach fuer beide derselbe
+        ist. `Hyprland -c` bekommt den Pfad; welches Format es ist,
+        entscheidet Hyprland an der Endung.
+        """
         environment = {
             "PATH": os.environ.get("PATH", "/usr/bin"),
             "HOME": str(self.home),
@@ -684,7 +717,17 @@ class Session:
         else:
             raise AssertionError("der verschachtelte Compositor meldet "
                                  "keinen Ausgang:\n" + self.read_log())
-        self._add_headless_output()
+        # OHNE AUSGANG, WENN JEMAND IHN NICHT WILL - seit dem 03.09.2026.
+        #     _add_headless_output() setzt die Groesse mit
+        #     `hyprctl keyword monitor`, und dieser Aufruf raeumt unter
+        #     einer Lua-Konfiguration ANDERE Optionen ab (GEMESSEN in
+        #     tests/render/test_lua_konfiguration.py: gaps_in stand
+        #     danach auf Hyprlands Vorgabe statt auf dem Wert aus der
+        #     Datei, und zwar nicht jedes Mal - ein Wettlauf). Ein Lauf,
+        #     der messen will, was in der Datei ANKOMMT, darf vorher
+        #     nichts anfassen.
+        if getattr(self, "_headless", True):
+            self._add_headless_output()
 
     def _add_headless_output(self, timeout: float = 20.0) -> None:
         """Der Schirm, der abgebildet wird - in der GEFORDERTEN Groesse.
@@ -1012,7 +1055,7 @@ class Session:
         #     Befund ueber die Oberflaeche, obwohl er einer ueber den
         #     Messstand ist.
         try:
-            self.start()
+            self.start(lua=self.lua)
         except BaseException:
             self.stop()
             raise
