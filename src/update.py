@@ -151,6 +151,7 @@ import os
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 from dataclasses import dataclass
@@ -214,6 +215,11 @@ DROPIN_FILE = "10-zepos.conf"
 # temporaeres Verzeichnis legen kann.
 SYSTEMD_ETC = Path("/etc")
 SYSTEMD_ETC_ENV = "ZEPOS_SYSTEMD_ETC"
+
+# Wo pacman seine Repository-Datenbanken ablegt, und der Weg, auf dem ein
+# Test einen eigenen Bestand vorgibt.
+SYNC_DB = Path("/var/lib/pacman/sync")
+SYNC_DB_ENV = "ZEPOS_PACMAN_SYNC"
 
 SCOPE_ZEPOS = "zepos"
 SCOPE_ALL = "all"
@@ -388,6 +394,12 @@ class Outcome:
     result: str
     upgraded: tuple[Change, ...] = ()
     base_available: tuple[Change, ...] = ()
+    # Was der Lauf ENTFERNT hat, weil ein Paket des Repositorys es
+    # ersetzt. Es steht getrennt von `upgraded`, weil es keine neue
+    # Fassung von etwas ist, sondern ein Name, den es danach nicht mehr
+    # gibt - und weil ein Lauf, der ein Paket still entfernt, genau die
+    # Art Stille ist, die dieses Projekt nicht duldet.
+    replaced: tuple[str, ...] = ()
     returncode: int = 0
     message: str = ""
     sessions: tuple[Session, ...] = ()
@@ -473,6 +485,12 @@ def marker_path() -> Path:
 def systemd_etc() -> Path:
     override = os.environ.get(SYSTEMD_ETC_ENV)
     return Path(override) if override else SYSTEMD_ETC
+
+
+def sync_db() -> Path:
+    """Wo pacman die Datenbanken der Repositorys liegen hat."""
+    override = os.environ.get(SYNC_DB_ENV)
+    return Path(override) if override else SYNC_DB
 
 
 def dropin_path() -> Path:
@@ -875,6 +893,107 @@ def repository_command() -> list[str]:
     Pakete stehen gelassen, die den Schreibtisch ausmachen.
     """
     return ["pacman", "-Slq", REPOSITORY]
+
+
+def installed_command() -> list[str]:
+    """Was installiert IST, in Namen und ohne Prosa.
+
+    `-Qq` und nicht `-Q`: die kurze Form gibt eine Spalte Namen, die
+    lange haengt die Fassung an. Gebraucht wird hier nur der Name, und
+    eine Spalte weniger ist eine Spalte, die nicht falsch geteilt werden
+    kann.
+    """
+    return ["pacman", "-Qq"]
+
+
+def removal_command(names: Sequence[str]) -> list[str]:
+    """Ein ersetztes Paket abraeumen, bevor sein Nachfolger einzieht.
+
+    `-dd`, und das ist die einzige Stelle dieses Projekts, an der eine
+    Abhaengigkeitspruefung uebergangen wird. Der Grund ist gemessen: das
+    installierte zepos-apps 0.1.13 fuehrt zepos-claude-code in seinen
+    `depends`, also verweigert ein blankes `-R` die Entfernung ("wird
+    benoetigt von"). `-Rc` waere die Kaskade und nahm zepos-apps mit -
+    also den halben Schreibtisch. Was das Paket bereitstellte, stellt
+    der Befehl danach wieder her: zepos-config 0.1.14 legt
+    /usr/bin/zepos-claude-code selbst ab.
+
+    Sortiert, damit derselbe Satz Namen denselben Befehl ergibt - ein
+    Test, der eine Reihenfolge aus einer Menge prueft, ist ein Test, der
+    manchmal faellt.
+    """
+    return ["pacman", "-Rdd", "--noconfirm", *sorted(names)]
+
+
+def replaced_by_repository(db: Path | None = None) -> set[str]:
+    """Welche Namen die Pakete des [zepos]-Repositorys ERSETZEN.
+
+    WARUM DIESE FUNKTION UEBERHAUPT EXISTIERT, UND ZWAR WOERTLICH
+        PKGBUILD(5) ueber das Feld `replaces`:
+
+            "Sysupgrade is currently the only pacman operation that
+            utilizes this field. A normal sync or upgrade will not use
+            its value."
+
+        Der Bereich "zepos" ist kein Sysupgrade - upgrade_command()
+        setzt dort `pacman -S --needed --noconfirm <namen>` ab, und zwar
+        mit Absicht (der Grund steht dort). Damit wird `replaces` NICHT
+        gelesen. Was gelesen wird, ist `conflicts` desselben Pakets, und
+        ein Konflikt mit `--noconfirm` bricht den GANZEN Vorgang ab:
+        pacman entfernt kein Paket, ohne gefragt zu haben.
+
+        GEMESSEN am 03.09.2026 auf der Maschine des Nutzers: nach dem
+        Fall von zepos-claude-code am 01.09.2026 traegt zepos-config
+        0.1.14 beides, `replaces` und `conflicts`, auf denselben Namen.
+        Ein Rechner mit dem alten Paket bekam damit KEINE Aktualisierung
+        mehr - nicht die von zepos-config, sondern gar keine.
+
+    WARUM AUS DER DATENBANK UND NICHT AUS `pacman -Sii`
+        Weil `-Sii` seine Felder uebersetzt ausgibt ("Ersetzt :"), und
+        die Regel dieser Datei lautet seit ihrer ersten Fassung: pacmans
+        Prosa wird nicht durchsucht (siehe den Kopf). %REPLACES% in der
+        Datenbank ist dasselbe Feld, nur in dem Format, das repo-add
+        geschrieben hat - und das ist dieselbe Datei, die packaging/
+        build.sh hier erzeugt.
+
+    Ein fehlender oder unlesbarer Datenbestand gibt eine leere Menge und
+    keinen Fehler: dann faellt schon `pacman -Sy` vorher, und dieser Lauf
+    hat kein zweites Urteil darueber zu faellen.
+    """
+    pfad = (db if db is not None else sync_db()) / f"{REPOSITORY}.db"
+    namen: set[str] = set()
+    try:
+        with tarfile.open(pfad) as archiv:
+            for eintrag in archiv:
+                if not eintrag.isfile() or not eintrag.name.endswith("/desc"):
+                    continue
+                inhalt = archiv.extractfile(eintrag)
+                if inhalt is None:
+                    continue
+                text = inhalt.read().decode("utf-8", errors="replace")
+                namen |= _section(text, "%REPLACES%")
+    except (OSError, tarfile.TarError):
+        return set()
+    return namen
+
+
+def _section(text: str, name: str) -> set[str]:
+    """Ein Abschnitt einer desc-Datei: Kopfzeile, dann Zeilen bis zur Leerzeile."""
+    werte: set[str] = set()
+    innen = False
+    for zeile in text.splitlines():
+        if zeile.startswith("%") and zeile.endswith("%"):
+            innen = zeile == name
+            continue
+        if not innen:
+            continue
+        if not zeile.strip():
+            innen = False
+            continue
+        # Ein versioniertes replaces (`name<1.0`) nennt trotzdem einen
+        # Namen, und der ist alles, was hier gebraucht wird.
+        werte.add(re.split(r"[<>=]", zeile.strip(), maxsplit=1)[0])
+    return werte
 
 
 def upgrade_command(config: dict[str, Any], names: Sequence[str]) -> list[str]:
@@ -1380,6 +1499,12 @@ def notification(outcome: Outcome, config: dict[str, Any], *,
 
     names = ", ".join(change.name for change in outcome.upgraded)
     body = f"{names}."
+    if outcome.replaced:
+        # Ein entferntes Paket wird GENANNT. Ein Lauf, der etwas
+        # abraeumt und nur die Neuzugaenge meldet, laesst den Nutzer
+        # spaeter raten, wohin ein Befehl verschwunden ist.
+        body += (f" Entfernt, weil ersetzt: "
+                 f"{', '.join(outcome.replaced)}.")
     if regenerated:
         # Der Fall, den ein Mensch selbst angestossen hat. Der Satz
         # darunter waere hier schlicht falsch - es IST neu erzeugt
@@ -1698,6 +1823,37 @@ def perform(config: dict[str, Any], *, runner: Runner | None = None,
                        sessions=tuple(sessions), started=started,
                        finished=_now())
 
+    # ERST ABRAEUMEN, WAS EIN NEUES PAKET ERSETZT
+    #
+    # Der Bereich "zepos" setzt `pacman -S` ab, und PKGBUILD(5) sagt zu
+    # `replaces`: "Sysupgrade is currently the only pacman operation that
+    # utilizes this field." Der Konflikt desselben Pakets wird dagegen
+    # gelesen, und ein Konflikt mit `--noconfirm` bricht den GANZEN
+    # Vorgang ab. Ohne diese Zeilen bekommt ein Rechner mit einem
+    # ersetzten Paket gar keine Aktualisierung mehr - gemessen am
+    # 03.09.2026 an zepos-claude-code, das am 01.09.2026 gefallen ist.
+    #
+    # Nur im Bereich "zepos": `-Syu` IST das Sysupgrade und liest
+    # `replaces` selbst.
+    #
+    # NACH dem check_only-Ausgang darueber, damit `--check` weiterhin
+    # nichts veraendert.
+    replaced: tuple[str, ...] = ()
+    if config["scope"] != SCOPE_ALL:
+        gemeldet = _run(runner, installed_command(), timeout=120)
+        vorhanden = parse_repository(gemeldet.stdout or "")
+        replaced = tuple(sorted(replaced_by_repository() & vorhanden))
+    if replaced:
+        entfernt = _run(runner, removal_command(replaced),
+                        note=f"ersetzt und wird entfernt: "
+                             f"{', '.join(replaced)}")
+        if entfernt.returncode != 0:
+            return Outcome(result=Outcome.FAILED,
+                           returncode=entfernt.returncode,
+                           message=_tail(entfernt), base_available=tuple(base),
+                           sessions=tuple(sessions), started=started,
+                           finished=_now())
+
     # Der Text nennt die Pakete und nicht ihre Anzahl: "3 Pakete" ist
     # nach dem Lauf nicht mehr nachzuvollziehen, "zepos-config, ..."
     # schon - und dieselben Namen stehen gleich darunter mit Fassung
@@ -1709,12 +1865,13 @@ def perform(config: dict[str, Any], *, runner: Runner | None = None,
     if upgraded.returncode != 0:
         return Outcome(result=Outcome.FAILED, returncode=upgraded.returncode,
                        message=_tail(upgraded), base_available=tuple(base),
-                       sessions=tuple(sessions), started=started,
-                       finished=_now())
+                       sessions=tuple(sessions), replaced=replaced,
+                       started=started, finished=_now())
 
     return Outcome(result=Outcome.OK, upgraded=tuple(ours),
                    base_available=tuple(base), sessions=tuple(sessions),
-                   message=_tail(upgraded), started=started, finished=_now())
+                   replaced=replaced, message=_tail(upgraded),
+                   started=started, finished=_now())
 
 
 def announce(outcome: Outcome, config: dict[str, Any], *,

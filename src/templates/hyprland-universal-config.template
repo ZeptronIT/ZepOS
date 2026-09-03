@@ -661,11 +661,47 @@ windowrule = match:class ^(floating-center)$, float on, center on, size 1200 800
 # YAD Rules (for VPN dialog)
 windowrule = match:class (?i)^(yad)$, float on, center on, size 400 300
 
-# gnome-keyring Unlock Prompt (Standard-Pattern für Auth-Dialoge)
+# Die Rechteabfrage. Sie muss DA aufgehen, WO DER NUTZER IST.
+#
+# HIER STAND `workspace 1`, UND DAS WAR DER GRUND, WARUM SIE NICHT KAM
+#     Der Nutzer am 03.09.2026: "dialoge um den pfad mit dateien
+#     anzugeben oder andere dialog erscheinen garnicht erst". Die Zeile
+#     kam aus einem echten Fehler - die Abfrage landete auf dem
+#     zugeklappten Laptopschirm (eDP-1, Arbeitsflaeche 10), waehrend der
+#     Nutzer auf DP-5 arbeitete - und sie hat ihn gegen einen anderen
+#     getauscht: jetzt landete sie auf Arbeitsflaeche 1, und wer auf 2
+#     oder 3 sass, sah sie ebenso wenig.
+#
+#     `pin on` faengt das NICHT auf, und das ist am Quelltext der
+#     ausgelieferten Fassung gemessen (hyprland-0.56.1,
+#     src/output/Monitor.cpp:1477-1481):
+#
+#         // move pinned windows
+#         for (auto const& w : ...windows()) {
+#             if (w->m_workspace == POLDWORKSPACE && w->m_pinned)
+#                 w->layoutTarget()->assignToSpace(pWorkspace->m_space);
+#         }
+#
+#     Ein gepinntes Fenster wandert nur mit, wenn die Arbeitsflaeche, auf
+#     der es LIEGT, gerade VERLASSEN wird. Liegt es auf 1 und der Nutzer
+#     wechselt von 3 nach 4, bleibt es auf 1. Es wird erst sichtbar, wenn
+#     er zufaellig von 1 weggeht.
+#
+# WAS OHNE DIE ZEILE GILT
+#     Ohne Arbeitsflaechenregel geht das Fenster auf der Flaeche auf, die
+#     gerade den Fokus hat - also dort, wo der Nutzer ist. `pin on`
+#     bleibt und leistet dann das, wofuer es da ist: wer waehrend der
+#     Abfrage die Flaeche wechselt, nimmt sie mit.
+#
+#     Der urspruengliche Fehler ist damit NICHT wieder da, sondern an
+#     seinem Ort: dass eine Abfrage auf einem zugeklappten Schirm
+#     aufgeht, heisst, dass dieser Schirm den Fokus hat - eine Frage der
+#     MONITORE und nicht der Arbeitsflaechen. Ein zugeklappter Laptop,
+#     dessen Ausgang noch an ist, ist der Befund; Dialoge auf
+#     Arbeitsflaeche 1 zu zwingen war das Pflaster darauf.
 windowrule = match:class ^(gcr-prompter)$, float on
 windowrule = match:class ^(gcr-prompter)$, center on
 windowrule = match:class ^(gcr-prompter)$, pin on
-windowrule = match:class ^(gcr-prompter)$, workspace 1
 
 # Hier standen drei Fensterregeln fuer die Klasse blueman-applet
 # (float/center/pin). Sie sind mit demselben Schritt gefallen wie die

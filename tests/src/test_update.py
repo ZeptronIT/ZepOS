@@ -61,9 +61,43 @@ def update(monkeypatch, tmp_path):
     monkeypatch.setenv("ZEPOS_STATE_ROOT", str(tmp_path / "var-lib-zepos"))
     monkeypatch.setenv("ZEPOS_SYSTEMD_ETC", str(tmp_path / "etc"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    # DIE FUENFTE KAM AM 03.09.2026 DAZU
+    #     replaced_by_repository() liest /var/lib/pacman/sync/zepos.db.
+    #     Ohne die Umlenkung befragte jeder Lauf die Datenbank DIESER
+    #     Maschine: gelesen, nicht geschrieben, also von der Sperre
+    #     unbemerkt - und das Ergebnis haenge daran, ob dieser Rechner
+    #     das [zepos]-Repository eingetragen hat. Genau die Klasse
+    #     Zusicherung, die gruen ist, weil ein Entwicklerrechner gerade
+    #     so aussieht, wie er aussieht.
+    monkeypatch.setenv("ZEPOS_PACMAN_SYNC", str(tmp_path / "pacman-sync"))
     import update as module
 
     return module
+
+
+def _sync_db(verzeichnis: Path, ersetzt: dict[str, list[str]]) -> Path:
+    """Eine Repository-Datenbank, gebaut wie repo-add sie schreibt.
+
+    Ein tar.gz aus `<name>-<fassung>/desc`, und in jeder desc-Datei die
+    Abschnitte in der Form `%NAME%`, Zeile, Leerzeile. Gebaut und nicht
+    nachgeahmt: derselbe Aufbau, den packaging/out/x86_64/zepos.db
+    wirklich hat - nachgesehen am 03.09.2026.
+    """
+    import tarfile
+
+    verzeichnis.mkdir(parents=True, exist_ok=True)
+    pfad = verzeichnis / "zepos.db"
+    with tarfile.open(pfad, "w:gz") as archiv:
+        for name, namen in ersetzt.items():
+            text = f"%NAME%\n{name}\n\n%VERSION%\n1-1\n\n"
+            if namen:
+                text += "%REPLACES%\n" + "\n".join(namen) + "\n\n"
+            rohdaten = text.encode("utf-8")
+            eintrag = tarfile.TarInfo(f"{name}-1-1/desc")
+            eintrag.size = len(rohdaten)
+            import io
+            archiv.addfile(eintrag, io.BytesIO(rohdaten))
+    return pfad
 
 
 @pytest.fixture
@@ -93,6 +127,14 @@ def _code(text: str) -> list[str]:
             if line.strip() and not line.lstrip().startswith("#")]
 
 
+# Die pacman-Aufrufe, die NUR FRAGEN. Ein Test, der prueft, was ein Lauf
+# VERAENDERT, laesst sie weg - und er muss sie vollstaendig kennen, sonst
+# faellt er, sobald eine neue Frage dazukommt. `-Qq` kam am 03.09.2026
+# dazu: der Lauf fragt seither, was installiert ist, um ein ersetztes
+# Paket zu finden.
+ABFRAGEN = ("-Sy", "-Qu", "-Slq", "-Qq")
+
+
 class Machine:
     """Ein pacman, ein loginctl und ein systemctl, die nur antworten.
 
@@ -103,9 +145,11 @@ class Machine:
 
     def __init__(self, *, upgradable: str = "", members: str = "",
                  sessions: str = "[]", codes: dict[str, int] | None = None,
-                 output: dict[str, str] | None = None):
+                 output: dict[str, str] | None = None,
+                 installed: str = ""):
         self.upgradable = upgradable
         self.members = members
+        self.installed = installed
         self.sessions = sessions
         self.codes = codes or {}
         self.output = output or {}
@@ -120,6 +164,8 @@ class Machine:
             code = 0 if self.upgradable.strip() else 1
         elif argv[:2] == ["pacman", "-Slq"]:
             stdout = self.members
+        elif argv[:2] == ["pacman", "-Qq"]:
+            stdout = self.installed
         elif argv[0] == "loginctl":
             stdout = self.sessions
         for key, value in self.codes.items():
@@ -365,7 +411,7 @@ def test_a_run_installs_ours_and_only_counts_the_arch_base(update):
     assert [c.name for c in outcome.base_available] == ["linux"]
 
     installs = [c for c in machine.called("pacman")
-                if c[1] not in ("-Sy", "-Qu", "-Slq")]
+                if c[1] not in ABFRAGEN]
     assert installs == [["pacman", "-S", "--needed", "--noconfirm",
                          "zepos-config", "aylurs-gtk-shell"]], installs
     assert "linux" not in " ".join(installs[0])
@@ -534,7 +580,11 @@ def test_an_unattended_run_never_regenerates_and_never_restarts_anything(
             assert Path(part).name not in update.FORBIDDEN_PROGRAMS, (
                 f"ein unbeaufsichtigter Lauf hat {part} aufgerufen: "
                 f"{command}")
-    assert machine.programs.count("pacman") == 4
+    # FUENF UND NICHT EINE ZAHL: die fuenf werden benannt. Eine reine
+    # Anzahl faellt bei jeder neuen Frage und sagt dem Nachfolger nicht,
+    # welche dazugekommen ist. `-Qq` kam am 03.09.2026 dazu.
+    assert [c[1] for c in machine.called("pacman")] == [
+        "-Sy", "-Qu", "-Slq", "-Qq", "-S"], machine.called("pacman")
 
 
 def test_a_package_swap_leaves_a_mark_for_the_next_login(update, monkeypatch):
@@ -1602,3 +1652,156 @@ def test_the_command_starts_and_says_what_it_would_do(tmp_path):
     # Ein --status darf die Maschine nicht anfassen. Waere es anders,
     # laege hier jetzt eine Zustandsdatei.
     assert not (tmp_path / "var-lib-zepos").exists()
+
+
+# --------------------------------------------------------------------
+# Ein Paket, das ein anderes ERSETZT - seit dem 03.09.2026
+# --------------------------------------------------------------------
+#
+# Der Nutzer am 03.09.2026: "wegen claude code kann ich aktuell keine
+# update ziehen". Der Grund steht nicht in diesem Baum, sondern in
+# PKGBUILD(5), woertlich:
+#
+#     "Sysupgrade is currently the only pacman operation that utilizes
+#     this field. A normal sync or upgrade will not use its value."
+#
+# Der Bereich "zepos" setzt `pacman -S` ab - kein Sysupgrade. `replaces`
+# wird damit nicht gelesen, `conflicts` desselben Pakets schon, und ein
+# Konflikt mit `--noconfirm` bricht den GANZEN Vorgang ab. Der Rechner
+# bekam also keine Aktualisierung mehr; nicht die von zepos-config,
+# sondern gar keine.
+
+
+def test_a_replaced_package_is_read_from_the_database_and_not_from_prose(
+        update, tmp_path):
+    """%REPLACES% aus der Datenbank, nicht "Ersetzt :" aus pacmans Ausgabe.
+
+    Der Kopf dieses Moduls verbietet das Durchsuchen von pacmans Prosa,
+    weil sie uebersetzt ist. Die Datenbank ist dieselbe Angabe in dem
+    Format, das repo-add geschrieben hat.
+    """
+    verzeichnis = tmp_path / "pacman-sync"
+    _sync_db(verzeichnis, {"zepos-config": ["zepos-claude-code"],
+                           "zepos-menu": []})
+
+    assert update.replaced_by_repository(verzeichnis) == {"zepos-claude-code"}
+
+
+def test_a_versioned_replaces_still_names_a_package(update, tmp_path):
+    """`replaces=('alt<2.0')` ist erlaubt und nennt trotzdem "alt"."""
+    verzeichnis = tmp_path / "pacman-sync"
+    _sync_db(verzeichnis, {"zepos-config": ["alt<2.0", "zweit>=1"]})
+
+    assert update.replaced_by_repository(verzeichnis) == {"alt", "zweit"}
+
+
+def test_a_missing_database_is_no_finding_of_this_run(update, tmp_path):
+    """Fehlt sie, faellt `pacman -Sy` vorher - und dieser Lauf hat kein
+    zweites Urteil darueber zu faellen."""
+    assert update.replaced_by_repository(tmp_path / "gibt-es-nicht") == set()
+
+
+def test_the_run_removes_what_a_new_package_replaces_before_it_installs(
+        update, tmp_path):
+    """DER FALL DES NUTZERS, an den Befehlen gemessen.
+
+    Die Reihenfolge ist der ganze Punkt: erst `-Rdd`, dann `-S`. Umkehrt
+    scheitert das `-S` am Konflikt, und danach ist nichts mehr zu
+    entfernen, weil nichts eingespielt wurde.
+    """
+    _sync_db(tmp_path / "pacman-sync", {"zepos-config": ["zepos-claude-code"]})
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS,
+                      sessions=SESSION,
+                      installed="zepos-config\nzepos-claude-code\nlinux\n")
+
+    outcome = update.perform(update.defaults(), runner=machine)
+
+    assert outcome.result == update.Outcome.OK
+    assert outcome.replaced == ("zepos-claude-code",)
+
+    veraendernd = [c for c in machine.called("pacman") if c[1] not in ABFRAGEN]
+    assert veraendernd == [
+        ["pacman", "-Rdd", "--noconfirm", "zepos-claude-code"],
+        ["pacman", "-S", "--needed", "--noconfirm",
+         "zepos-config", "aylurs-gtk-shell"],
+    ], veraendernd
+
+
+def test_nothing_is_removed_when_the_replaced_package_is_not_installed(
+        update, tmp_path):
+    """Die Gegenprobe zum Test darueber. Ohne sie sagte er nur, dass der
+    Lauf `-Rdd` absetzt - nicht, dass er es aus einem GRUND tut."""
+    _sync_db(tmp_path / "pacman-sync", {"zepos-config": ["zepos-claude-code"]})
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS,
+                      sessions=SESSION,
+                      installed="zepos-config\naylurs-gtk-shell\n")
+
+    outcome = update.perform(update.defaults(), runner=machine)
+
+    assert outcome.replaced == ()
+    assert not [c for c in machine.called("pacman") if c[1] == "-Rdd"]
+
+
+def test_the_full_upgrade_does_not_need_the_extra_step(update, tmp_path):
+    """`-Syu` IST das Sysupgrade und liest `replaces` selbst. Ein
+    zusaetzliches `-Rdd` waere dort ein Eingriff ohne Anlass."""
+    _sync_db(tmp_path / "pacman-sync", {"zepos-config": ["zepos-claude-code"]})
+    config = update.defaults()
+    config["scope"] = update.SCOPE_ALL
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS,
+                      sessions=SESSION,
+                      installed="zepos-config\nzepos-claude-code\n")
+
+    outcome = update.perform(config, runner=machine)
+
+    assert outcome.replaced == ()
+    assert not [c for c in machine.called("pacman") if c[1] in ("-Rdd", "-Qq")]
+
+
+def test_a_check_removes_nothing(update, tmp_path):
+    """`--check` sagt, was passieren WUERDE. Ein Lauf, der dabei ein
+    Paket entfernt, hat die Frage nicht beantwortet, sondern die
+    Maschine veraendert."""
+    _sync_db(tmp_path / "pacman-sync", {"zepos-config": ["zepos-claude-code"]})
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS,
+                      sessions=SESSION,
+                      installed="zepos-config\nzepos-claude-code\n")
+
+    outcome = update.perform(update.defaults(), runner=machine, check_only=True)
+
+    assert outcome.result == update.Outcome.PENDING
+    assert not [c for c in machine.called("pacman") if c[1] not in ABFRAGEN]
+
+
+def test_a_removal_that_fails_stops_the_run_instead_of_installing_anyway(
+        update, tmp_path):
+    """Scheitert das Abraeumen, waere das `-S` danach genau der Abbruch,
+    den dieser Schritt verhindern soll - nur mit einer Meldung, die vom
+    falschen Befehl kommt."""
+    _sync_db(tmp_path / "pacman-sync", {"zepos-config": ["zepos-claude-code"]})
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS,
+                      sessions=SESSION,
+                      installed="zepos-config\nzepos-claude-code\n",
+                      codes={"-Rdd": 1})
+
+    outcome = update.perform(update.defaults(), runner=machine)
+
+    assert outcome.result == update.Outcome.FAILED
+    assert outcome.returncode == 1
+    assert not [c for c in machine.called("pacman") if c[1] == "-S"]
+
+
+def test_the_notification_names_what_was_removed(update, tmp_path):
+    """Ein Lauf, der etwas abraeumt und nur die Neuzugaenge meldet,
+    laesst den Nutzer spaeter raten, wohin ein Befehl verschwunden ist."""
+    _sync_db(tmp_path / "pacman-sync", {"zepos-config": ["zepos-claude-code"]})
+    machine = Machine(upgradable=UPGRADABLE, members=MEMBERS,
+                      sessions=SESSION,
+                      installed="zepos-config\nzepos-claude-code\n")
+
+    outcome = update.perform(update.defaults(), runner=machine)
+    note = update.notification(outcome, update.defaults())
+
+    assert note is not None
+    assert "zepos-claude-code" in note.body
+    assert "ersetzt" in note.body.lower()
