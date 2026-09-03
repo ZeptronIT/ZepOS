@@ -32,29 +32,40 @@ Seiten und zeichnet sie. Eine Quelle, zwei Oberflächen.
 
 ## Was noch fehlt
 
-Die Bridge kennt **sieben** Arten von Bedienelementen:
+**Fachlich nichts.** Die Bridge kennt sieben Arten von Bedienelementen:
 
     zahl  schalter  text  auswahl  farbe  reihenfolge  anordnung
 
-Das AGS-Fenster zeichnet **sechs** davon. Es fehlt: **`farbe`**.
+Das AGS-Fenster zeichnet **alle sieben**, auf zwei Wegen: fünf als Zeile
+neben ihrer Beschriftung (`case FARBE: ende = farbWidget(element)`), zwei
+als eigene Seite (`reihenfolge` als Liste zum Umsortieren, `anordnung`
+als Schirmbild) — eine Art, die keine Zeile ist, in eine Zeile zu
+zwingen wäre schlechter und nicht besser.
 
-Das ist die ganze fachliche Lücke. Alles andere — die sieben Seiten, die
-Prüfungen, die Vorgaben, die Rechteabfragen, der Wächter der
-Bildschirmseite — liegt schon hinter `--json` und wird von beiden
-Oberflächen geteilt.
+> **Korrektur vom 03.09.2026.** Die erste Fassung dieses Absatzes
+> behauptete, `farbe` fehle. Das war ein verunglücktes `grep` — gesucht
+> nach „farben", im Quelltext steht „farbe". Es gab die Lücke nie.
+> Damit die Frage künftig beantwortet und nicht geschätzt wird, misst
+> sie jetzt `tests/src/test_einstellungen_abdeckung.py`: für jede Art
+> aus `bridge.py` muss das Fenster eine Konstante mit demselben Wert
+> und eine Stelle haben, die etwas baut — mitsamt Gegenbeweis, dass die
+> Zusicherung eine fehlende Art auch sähe.
+
+Alles Übrige — die sieben Seiten, die Prüfungen, die Vorgaben, die
+Rechteabfragen, der Wächter der Bildschirmseite — liegt schon hinter
+`--json` und wird von beiden Oberflächen geteilt.
 
 ## Der Weg
 
-### Schritt 1 — die Farbseite in AGS
+### Schritt 1 — die Abdeckung festnageln ✅
 
-Das siebte Bedienelement bauen: ein Farbwähler im ZepOS-Baukasten, der
-`farbe` aus `--json get` liest und über `--json set` zurückschreibt.
-Danach deckt das AGS-Fenster **100 %** des Modells ab.
+Erledigt am 03.09.2026: `tests/src/test_einstellungen_abdeckung.py`.
+Fünf Zusicherungen, die aus `bridge.py` lesen, welche Arten es gibt, und
+im Fenster nachsehen, ob jede gebaut wird. Sie ist die Bedingung, an der
+der Rest dieses Plans hängt — fällt sie, fiele mit der GTK-Anwendung
+eine Einstellung weg, die niemand vermisst, bis er sie sucht.
 
-*Kein Abriss bisher.* Beide Oberflächen laufen weiter nebeneinander, und
-die Abdeckung lässt sich messen: für jede Art aus `bridge.py` muss das
-AGS-Fenster einen Zweig haben — eine Zusicherung, die den Rest dieses
-Plans absichert.
+*Kein Abriss bisher.* Beide Oberflächen laufen weiter nebeneinander.
 
 ### Schritt 2 — der Eintrag zeigt auf AGS
 

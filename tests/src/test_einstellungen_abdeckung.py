@@ -71,11 +71,29 @@ def test_das_fenster_kennt_jede_art_beim_namen():
 
 
 def test_das_fenster_zeichnet_jede_art():
-    """Und jede Art braucht einen Zweig, der etwas BAUT.
+    """Und jede Art braucht eine Stelle, die etwas BAUT.
 
-    `default: ende = unbekanntesElement(element)` faengt alles ab -
-    genau deshalb faellt eine fehlende Art nicht auf, sondern zeigt sich
-    als Zeile, die dasteht und nichts kann.
+    ZWEI FORMEN, UND BEIDE ZAEHLEN - nachgesehen am 03.09.2026, weil die
+    erste Fassung dieser Zusicherung nur die eine kannte und deshalb
+    zwei Arten anschwaerzte, die es laengst gibt:
+
+        als ZEILE     `case FARBE: ende = farbWidget(element)` in
+                      elementZeile() - ein Bedienelement rechts neben
+                      seiner Beschriftung. So sind zahl, schalter, text,
+                      auswahl und farbe gebaut.
+        als SEITE     `if (element.kind === REIHENFOLGE) { ...
+                      behaelter.append(reihenfolgeSeite(...)) }` in
+                      zeichneSeite() - eine Art, die keine Zeile ist,
+                      sondern eine ganze Liste zum Umsortieren
+                      (reihenfolge) oder ein Schirmbild zum Anordnen
+                      (anordnung). Eine solche Art in eine Zeile zu
+                      zwingen waere schlechter und nicht besser.
+
+    Was NICHT zaehlt, ist `case FARBE: return ICONS.farbe`: die
+    Zeichenwahl verzweigt ueber dieselben Namen, und ein Muster, das sie
+    mitnimmt, bliebe gruen, wenn nur das Zeichen da ist und das
+    Bedienelement fehlt. GEMESSEN am 03.09.2026 mit einer Probe: Zeile
+    573 entfernt, die erste Fassung blieb gruen. Daher `ende = `.
     """
     text = _fenster_text()
     # Die Konstante zum Wert: das Fenster verzweigt ueber die Namen.
@@ -88,16 +106,41 @@ def test_das_fenster_zeichnet_jede_art():
         konstante = namen.get(wert)
         if not konstante:
             continue          # der Test darueber sagt es deutlicher
-        # `case FARBE: ende = ...` und nicht bloss `case FARBE:` - die
-        # Zeichenwahl (zeichenFuer()) verzweigt ueber DIESELBEN Namen.
-        # Ein Muster ohne `ende =` bleibt gruen, wenn nur das Zeichen da
-        # ist und das Bedienelement fehlt. GEMESSEN am 03.09.2026 mit
-        # einer Probe: Zeile 573 entfernt, Test blieb gruen.
-        if not re.search(rf"case {konstante}: ende = ", text):
+        als_zeile = re.search(rf"case {konstante}: ende = ", text)
+        als_seite = re.search(
+            rf"element\.kind === {konstante}\)", text)
+        if not (als_zeile or als_seite):
             ohne_zweig.append(f"{name} ({wert} -> {konstante})")
     assert ohne_zweig == [], (
-        f"diese Arten haben keinen eigenen Zweig in elementZeile(): "
+        f"diese Arten baut das AGS-Fenster nirgends - weder als Zeile in "
+        f"elementZeile() noch als eigene Seite in zeichneSeite(): "
         f"{ohne_zweig}")
+
+
+def test_jede_art_wird_auf_genau_einem_weg_gebaut():
+    """Zeile ODER Seite, nicht beides.
+
+    Beides waere kein Luxus, sondern ein Widerspruch: zeichneSeite()
+    fragt die Seitenform ZUERST ab und kehrt dann um. Eine Art mit
+    beidem haette einen Zweig, den nie jemand erreicht - und der beim
+    naechsten Lesen wie die gueltige Fassung aussieht.
+    """
+    text = _fenster_text()
+    namen = {}
+    for treffer in re.finditer(r'^const ([A-Z_]+) = "([a-z]+)"$', text, re.M):
+        namen[treffer.group(2)] = treffer.group(1)
+
+    doppelt = []
+    for name, wert in _arten_der_bruecke().items():
+        konstante = namen.get(wert)
+        if not konstante:
+            continue
+        if (re.search(rf"case {konstante}: ende = ", text)
+                and re.search(rf"element\.kind === {konstante}\)", text)):
+            doppelt.append(f"{name} ({wert})")
+    assert doppelt == [], (
+        f"diese Arten haben eine Zeile UND eine Seite: {doppelt} - einer "
+        f"der beiden Wege ist tot")
 
 
 def test_die_zusicherung_wuerde_eine_fehlende_art_sehen():
