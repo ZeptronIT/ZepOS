@@ -305,7 +305,22 @@ async function homePlan(): Promise<HomePlan | null> {
  * haengt, ob eine neu ausgelieferte Anwendung erscheinen darf.
  */
 async function aendere(argumente: string[]): Promise<boolean> {
-  return (await frage(argumente)) !== null
+  const ging = (await frage(argumente)) !== null
+  // NACH EINER EIGENEN AENDERUNG WIRD SOFORT GELESEN, seit dem
+  // 03.09.2026 - und nicht auf den Dateibeobachter gewartet.
+  //
+  //     Bis dahin war der Beobachter der EINZIGE Weg zurueck, auch fuer
+  //     Aenderungen, die dieses Programm selbst ausgeloest hat. Das ist
+  //     eine unnoetige Abhaengigkeit: wer gerade selbst geschrieben
+  //     hat, weiss, dass sich etwas geaendert hat, und muss es sich
+  //     nicht von inotify sagen lassen.
+  //
+  //     Der Beobachter bleibt fuer die FREMDEN Aenderungen (der
+  //     Starter, das Einstellungsfenster, eine Hand auf der
+  //     Befehlszeile) - dafuer ist er da, und dafuer gibt es die
+  //     Messung in tests/src/test_dock_menue.py.
+  if (ging) baldLesen()
+  return ging
 }
 
 /** Ans Dock heften. Steht der Name schon dort, geschieht nichts - und
@@ -429,7 +444,54 @@ function horche(folge: () => void): void {
   }
 
   const monitor = wache(datei, false)
-  if (!monitor) return
+  if (!monitor) {
+    // KEIN BEOBACHTER HEISST NICHT KEINE AENDERUNG - seit dem
+    // 03.09.2026.
+    //
+    //     `monitor_file()` scheitert im Alltag aus einem Grund, den
+    //     kein Messstand hat: fs.inotify.max_user_instances steht auf
+    //     vielen Maschinen auf 128, und jeder Editor, jeder
+    //     Dateimanager, jeder Sprachserver nimmt sich davon. Ist das
+    //     Kontingent voll, gab diese Funktion bis heute auf - und der
+    //     Nutzer sah eine Oberflaeche, die fremde Aenderungen nie
+    //     bemerkt, ohne einen Hinweis darauf, warum.
+    //
+    //     Nachsehen ist schlechter als benachrichtigt werden und viel
+    //     besser als gar nichts: eine Abfrage der Aenderungszeit alle
+    //     zwei Sekunden kostet einen stat()-Aufruf. Gelesen wird nur,
+    //     wenn sich die Zeit WIRKLICH geaendert hat.
+    console.log("Einstellungen: kein Dateibeobachter zu bekommen - es "
+                + "wird stattdessen alle zwei Sekunden nachgesehen. "
+                + "Ursache ist meist fs.inotify.max_user_instances.")
+    // DER AUSGANGSWERT WIRD JETZT GENOMMEN UND NICHT BEIM ERSTEN TICK.
+    //     Sonst faellt genau die Aenderung durch, die zwischen dem
+    //     Einrichten und dem ersten Nachsehen passiert - und das ist
+    //     der haeufigste Fall, weil ein Mensch klickt, waehrend die
+    //     Oberflaeche gerade hochkommt. GEMESSEN am 03.09.2026: die
+    //     fremde Anheftung kam nach 1,2 s, der erste Tick nach 2 s, und
+    //     der nahm sie als "so war es schon immer".
+    const stempel = (): string => {
+      try {
+        const info = datei.query_info(
+          "time::modified,time::modified-usec", Gio.FileQueryInfoFlags.NONE,
+          null)
+        return `${info.get_attribute_uint64("time::modified")}`
+             + `.${info.get_attribute_uint32("time::modified-usec")}`
+      } catch (fehler) {
+        return ""
+      }
+    }
+    let zuletzt = stempel()
+    GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT_IDLE, 2, () => {
+      const jetzt = stempel()
+      if (jetzt && jetzt !== zuletzt) {
+        zuletzt = jetzt
+        folge()
+      }
+      return GLib.SOURCE_CONTINUE
+    })
+    return
+  }
   monitor.connect("changed", () => folge())
 }
 

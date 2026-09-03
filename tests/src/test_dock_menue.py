@@ -325,6 +325,7 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
           gepflegt: list[str] | None = None,
           home: list[str] | None = None,
           fremd: list[str] | None = None,
+          ohne_beobachter: bool = False,
           kennung: str | None = None,
           langer_name: bool = False,
           abgelegt: bool = False,
@@ -451,7 +452,11 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
         "ZEPOS_CSS": str(ags / "bar.css"),
         "ZEPOS_MENUES": "|".join(menues),
         "ZEPOS_WAEHLE": wahl,
-        "ZEPOS_WARTEN": "2500" if fremd else "",
+        # Ohne Beobachter wird alle zwei Sekunden nachgesehen - dann
+        # braucht dieser Lauf mehr Luft als die 2500 ms, die einem
+        # inotify-Ereignis reichen.
+        "ZEPOS_WARTEN": ("6000" if ohne_beobachter else "2500") if fremd else "",
+        "ZEPOS_KEIN_BEOBACHTER": "1" if ohne_beobachter else "",
     }
     if katalog is not None:
         # Nur fuer den einen Lauf, der die Uebersetzung PRUEFT. Ohne
@@ -1168,3 +1173,52 @@ def test_auch_ein_langer_programmname_bekommt_seine_zwei_punkte(langer_name):
         f"{HOME_ICON} Add to Home",
         f"{CLOSE_ICON} Close",
     ], langer_name["lauf"].trace
+
+
+@pytest.fixture(scope="module")
+def ohne_beobachter(bundle, tmp_path_factory) -> dict:
+    """Dieselbe fremde Anheftung, aber monitor_file() wirft.
+
+    WARUM DIESE LAGE EINEN EIGENEN LAUF WERT IST
+        fs.inotify.max_user_instances steht auf vielen Maschinen auf
+        128, und jeder Editor, jeder Dateimanager, jeder Sprachserver
+        nimmt sich davon. Ist das Kontingent voll, bekommt AGS keinen
+        Dateibeobachter - und bis zum 03.09.2026 hiess das: fremde
+        Aenderungen kommen NIE an, ohne dass der Nutzer erfaehrt, warum.
+
+        Der Zaehler gehoert dem ganzen Konto, also laesst er sich in
+        einem Testlauf nicht ehrlich fuellen. Nachgebaut wird deshalb
+        die WIRKUNG: ein monitor_file(), das wirft.
+    """
+    return _lauf(bundle, tmp_path_factory.mktemp("ohne-beobachter"),
+                 menues=(GIMP_TITEL,), home=[],
+                 fremd=["dock", "add", "gimp"], ohne_beobachter=True)
+
+
+def test_ohne_dateibeobachter_wird_nachgesehen(ohne_beobachter):
+    """Nachsehen ist schlechter als benachrichtigt werden und viel
+    besser als gar nichts."""
+    vorher = _pins(ohne_beobachter, "kinder")
+    nachher = _pins(ohne_beobachter, "kinder-danach")
+    assert not [name for name in vorher if name.startswith("GIMP")], (
+        f"gimp stand schon vorher im Fuss: {vorher}")
+    assert [name for name in nachher if name.startswith("GIMP")], (
+        "ohne Dateibeobachter kommt die fremde Anheftung nicht an - der "
+        f"Rueckfall greift nicht: {nachher}\n"
+        + ohne_beobachter["lauf"].trace)
+
+
+def test_der_ausfall_des_beobachters_wird_genannt(ohne_beobachter):
+    """Ein Rueckfall, der still greift, verbirgt seinen Anlass.
+
+    Der Satz nennt auch die Ursache (max_user_instances) - wer ihn
+    liest, kann sie selbst nachsehen, statt bei uns zu fragen.
+    """
+    # Die Meldung geht auf die Standardausgabe des Kindes und nicht in
+    # die Spur: `trace` sind die MARKEN, die das Kind selbst setzt, und
+    # eine Klage aus der Oberflaeche ist keine Marke.
+    lauf = ohne_beobachter["lauf"]
+    protokoll = lauf.stdout + lauf.stderr
+    assert "nachgesehen" in protokoll or "Beobachter" in protokoll, (
+        "der Ausfall des Beobachters steht nirgends - dann sieht ein "
+        f"langsamer Fuss aus wie ein kaputter:\n{protokoll[-1500:]}")

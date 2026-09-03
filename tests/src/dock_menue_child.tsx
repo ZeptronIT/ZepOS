@@ -27,7 +27,30 @@
 
 import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
+// Fuer die Betriebsart ohne Dateibeobachter weiter unten. Der Import
+// steht VOR dem des Fusses, weil das Urbild gepatcht sein muss,
+// bevor DockContent seinen Beobachter anmeldet.
+import Gio from "gi://Gio"
 import { DockContent } from "./widget/Dock"
+
+// KEIN DATEIBEOBACHTER, wenn dieser Lauf es so will - seit dem
+// 03.09.2026.
+//
+// Nachgebaut wird die WIRKUNG und nicht die Ursache: im Alltag
+// scheitert monitor_file(), weil fs.inotify.max_user_instances voll
+// ist (oft 128, und jeder Editor nimmt sich welche). Das laesst sich in
+// einem Testlauf nicht ehrlich herstellen - der Zaehler gehoert dem
+// ganzen Konto. Was sich herstellen laesst, ist ein monitor_file(), das
+// wirft, und genau darauf antwortet der Rueckfall in
+// ags-user-settings.template.
+if (GLib.getenv("ZEPOS_KEIN_BEOBACHTER")) {
+  const werfen = () => {
+    throw new Error("ZEPOS-PROBE: kein Dateibeobachter zu bekommen")
+  }
+  const urbild = Gio.File.prototype as any
+  urbild.monitor_file = werfen
+  urbild.monitor_directory = werfen
+}
 
 const TRACE = GLib.getenv("ZEPOS_TRACE") ?? ""
 const marks: string[] = []
