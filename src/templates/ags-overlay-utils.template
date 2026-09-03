@@ -774,9 +774,17 @@ export function waehlePfadSelbst(
       hinweis.set_visible(false)
       rumpf.append(hinweis)
 
+      // AUTOMATIC und NICHT NEVER, und das ist gemessen und nicht
+      // Geschmack: `Gtk.PolicyType.NEVER` heisst in GTK4 nicht "keine
+      // Leiste", sondern "der Inhalt bestimmt die Breite" - die
+      // Mindestbreite des Inhalts wandert dann an das Fenster weiter und
+      // der Hoehendeckel greift nur noch senkrecht. GEMESSEN in
+      // tests/src/test_modal_second_open.py: 930 statt 495. Ein
+      // Dateiname kann beliebig lang sein, also ist das hier kein
+      // Sonderfall, sondern der Regelfall.
       const roller = new Gtk.ScrolledWindow({
         vexpand: true,
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
+        hscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
       })
       liste = new Gtk.Box({

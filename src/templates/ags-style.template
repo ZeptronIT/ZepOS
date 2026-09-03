@@ -3647,7 +3647,7 @@ button:hover,
 //
 // Der Nutzer am 03.09.2026: "sorge dafuer das die dialoge erscheinen ich
 // will datei pfade angeben knnen in einem dialog usw." Das Fenster dazu
-// ist waehlePfadSelbst() in ags/utils/overlay.ts - der Boden unter
+// ist waehlePfadSelbst() in ags-overlay-utils.template - der Boden unter
 // Gtk.FileDialog, dessen Fenster diesem Programm nicht gehoert und
 // deshalb ausbleiben kann.
 //

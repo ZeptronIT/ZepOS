@@ -2560,6 +2560,12 @@ GLASS_LAYERS = (
     # Glasplatte des Namensraums "control". "vpn-settings" bleibt: die
     # VPN-Einstellungen sind ein eigenes Fenster, kein Verbindungsziel.
     "vpn-settings",
+    # Der eigene Dateiwaehler, seit dem 03.09.2026 (der Nutzer: "sorge
+    # dafuer das die dialoge erscheinen"). Er kommt aus
+    # createOverlayWindow() wie die uebrigen, also traegt er dieselbe
+    # Glasplatte - eine eigene Gestalt fuer einen Waehler waere ein
+    # zweites Aussehen fuer dasselbe Fenster.
+    "dateiwahl",
     # Die Einstellungen als eigenes AGS-Fenster, seit Aufgabe 32
     # (19.08.2026). Die ZWEITE Schale dieses Baums (createShellWindow(),
     # ags-settings.template) neben dem Kontrollzentrum - eine eigene
@@ -2808,6 +2814,9 @@ GLASS_PLATES = {
     # bei GLASS_LAYERS oben. VPN malt sich seither auf der Platte des
     # Namensraums "control".
     "vpn-settings": _OVERLAY,
+    # Der eigene Dateiwaehler (03.09.2026): createOverlayWindow(), also
+    # dieselbe `.overlay-outer`-Platte wie die uebrigen.
+    "dateiwahl": _OVERLAY,
     # Die Einstellungen (Aufgabe 32, 19.08.2026): createShellWindow()
     # reicht an createOverlayWindow() weiter, also traegt dieses Fenster
     # dieselbe `.overlay-outer`-Platte wie die uebrigen elf - genau wie
