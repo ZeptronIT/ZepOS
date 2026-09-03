@@ -215,3 +215,79 @@ def test_der_headless_ausgang_nimmt_unter_lua_keine_groesse_an():
             sitzung.start()
     finally:
         sitzung.stop()
+
+
+def test_keyword_setzt_unter_lua_keinen_wert(aus_lua):
+    """Gemessen statt gefolgert.
+
+    Die Vorrichtung setzt border_size in der Lua-Datei auf 3, ruft dann
+    `hyprctl keyword general:border_size 9` und liest nach. Kaeme 9
+    heraus, waere der Umzug eine reine Schreibarbeit.
+    """
+    assert aus_lua["border_size"] == 3, (
+        "schon die Lua-Datei ist nicht angekommen - dann sagt die "
+        "Messung darunter nichts")
+    assert aus_lua["border_nach_keyword"] != 9, (
+        "`hyprctl keyword` hat unter Lua doch gesetzt (border_size = "
+        f"{aus_lua['border_nach_keyword']}) - dann ist der Befund "
+        "ueberholt und src/displays.py kann bleiben, wie es ist")
+
+
+# ---------------------------------------------------------------------
+# WAS LUA STATT keyword ANBIETET - und was nicht
+# ---------------------------------------------------------------------
+
+TARBALL = (Path(__file__).resolve().parents[2] / "packaging"
+           / "zepos-hyprland" / "hyprland-0.56.1.tar.gz")
+
+# Die Namen, die src/displays.py braucht, um eine Anordnung anzuwenden:
+# Modus (Aufloesung samt Bildwiederholrate), Lage und Massstab.
+GEBRAUCHT = ("set_mode", "set_position", "set_scale")
+
+
+def _lua_monitor_quelle() -> str:
+    import tarfile
+    with tarfile.open(TARBALL) as archiv:
+        for eintrag in archiv:
+            if eintrag.name.endswith("config/lua/objects/LuaMonitor.cpp"):
+                inhalt = archiv.extractfile(eintrag)
+                if inhalt is None:
+                    break
+                return inhalt.read().decode("utf-8", errors="replace")
+    return ""
+
+
+def test_der_lua_monitor_kann_eine_anordnung_nicht_anwenden():
+    """DER ZWEITE HALBE BEFUND, und er entscheidet ueber den Zuschnitt.
+
+    `hyprctl keyword` wirkt unter Lua nicht (die Zusicherung darueber).
+    Bliebe ein Weg ueber die Lua-Schnittstelle selbst - hl.get_monitor()
+    gibt ein Objekt zurueck. GEMESSEN am 03.09.2026 im Quelltext, den
+    ZepOS ausliefert: dieses Objekt kennt name, width, height, scale,
+    transform, position ... alles LESEND, und als einzige Setzer
+    set_workspace und set_special_workspace.
+
+    Damit gibt es unter Lua in dieser Fassung KEINEN Weg, Aufloesung,
+    Lage oder Massstab eines Ausgangs zur Laufzeit zu aendern. Fuer
+    src/displays.py heisst das: die Seite "Bildschirme" muss auf
+    "Datei schreiben und neu laden" umgebaut werden - genau der Weg von
+    nwg-displays, den displays.py mit Begruendung NICHT geht (siehe
+    seinen Kopf, Zeile 99). Dieser Umbau ist Teil des Umzugs und keine
+    Nebensache.
+
+    Diese Zusicherung faellt, sobald Hyprland die Setzer nachliefert -
+    und das ist ihr Zweck: dann ist der teure Teil des Umzugs erledigt,
+    bevor jemand ihn baut.
+    """
+    quelle = _lua_monitor_quelle()
+    if not quelle:
+        pytest.skip(f"{TARBALL.name} liegt nicht neben dem Rezept - ohne "
+                    f"den Quelltext ist diese Frage nicht zu beantworten")
+    gefunden = [name for name in GEBRAUCHT if f'"{name}"' in quelle]
+    assert gefunden == [], (
+        f"LuaMonitor kennt jetzt {gefunden} - damit gibt es einen Weg, "
+        f"eine Bildschirmanordnung unter Lua zur Laufzeit anzuwenden, und "
+        f"der Umbau von src/displays.py ist billiger als hier beschrieben")
+    assert '"set_workspace"' in quelle, (
+        "auch set_workspace ist fort - dann hat sich die Schnittstelle "
+        "grundlegend geaendert und dieser Text ist zu erneuern")
