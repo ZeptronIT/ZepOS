@@ -431,7 +431,14 @@ def lauf(tmp_path_factory) -> dict:
         # Und danach noch einmal ueber den Rueckruf - das Menue ist nach
         # der Auswahl zu, also wird neu aufgeklappt.
         kind.frage("rechtsklick")
-        time.sleep(RUHE)
+        # ZWEI SEKUNDEN WARTEN, UND DAS IST DER PUNKT.
+        #     Der erste Lauf klickte SOFORT nach dem Aufklappen und war
+        #     gruen. Ein Mensch braucht die Zeit, das Menue zu lesen und
+        #     die Maus zu bewegen. Faellt der Klick nach einer Pause aus,
+        #     passiert dazwischen etwas - und genau das erlebt der
+        #     Nutzer: "rechtklick kommt popover [...] aber danach
+        #     passiert nichts mehr".
+        time.sleep(2.0)
         gewaehlt = kind.frage("waehle:Add to dock")
         # Der Rueckruf setzt settings.py als Unterprozess ab und wartet
         # (g_spawn_sync). Die Pause ist trotzdem noetig: der Rueckruf
