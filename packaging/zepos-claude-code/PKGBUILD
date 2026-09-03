@@ -1,0 +1,124 @@
+# Maintainer: ZeptronIT <https://github.com/ZeptronIT/ZepOS>
+#
+# zepos-claude-code - ein UEBERGANGSPAKET, und nichts sonst.
+#
+# WARUM ES DIESES PAKET WIEDER GIBT, OBWOHL ES AM 01.09.2026 GEFALLEN IST
+#
+#     Es liefert Claude Code NICHT mehr aus. Die Entscheidung des
+#     Nutzers vom 01.09.2026 steht unveraendert - "ich will das packet
+#     nicht als meins verkaufen [...] weil jetzt bekommt es keine
+#     updates" - und die Begruendung im ganzen steht in
+#     src/bin/zepos-claude-code. Dieses Paket enthaelt kein Programm,
+#     keine 324 MiB und keinen fremden Quelltext. Es enthaelt eine
+#     Erklaerung und eine Abhaengigkeit.
+#
+#     Es gibt es, weil ein Paket ZURUECKZIEHEN etwas anderes ist als es
+#     zu loeschen. Am 01.09.2026 wurde das Rezept geloescht, die Datei
+#     aus dem Repository entfernt und `replaces=('zepos-claude-code')`
+#     in zepos-config geschrieben. Das war der Fehler, und er hat die
+#     Maschine des Nutzers am 03.09.2026 zwei Tage lang von JEDER
+#     Aktualisierung abgeschnitten. PKGBUILD(5) sagt zu `replaces`
+#     woertlich:
+#
+#         "Sysupgrade is currently the only pacman operation that
+#         utilizes this field. A normal sync or upgrade will not use its
+#         value."
+#
+#     Der Bereich "zepos" der Selbstaktualisierung setzt `pacman -S` ab -
+#     kein Sysupgrade. Also wurde `replaces` nicht gelesen, wohl aber
+#     `conflicts` desselben Pakets, und ein Konflikt bricht den Vorgang
+#     ab. Gemeldet hat es der Nutzer mit dem Satz, der auf seinem Schirm
+#     stand: "dort steht zeppos config und zepos claude code are in a
+#     conflict und es kann nicht aktualsierst werden".
+#
+#     Der Nutzer hat daraufhin die Frage gestellt, aus der dieses Paket
+#     entstanden ist: "allgemein mann muss das doch anders loesen
+#     koennen". Man muss, und so geht es.
+#
+# WIE EIN UEBERGANGSPAKET DEN FEHLER UNMOEGLICH MACHT
+#
+#     Der Name bleibt im Repository, das Paket wird leer. Damit ist die
+#     Ablesung eine gewoehnliche AKTUALISIERUNG und kein Konflikt:
+#
+#         zepos-claude-code  2.1.233-4  ->  1:0.1.15-1
+#
+#     pacman raeumt dabei die Dateien der alten Fassung ab
+#     (/usr/bin/claude, /usr/bin/zepos-claude-code, der Eintrag im
+#     Starter, die vier Zeichen) und zepos-config legt die vier
+#     letzteren im selben Vorgang neu ab. Eine Ablesung braucht keine
+#     Rueckfrage, kein `-Rdd` und kein Sysupgrade - sie geht auch durch
+#     `pacman -S --needed`, also durch den Bereich "zepos".
+#
+#     DESHALB TRAEGT zepos-config KEIN `replaces` UND KEIN `conflicts`
+#     MEHR auf diesen Namen. Beides waere jetzt schaedlich: ein
+#     `conflicts` auf einen Namen, den dasselbe Repository anbietet,
+#     macht die beiden Pakete unvereinbar, und genau das war der Fehler.
+#
+# WARUM epoch UND NICHT NUR EINE HOEHERE FASSUNG
+#     Weil 0.1.15 kleiner ist als 2.1.233. Die alte Fassung war die von
+#     Claude Code, jedes ZepOS-Paket traegt die aus VERSION, und pacman
+#     vergleicht Zahlen und keine Absichten - es meldete "local version
+#     is newer" und spielte nichts ein. `epoch` ist das Feld, das genau
+#     fuer diesen Fall gemacht ist: es wird VOR pkgver verglichen, also
+#     schlaegt 1:0.1.15-1 die 2.1.233-4, ohne dass ZepOS eine Fassung
+#     erfinden muss, die es nicht hat.
+#
+# WANN ES WIEDER VERSCHWINDEN DARF
+#     Wenn keine Maschine mehr die alte Fassung traegt. Vorher ist sein
+#     Wegfall derselbe Fehler noch einmal. Ein Anhaltspunkt statt eines
+#     Gefuehls: `pacman -Qi zepos-claude-code` auf den betreuten
+#     Rechnern; solange dort eine 2.x steht, bleibt dieses Rezept.
+
+_zepos_repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+pkgname=zepos-claude-code
+epoch=1
+pkgver="$(<"$_zepos_repo/VERSION")"
+pkgrel=1
+pkgdesc="Uebergangspaket: Claude Code kommt nicht mehr von ZepOS, der Befehl liegt in zepos-config"
+arch=('any')
+url="https://github.com/ZeptronIT/ZepOS"
+license=('GPL-3.0-or-later')
+
+# Die Abhaengigkeit ist der Zweck: wer dieses Paket noch hat, bekommt
+# damit das Paket, in dem der Befehl jetzt liegt. Ohne sie waere die
+# Ablesung ein Rechner, auf dem /usr/bin/zepos-claude-code weg ist und
+# nichts es ersetzt.
+depends=('zepos-config')
+
+# KEIN provides, KEIN conflicts, KEIN replaces.
+#
+# provides waere eine Zusage ueber einen Namen, den dieses Paket nicht
+# mehr traegt. conflicts und replaces sind die zwei Felder, deren
+# falscher Gebrauch diesen Fehler ueberhaupt erzeugt hat.
+
+package() {
+    # Genau eine Datei, und keine davon liegt auf einem Pfad, den
+    # zepos-config ablegt - sonst waere das Uebergangspaket selbst der
+    # Dateikonflikt, den es aufloest.
+    install -dm755 "$pkgdir/usr/share/doc/$pkgname"
+    cat > "$pkgdir/usr/share/doc/$pkgname/HERKUNFT" <<'HINWEIS'
+Dieses Paket ist leer.
+
+Claude Code wird von ZepOS nicht mehr ausgeliefert. Der Grund: ein
+Paket, das ZepOS baut und signiert, ist die Weitergabe fremder
+Software unter eigenem Namen - und es nagelt eine Fassung fest, die
+Anthropic woechentlich nachlegt. Das ausgelieferte Paket stand auf
+2.1.233, waehrend npm bereits 2.1.257 fuehrte.
+
+Was statt dessen da ist, liegt in zepos-config:
+
+    zepos-claude-code
+
+Der Befehl installiert Claude Code bei der ersten Benutzung aus der
+npm-Registry und aktualisiert es danach von dort. Der Eintrag im
+Starter ruft denselben Befehl.
+
+Dieses Paket steht nur noch, damit ein Rechner, der die alte Fassung
+traegt, sie durch eine gewoehnliche Aktualisierung loswird. Es darf
+entfernt werden:
+
+    pacman -Rns zepos-claude-code
+HINWEIS
+    chmod 644 "$pkgdir/usr/share/doc/$pkgname/HERKUNFT"
+}

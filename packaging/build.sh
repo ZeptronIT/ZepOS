@@ -86,11 +86,17 @@ readonly PACKAGES=(
     zepos-hyprclipx
     zepos-hyprzones
     hyprland-plugins
-    # HIER STAND zepos-claude-code, vor zepos-apps, weil dessen depends
-    # darauf zeigte. Beides ist am 01.09.2026 gefallen - der Nutzer:
-    # "ich will das packet nicht als meins verkaufen". Die ganze
-    # Begruendung steht in packaging/zepos-apps/PKGBUILD an der Stelle,
-    # an der der Name in depends stand.
+    # zepos-claude-code steht seit dem 03.09.2026 WIEDER hier, und es
+    # liefert Claude Code trotzdem nicht aus: es ist ein leeres
+    # UEBERGANGSPAKET, das nur noch dafuer da ist, dass ein Rechner mit
+    # der alten Fassung sie durch eine gewoehnliche Aktualisierung
+    # loswird. Die ganze Begruendung steht in seinem Rezept; die
+    # Kurzfassung ist, dass ein Paket ZURUECKZIEHEN etwas anderes ist
+    # als es zu loeschen, und dass der Unterschied die Maschine des
+    # Nutzers zwei Tage von jeder Aktualisierung abgeschnitten hat.
+    #
+    # NACH zepos-config, weil es davon abhaengt.
+    zepos-claude-code
     #
     # UND ES IST DER GROESSTE EINZELNE WEGFALL, DEN DIESES REPOSITORY
     # JE HATTE: 91831121 Bytes als

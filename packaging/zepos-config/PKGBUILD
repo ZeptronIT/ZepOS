@@ -96,13 +96,37 @@ optdepends=(
 # 0.1.x. pacman haelt 0.1.14 fuer AELTER als 2.1.233, meldet "local is
 # newer" und spielt nichts ein.
 #
-# `conflicts` daneben und nicht statt dessen: die abgelegten Dateien
-# liegen unter denselben Pfaden (/usr/bin/zepos-claude-code, der
-# Eintrag, die vier Zeichen). Ohne diese Zeile waere eine Maschine, auf
-# der beide Pakete noch stehen, ein Dateikonflikt mitten in einem
-# `pacman -Syu`.
-replaces=('zepos-claude-code')
-conflicts=('zepos-claude-code')
+# HIER STANDEN replaces UND conflicts AUF zepos-claude-code, VOM
+# 01.09. BIS ZUM 03.09.2026. SIE WAREN DER FEHLER.
+#
+#     `conflicts` war richtig gedacht: die abgelegten Dateien liegen
+#     unter denselben Pfaden (/usr/bin/zepos-claude-code, der Eintrag im
+#     Starter, die vier Zeichen), und ohne die Zeile waere eine Maschine
+#     mit beiden Paketen ein Dateikonflikt mitten in einem `pacman -Syu`.
+#
+#     Der Konflikt kam dann auch - nur nicht als Fehler beim Einspielen,
+#     sondern als ABBRUCH VOR JEDEM Einspielen. Der Nutzer am
+#     03.09.2026, von seinem Schirm abgelesen: "dort steht zeppos config
+#     und zepos claude code are in a conflict und es kann nicht
+#     aktualsierst werden". Zwei Tage lang bekam der Rechner GAR KEINE
+#     Aktualisierung, nicht bloss diese eine.
+#
+#     Der Grund steht in PKGBUILD(5) und war nachzulesen, bevor die
+#     Zeilen geschrieben wurden: "Sysupgrade is currently the only
+#     pacman operation that utilizes this field. A normal sync or
+#     upgrade will not use its value." Die Selbstaktualisierung setzt im
+#     Bereich "zepos" `pacman -S` ab. `replaces` wurde also nie gelesen,
+#     `conflicts` schon - und mit `--noconfirm` entfernt pacman nichts,
+#     es bricht ab.
+#
+# WAS JETZT STATT DESSEN DA IST
+#     packaging/zepos-claude-code/ ist wieder da, als UEBERGANGSPAKET:
+#     derselbe Name, leer, mit `epoch=1` und `depends=('zepos-config')`.
+#     Damit ist die Ablesung eine gewoehnliche Aktualisierung
+#     (2.1.233-4 -> 1:0.1.15-1), die auch `pacman -S --needed` ausfuehrt.
+#     Beide Felder MUESSEN hier deshalb weg sein: ein `conflicts` auf
+#     einen Namen, den dasselbe Repository anbietet, macht die zwei
+#     Pakete unvereinbar - und genau das war der Fehler.
 
 # Produced by packaging/build.sh from the working tree, with mtimes
 # clamped to SOURCE_DATE_EPOCH so that one tree gives one tarball.
