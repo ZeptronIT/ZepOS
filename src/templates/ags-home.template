@@ -705,10 +705,42 @@ export default function Home(
       //     ein Symbol abnimmt und ein anderes hinzufuegt, hat gleich
       //     viele - und bekaeme sonst das alte Bild mit dem neuen Namen
       //     darunter.
+      //     UND DIE ZELLE ZAEHLT MIT - seit dem 03.09.2026, und das ist
+      //     der Fehler, den diese Zeile bis dahin verursacht hat.
+      //
+      //     GEMELDET, woertlich: "ja auf home wenn ich eine icon
+      //     verschiebe dann ja aber auch das passiert nicht live !!!!
+      //     ich muss mich ausloggen damit der icon verschoben ist".
+      //
+      //     Ein Umzug aendert GENAU NUR die Zellen: derselbe Name,
+      //     dieselbe Anzahl, dieselbe Reihenfolge - das Ablegen
+      //     schreibt die gesamte Belegung zurueck und ruehrt nur eine
+      //     Zeile davon an (siehe den "drop"-Rueckruf weiter unten).
+      //     Ohne diesen Vergleich war `passtNoch` danach WAHR, die alte
+      //     Belegung blieb stehen, und jeder Knopf wurde wieder an
+      //     seinen alten Platz gesetzt. Erst der naechste Start las die
+      //     Datei frisch - daher das Ausloggen.
+      //
+      //     GEMESSEN am 03.09.2026 in tests/render/test_home_flaeche.py
+      //     am laufenden Compositor: nach `settings.py home set` mit
+      //     einer geaenderten Zelle standen in der Zielzelle 0 von 4096
+      //     Bildpunkten anders, und in der Quellzelle lagen weiterhin
+      //     1699 Punkte ueber der Tapete - das Symbol war nicht
+      //     umgezogen, sondern gar nicht bewegt worden.
+      //
+      //     Ein Symbol OHNE eigene Zelle bleibt weiter liegen, wo es
+      //     liegt. Das ist kein Nachlassen der Regel, sondern dieselbe:
+      //     es hat keinen gespeicherten Platz, den man verfehlen
+      //     koennte, und es bei jedem Lesevorgang neu zu legen waere
+      //     genau das Umraeumen, gegen das der Absatz darueber steht.
       const passtNoch = flaeche.gelegt.length === icons.length
         && flaeche.gelegt.every((p, stelle) =>
              p.icon.name === icons[stelle].name
-             && p.col < spalten && p.row < zeilen)
+             && p.col < spalten && p.row < zeilen
+             && (typeof icons[stelle].col !== "number"
+                 || typeof icons[stelle].row !== "number"
+                 || (p.col === icons[stelle].col
+                     && p.row === icons[stelle].row)))
       if (!passtNoch) flaeche.gelegt = lege(icons, spalten, zeilen)
       for (const platz of flaeche.gelegt) {
         flaeche.fixed.put(symbolKnopf(platz),

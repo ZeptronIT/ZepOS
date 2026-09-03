@@ -48,7 +48,7 @@ sys.path.insert(0, str(ROOT))
 
 from tests.render import measure                      # noqa: E402
 from tests.render.desktop_session import (             # noqa: E402
-    Session, bundle, render_configuration, required_tools,
+    Session, bundle, render_configuration, required_tools, size_of,
     workspaces_file,
 )
 
@@ -65,6 +65,13 @@ BREITE, HOEHE = 1920, 1080
 EBENEN = {"0": "background", "1": "bottom", "2": "top", "3": "overlay"}
 
 NAMENSRAUM = "zepos-home"
+
+# WO DIE SYMBOLE FUER DEN UMZUG LIEGEN - siehe die Vorrichtung unten.
+# Acht je Reihe, damit auch eine lange Auslieferungsliste in die oberen
+# Reihen passt und die Zeile 3 in jedem Fall frei bleibt.
+SPALTEN_JE_REIHE = 8
+QUELLE = (0, 0)
+ZIEL = (0, 3)
 
 # Die modulweite Vorrichtung `gemessen` startet eine verschachtelte
 # Sitzung und ruft dazu src/settings.py als Kind, um ein Symbol
@@ -151,6 +158,41 @@ def gemessen(tmp_path_factory) -> dict:
         ebenen_danach = _ebenen(sitzung)
         flaechen_danach = sitzung.layers()
 
+        # ================================================================
+        # DER UMZUG - 03.09.2026
+        # ================================================================
+        #
+        # GEMELDET, woertlich: "ja auf home wenn ich eine icon verschiebe
+        # dann ja aber auch das passiert nicht live !!!! ich muss mich
+        # ausloggen damit der icon verschoben ist".
+        #
+        # ZWEI SCHRITTE, und beide gehen ueber `settings.py home set` -
+        # den Befehl, den der "drop"-Rueckruf in ags-home.template ueber
+        # homeSet() absetzt, wenn ein Symbol abgelegt wird:
+        #
+        #     1. jedes Symbol bekommt eine ausdrueckliche Zelle. Danach
+        #        steht fest, wo welches liegt - ohne diesen Schritt legt
+        #        das Home sie selbst, und der Test wuesste es nicht.
+        #     2. EINES zieht um, von QUELLE nach ZIEL. Die Belegung ist
+        #        sonst dieselbe, genau wie beim Ablegen.
+        #
+        # Dazwischen liegt kein Neustart, kein Erzeugungslauf, kein
+        # `ags request`. Was das zweite Bild vom ersten unterscheidet,
+        # ist die Antwort auf "geht das live?".
+        namen = _namen(bau)
+        assert len(namen) >= 2, (
+            f"fuer den Umzug liegen zu wenige Symbole auf dem Home: {namen}")
+        _lege(bau, _in_reihen(namen))
+        time.sleep(SETTLE)
+        in_reihen = sitzung.shoot(bilder / "in-reihen.png")
+
+        belegung = _in_reihen(namen)
+        belegung[0]["col"], belegung[0]["row"] = ZIEL
+        _lege(bau, belegung)
+        time.sleep(SETTLE)
+        nach_umzug = sitzung.shoot(bilder / "nach-umzug.png")
+        kasten = sitzung.layers().get(NAMENSRAUM)
+
         return {
             "ebenen": ebenen,
             "flaechen": flaechen,
@@ -160,6 +202,10 @@ def gemessen(tmp_path_factory) -> dict:
             "danach": measure.read_png(ohne_erstes),
             "ebenen_danach": ebenen_danach,
             "flaechen_danach": flaechen_danach,
+            "in_reihen": measure.read_png(in_reihen),
+            "nach_umzug": measure.read_png(nach_umzug),
+            "umgezogen": namen[0],
+            "kasten": kasten,
             "protokoll": sitzung.read_shell_log(),
         }
 
@@ -184,22 +230,87 @@ def _nimm_das_erste_symbol_weg(bau: Path) -> str:
     utils/user-settings.ts leitet daraus `<bau>/zepos` ab (dieselbe
     Ableitung wie src/paths.py).
     """
-    umgebung = {"PATH": os.environ.get("PATH", "/usr/bin"),
-                "ZEPOS_SYSTEM_ROOT": str(ROOT / "src"),
-                "ZEPOS_USER_ROOT": str(bau / "zepos")}
-    plan = subprocess.run(
-        [sys.executable, str(ROOT / "src" / "settings.py"), "home"],
-        capture_output=True, text=True, env=umgebung, timeout=60)
-    assert plan.returncode == 0, plan.stderr
-    namen = [icon["name"] for icon in json.loads(plan.stdout)["icons"]]
+    namen = _namen(bau)
     assert namen, "auf dem Home lag nichts - dann misst dieser Lauf nichts"
 
     fertig = subprocess.run(
         [sys.executable, str(ROOT / "src" / "settings.py"),
          "home", "remove", namen[0]],
-        capture_output=True, text=True, env=umgebung, timeout=60)
+        capture_output=True, text=True, env=_umgebung(bau), timeout=60)
     assert fertig.returncode == 0, f"{namen[0]}: {fertig.stderr}"
     return namen[0]
+
+
+def _umgebung(bau: Path) -> dict[str, str]:
+    """Die Umgebung, in der settings.py DIESELBE Datei sieht wie die
+    laufende Oberflaeche.
+
+    ZEPOS_USER_ROOT zeigt dorthin, wo die Oberflaeche ihre Datei sucht:
+    Session.shell() reicht XDG_CONFIG_HOME=<bau> durch, und
+    utils/user-settings.ts leitet daraus `<bau>/zepos` ab (dieselbe
+    Ableitung wie src/paths.py).
+    """
+    return {"PATH": os.environ.get("PATH", "/usr/bin"),
+            "ZEPOS_SYSTEM_ROOT": str(ROOT / "src"),
+            "ZEPOS_USER_ROOT": str(bau / "zepos")}
+
+
+def _namen(bau: Path) -> list[str]:
+    """Was gerade auf dem Home liegt, in seiner Reihenfolge."""
+    plan = subprocess.run(
+        [sys.executable, str(ROOT / "src" / "settings.py"), "home"],
+        capture_output=True, text=True, env=_umgebung(bau), timeout=60)
+    assert plan.returncode == 0, plan.stderr
+    return [icon["name"] for icon in json.loads(plan.stdout)["icons"]]
+
+
+def _lege(bau: Path, belegung: list[dict]) -> None:
+    """`settings.py home set` - GENAU der Befehl, den das Ablegen absetzt.
+
+    Der "drop"-Rueckruf in ags-home.template ruft homeSet() mit der
+    GESAMTEN Belegung, und homeSet() setzt diesen Befehl ab. Von aussen
+    gerufen ist er derselbe Schreibvorgang, nur ohne den Zeiger - und
+    der Zeiger ist nicht der Teil, der gemeldet wurde.
+    """
+    fertig = subprocess.run(
+        [sys.executable, str(ROOT / "src" / "settings.py"),
+         "home", "set", json.dumps(belegung)],
+        capture_output=True, text=True, env=_umgebung(bau), timeout=60)
+    assert fertig.returncode == 0, fertig.stderr
+
+
+def _in_reihen(namen: list[str]) -> list[dict]:
+    """Jedem Symbol eine AUSDRUECKLICHE Zelle geben.
+
+    Ohne sie legt das Home die Symbole selbst, und dieser Test wuesste
+    nicht, wo sie liegen. Mit ihr steht vor dem Umzug fest, welche Zelle
+    leer werden muss und welche sich fuellen soll.
+    """
+    return [{"name": name,
+             "col": nummer % SPALTEN_JE_REIHE,
+             "row": nummer // SPALTEN_JE_REIHE}
+            for nummer, name in enumerate(namen)]
+
+
+def _zelle(kasten: tuple[int, int, int, int], spalte: int,
+           reihe: int) -> tuple[int, int, int, int]:
+    """Das Rechteck einer Zelle auf dem Bild, ein Stueck eingerueckt.
+
+    Die Rechnung ist die des Homes, rueckwaerts: `EDGE_GAP + col * CELL`
+    (ags-home.template), auf dem Bild um die Ecke der Flaeche versetzt.
+    Beide Zahlen kommen aus src/sizes.py und nicht von hier.
+
+    EINGERUECKT UM EIN SECHSTEL, damit die Beschriftung des Nachbarn
+    nicht mitzaehlt: sie ist CELL breit und darf ihre Zelle an den
+    Raendern weich verlassen. Das Symbol selbst sitzt in der Mitte.
+    """
+    x, y, _breite, _hoehe = kasten
+    kante = size_of("STYLE_HOME_CELL")
+    rand = size_of("STYLE_GAPS_OUT")
+    innen = kante // 6
+    return (x + rand + spalte * kante + innen,
+            y + rand + reihe * kante + innen,
+            kante - 2 * innen, kante - 2 * innen)
 
 
 def test_das_home_liegt_auf_bottom(gemessen):
@@ -413,3 +524,66 @@ def test_die_flaeche_des_homes_bleibt_dabei_liegen(gemessen):
         gemessen["ebenen_danach"])
     assert NAMENSRAUM in gemessen["flaechen_danach"], (
         gemessen["flaechen_danach"])
+
+
+# --------------------------------------------------------------------
+# Dass ein VERSCHOBENES Symbol sofort woanders liegt
+# --------------------------------------------------------------------
+
+def test_ein_verschobenes_symbol_liegt_sofort_an_seinem_neuen_platz(gemessen):
+    """Die andere Haelfte der Meldung vom 03.09.2026.
+
+    "ich muss mich ausloggen damit der icon verschoben ist" - also war
+    der Schreibvorgang da und das Bild blieb stehen. Zwischen den beiden
+    Bildern dieser Messung liegt ein einziges `settings.py home set`,
+    dasselbe, das homeSet() aus dem "drop"-Rueckruf absetzt. Ist die
+    Zielzelle danach unveraendert, ist der Umzug NICHT angekommen.
+
+    GEMESSEN WIRD IN DER ZELLE UND NICHT AUF DEM GANZEN SCHIRM: "es hat
+    sich irgendwo etwas geaendert" waere auch dann wahr, wenn nur eine
+    Uhr weitergelaufen ist.
+    """
+    assert gemessen["kasten"], (
+        "nach dem Umzug liegt das Home nicht mehr auf dem Schirm:\n"
+        + gemessen["protokoll"][-2000:])
+    ziel = _zelle(gemessen["kasten"], *ZIEL)
+    punkte = measure.changed_pixels(
+        gemessen["in_reihen"], gemessen["nach_umzug"], ziel)
+
+    assert len(punkte) > 200, (
+        f"in der Zielzelle {ZIEL} haben sich nur {len(punkte)} Bildpunkte "
+        f"geaendert, nachdem \"{gemessen['umgezogen']}\" dorthin gelegt "
+        f"wurde - der Umzug ist nicht angekommen. Gemessen im Rechteck "
+        f"{ziel}.\n" + gemessen["protokoll"][-2000:])
+
+
+def test_die_alte_zelle_ist_danach_wirklich_leer(gemessen):
+    """Und es liegt nicht ZWEIMAL da.
+
+    Ein Home, das das neue Symbol zeichnet, ohne das alte wegzunehmen,
+    saehe auf dem Zielbild richtig aus und waere trotzdem falsch. Die
+    Gegenprobe ist die Tapete: das Home malt keinen Hintergrund (siehe
+    test_die_tapete_scheint_durch_das_home), eine leere Zelle ist also
+    Bildpunkt fuer Bildpunkt die Tapete.
+
+    DIE FUENFZIG PUNKTE TOLERANZ sind kein Spielraum fuer ein halbes
+    Symbol: das Rechteck ist 64x64 = 4096 Punkte gross, und ein Symbol
+    schlaegt dort ueber zweihundert. Sie fangen den weichen Rand einer
+    Nachbarbeschriftung ab, mehr nicht.
+    """
+    quelle = _zelle(gemessen["kasten"], *QUELLE)
+    vorher = measure.changed_pixels(
+        gemessen["vorher"], gemessen["in_reihen"], quelle)
+    nachher = measure.changed_pixels(
+        gemessen["vorher"], gemessen["nach_umzug"], quelle)
+
+    assert len(vorher) > 200, (
+        f"in der Quellzelle {QUELLE} lag vor dem Umzug nichts "
+        f"({len(vorher)} Punkte gegen die blosse Tapete) - dann misst "
+        f"diese Zusicherung nichts. Gemessen im Rechteck {quelle}.\n"
+        + gemessen["protokoll"][-2000:])
+    assert len(nachher) <= 50, (
+        f"in der Quellzelle {QUELLE} stehen nach dem Umzug noch "
+        f"{len(nachher)} Bildpunkte ueber der Tapete - "
+        f"\"{gemessen['umgezogen']}\" liegt jetzt an ZWEI Stellen.\n"
+        + gemessen["protokoll"][-2000:])
