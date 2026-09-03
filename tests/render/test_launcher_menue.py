@@ -403,6 +403,35 @@ def lauf(tmp_path_factory) -> dict:
         #     hat.
         datei = heim / ".config" / "zepos" / "user-settings.json"
         vor_der_wahl = datei.read_text(encoding="utf-8") if datei.exists() else ""
+        # ERST DER TASTATURWEG, seit dem 03.09.2026.
+        #
+        #     Der Weg des Zeigers zu einem Popover auf einer
+        #     Layer-Flaeche laesst sich hier nicht nachstellen -
+        #     `waehle:` unten feuert `clicked` direkt am Knopf ab und
+        #     ueberspringt genau die Strecke, die auf der Maschine des
+        #     Nutzers klemmt. Was sich nachstellen laesst, ist der
+        #     zweite Weg: Tab zum ersten Punkt, Eingabetaste.
+        #
+        #     Er misst zugleich die zwei Aenderungen von heute: dass die
+        #     Knoepfe Fokus annehmen (can_focus TRUE) und dass das
+        #     Fenster die Tasten dafuer durchlaesst (onKeyPress).
+        vor_der_taste = datei.read_text(encoding="utf-8") if datei.exists() else ""
+        # Zweimal Tab und einmal Down: welche Taste den Fokus in ein
+        # frisch aufgegangenes Popover holt, entscheidet GTK, und ein
+        # Lauf, der nur eine davon versucht, misst die falsche Frage.
+        for taste in ("Tab", "Down", "Tab"):
+            subprocess.run(["wtype", "-k", taste], env=umgebung,
+                           capture_output=True, timeout=20)
+            time.sleep(0.3)
+        subprocess.run(["wtype", "-k", "Return"], env=umgebung,
+                       capture_output=True, timeout=20)
+        time.sleep(2.0)
+        nach_der_taste = datei.read_text(encoding="utf-8") if datei.exists() else ""
+
+        # Und danach noch einmal ueber den Rueckruf - das Menue ist nach
+        # der Auswahl zu, also wird neu aufgeklappt.
+        kind.frage("rechtsklick")
+        time.sleep(RUHE)
         gewaehlt = kind.frage("waehle:Add to dock")
         # Der Rueckruf setzt settings.py als Unterprozess ab und wartet
         # (g_spawn_sync). Die Pause ist trotzdem noetig: der Rueckruf
@@ -431,6 +460,8 @@ def lauf(tmp_path_factory) -> dict:
 
     return {
         "gewaehlt": gewaehlt,
+        "vor_der_taste": vor_der_taste,
+        "nach_der_taste": nach_der_taste,
         "gefunden": gefunden,
         "vor_der_wahl": vor_der_wahl,
         "nach_der_wahl": nach_der_wahl,
@@ -701,3 +732,32 @@ def test_wohin_der_starter_schreibt(lauf):
     for pfad, inhalt in lauf["gefunden"].items():
         print(f"GEFUNDEN {pfad}: {inhalt}")
     assert lauf["gefunden"], "es gibt gar keine user-settings.json"
+
+
+def test_das_menue_ist_heute_nur_mit_dem_zeiger_zu_bedienen(lauf):
+    """EINE GEMESSENE GRENZE, kein Versprechen.
+
+    GEMESSEN am 03.09.2026 im verschachtelten Compositor: Tab, Down und
+    Eingabetaste erreichen keinen Menuepunkt des Starters. Drei
+    Versuche, den Weg zu oeffnen, haben es nicht geaendert und sind
+    deshalb NICHT eingebaut worden:
+
+        can_focus TRUE an den Knoepfen
+        onKeyPress() laesst Tab/Pfeile/Eingabetaste durch
+        der Tastenmodus sinkt fuer die Dauer des Menues auf ON_DEMAND
+
+    Warum das hier steht, statt weggelassen zu werden: der Nutzer meldet
+    seit Tagen "zur dock oder home hinzufuegen klappt nicht", und die
+    Schreibseite ist inzwischen end-zu-ende belegt (der Test darueber
+    loest den Punkt aus, und danach steht die Anheftung in der Datei).
+    Bleibt der WEG DES ZEIGERS zu diesem Knopf - und ein Popover auf
+    einer Layer-Flaeche ist ein eigener xdg_popup, dessen Eingaben der
+    Compositor zuteilt. Solange der Zeiger der einzige Weg ist, ist
+    dieses Menue genau so verletzlich, wie der Nutzer es erlebt.
+
+    Diese Zusicherung faellt, sobald jemand den zweiten Weg zum Laufen
+    bringt - und dann soll er hier lesen, was schon versucht wurde.
+    """
+    assert lauf["nach_der_taste"] == lauf["vor_der_taste"], (
+        "die Tastatur erreicht das Menue jetzt doch - dann ist der "
+        "zweite Weg da, und dieser Text ist zu erneuern")
