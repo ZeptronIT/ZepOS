@@ -104,25 +104,6 @@ def test_sie_gilt_als_einstellung_und_nicht_als_programmteil():
     )
 
 
-def test_der_dateidialog_ist_der_gtk4_anbieter_mit_gtk_als_rueckwand():
-    """Der Grund, aus dem zepos-apps das GNOME-Portal ueberhaupt kauft.
-
-    Und die Rueckwand ist kein Zierrat: wer zepos-desktop OHNE zepos-apps
-    installiert, hat kein xdg-desktop-portal-gnome. Stuende hier nur
-    'gnome', haette diese Maschine dann GAR KEINEN Dateidialog.
-    """
-    kette = _kette(_zuordnung()[IMPL + "filechooser"])
-    assert kette[0] == "gnome", (
-        "Der Dateidialog zeigt nicht auf gnome. Dann ist er wieder der "
-        "GTK3-Dialog, und xdg-desktop-portal-gnome ist ein Paket, das "
-        "installiert wird und nie laeuft - gemessen am 22.08.2026: "
-        "sieben Tage, kein einziger Start."
-    )
-    assert "gtk" in kette[1:], (
-        "Hinter gnome steht keine Rueckwand. Ohne zepos-apps gaebe es "
-        "dann keinen Dateidialog mehr."
-    )
-
 
 def test_inhibit_ist_abgeschaltet_statt_auf_einen_anbieter_zu_zeigen():
     """Der Fehler, der den Schirm im Videoanruf ausgehen liess.
@@ -172,21 +153,94 @@ def test_gnome_bekommt_nur_was_ihm_namentlich_zugewiesen_ist():
     )
 
 
-def test_der_dateidialog_zeigt_auf_ein_paket_das_auch_installiert_wird():
-    """Die Kante zwischen zwei Dateien, die sonst niemand haelt.
 
-    Die Zeile FileChooser=gnome ist nur so viel wert wie das Paket, das
-    den Anbieter mitbringt. Faellt xdg-desktop-portal-gnome eines Tages
-    aus packaging/zepos-apps/PKGBUILD, faellt der Dialog stillschweigend
-    auf die gtk-Rueckwand zurueck - also auf genau den Zustand, den diese
-    Zuordnung beheben sollte. Dieser Test ist die einzige Stelle im Baum,
-    an der die beiden Dateien voneinander wissen.
+# --------------------------------------------------------------------
+# Der Dateidialog, seit dem 03.09.2026
+# --------------------------------------------------------------------
+#
+# HIER STANDEN ZWEI ZUSICHERUNGEN AUF `FileChooser=gnome`, VOM 22.08. BIS
+# ZUM 03.09.2026. Die eine verlangte kette[0] == "gnome", die andere
+# hielt die Kante zu zepos-apps und UEBERSPRANG sich selbst, sobald die
+# Zeile nicht auf gnome zeigt.
+#
+# Sie sind mit der Freigabe des Nutzers gefallen, und zwar aus dem
+# Grund, den er gemeldet hat: "dialoge um den pfad mit dateien anzugeben
+# oder andere dialog erscheinen garnicht erst". Drei Belege sprechen
+# gegen gnome an dieser Stelle - gnome.portal traegt `UseIn=gnome`,
+# ZepOS' eigene Messung vom 22.08.2026 haelt fest, dass der Dienst in
+# sieben Tagen nie startete, und portals.conf(5) kennt fuer einen
+# Rueckfall nur den Sonderwert `*`: ein Anbieter, der zur LAUFZEIT
+# scheitert, laesst die Bitte scheitern statt sie weiterzugeben.
+#
+# Was von den beiden bleibt, steht hier - und die erste ist STRENGER als
+# die alte: sie prueft JEDE Schnittstelle und JEDEN genannten Anbieter
+# gegen das Rezept, das ihn installiert, und ueberspringt sich nie.
+
+# Welches Paket welchen Anbieter mitbringt, und wo es steht. Die
+# Zuordnung ist Wissen ueber fremde Pakete und gehoert deshalb hierhin
+# und nicht in eine Vorlage.
+DESKTOP = ROOT / "packaging" / "zepos-desktop" / "PKGBUILD"
+ANBIETER_PAKET = {
+    "gtk": ("xdg-desktop-portal-gtk", DESKTOP),
+    "gnome": ("xdg-desktop-portal-gnome", APPS),
+    "hyprland": ("xdg-desktop-portal-hyprland", DESKTOP),
+}
+
+
+def test_jeder_genannte_anbieter_wird_auch_installiert():
+    """Eine Zuordnung ist nur so viel wert wie das Paket dahinter.
+
+    Steht ein Anbieter in dieser Datei, den kein Rezept installiert,
+    faellt die Bitte auf den naechsten Namen - oder auf gar keinen. Beides
+    ist ein Dialog, der nicht aufgeht, und niemand merkt es.
     """
-    if "gnome" not in _kette(_zuordnung()[IMPL + "filechooser"]):
-        pytest.skip("FileChooser zeigt nicht auf gnome")
-    assert "'xdg-desktop-portal-gnome'" in APPS.read_text(encoding="utf-8"), (
-        "Die Portal-Zuordnung schickt den Dateidialog zu gnome, aber "
-        "packaging/zepos-apps/PKGBUILD installiert "
-        "xdg-desktop-portal-gnome nicht mehr. Dann greift die Rueckwand "
-        "gtk - der GTK3-Dialog ist zurueck, ohne dass es jemand merkt."
-    )
+    fehlend = []
+    for schnittstelle, wert in _zuordnung().items():
+        for anbieter in _kette(wert):
+            if anbieter in ("none", "*"):
+                continue
+            if anbieter not in ANBIETER_PAKET:
+                fehlend.append(
+                    f"{schnittstelle}={anbieter}: dieser Test kennt das "
+                    f"Paket dazu nicht - ANBIETER_PAKET ergaenzen")
+                continue
+            paket, rezept = ANBIETER_PAKET[anbieter]
+            if f"'{paket}'" not in rezept.read_text(encoding="utf-8"):
+                fehlend.append(
+                    f"{schnittstelle}={anbieter}: {rezept.parent.name} "
+                    f"installiert {paket} nicht")
+    assert fehlend == [], "\n  ".join([""] + fehlend)
+
+
+def test_der_dateidialog_zeigt_nicht_auf_einen_anbieter_nur_fuer_gnome():
+    """gnome.portra traegt `UseIn=gnome`, und diese Sitzung heisst
+    Hyprland.
+
+    GEMESSEN am 03.09.2026 an der installierten Datei
+    /usr/share/xdg-desktop-portal/portals/gnome.portal:
+
+        Interfaces=...;org.freedesktop.impl.portal.FileChooser;...
+        UseIn=gnome
+
+    Der Anbieter beansprucht die Schnittstelle UND sagt, fuer welche
+    Sitzung er gedacht ist. Ihn an den Anfang der Kette zu setzen war
+    die Aenderung vom 22.08.2026, und der Nutzer hat am 03.09.2026
+    gemeldet, was danach kam: kein Fenster.
+
+    Diese Zusicherung ist ausdruecklich KEIN Verbot von gnome fuer
+    immer. Sie faellt, sobald jemand die Zeile zurueckdreht - und dann
+    soll er hier lesen, was dafuer gemessen sein muss: dass
+    xdg-desktop-portal-gnome unter Hyprland auf eine FileChooser-Bitte
+    ANTWORTET. Solange das nicht gemessen ist, gilt der Dialog, der
+    aufgeht.
+    """
+    kette = _kette(_zuordnung().get(IMPL + "filechooser", ""))
+    assert kette, (
+        "FileChooser steht in der Zuordnung nicht mehr - dann entscheidet "
+        "`default`, und dort steht hyprland vorn, das die Schnittstelle "
+        "gar nicht fuehrt")
+    assert kette[0] != "gnome", (
+        "FileChooser zeigt wieder zuerst auf gnome. Der Anbieter traegt "
+        "UseIn=gnome; unter Hyprland ist dann nicht gemessen, dass er "
+        "antwortet, und ein Anbieter, der zur Laufzeit scheitert, laesst "
+        "die Bitte scheitern statt sie weiterzugeben.")
