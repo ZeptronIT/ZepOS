@@ -2463,7 +2463,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
          struct ClickData {
              LauncherRenderer* self;
              size_t index;
-@@ -514,13 +608,330 @@
+@@ -514,13 +608,369 @@
                  delete static_cast<ClickData*>(data);
              }, G_CONNECT_DEFAULT);
  
@@ -2834,7 +2834,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  void LauncherRenderer::updateSelection(int newIndex) {
-@@ -568,7 +979,7 @@
+@@ -568,7 +1018,7 @@
  }
  
  // ============================================================================
@@ -2843,7 +2843,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  void LauncherRenderer::activateSelected() {
-@@ -593,7 +1004,7 @@
+@@ -593,7 +1043,7 @@
  }
  
  // ============================================================================
@@ -2852,7 +2852,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  gboolean LauncherRenderer::onKeyPress(GtkEventControllerKey*, guint keyval,
-@@ -601,6 +1012,38 @@
+@@ -601,6 +1051,38 @@
      auto* self = static_cast<LauncherRenderer*>(data);
      int maxIndex = static_cast<int>(self->m_resultButtons.size()) - 1;
  

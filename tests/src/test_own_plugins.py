@@ -242,6 +242,137 @@ def test_the_adopted_source_is_fetched_and_patched_at_a_pinned_commit(
         f"an")
 
 
+_HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+
+
+def _hunk_klagen(text: str) -> list[str]:
+    """Wo die Buchhaltung eines Diffs nicht aufgeht.
+
+    Ein Diff traegt sie selbst mit sich: `@@ -a,b +c,d @@` sagt, wie
+    viele Zeilen der Hunk auf jeder Seite hat, und `c` ist keine freie
+    Zahl - es folgt aus `a` und allem, was die vorherigen Hunks
+    DERSELBEN Datei hinzugefuegt oder weggenommen haben. Nachzaehlen
+    kostet nichts und braucht weder Netz noch Quellbaum.
+    """
+    zeilen = text.split("\n")
+    klagen: list[str] = []
+    versatz: int | None = None
+    stelle = 0
+    while stelle < len(zeilen):
+        zeile = zeilen[stelle]
+        if zeile.startswith("--- ") or zeile.startswith("diff "):
+            versatz = None            # eine neue Datei, ein neuer Versatz
+            stelle += 1
+            continue
+        treffer = _HUNK.match(zeile)
+        if not treffer:
+            stelle += 1
+            continue
+
+        a_start = int(treffer.group(1))
+        a_zahl = int(treffer.group(2)) if treffer.group(2) else 1
+        b_start = int(treffer.group(3))
+        b_zahl = int(treffer.group(4)) if treffer.group(4) else 1
+
+        alt = neu = 0
+        stelle += 1
+        while stelle < len(zeilen):
+            inhalt = zeilen[stelle]
+            if _HUNK.match(inhalt) or inhalt.startswith(("--- ", "diff ")):
+                break
+            if inhalt.startswith("+"):
+                neu += 1
+            elif inhalt.startswith("-"):
+                alt += 1
+            elif inhalt.startswith(" "):
+                alt += 1
+                neu += 1
+            elif inhalt.startswith("\\"):
+                pass              # "\ No newline at end of file"
+            elif inhalt == "" and stelle + 1 < len(zeilen) and \
+                    zeilen[stelle + 1].startswith((" ", "+", "-", "\\")):
+                # Eine Kontextzeile, deren fuehrendes Leerzeichen ein
+                # Werkzeug weggeschnitten hat. `patch` nimmt sie an.
+                alt += 1
+                neu += 1
+            else:
+                break
+            stelle += 1
+
+        if (alt, neu) != (a_zahl, b_zahl):
+            klagen.append(
+                f"@@ -{a_start},{a_zahl} +{b_start},{b_zahl} @@ traegt "
+                f"wirklich {alt} alte und {neu} neue Zeilen")
+        if versatz is None:
+            versatz = b_start - a_start
+        elif b_start != a_start + versatz:
+            klagen.append(
+                f"@@ -{a_start},{a_zahl} +{b_start},{b_zahl} @@ muesste "
+                f"bei +{a_start + versatz} anfangen (Versatz {versatz:+d} "
+                f"aus den Hunks davor)")
+            versatz = b_start - a_start
+        versatz += neu - alt
+    return klagen
+
+
+@pytest.mark.parametrize("name, recipe", sorted(ADOPTED.items()))
+def test_every_hunk_counts_the_lines_it_really_carries(name, recipe):
+    """Die Kopfzeile eines Hunks muss zu seinem Inhalt passen.
+
+    WAS DAS FAENGT, UND ES IST AM 03.09.2026 PASSIERT
+        zepos-hyprlaunch.patch wurde von Hand um einen Absatz erweitert
+        und die Kopfzeile `@@ -514,13 +608,330 @@` blieb stehen. Die
+        Datei war danach gueltiges UTF-8, ihre Pruefsumme liess sich
+        nachziehen, und die Zusicherung darueber blieb gruen. `patch`
+        brach im Bau ab:
+
+            patch: **** malformed patch at line 2798
+
+        Das kostet einen ganzen Bauumlauf, um etwas zu erfahren, das in
+        der Datei selbst steht.
+
+    VIER KOEPFE WAREN ES, NICHT EINER: der eingeschobene Absatz
+    verschiebt auch jeden folgenden Hunk derselben Datei. Ohne die
+    Versatzrechnung faende sich nur der erste.
+    """
+    patch = PACKAGING / recipe / f"zepos-{name}.patch"
+    klagen = _hunk_klagen(patch.read_text(encoding="utf-8"))
+    assert klagen == [], (
+        f"packaging/{recipe}/zepos-{name}.patch rechnet nicht auf:\n  "
+        + "\n  ".join(klagen)
+        + "\n\n`patch` bricht damit im Bau ab. Wer den Patch von Hand "
+          "erweitert, muss die Kopfzeilen mitziehen.")
+
+
+def test_die_nachzaehlung_wuerde_den_fehler_von_heute_sehen():
+    """Der Gegenbeweis - denn eine Zusicherung, die nichts findet, ist
+    gruen.
+
+    Der Probediff bildet genau den Fehler vom 03.09.2026 nach: eine
+    Zeile mehr im Hunk, als die Kopfzeile zugibt, und ein zweiter Hunk,
+    der deshalb an der falschen Stelle anfaengt.
+    """
+    probe = "\n".join([
+        "--- a/probe.c",
+        "+++ b/probe.c",
+        "@@ -1,2 +1,2 @@",
+        " eins",
+        "+zwei",
+        "+drei",
+        "@@ -10,1 +10,1 @@",
+        " zehn",
+    ])
+    klagen = _hunk_klagen(probe)
+
+    assert len(klagen) == 2, (
+        f"der Probediff ist an zwei Stellen falsch, gefunden wurden "
+        f"{len(klagen)}: {klagen}")
+    # Eine Kontextzeile und zwei neue sind DREI - die Kopfzeile sagt 2.
+    assert "wirklich 1 alte und 3 neue Zeilen" in klagen[0], klagen[0]
+    # Und der zweite Hunk faengt deshalb zwei Zeilen zu frueh an.
+    assert "muesste bei +12 anfangen" in klagen[1], klagen[1]
+
+
 def test_build_sh_no_longer_makes_a_working_tree_tarball_for_the_adopted_plugins():
     """Die Gegenprobe zum vorigen Test: packaging/build.sh darf keine
     plugins/hyprlaunch/ oder plugins/hyprclipx/ mehr in einen Tarball
