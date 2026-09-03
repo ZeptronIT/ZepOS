@@ -126,8 +126,8 @@ GenericName[de]=KI-Assistent auf der Kommandozeile
 # verschweigen darf, dass das Programm erst geholt wird - "ich will das
 # packet nicht als meins verkaufen", 01.09.2026. Eine Uebersetzung, die
 # den Hinweis weglaesst, verschwiege ihn der einen Haelfte der Nutzer.
-Comment=Anthropic's assistant for coding and system work – fetched over npm on first use
-Comment[de]=Anthropics Assistent für Programmieren und Systemarbeit – wird beim ersten Aufruf über npm geholt
+Comment=Anthropic's assistant for coding and system work – fetched from Anthropic on first use
+Comment[de]=Anthropics Assistent für Programmieren und Systemarbeit – wird beim ersten Aufruf von Anthropic geholt
 Exec=kitty --class zepos-claude-code -e zepos-claude-code
 TryExec=/usr/bin/zepos-claude-code
 Icon=zepos-claude-code

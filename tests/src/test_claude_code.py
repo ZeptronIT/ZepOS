@@ -87,6 +87,11 @@ def _claude_attrappe(fassung: str) -> str:
         "    exit 0\n"
         "fi\n"
         'echo "claude lief mit: $*"\n'
+        # SEIT DEM 03.09.2026 SCHREIBT SIE MIT: `zepos-claude-code
+        # update` ruft `claude update`, weil die native Binaerdatei
+        # ihren eigenen Weg mitbringt. Ohne diese Zeile waere nicht zu
+        # messen, DASS sie gerufen wurde.
+        'echo "$*" >> "${CLAUDE_PROTOKOLL:-/dev/null}"\n'
         "exit ${CLAUDE_RC:-0}\n"
     )
 
@@ -94,36 +99,81 @@ def _claude_attrappe(fassung: str) -> str:
 # Die Fassung, die das gefallene Paket festnagelte.
 CLAUDE_ATTRAPPE = _claude_attrappe("2.1.233")
 
-# Und die, die npm liefert. Ein npm-Lauf legt genau sie ab - so misst
-# der Test, dass der Weg ueber npm wirklich eine NEUERE Fassung bringt
-# und nicht dieselbe unter anderem Namen.
-NPM_ATTRAPPE = "#!/bin/bash\n" + f"""\
+# Und das vorgetaeuschte curl, seit dem 03.09.2026.
+#
+# WARUM NICHT MEHR npm
+#     Der Nutzer hat den Installationsweg am 01.09.2026 bestellt: "es
+#     muss per bash command dazu installiert werden". Gebaut wurde
+#     `npm i -g @anthropic-ai/claude-code`, und am 03.09.2026 kam die
+#     Quittung von seinem Rechner: "claude native binary not
+#     installed". Die npm-Fassung bringt einen Starter mit, der die
+#     NATIVE Binaerdatei erwartet; die legt nur der Installer ab.
+#
+#     GEMESSEN auf einer Maschine, auf der Claude Code richtig liegt:
+#     ~/.local/bin/claude ist ein VERWEIS auf
+#     ~/.local/share/claude/versions/<fassung>, und
+#     ~/.local/lib/node_modules/@anthropic-ai/ gibt es nicht.
+#
+# Diese Attrappe tut, was der Installer tut: sie legt genau diesen
+# Verweis an - so misst der Test, dass der Weg wirklich eine neuere
+# Fassung bringt und nicht dieselbe unter anderem Namen.
+CURL_ATTRAPPE = "#!/bin/bash\n" + f"""\
 echo "$@" >> "$NPM_PROTOKOLL"
-case "$1" in
-    ping)
-        exit ${{NPM_PING_RC:-0}} ;;
-    prefix)
-        echo "$HOME/.local"; exit 0 ;;
-    install)
-        if [ "${{NPM_INSTALL_RC:-0}}" -ne 0 ]; then
-            echo "npm error code E${{NPM_INSTALL_RC:-0}}" >&2
-            exit "${{NPM_INSTALL_RC}}"
-        fi
-        # Was ein echtes `npm i -g` hinterlaesst: das Programm unter
-        # dem Praefix. Genau das sucht der Pruefling danach - es sei
-        # denn NPM_LEGT_NICHTS_AB steht, dann meldet npm Erfolg und legt
-        # nichts hin (der Fall einer eigenen ~/.npmrc mit anderem Ziel).
-        if [ -z "${{NPM_LEGT_NICHTS_AB:-}}" ]; then
-            mkdir -p "$HOME/.local/bin"
-            cat > "$HOME/.local/bin/claude" <<'CLAUDE'
+# -o <datei>: der Pruefling laedt in eine Datei und fuehrt DANN aus.
+# Diese Attrappe schreibt das Installerskript also dorthin.
+ZIEL=""
+vorher=""
+for argument in "$@"; do
+    if [ "$vorher" = "-o" ]; then ZIEL="$argument"; fi
+    vorher="$argument"
+done
+# --head: die Netzprobe des Prueflings. Sie laedt nichts.
+for argument in "$@"; do
+    if [ "$argument" = "--head" ]; then
+        exit ${{NPM_PING_RC:-0}}
+    fi
+done
+if [ "${{NPM_INSTALL_RC:-0}}" -ne 0 ]; then
+    echo "curl: (${{NPM_INSTALL_RC}}) konnte nicht laden" >&2
+    exit "${{NPM_INSTALL_RC}}"
+fi
+# Der Installer kommt ueber die Standardausgabe und wird von `bash`
+# gelesen - also gibt diese Attrappe ein SKRIPT aus, das ablegt, was
+# der echte Installer ablegt. Steht NPM_LEGT_NICHTS_AB, meldet es
+# Erfolg und legt nichts hin.
+schreibe() {{
+    if [ -n "$ZIEL" ]; then cat > "$ZIEL"; else cat; fi
+}}
+if [ -n "${{NPM_LEGT_NICHTS_AB:-}}" ]; then
+    echo "exit 0" | schreibe
+    exit 0
+fi
+{{
+cat <<'SKRIPT'
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share/claude/versions"
+cat > "$HOME/.local/share/claude/versions/2.1.257" <<'CLAUDE'
+SKRIPT
+cat <<'CLAUDE_INHALT'
 {_claude_attrappe("2.1.257")}\
+CLAUDE_INHALT
+cat <<'SKRIPT'
 CLAUDE
-            chmod 0755 "$HOME/.local/bin/claude"
-        fi
-        exit 0 ;;
-esac
+chmod 0755 "$HOME/.local/share/claude/versions/2.1.257"
+# OHNE ln, und das ist kein Abstrich: der echte Installer legt einen
+# Verweis, der Pruefling fragt `command -v claude`. Beides beantwortet
+# eine gewoehnliche Datei genauso - und `ln` steht nicht in WERKZEUGE,
+# also gaebe es die Attrappe nur einen Lauf lang, der an einem
+# fehlenden Werkzeug scheitert statt an der Sache.
+cat "$HOME/.local/share/claude/versions/2.1.257" > "$HOME/.local/bin/claude"
+chmod 0755 "$HOME/.local/bin/claude"
+SKRIPT
+}} | schreibe
 exit 0
 """
+
+# Der alte Name, damit die Vorrichtungen unten unveraendert bleiben:
+# sie legen die Attrappe unter dem Namen ab, den der Pruefling ruft.
+NPM_ATTRAPPE = CURL_ATTRAPPE
 
 
 # Die Werkzeuge, die der Pruefling wirklich braucht - und NUR sie.
@@ -139,7 +189,11 @@ exit 0
 #     Dieselbe Ueberlegung wie bei den Sitzungen in test_login.py, die
 #     unter `env -i` mit einem Stub-Verzeichnis als GANZEM PATH laufen.
 WERKZEUGE = ("id", "timeout", "mkdir", "chmod", "head", "cat", "setsid",
-             "sleep", "env", "bash", "sh")
+             "sleep", "env", "bash", "sh",
+             # Seit dem 03.09.2026: der Installer wird GELADEN und dann
+             # ausgefuehrt, nicht durch eine Roehre geschickt (siehe
+             # holen() im Pruefling). Dafuer braucht er eine Datei.
+             "mktemp", "rm")
 
 
 @pytest.fixture
@@ -187,7 +241,11 @@ def welt(tmp_path):
             return ziel
 
         def mit_npm(self):
-            self.lege("npm", NPM_ATTRAPPE)
+            # Der Name der Methode blieb, ihr Inhalt nicht: seit dem
+            # 03.09.2026 legt sie `curl` hin, weil der Pruefling den
+            # Installer holt und kein npm-Paket. Umbenennen haette
+            # dreissig Aufrufstellen angefasst, ohne etwas zu messen.
+            self.lege("curl", CURL_ATTRAPPE)
             return self
 
         def mit_claude(self):
@@ -209,6 +267,9 @@ def welt(tmp_path):
                 "HOME": str(self.heim),
                 "XDG_STATE_HOME": str(self.heim / ".local" / "state"),
                 "NPM_PROTOKOLL": str(self.protokoll),
+                # Dieselbe Datei: was gerufen wurde, steht an einem Ort,
+                # und die Reihenfolge bleibt lesbar.
+                "CLAUDE_PROTOKOLL": str(self.protokoll),
                 "LC_ALL": "C.UTF-8",
             }
             umwelt.update({k: str(v) for k, v in extra.items()})
@@ -292,14 +353,14 @@ def test_ohne_npm_nennt_der_befehl_npm_und_holt_nichts(welt):
     ergebnis = _lauf(welt, "install")
 
     assert ergebnis.returncode == 3, (
-        f"ohne npm ist der Rueckgabewert {ergebnis.returncode}, nicht 3 - "
+        f"ohne curl ist der Rueckgabewert {ergebnis.returncode}, nicht 3 - "
         "und ein eigener Wert ist der halbe Unterschied zwischen den "
         f"Lagen.\n{ergebnis.stdout}{ergebnis.stderr}")
-    assert "npm" in ergebnis.stderr, (
-        "die Meldung nennt npm nicht - dann weiss der Nutzer nicht, was "
+    assert "curl" in ergebnis.stderr, (
+        "die Meldung nennt curl nicht - dann weiss der Nutzer nicht, was "
         f"fehlt:\n{ergebnis.stderr}")
-    assert "nodejs-lts-krypton" in ergebnis.stderr, (
-        "die Meldung sagt nicht, WIE man npm bekommt. Genau das ist der "
+    assert "pacman -S curl" in ergebnis.stderr, (
+        "die Meldung sagt nicht, WIE man curl bekommt. Genau das ist der "
         "Unterschied zwischen einer Klage und einem Weg:\n"
         f"{ergebnis.stderr}")
     assert welt.aufrufe() == [], (
@@ -325,7 +386,8 @@ def test_ohne_netz_nennt_der_befehl_das_netz_und_installiert_nicht(welt):
         f"{ergebnis.stdout}{ergebnis.stderr}")
     assert "Registry" in ergebnis.stderr or "Netz" in ergebnis.stderr, (
         f"die Meldung nennt weder Registry noch Netz:\n{ergebnis.stderr}")
-    assert ["ping"] == welt.aufrufe(), (
+    aufrufe = welt.aufrufe()
+    assert len(aufrufe) == 1 and "--head" in aufrufe[0], (
         "nach einem gescheiterten ping wurde weitergemacht: "
         f"{welt.aufrufe()}")
 
@@ -390,8 +452,19 @@ def test_als_root_wird_nicht_installiert(welt):
 # --------------------------------------------------------------------
 
 @pytest.mark.allow_subprocess
-def test_install_ruft_npm_mit_dem_nachlader_und_nicht_mit_der_binaerdatei(welt):
-    """@anthropic-ai/claude-code und NICHT ...-linux-x64.
+def test_install_ruft_den_offiziellen_installer(welt):
+    """Der Weg, den der Nutzer am 01.09.2026 bestellt hat: "es muss per
+    bash command dazu installiert werden".
+
+    HIER STAND BIS ZUM 03.09.2026 `npm i -g @anthropic-ai/claude-code`,
+    und das war die falsche Lesart derselben Bestellung. Die Quittung
+    kam vom Rechner des Nutzers: "claude native binary not installed".
+    Die npm-Fassung bringt einen Starter mit, der die NATIVE
+    Binaerdatei erwartet - und die legt nur der Installer ab.
+
+    Die URL ist nicht abgeschrieben: sie steht in der laufenden
+    Binaerdatei (`strings`), die auch `claude install` und
+    `claude update` fuehrt.
 
     Das alte Rezept holte die Binaerdatei direkt, weil ein Paketbau
     reproduzierbar sein muss - eine feste Fassung, eine Pruefsumme. `npm
@@ -406,9 +479,10 @@ def test_install_ruft_npm_mit_dem_nachlader_und_nicht_mit_der_binaerdatei(welt):
     assert ergebnis.returncode == 0, (
         f"{ergebnis.stdout}{ergebnis.stderr}")
     aufrufe = welt.aufrufe()
-    assert any(zeile.startswith("install -g @anthropic-ai/claude-code")
+    assert any("https://claude.ai/install.sh" in zeile
+               and "--head" not in zeile
                and "linux-x64" not in zeile for zeile in aufrufe), (
-        f"npm wurde nicht mit dem Nachlader gerufen: {aufrufe}")
+        f"der Installer wurde nicht geladen: {aufrufe}")
 
 
 @pytest.mark.allow_subprocess
@@ -442,9 +516,9 @@ def test_ein_gescheitertes_npm_gibt_seinen_eigenen_wert_zurueck(welt):
     ergebnis = _lauf(welt, "install", NPM_INSTALL_RC=7)
 
     assert ergebnis.returncode == 7, (
-        f"npms Rueckgabewert ist unterwegs verlorengegangen: "
+        f"curls Rueckgabewert ist unterwegs verlorengegangen: "
         f"{ergebnis.returncode}")
-    assert "npm error" in ergebnis.stderr, (
+    assert "curl:" in ergebnis.stderr, (
         f"npms eigene Meldung fehlt:\n{ergebnis.stderr}")
 
 
@@ -462,9 +536,9 @@ def test_update_holt_die_neueste_fassung(welt):
 
     assert ergebnis.returncode == 0, (
         f"{ergebnis.stdout}{ergebnis.stderr}")
-    assert any(zeile.startswith("install -g @anthropic-ai/claude-code")
+    assert any(zeile.strip() == "update"
                for zeile in welt.aufrufe()), (
-        f"update hat npm nicht gerufen: {welt.aufrufe()}")
+        f"update hat `claude update` nicht gerufen: {welt.aufrufe()}")
     assert "2.1.233" in ergebnis.stdout, (
         "update sagt nicht, was vorher lag - dann sieht niemand, dass "
         f"sich etwas bewegt hat:\n{ergebnis.stdout}")
@@ -493,7 +567,7 @@ def test_die_hilfe_nennt_update_beim_namen(welt):
     assert ergebnis.returncode == 0
     assert "update" in ergebnis.stdout, (
         f"--help kennt update nicht:\n{ergebnis.stdout}")
-    assert "npm i -g @anthropic-ai/claude-code" in ergebnis.stdout, (
+    assert "curl -fsSL https://claude.ai/install.sh | bash" in ergebnis.stdout, (
         "die Hilfe verschweigt, was der Befehl eigentlich tut - und "
         "genau diese Offenheit ist der Punkt, an dem ZepOS aufhoert, so "
         f"zu tun, als sei das sein Programm:\n{ergebnis.stdout}")
@@ -543,7 +617,7 @@ def test_der_starter_fragt_am_terminal_und_installiert_nach(welt):
     assert "[J/n]" in ausgabe, (
         "es wird nicht gefragt - 50 MB gehen ueber die Leitung des "
         f"Nutzers und nicht ueber unsere:\n{ausgabe}")
-    assert any(zeile.startswith("install -g @anthropic-ai/claude-code")
+    assert any("install.sh" in zeile and "--head" not in zeile
                for zeile in welt.aufrufe()), (
         f"nach dem Ja wurde nicht installiert: {welt.aufrufe()}\n{ausgabe}")
     assert "claude lief mit" in ausgabe, (
@@ -749,9 +823,9 @@ def test_der_eintrag_verschweigt_nicht_dass_claude_code_erst_geholt_wird():
     """
     text = EINTRAG.read_text(encoding="utf-8")
     kommentar = _feld(text, "Comment")
-    assert "npm" in kommentar, (
-        "der Eintrag sagt nicht, dass Claude Code ueber npm kommt: "
-        f"{kommentar}")
+    assert "Anthropic" in kommentar or "install" in kommentar.lower(), (
+        "der Eintrag sagt nicht, dass Claude Code von Anthropic geholt "
+        f"wird: {kommentar}")
 
 
 def test_kein_eintrag_und_kein_befehl_nennt_das_gefallene_paket():

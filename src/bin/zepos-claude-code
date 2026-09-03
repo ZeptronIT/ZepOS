@@ -65,7 +65,29 @@ PROGRAMM="claude"
 # "Detects the platform, finds the matching native binary from
 # optionalDependencies, and copies it over the bin/claude.exe
 # placeholder."
-PAKET="@anthropic-ai/claude-code"
+# DER OFFIZIELLE INSTALLER, SEIT DEM 03.09.2026 - UND WARUM NICHT npm
+#
+#     Der Nutzer, als er ihn bestellt hat (01.09.2026, woertlich): "es
+#     muss per bash command dazu installiert werden". Das war schon
+#     damals der Installer und nicht `npm i -g`; ich habe "bash command"
+#     als "irgendein Befehl in einer Schale" gelesen und npm gebaut. Der
+#     Fehler ist am 03.09.2026 aufgeflogen, und zwar so, wie ein Nutzer
+#     ihn merkt: "claude native binary not installed".
+#
+#     GEMESSEN auf einer Maschine, auf der Claude Code richtig liegt:
+#
+#         ~/.local/bin/claude -> ~/.local/share/claude/versions/2.1.259
+#         ~/.local/lib/node_modules/@anthropic-ai/  existiert NICHT
+#
+#     Eine native Binaerdatei mit Fassungsverzeichnis, kein npm-Baum.
+#     Die npm-Fassung bringt einen Starter mit, der die native
+#     Binaerdatei ERWARTET - und ohne sie sagt er genau den Satz oben.
+#
+#     Die URL ist nicht abgeschrieben, sondern aus der laufenden
+#     Binaerdatei gelesen (`strings`), und dieselbe Binaerdatei fuehrt
+#     die zwei Unterbefehle, die dieses Skript jetzt benutzt:
+#     `claude install` und `claude update`.
+INSTALLER="https://claude.ai/install.sh"
 
 # Wo die Frage "wurde schon einmal gefragt" beantwortet wird. Dieselbe
 # Ablage wie die Marken von src/bin/zepos-session
@@ -133,11 +155,11 @@ halten() {
 # begruendet, warum seine depends kurz bleiben. Wer nur den Generator
 # will, bekommt ihn ohne JavaScript-Laufzeit, und dieser Befehl misst
 # npm, statt es vorauszusetzen.
-kein_npm() {
+kein_curl() {
     printf '%s\n%s\n%s\n' \
-        "ZepOS: npm liegt nicht im PATH - ohne npm gibt es keinen Weg zu Claude Code." \
-        "Auf einem ausgelieferten ZepOS bringt zepos-desktop es mit (nodejs-lts-krypton und npm)." \
-        "Nachträglich:  pacman -S nodejs-lts-krypton npm" >&2
+        "ZepOS: curl liegt nicht im PATH - ohne curl gibt es keinen Weg zum Installer." \
+        "Auf einem ausgelieferten ZepOS bringt zepos-desktop es mit." \
+        "Nachträglich:  pacman -S curl" >&2
 }
 
 # 2. Kein Netz.
@@ -148,7 +170,16 @@ kein_npm() {
 # sind. Eine eigene Messung gegen registry.npmjs.org waere eine Antwort
 # auf eine andere Frage als die, die gleich gestellt wird.
 netz_da() {
-    npm ping >/dev/null 2>&1
+    # GEFRAGT WIRD DER ORT, VON DEM GEHOLT WIRD, und nicht "das Netz".
+    # `npm ping` stand hier bis zum 03.09.2026 und fragte eine Registry,
+    # die dieses Skript gar nicht mehr benutzt - eine Probe, die etwas
+    # anderes misst als das, was gleich passiert.
+    #
+    # --head: nur die Kopfzeilen, also kein Herunterladen fuer eine
+    # Frage. --max-time 10, damit ein haengendes Netz den Befehl nicht
+    # aufhaelt, der gerade sagen will, dass es haengt.
+    curl --silent --show-error --head --fail --max-time 10 \
+        "$INSTALLER" >/dev/null 2>&1
 }
 
 # DIE ZAHL IN DER MELDUNG IST GEMESSEN UND NICHT GESCHAETZT: das
@@ -160,8 +191,8 @@ netz_da() {
 # Groessenordnung VOR dem Ladevorgang kennen.
 kein_netz() {
     printf '%s\n%s\n%s\n' \
-        "ZepOS: die npm-Registry ist nicht erreichbar - Claude Code kommt von dort." \
-        "Das Programm ist rund 90 MB groß und wird bei jeder Installation geladen;" \
+        "ZepOS: $INSTALLER ist nicht erreichbar - Claude Code kommt von dort." \
+        "Das Programm wird bei der Installation geladen;" \
         "ohne Netzverbindung gibt es hier nichts zu holen. Verbinde dich und ruf den Befehl erneut auf." >&2
 }
 
@@ -186,7 +217,7 @@ ist_root() {
 als_root() {
     printf '%s\n%s\n%s\n' \
         "ZepOS: dieser Befehl gehört dem Konto, das Claude Code benutzt - nicht root." \
-        "/etc/npmrc setzt npms Präfix auf \${HOME}/.local; als root landete das Programm" \
+        "Der Installer legt nach \${HOME}/.local; als root landete das Programm" \
         "unter /root/.local/bin und wäre für niemanden im PATH. Ruf ihn als dein Konto auf." >&2
 }
 
@@ -212,9 +243,52 @@ fassung() {
 # waehrend eines 90-MB-Ladevorgangs zeigt, dass etwas passiert, und im
 # Fehlerfall steht die Ursache darin und in keiner Zusammenfassung, die
 # dieses Skript daraus machen koennte.
-npm_holen() {
-    printf '%s\n\n' "ZepOS: npm install -g $PAKET"
-    npm install -g "$PAKET"
+holen() {
+    # DER BEFEHL, DEN DER NUTZER BESTELLT HAT, woertlich sichtbar - wer
+    # ihn liest, kann ihn selbst noch einmal absetzen, ohne dieses
+    # Skript. Ein Installationsweg, den nur ein Skript kennt, ist ein
+    # Weg, den niemand nachvollziehen kann.
+    printf '%s\n\n' "ZepOS: curl -fsSL $INSTALLER | bash"
+
+    # ERST LADEN, DANN AUSFUEHREN - und nicht durch die Roehre.
+    #
+    #     `curl ... | bash` gibt den Rueckgabewert von BASH zurueck, nie
+    #     den von curl. Ein Netzfehler mitten im Laden sieht damit aus
+    #     wie ein erfolgreicher Lauf, der nichts getan hat - GEMESSEN am
+    #     03.09.2026, weil ein Test es gemerkt hat
+    #     (test_ein_gescheitertes_npm_gibt_seinen_eigenen_wert_zurueck:
+    #     erwartet 7, bekam 1).
+    #
+    #     Der zweite Grund wiegt schwerer als der Rueckgabewert: eine
+    #     Roehre fuehrt aus, WAEHREND geladen wird. Bricht die Leitung
+    #     nach der Haelfte, hat bash die erste Haelfte schon
+    #     ausgefuehrt. Eine Datei ist entweder ganz da oder nicht.
+    local skript
+    skript="$(mktemp -t zepos-claude-installer.XXXXXX)" || return 1
+    # ERST AUSFUEHREN, DANN $? LESEN - und nicht `if ! curl ...`.
+    #     Nach `if ! befehl; then` steht in $? der Wert der NEGATION,
+    #     also 0 oder 1, und nie der des Befehls. GEMESSEN am
+    #     03.09.2026: curl endete mit 7, der Aufrufer bekam 1. Ein Test
+    #     hat es gemerkt, kein Mensch haette es an der Ausgabe gesehen.
+    curl -fsSL "$INSTALLER" -o "$skript"
+    local wert=$?
+    if [ "$wert" -ne 0 ]; then
+        rm -f "$skript"
+        return "$wert"
+    fi
+    bash "$skript"
+    wert=$?
+    rm -f "$skript"
+    return "$wert"
+}
+
+aktualisieren() {
+    # SEIN EIGENER WEG UND NICHT NOCH EINMAL DER INSTALLER: die native
+    # Binaerdatei fuehrt `claude update` selbst (aus ihrer eigenen
+    # Hilfe: "Check for updates and install if"). Sie weiss dabei, was
+    # sie schon hat; ein erneuter Installerlauf laedt in jedem Fall.
+    printf '%s\n\n' "ZepOS: $PROGRAMM update"
+    "$PROGRAMM" update
 }
 
 # Was nach einem erfolgreichen npm-Lauf noch schiefgegangen sein kann.
@@ -233,9 +307,9 @@ nachher_pruefen() {
     fi
 
     printf '\n%s\n%s\n%s\n' \
-        "ZepOS: npm meldet Erfolg, aber '$PROGRAMM' liegt nicht im PATH." \
-        "npm legt global unter seinem Präfix ab; hier ist das:  $(npm prefix -g 2>/dev/null)" \
-        "Steht dessen bin/ nicht im PATH, hilft ein Eintrag in ~/.npmrc oder in ~/.zshrc.d/." >&2
+        "ZepOS: der Installer meldet Erfolg, aber '$PROGRAMM' liegt nicht im PATH." \
+        "Er legt nach ~/.local/bin ab - ein Verweis auf ~/.local/share/claude/versions/<fassung>." \
+        "Steht ~/.local/bin nicht im PATH, hilft ein Eintrag in ~/.zshrc.d/." >&2
     return 1
 }
 
@@ -255,8 +329,8 @@ befehl_install() {
         return 0
     fi
 
-    if ! command -v npm >/dev/null 2>&1; then
-        kein_npm
+    if ! command -v curl >/dev/null 2>&1; then
+        kein_curl
         return 3
     fi
 
@@ -265,7 +339,7 @@ befehl_install() {
         return 4
     fi
 
-    npm_holen || return $?
+    holen || return $?
     nachher_pruefen
 }
 
@@ -288,8 +362,8 @@ befehl_update() {
         return 5
     fi
 
-    if ! command -v npm >/dev/null 2>&1; then
-        kein_npm
+    if ! command -v curl >/dev/null 2>&1; then
+        kein_curl
         return 3
     fi
 
@@ -305,8 +379,8 @@ befehl_update() {
         return 4
     fi
 
-    printf '%s\n' "ZepOS: installiert ist $(fassung) - npm holt die neueste Fassung."
-    npm_holen || return $?
+    printf '%s\n' "ZepOS: installiert ist $(fassung) - $PROGRAMM holt die neueste Fassung."
+    aktualisieren || return $?
     nachher_pruefen
 }
 
@@ -321,7 +395,7 @@ befehl_status() {
         return 0
     fi
 
-    if command -v npm >/dev/null 2>&1; then
+    if command -v curl >/dev/null 2>&1; then
         printf '%s\n%s\n' \
             "Claude Code:  nicht installiert" \
             "Installieren:  zepos-claude-code install"
@@ -330,7 +404,7 @@ befehl_status() {
 
     printf '%s\n%s\n' \
         "Claude Code:  nicht installiert" \
-        "npm fehlt auch - ohne npm gibt es keinen Weg dorthin (pacman -S nodejs-lts-krypton npm)"
+        "curl fehlt auch - ohne curl gibt es keinen Weg dorthin (pacman -S curl)"
     return 1
 }
 
@@ -390,7 +464,7 @@ anbieten() {
 
     printf '%s\n%s\n\n' \
         "Claude Code ist auf dieser Maschine noch nicht installiert." \
-        "ZepOS liefert es nicht mit - es kommt von npm, und von dort bekommst du immer die neueste Fassung."
+        "ZepOS liefert es nicht mit - es kommt von Anthropic selbst, und von dort bekommst du immer die neueste Fassung."
 
     local antwort=""
     printf '%s' "Jetzt holen? Rund 90 MB über deine Leitung. [J/n] "
@@ -487,12 +561,12 @@ befehl_erstanmeldung() {
     # Schon gefragt.
     [ -e "$MARKE" ] && return 0
 
-    # Ohne npm gibt es nichts anzubieten, und ohne kitty kein Fenster,
+    # Ohne curl gibt es nichts anzubieten, und ohne kitty kein Fenster,
     # in dem man es anboete. In BEIDEN Faellen: KEINE Meldung und KEINE
     # Marke - wer eines der beiden nachtraeglich installiert, soll das
     # Angebot noch bekommen. Eine Marke, die eine nie gestellte Frage
     # als beantwortet verbucht, ist die teuerste Art, still zu sein.
-    command -v npm >/dev/null 2>&1 || return 0
+    command -v curl >/dev/null 2>&1 || return 0
     command -v kitty >/dev/null 2>&1 || return 0
 
     # Als root wird gar nicht erst gefragt - siehe als_root(). Eine
@@ -524,20 +598,22 @@ zepos-claude-code - Claude Code auf ZepOS
 
   zepos-claude-code            startet Claude Code; ist es nicht da,
                                fragt es und holt es nach
-  zepos-claude-code install    holt Claude Code ueber npm
+  zepos-claude-code install    holt Claude Code ueber den Installer
   zepos-claude-code update     holt die neueste Fassung
   zepos-claude-code status     sagt, was installiert ist
   zepos-claude-code --help     diese Hilfe
 
 ZepOS liefert Claude Code NICHT mit. Es ist Anthropics proprietäres
-Programm unter eigener Lizenz, und es kommt aus dem npm-Verzeichnis:
+Programm unter eigener Lizenz, und es kommt von Anthropic selbst:
 
-  npm i -g @anthropic-ai/claude-code
+  curl -fsSL https://claude.ai/install.sh | bash
 
-Das ist genau das, was `install` tut - ohne root, weil /etc/npmrc npms
-Präfix auf ~/.local setzt und ~/.local/bin ohnehin im PATH liegt.
-Deshalb bekommst du von dort immer die neueste Fassung statt einer, die
-ein Paket eingefroren hat.
+Das ist genau das, was `install` tut - ohne root, weil der Installer
+nach ~/.local legt und ~/.local/bin ohnehin im PATH liegt. Er legt eine
+native Binärdatei unter ~/.local/share/claude/versions/<fassung> ab und
+verweist ~/.local/bin/claude darauf. Aktualisiert wird danach mit
+`claude update`, das das Programm selbst mitbringt - deshalb bekommst du
+immer die neueste Fassung statt einer, die ein Paket eingefroren hat.
 ENDE
 }
 

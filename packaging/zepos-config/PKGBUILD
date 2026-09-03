@@ -76,7 +76,7 @@ optdepends=(
     # Satz oben, dass diese Liste kurz bleibt: wer nur den Generator
     # will, soll ihn ohne JavaScript-Laufzeit bekommen. Ein
     # ausgeliefertes ZepOS hat npm ohnehin, es haengt an zepos-desktop.
-    'npm: zepos-claude-code holt Claude Code damit aus der npm-Registry'
+    'curl: zepos-claude-code holt damit Anthropics Installer'
 )
 
 # WAS DIESES PAKET ABLOEST, UND WARUM DIESE ZWEI ZEILEN NICHT WEGGELASSEN
