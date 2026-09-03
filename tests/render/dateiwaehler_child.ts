@@ -21,6 +21,9 @@
 //                                   Gtk.FileDialog.open() direkt auf
 //                                   die Layer-Flaeche.
 //     ZEPOS_WAEHLER_MODUS=repariert ueber waehleDatei().
+//     ZEPOS_WAEHLER_MODUS=ohne-gtk  ueber waehleDatei(), aber mit einem
+//                                   Gtk.FileDialog, dessen Konstruktor
+//                                   wirft - der Boden muss einspringen.
 //
 //     Ohne den rohen Lauf waere "die Flaeche liegt auf Ebene 1" eine
 //     Zahl ohne Bedeutung; mit ihm ist es der Unterschied zwischen 3
@@ -82,6 +85,28 @@ app.start({
           print("WAEHLER:fertig")
         })
         print("WAEHLER:offen")
+      } else if (MODUS === "ohne-gtk") {
+        // GTKs Waehler wird UNMOEGLICH gemacht, und zwar an der Stelle,
+        // an der waehleDatei() ihn baut: der Konstruktor wirft.
+        //
+        // WARUM SO UND NICHT DURCH EIN FEHLENDES PORTAL. Der Zustand,
+        // den der Nutzer am 03.09.2026 gemeldet hat ("dialoge [...]
+        // erscheinen garnicht erst"), hat mindestens zwei Ursachen -
+        // GTK_USE_PORTAL und die FileChooser-Zuordnung - und keine davon
+        // laesst sich in einer Testsitzung ehrlich nachbauen: der
+        // Messstand hat weder seine Portalzuordnung noch seine
+        // Umgebung. Was sich nachbauen laesst, ist die WIRKUNG: kein
+        // Fenster von GTK. Genau darauf antwortet der Boden in
+        // waehleDatei(), und genau das wird hier gemessen.
+        const echt = (Gtk as any).FileDialog
+        ;(Gtk as any).FileDialog = function () {
+          throw new Error("ZEPOS-PROBE: kein Gtk.FileDialog")
+        }
+        const ging = waehleDatei(fenster, titel, (pfad) => {
+          print("WAEHLER:pfad:" + pfad)
+        }, abbruch, GLib.get_home_dir(), [".conf"])
+        ;(Gtk as any).FileDialog = echt
+        print("WAEHLER:offen:" + String(ging))
       } else {
         const ging = waehleDatei(fenster, titel, (pfad) => {
           print("WAEHLER:pfad:" + pfad)

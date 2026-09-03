@@ -93,6 +93,11 @@ KIND = Path(__file__).resolve().parent / "dateiwaehler_child.ts"
 
 # Derselbe Name wie im Kind. Zwei Schreibweisen waeren zwei Flaechen.
 NAMENSRAUM = "waehler-probe"
+
+# Der Namensraum der eigenen Waehlerflaeche - `name` in
+# createOverlayWindow(), und createOverlayWindow() macht daraus den
+# namespace der Layer-Flaeche.
+BODEN_NAMENSRAUM = "dateiwahl"
 FENSTERTITEL = "ZEPOS-WAEHLER-DIALOG"
 
 # Die Ebenen, wie `hyprctl -j layers` sie zaehlt. Sie stehen hier
@@ -185,12 +190,20 @@ def _lauf(bau: Path, modus: str) -> dict:
         # Waehrend der Waehler offen ist. Auf das FENSTER gewartet und
         # nicht auf eine feste Zeit: wann GTK es anmeldet, entscheidet
         # GTK.
+        #
+        # ODER auf die eigene Flaeche, seit dem 03.09.2026: in der
+        # Betriebsart "ohne-gtk" kommt von GTK nie ein Fenster, und ein
+        # Lauf, der darauf dreissig Sekunden wartet, misst nur seine
+        # eigene Frist. Gewartet wird auf das, was zuerst da ist.
         frist = time.monotonic() + 30.0
         while time.monotonic() < frist:
-            if _waehlerfenster(sitzung):
+            if _waehlerfenster(sitzung) or _ebene(sitzung, BODEN_NAMENSRAUM):
                 break
             time.sleep(0.3)
         fenster = _waehlerfenster(sitzung)
+        # Der Boden: die Layer-Flaeche von waehlePfadSelbst(). Sie traegt
+        # den Namensraum, den createOverlayWindow() aus `name` macht.
+        messung["boden"] = _ebene(sitzung, BODEN_NAMENSRAUM)
         messung["fenster"] = None if not fenster else {
             "at": fenster.get("at"), "size": fenster.get("size"),
             "class": fenster.get("class"),
@@ -222,6 +235,23 @@ def repariert(tmp_path_factory) -> dict:
     if fehlt:
         pytest.skip(f"fuer den Bildlauf fehlt: {', '.join(fehlt)}")
     return _lauf(tmp_path_factory.mktemp("zepwaehler-neu"), "repariert")
+
+
+@pytest.fixture(scope="module")
+def ohne_gtk(tmp_path_factory) -> dict:
+    """Derselbe Weg, aber Gtk.FileDialog wirft im Konstruktor.
+
+    Die Wirkung, die der Nutzer am 03.09.2026 gemeldet hat, ist "kein
+    Fenster" - und genau die wird hier hergestellt. Die URSACHEN
+    (GTK_USE_PORTAL, die FileChooser-Zuordnung) laesst dieser Messstand
+    nicht nachbauen; er hat weder die Portalzuordnung des Nutzers noch
+    seine Umgebung. Gemessen wird deshalb, was ZepOS tut, wenn von GTK
+    nichts kommt.
+    """
+    fehlt = required_tools()
+    if fehlt:
+        pytest.skip(f"fuer den Bildlauf fehlt: {', '.join(fehlt)}")
+    return _lauf(tmp_path_factory.mktemp("zepwaehler-boden"), "ohne-gtk")
 
 
 @pytest.fixture(scope="module")
@@ -294,3 +324,51 @@ def test_ohne_die_reparatur_bleibt_die_flaeche_oben(roh):
         f"Ueberlagerung liegen ({roh['ebene_waehrend']}) - dann hat sich "
         "etwas ausserhalb dieser Datei geaendert, und die Zusicherungen "
         "darueber messen nicht mehr den Unterschied, den sie behaupten.")
+
+
+# ---------------------------------------------------------------------
+# DER BODEN, seit dem 03.09.2026
+# ---------------------------------------------------------------------
+
+
+def test_ohne_gtk_kommt_der_eigene_waehler(ohne_gtk):
+    """DIE Zusicherung dieser Aenderung.
+
+    Der Nutzer: "und sorge dafuer das die dialoge erscheinen ich will
+    datei pfade angeben knnen in einem dialog usw." Kommt von GTK kein
+    Fenster, muss ZepOS eins stellen - sonst bleibt ein Klick
+    unbeantwortet, und das war der gemeldete Zustand.
+    """
+    assert ohne_gtk["boden"] is not None, (
+        "GTKs Waehler war unmoeglich UND der eigene ist nicht gekommen - "
+        "der Klick auf das Ordnerzeichen bleibt damit ohne Antwort:\n"
+        + ohne_gtk["protokoll"][-2000:])
+
+
+def test_der_grund_steht_im_protokoll(ohne_gtk):
+    """Ein Boden, der still einspringt, verbirgt den Fehler darueber.
+
+    Die vier Meldungen des Starters standen bis zum 02.09.2026 im
+    Quelltext und konnten niemanden erreichen; dieselbe Falle ein
+    zweites Mal waere unentschuldbar.
+    """
+    assert "Dateiwahl:" in ohne_gtk["protokoll"], (
+        "der Einsprung ist nicht begruendet - im Protokoll steht keine "
+        f"Zeile mit \"Dateiwahl:\":\n{ohne_gtk['protokoll'][-2000:]}")
+
+
+def test_der_aufrufer_bekommt_trotzdem_ein_ja(ohne_gtk):
+    """`false` hiesse fuer die Oberflaeche "kein Waehler da" - und sie
+    schriebe "bitte tippen", obwohl gerade ein Fenster aufgeht."""
+    assert "WAEHLER:offen:true" in ohne_gtk["protokoll"], (
+        "waehleDatei() hat `false` gemeldet, obwohl der eigene Waehler "
+        f"einspringt:\n{ohne_gtk['protokoll'][-2000:]}")
+
+
+def test_der_prozess_ueberlebt_den_boden(ohne_gtk):
+    """Der Grund, aus dem es diese ganze Datei gibt: am 01.09.2026 nahm
+    ein Waehler den ganzen gjs-Prozess mit - Leiste, Fuss und jede
+    Ueberlagerung liegen darin."""
+    assert ohne_gtk["lebt"], (
+        "der Prozess hat den eigenen Waehler nicht ueberlebt:\n"
+        + ohne_gtk["protokoll"][-2000:])

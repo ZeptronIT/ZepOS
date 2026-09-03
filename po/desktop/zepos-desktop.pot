@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: zepos-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/ZeptronIT/ZepOS\n"
-"POT-Creation-Date: 2026-09-03 00:13+0200\n"
+"POT-Creation-Date: 2026-09-03 17:37+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -849,6 +849,32 @@ msgstr ""
 msgid "Clear all"
 msgstr ""
 
+#: src/templates/ags-overlay-utils.template:703
+msgid "One level up"
+msgstr ""
+
+#: src/templates/ags-overlay-utils.template:713
+msgid "Nothing here that fits"
+msgstr ""
+
+#: src/templates/ags-overlay-utils.template:715
+msgid "Shown are folders and {kinds}"
+msgstr ""
+
+#: src/templates/ags-overlay-utils.template:746
+msgid "{path} does not exist"
+msgstr ""
+
+#: src/templates/ags-overlay-utils.template:790
+#: src/templates/ags-style-editor.template:1061
+#: src/templates/ags-vpn-settings.template:2714
+msgid "Cancel"
+msgstr ""
+
+#: src/templates/ags-overlay-utils.template:791
+msgid "Use this path"
+msgstr ""
+
 #: src/templates/ags-settings.template:284
 msgid "{command} did not answer."
 msgstr ""
@@ -1070,11 +1096,6 @@ msgstr ""
 
 #: src/templates/ags-style-editor.template:988
 msgid "Presets"
-msgstr ""
-
-#: src/templates/ags-style-editor.template:1061
-#: src/templates/ags-vpn-settings.template:2714
-msgid "Cancel"
 msgstr ""
 
 #: src/templates/ags-style-editor.template:1097
@@ -2722,17 +2743,17 @@ msgstr ""
 msgid "Kept and written: {paths}"
 msgstr ""
 
-#: src/apps.py:517
+#: src/apps.py:524
 #, python-brace-format
 msgid "the marker `// zepos-pinned` appears {count} times in it, exactly once is expected"
 msgstr ""
 
-#: src/apps.py:562
+#: src/apps.py:569
 #, python-brace-format
 msgid "{path} cannot be read: {problem}"
 msgstr ""
 
-#: src/apps.py:598
+#: src/apps.py:605
 #, python-brace-format
 msgid "{path} cannot be written: {problem}"
 msgstr ""

@@ -3640,3 +3640,51 @@ button:hover,
 .disk-partition-progress progress {
   transition: min-width {{STYLE_MOTION_ENTER}} {{STYLE_MOTION_CURVE}};
 }
+
+// =====================================================================
+// DER EIGENE DATEIWAEHLER
+// =====================================================================
+//
+// Der Nutzer am 03.09.2026: "sorge dafuer das die dialoge erscheinen ich
+// will datei pfade angeben knnen in einem dialog usw." Das Fenster dazu
+// ist waehlePfadSelbst() in ags/utils/overlay.ts - der Boden unter
+// Gtk.FileDialog, dessen Fenster diesem Programm nicht gehoert und
+// deshalb ausbleiben kann.
+//
+// WARUM DIESE KLASSEN UEBERHAUPT DASTEHEN, obwohl das Fenster aus
+// derselben Fabrik kommt wie die anderen zwoelf: die Fabrik gibt Kopf,
+// Rahmen und Bildlauf. Was DARIN steht - Eingabefeld, Hinweiszeile -
+// gehoert dem Inhalt, und ein Gtk.Entry ohne Regel traegt das Aussehen
+// von Adwaita. Genau der Fehler, der am 20.08.2026 als "es ist komplett
+// weiss und passt nicht zum style" gemeldet wurde.
+.Dateiwahl {
+  background: transparent;
+}
+
+// Das Pfadfeld. Dieselben Werte wie .vpn-entry, und das ist Absicht: es
+// ist dasselbe Bedienelement in einem anderen Fenster. Eine eigene
+// Gestalt dafuer waere ein zweites Aussehen fuer eine Eingabezeile.
+.zep-entry {
+  background: rgba($surface, 0.5);
+  border: 1px solid rgba($accent, 0.3);
+  border-radius: {{STYLE_RADIUS_CONTROL}};
+  padding: {{STYLE_SPACE_12}} {{STYLE_SPACE_12}};
+  color: $text;
+  font-size: {{STYLE_FONT_BODY}};
+  caret-color: $accent;
+
+  &:focus {
+    outline: none;
+    border-color: rgba($accent, 0.7);
+  }
+}
+
+// Die Zeile, die sagt, warum ein getippter Pfad nicht genommen wurde.
+// Sie ist unsichtbar, solange es nichts zu sagen gibt (set_visible), und
+// traegt die Warnfarbe - ein Hinweis in der Textfarbe liest sich wie
+// Beiwerk.
+.zep-hinweis {
+  color: {{STYLE_COLOR_WARNING}};
+  font-size: {{STYLE_FONT_CAPTION}};
+  padding: 0 {{STYLE_SPACE_12}};
+}

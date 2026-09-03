@@ -1871,10 +1871,21 @@ function buildWgImportSection(): Gtk.Box {
   //     laesst die Flaeche fuer die Dauer des Waehlers sinken; hier
   //     bleibt genau das stehen, was diese Stelle angeht.
   const browseBtn = zepButton(ICONS.folder, "still", () => {
+    // Vier Angaben und keine drei mehr, seit dem 03.09.2026: der
+    // Waehler faengt DORT an, wo das Feld daneben schon hinzeigt, und er
+    // zeigt nur, was hier passt. Beides braucht der eigene Waehler, der
+    // einspringt, wenn GTKs Fenster ausbleibt - ohne den Startort ginge
+    // er in $HOME auf, obwohl der Nutzer den Ordner schon getippt hat.
     const ging = waehleDatei(
       parentWindow, _("Choose a WireGuard configuration"),
-      (pfad) => pathEntry.set_text(pfad))
+      (pfad) => pathEntry.set_text(pfad),
+      null, pathEntry.get_text(), [".conf"])
     if (!ging) {
+      // SEIT DEM 03.09.2026 EIN ZWEIG, DER NICHT MEHR VORKOMMEN SOLLTE:
+      // waehleDatei() gibt jetzt in jedem Fall ein Fenster - GTKs oder
+      // das eigene. Die Zeile bleibt stehen, weil eine Oberflaeche, die
+      // sich auf eine Zusage verlaesst, statt sie zu pruefen, genau dann
+      // schweigt, wenn die Zusage bricht.
       status.set_text(_("No file chooser available - please type the path."))
       status.add_css_class("warning")
     }
@@ -2238,10 +2249,21 @@ function buildOvpnImportSection(): Gtk.Box {
   // gemessenen Grund (01.09.2026): ueber waehleDatei(), damit die
   // OVERLAY-Flaeche dieses Fensters dem Waehler nicht im Bild steht.
   const browseBtn = zepButton(ICONS.folder, "still", () => {
+    // Vier Angaben und keine drei mehr, seit dem 03.09.2026: der
+    // Waehler faengt DORT an, wo das Feld daneben schon hinzeigt, und er
+    // zeigt nur, was hier passt. Beides braucht der eigene Waehler, der
+    // einspringt, wenn GTKs Fenster ausbleibt - ohne den Startort ginge
+    // er in $HOME auf, obwohl der Nutzer den Ordner schon getippt hat.
     const ging = waehleDatei(
       parentWindow, _("Choose an OpenVPN configuration"),
-      (pfad) => pathEntry.set_text(pfad))
+      (pfad) => pathEntry.set_text(pfad),
+      null, pathEntry.get_text(), [".ovpn", ".conf"])
     if (!ging) {
+      // SEIT DEM 03.09.2026 EIN ZWEIG, DER NICHT MEHR VORKOMMEN SOLLTE:
+      // waehleDatei() gibt jetzt in jedem Fall ein Fenster - GTKs oder
+      // das eigene. Die Zeile bleibt stehen, weil eine Oberflaeche, die
+      // sich auf eine Zusage verlaesst, statt sie zu pruefen, genau dann
+      // schweigt, wenn die Zusage bricht.
       status.set_text(_("No file chooser available - please type the path."))
       status.add_css_class("warning")
     }

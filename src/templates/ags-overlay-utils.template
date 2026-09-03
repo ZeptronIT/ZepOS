@@ -25,14 +25,36 @@
 import Astal from "gi://Astal?version=4.0"
 import { Gtk, Gdk } from "ags/gtk4"
 import Gio from "gi://Gio"
+import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 // Fuer die Schale (createShellWindow() weiter unten) - kit.ts liegt
 // neben overlay.ts unter ags/utils/ (generate_config.sh, beide auf
 // "$ZEPOS_OUTPUT_ROOT/ags/utils"), darum der Geschwister-Pfad "./kit"
 // und nicht "../utils/kit" wie in den Fenstern ausserhalb von utils/.
-import { zepSidebar, ZepNavGruppe, ZepNavEintrag } from "./kit"
+import { zepSidebar, ZepNavGruppe, ZepNavEintrag, zepButton, zepRow }
+  from "./kit"
+// Der eigene Waehler weiter unten spricht mit dem Nutzer, also spricht
+// er dessen Sprache. Derselbe Pfad wie bei kit: i18n.ts liegt neben
+// overlay.ts unter ags/utils/.
+import { _, format } from "./i18n"
 
 const CLOSE_ICON = "{{ICON_CLOSE}}"
+const FOLDER_ICON = "{{ICON_FOLDER}}"
+const FILE_ICON = "{{ICON_FILE}}"
+const UP_ICON = "{{ICON_ARROW_LEFT}}"
+
+// Die Masse des eigenen Waehlers. Die Breite kommt aus der Leiter
+// (MODAL_WIDTHS in src/sizes.py) und nicht aus einer getippten Zahl -
+// eine Liste von Dateinamen braucht mehr als die schmalste Sprosse. Die
+// Hoehe ist eine Zahl wie bei jedem anderen Fenster dieses Baums; eine
+// Hoehenleiter gibt es absichtlich nicht (src/sizes.py sagt, warum).
+const WAEHLER_BREITE = {{STYLE_MODAL_WIDTH_M}}
+const WAEHLER_HOEHE = 620
+
+// Wie lange auf GTKs Waehler gewartet wird, bevor ZepOS seinen eigenen
+// nimmt. Die Begruendung fuer genau diese Zahl steht bei ihrem einzigen
+// Verbraucher in waehleDatei().
+const WAEHLER_FRIST_MS = 1200
 
 // Der Abstand zum Schirmrand, und es ist DERSELBE, den die Leiste haelt.
 //
@@ -606,13 +628,273 @@ async function getOverlayPosition(
  *          den Pfad tippen - das Eingabefeld daneben bleibt der Weg,
  *          der Waehler fuellt es nur.
  */
+/**
+ * DER WAEHLER, DER NICHT AUSBLEIBEN KANN
+ *
+ * WARUM ES IHN GIBT, UND ZWAR WOERTLICH
+ *     Der Nutzer am 03.09.2026: "und sorge dafuer das die dialoge
+ *     erscheinen ich will datei pfade angeben knnen in einem dialog
+ *     usw." Davor, am selben Tag: "dialoge um den pfad mit dateien
+ *     anzugeben oder andere dialog erscheinen garnicht erst".
+ *
+ *     Das Fenster von Gtk.FileDialog gehoert NICHT diesem Programm.
+ *     Entweder zeichnet es GTK selbst - dann haengt es an
+ *     GTK_USE_PORTAL, und die Hyprland-Konfiguration setzt 0 - oder ein
+ *     Portalanbieter in einem FREMDEN Prozess, dann haengt es an
+ *     /etc/xdg-desktop-portal/hyprland-portals.conf und daran, ob der
+ *     dort genannte Anbieter unter Hyprland ueberhaupt antwortet. In
+ *     beiden Faellen kann es ausbleiben, ohne dass hier ein Fehler
+ *     ankommt: der Rueckruf feuert dann einfach nie.
+ *
+ *     GEMESSEN im eigenen Messstand (tests/render/test_dateiwaehler.py
+ *     und test_dateiwaehler_echt.py, beide gruen am 03.09.2026): dort
+ *     geht der Waehler auf, mit Portal und ohne. Auf der Maschine des
+ *     Nutzers nicht. Was der Messstand nicht nachbaut, ist die
+ *     Portalzuordnung und die Umgebung seiner Sitzung - es bleibt also
+ *     eine Luecke zwischen "hier gemessen" und "dort erlebt", und diese
+ *     Funktion ist die Antwort darauf: ein Waehler, der ZepOS gehoert.
+ *
+ * WAS ER KANN UND WAS NICHT
+ *     Er geht durch Verzeichnisse, laesst einen Pfad tippen und gibt
+ *     eine Datei zurueck. Er kann KEINE Lesezeichen, keine
+ *     Vorschaubilder, kein "zuletzt benutzt" - das kann GTKs Waehler,
+ *     und deshalb wird der weiterhin ZUERST versucht. Dieser hier ist
+ *     der Boden darunter und nicht der Ersatz.
+ *
+ * @param titel      Kopfzeile des Fensters.
+ * @param start      Verzeichnis oder Datei, wo er aufgeht. Leer = $HOME.
+ * @param gewaehlt   Bekommt den ganzen Pfad der gewaehlten Datei.
+ * @param endungen   Nur Dateien mit diesen Endungen werden gezeigt.
+ *                   Leer heisst: alle.
+ */
+export function waehlePfadSelbst(
+  titel: string,
+  start: string,
+  gewaehlt: (pfad: string) => void,
+  endungen: string[] = [],
+): OverlayWidget {
+  let ort = ordnerVon(pfadAusText(start)) || GLib.get_home_dir()
+  let feld: Gtk.Entry | null = null
+  let liste: Gtk.Box | null = null
+  let hinweis: Gtk.Label | null = null
+
+  const setzeHinweis = (text: string) => {
+    if (!hinweis) return
+    hinweis.set_text(text)
+    hinweis.set_visible(text !== "")
+  }
+
+  const zeichne = (schliessen: () => void) => {
+    if (!liste) return
+    let kind = liste.get_first_child()
+    while (kind) {
+      const naechstes = kind.get_next_sibling()
+      liste.remove(kind)
+      kind = naechstes
+    }
+    if (feld) feld.set_text(ort)
+    setzeHinweis("")
+
+    const eltern = Gio.File.new_for_path(ort).get_parent()
+    if (eltern) {
+      const hoch = eltern.get_path() || ort
+      liste.append(zepRow({
+        symbol: UP_ICON,
+        titel: _("One level up"),
+        unterzeile: hoch,
+        aktion: () => { ort = hoch; zeichne(schliessen) },
+      }))
+    }
+
+    const gefunden = inhalt(ort, endungen)
+    if (gefunden.length === 0) {
+      liste.append(zepRow({
+        symbol: FOLDER_ICON,
+        titel: _("Nothing here that fits"),
+        unterzeile: endungen.length
+          ? format(_("Shown are folders and {kinds}"),
+                   { kinds: endungen.join(", ") })
+          : "",
+      }))
+    }
+    for (const eintrag of gefunden) {
+      const ganz = zusammen(ort, eintrag.name)
+      liste.append(zepRow({
+        symbol: eintrag.ordner ? FOLDER_ICON : FILE_ICON,
+        titel: eintrag.name,
+        aktion: () => {
+          if (eintrag.ordner) { ort = ganz; zeichne(schliessen); return }
+          gewaehlt(ganz)
+          schliessen()
+        },
+      }))
+    }
+  }
+
+  const uebernehmen = (schliessen: () => void) => {
+    const getippt = pfadAusText(feld ? feld.get_text() : "")
+    if (!getippt) return
+    const datei = Gio.File.new_for_path(getippt)
+    if (istOrdner(datei)) {
+      ort = getippt
+      zeichne(schliessen)
+      return
+    }
+    if (!datei.query_exists(null)) {
+      // GENANNT und nicht verschwiegen: ein Feld, das einen getippten
+      // Pfad still verwirft, ist ein Feld, das nicht funktioniert.
+      setzeHinweis(format(_("{path} does not exist"), { path: getippt }))
+      return
+    }
+    gewaehlt(getippt)
+    schliessen()
+  }
+
+  return createOverlayWindow({
+    name: "dateiwahl",
+    width: WAEHLER_BREITE,
+    height: WAEHLER_HOEHE,
+    cssClass: "Dateiwahl",
+    headerIcon: FOLDER_ICON,
+    headerTitle: titel,
+    buildContent: (_win, closeWindow) => {
+      const rumpf = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+
+      feld = new Gtk.Entry({ text: ort, hexpand: true })
+      feld.add_css_class("zep-entry")
+      // Die Eingabetaste ist derselbe Weg wie der Knopf unten. Ein Feld,
+      // in dem man tippt und dann zur Maus greifen muss, ist ein Feld,
+      // das nur halb da ist.
+      feld.connect("activate", () => uebernehmen(closeWindow))
+      rumpf.append(feld)
+
+      hinweis = new Gtk.Label({ label: "", xalign: 0, wrap: true })
+      hinweis.add_css_class("zep-hinweis")
+      hinweis.set_visible(false)
+      rumpf.append(hinweis)
+
+      const roller = new Gtk.ScrolledWindow({
+        vexpand: true,
+        hscrollbar_policy: Gtk.PolicyType.NEVER,
+        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+      })
+      liste = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+      roller.set_child(liste)
+      rumpf.append(roller)
+
+      const fuss = new Gtk.Box({
+        orientation: Gtk.Orientation.HORIZONTAL, spacing: 8,
+        halign: Gtk.Align.END })
+      fuss.append(zepButton(_("Cancel"), "still", () => closeWindow()))
+      fuss.append(zepButton(_("Use this path"), "haupt",
+                            () => uebernehmen(closeWindow)))
+      rumpf.append(fuss)
+
+      zeichne(closeWindow)
+      return rumpf
+    },
+  })
+}
+
+/** Ein getippter Pfad, wie ihn das Dateisystem versteht.
+ *
+ * Die Tilde loest HIER auf und nicht in einer Schale: dieses Feld ist
+ * kein Shell-Aufruf, also expandiert sie unterwegs niemand. Ohne diese
+ * Zeile ist "~/Dokumente/x.conf" ein Verzeichnis namens "~" - genau der
+ * Fehler, den der Nutzer am 01.09.2026 als "erno2 error" gemeldet hat.
+ */
+function pfadAusText(text: string): string {
+  const roh = (text || "").trim()
+  if (!roh) return ""
+  if (roh === "~") return GLib.get_home_dir()
+  if (roh.startsWith("~/")) return GLib.get_home_dir() + roh.slice(1)
+  return roh
+}
+
+/** Zwei Stuecke zu einem Pfad, ohne den doppelten Schraegstrich bei "/". */
+function zusammen(ort: string, name: string): string {
+  return ort.endsWith("/") ? ort + name : ort + "/" + name
+}
+
+/** Das Verzeichnis, in dem dieser Pfad liegt - oder er selbst.
+ *
+ * Damit geht der Waehler dort auf, wo der Nutzer hinzeigt, auch wenn im
+ * Feld daneben schon eine DATEI stand.
+ */
+function ordnerVon(pfad: string): string {
+  if (!pfad) return ""
+  const datei = Gio.File.new_for_path(pfad)
+  if (istOrdner(datei)) return pfad
+  const eltern = datei.get_parent()
+  return eltern ? (eltern.get_path() || "") : ""
+}
+
+function istOrdner(datei: Gio.File): boolean {
+  try {
+    return datei.query_file_type(Gio.FileQueryInfoFlags.NONE, null)
+      === Gio.FileType.DIRECTORY
+  } catch (e) {
+    return false
+  }
+}
+
+/** Was in einem Verzeichnis steht - Ordner zuerst, dann die Dateien.
+ *
+ * Versteckte Dateien bleiben aus: wer eine braucht, tippt sie. Ein
+ * Verzeichnis, das nicht zu lesen ist, gibt eine leere Liste und keine
+ * Ausnahme - der Waehler zeigt dann "Nichts hier, was passt", und das
+ * ist die Wahrheit fuer den, der davor sitzt.
+ */
+function inhalt(ort: string, endungen: string[]):
+    { name: string, ordner: boolean }[] {
+  const gefunden: { name: string, ordner: boolean }[] = []
+  try {
+    const zaehler = Gio.File.new_for_path(ort).enumerate_children(
+      "standard::name,standard::type,standard::is-hidden",
+      Gio.FileQueryInfoFlags.NONE, null)
+    let info = zaehler.next_file(null)
+    while (info) {
+      const name = info.get_name()
+      const ordner = info.get_file_type() === Gio.FileType.DIRECTORY
+      if (!info.get_is_hidden() && (ordner || passt(name, endungen)))
+        gefunden.push({ name, ordner })
+      info = zaehler.next_file(null)
+    }
+    zaehler.close(null)
+  } catch (e) {
+    console.log("Dateiwahl: " + ort + " laesst sich nicht lesen - " + e)
+    return []
+  }
+  gefunden.sort((a, b) => a.ordner === b.ordner
+    ? a.name.localeCompare(b.name)
+    : (a.ordner ? -1 : 1))
+  return gefunden
+}
+
+function passt(name: string, endungen: string[]): boolean {
+  if (endungen.length === 0) return true
+  const klein = name.toLowerCase()
+  return endungen.some(endung => klein.endsWith(endung.toLowerCase()))
+}
+
 export function waehleDatei(
   fenster: Astal.Window | null,
   titel: string,
   gewaehlt: (pfad: string) => void,
   abbruch: Gio.Cancellable | null = null,
+  start: string = "",
+  endungen: string[] = [],
 ): boolean {
-  if (!fenster) return false
+  // OHNE ELTERNFENSTER GAR NICHTS, und das ist keine Formsache: die
+  // Flaeche muss fuer die Dauer des Waehlers sinken, und dazu braucht es
+  // sie. Der eigene Waehler unten braucht sie NICHT - er ist selbst eine
+  // Layer-Flaeche - also bekommt der Aufrufer auch dann einen Dialog.
+  if (!fenster) {
+    waehlePfadSelbst(titel, start, gewaehlt, endungen).show()
+    return true
+  }
 
   const alteEbene = fenster.get_layer()
   const alterTastenmodus = fenster.get_keymode()
@@ -648,7 +930,19 @@ export function waehleDatei(
     // Blattkopf. Mit einer Layer-Flaeche als Elternfenster ist der
     // Portalweg von GTK ein Wayland-Protokollfehler, und der Compositor
     // wirft den ganzen Prozess hinaus.
+    // DIE ZAHL VORHER, und sie ist der ganze Trick beim Nachsehen.
+    //
+    // Gtk.Window.get_toplevels() ist die Liste der Fenster DIESES
+    // Prozesses. Zeichnet GTK den Waehler selbst - und genau das tut es
+    // hier, weil die Hyprland-Konfiguration `GTK_USE_PORTAL,0` setzt -,
+    // dann steht er darin. Geht er ueber ein Portal auf, gehoert er
+    // einem fremden Prozess und steht NICHT darin; dann meldet der
+    // Rueckruf oder eben nichts.
+    const fensterVorher = (Gtk.Window as any).get_toplevels().get_n_items()
+    let beantwortet = false
+
     waehler.open(null, abbruch, (_quelle: any, ergebnis: any) => {
+      beantwortet = true
       try {
         const datei = waehler.open_finish(ergebnis)
         if (datei) gewaehlt(datei.get_path() ?? "")
@@ -657,10 +951,48 @@ export function waehleDatei(
       }
       zurueck()
     })
+
+    // DER BODEN: kommt nach dieser Frist kein Fenster und keine Antwort,
+    // dann kommt keins mehr.
+    //
+    // WARUM EINE FRIST UND KEIN SIGNAL. Es gibt keins. Ein
+    // Gtk.FileDialog, dessen Fenster ausbleibt, meldet das nicht - der
+    // Rueckruf feuert dann einfach nie, und genau dieser Zustand ist es,
+    // den der Nutzer am 03.09.2026 gemeldet hat ("erscheinen garnicht
+    // erst"). Also wird nachgesehen statt gewartet.
+    //
+    // WARUM 1200 ms. Zwei Enden: lange genug, dass ein Waehler, der nur
+    // langsam aufgeht, nicht ueberrannt wird - GEMESSEN im
+    // verschachtelten Compositor stand er nach 500 ms
+    // (tests/render/test_dateiwaehler.py wartet SETTLE=1.5 s und findet
+    // ihn) -, und kurz genug, dass der Mensch davor nicht glaubt, sein
+    // Klick sei ins Leere gegangen.
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, WAEHLER_FRIST_MS, () => {
+      const jetzt = (Gtk.Window as any).get_toplevels().get_n_items()
+      if (!beantwortet && jetzt <= fensterVorher) {
+        console.log("Dateiwahl: Gtk.FileDialog hat nach "
+          + WAEHLER_FRIST_MS + " ms kein Fenster gezeigt und nicht "
+          + "geantwortet - ZepOS nimmt seinen eigenen Waehler. "
+          + "Verdaechtig sind GTK_USE_PORTAL und die FileChooser-Zeile in "
+          + "/etc/xdg-desktop-portal/hyprland-portals.conf.")
+        if (abbruch) abbruch.cancel()
+        zurueck()
+        waehlePfadSelbst(titel, start, gewaehlt, endungen).show()
+      }
+      return GLib.SOURCE_REMOVE
+    })
     return true
   } catch (e) {
+    // GTK konnte gar keinen Waehler bauen. Das ist der Fall, in dem
+    // dieser Zweig bis zum 03.09.2026 `false` zurueckgab und der
+    // Aufrufer "tippe den Pfad" sagte - eine Antwort, die den Klick
+    // unbeantwortet liess. Jetzt kommt ein Fenster, und der Grund steht
+    // im Protokoll.
+    console.log("Dateiwahl: Gtk.FileDialog liess sich nicht bauen (" + e
+      + ") - ZepOS nimmt seinen eigenen Waehler.")
     zurueck()
-    return false
+    waehlePfadSelbst(titel, start, gewaehlt, endungen).show()
+    return true
   }
 }
 
