@@ -49,6 +49,13 @@ UNIVERSAL = WURZEL / "src" / "templates" / "hyprland-universal-config.template"
 # yad             der VPN-Dialog
 ABFRAGE_KLASSEN = ("gcr-prompter", "yad")
 
+# Und der Dateidialog, seit dem 03.09.2026. Er traegt keine Frage,
+# sondern eine Suche - aber er hat dasselbe Problem: er gehoert nicht
+# der Anwendung, die ihn oeffnet, sondern dem Portal, und ohne Regel
+# geht er in die Kachelung. GEMELDET: "der order als vault oeffnen
+# kommt jetzt ja aber eingerastet und nicht fliegend".
+WAEHLER_KLASSE = "xdg-desktop-portal-gtk"
+
 
 def _zeilen() -> list[str]:
     return [z.strip() for z in UNIVERSAL.read_text(encoding="utf-8").splitlines()
@@ -99,3 +106,38 @@ def test_die_zusicherung_wuerde_die_geloeschte_zeile_wiedererkennen():
         "das Muster erkennt die Zeile nicht mehr, die den Fehler "
         "ausgeloest hat - dann sagt der Test oben nichts aus")
     assert any(klasse in damals for klasse in ABFRAGE_KLASSEN)
+
+
+def test_der_dateidialog_des_portals_schwebt():
+    """Obsidian ist Electron, und Electron fragt fuer "Ordner oeffnen"
+    das Portal. Das Fenster gehoert damit xdg-desktop-portal-gtk.
+
+    Die Klasse ist nicht geraten: sie steht im Programm selbst
+    (`strings /usr/lib/xdg-desktop-portal-gtk`), neben seinem
+    D-Bus-Namen org.freedesktop.impl.portal.desktop.gtk.
+    """
+    regeln = [z for z in _zeilen()
+              if z.startswith("windowrule") and WAEHLER_KLASSE in z]
+    assert regeln, (
+        f"es gibt keine Regel fuer {WAEHLER_KLASSE} - der Dateidialog "
+        f"jeder Anwendung, die das Portal fragt, geht dann in die "
+        f"Kachelung")
+
+    zusammen = " ".join(regeln)
+    for eigenschaft in ("float on", "center on"):
+        assert eigenschaft in zusammen, (
+            f"dem Dateidialog fehlt {eigenschaft!r}: {regeln}")
+    assert "size " in zusammen, (
+        "der Dateidialog bekommt keine Groesse - ein Waehler ist eine "
+        "Liste, und zu klein heisst blaettern, wo man suchen will")
+
+
+def test_der_dateidialog_wird_nicht_auf_eine_arbeitsflaeche_gezwungen():
+    """Dieselbe Falle wie bei der Rechteabfrage, an einem zweiten
+    Fenster: er muss dort aufgehen, wo der Nutzer gerade sucht."""
+    gezwungen = [z for z in _zeilen()
+                 if z.startswith("windowrule") and WAEHLER_KLASSE in z
+                 and re.search(r"\bworkspace\s+\S", z)]
+    assert gezwungen == [], (
+        f"der Dateidialog wird auf eine feste Arbeitsflaeche gezwungen: "
+        f"{gezwungen}")

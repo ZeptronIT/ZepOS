@@ -661,6 +661,28 @@ windowrule = match:class ^(floating-center)$, float on, center on, size 1200 800
 # YAD Rules (for VPN dialog)
 windowrule = match:class (?i)^(yad)$, float on, center on, size 400 300
 
+# Der Dateidialog, den JEDE Anwendung teilt - seit dem 03.09.2026.
+#
+# GEMELDET, woertlich: "der order als vault oeffnen kommt jetzt ja aber
+# eingerastet und nicht fliegend". Obsidian ist Electron, und Electron
+# fragt fuer "Ordner oeffnen" das PORTAL - das Fenster gehoert damit
+# nicht Obsidian, sondern xdg-desktop-portal-gtk. Ohne eine Regel geht
+# es in die Kachelung und schiebt die Anordnung des Nutzers auseinander,
+# waehrend er nur eine Datei suchen wollte.
+#
+# DIE KLASSE IST NICHT GERATEN: sie steht im Programm selbst
+# (`strings /usr/lib/xdg-desktop-portal-gtk`), neben seinem D-Bus-Namen
+# org.freedesktop.impl.portal.desktop.gtk. GTK setzt sie aus dem
+# Programmnamen, und der ist der Dateiname des Anbieters.
+#
+# 1024x768 ist dieselbe Zahl, die eine funktionierende Maschine dafuer
+# schon setzt (gsettings org.gtk.Settings.FileChooser window-size). Ein
+# Waehler ist eine LISTE - zu klein heisst blaettern, wo man suchen
+# will.
+windowrule = match:class ^(xdg-desktop-portal-gtk)$, float on
+windowrule = match:class ^(xdg-desktop-portal-gtk)$, center on
+windowrule = match:class ^(xdg-desktop-portal-gtk)$, size 1024 768
+
 # Die Rechteabfrage. Sie muss DA aufgehen, WO DER NUTZER IST.
 #
 # HIER STAND `workspace 1`, UND DAS WAR DER GRUND, WARUM SIE NICHT KAM

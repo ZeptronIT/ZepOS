@@ -116,6 +116,10 @@ ANGEHEFTET = ["firefox", "nautilus", "btop"]
 # hinter den Trenner und traegt den Punkt.
 GIMP_TITEL = "Gimp-Fenster"
 
+# Ein Programmname, der laenger ist als die 15 Zeichen, die
+# /proc/<pid>/comm fasst - "sehr-langer-pro" kommt dort an.
+LANGER_PROGRAMMNAME = "sehr-langer-programmname"
+
 # Ein abgelegtes Fenster einer ANGEHEFTETEN Anwendung. Es steht
 # hinter dem Trenner (siehe den Kopf von ags-dock.template) und
 # darf trotzdem kein zweites Firefox-Symbol anbieten.
@@ -322,6 +326,7 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
           home: list[str] | None = None,
           fremd: list[str] | None = None,
           kennung: str | None = None,
+          langer_name: bool = False,
           abgelegt: bool = False,
           sprache: str = MASCHINENSPRACHE,
           katalog: Path | None = None) -> dict:
@@ -382,14 +387,31 @@ def _lauf(bundle: tuple[Path, Path], root: Path, *,
         (eintraege / "gimp.desktop").rename(
             eintraege / f"{kennung}.desktop")
 
+    # DAS PROGRAMM MIT DEM LANGEN NAMEN - seit dem 03.09.2026.
+    #
+    # /proc/<pid>/comm fasst 15 Zeichen (TASK_COMM_LEN im Kern). Ein
+    # Programm mit einem laengeren Namen kommt dort GEKUERZT an, und der
+    # gekuerzte Name passt zu keinem Anwendungseintrag. Genau das ist
+    # der Fall, den der Nutzer am 03.09.2026 gemeldet hat: "ausserdem
+    # habe ich diese beiden button nicht im tooltip bei bereits
+    # geoeffneten anwendungen unten in der dock".
+    #
+    # Die Fensterklasse bleibt "Gimp" - der Fuss muss den Eintrag also
+    # ueber sie finden statt ueber comm.
+    if langer_name:
+        shutil.copy(shutil.which("sleep"), binaries / LANGER_PROGRAMMNAME)
+        (binaries / LANGER_PROGRAMMNAME).chmod(0o755)
+        prozess = subprocess.Popen([str(binaries / LANGER_PROGRAMMNAME), "120"])
+
     # DAS PROGRAMM, DAS "gimp" HEISST. _desktop_entries legt dafuer ein
     # Bash-Skript ab, das sofort endet; comm waere dann der Interpreter
     # und der Prozess ohnehin fort. Eine Kopie von `sleep` heisst im
     # Kern so, wie ihre Datei heisst - GEMESSEN am 20.08.2026:
     # comm=gimp.
-    shutil.copy(shutil.which("sleep"), binaries / "gimp")
-    (binaries / "gimp").chmod(0o755)
-    prozess = subprocess.Popen([str(binaries / "gimp"), "120"])
+    if not langer_name:
+        shutil.copy(shutil.which("sleep"), binaries / "gimp")
+        (binaries / "gimp").chmod(0o755)
+        prozess = subprocess.Popen([str(binaries / "gimp"), "120"])
 
     wurzel = _einstellungen(
         root, gepflegt if gepflegt is not None else ANGEHEFTET, home)
@@ -1108,3 +1130,41 @@ def test_die_vorgegebene_sprache_ist_wirklich_die_ausgangssprache():
         "die uebersetzte Sprache IST die Ausgangssprache - dann prueft "
         "test_das_menue_spricht_die_sprache_der_maschine() nichts")
     assert UEBERSETZTER_CODE == UEBERSETZTE_SPRACHE.split("_")[0]
+
+
+# ---------------------------------------------------------------------
+# Ein Programm, dessen Name laenger ist als comm fasst - 03.09.2026
+# ---------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def langer_name(bundle, tmp_path_factory) -> dict:
+    """Dasselbe Menue, aber das Programm heisst 24 Zeichen lang.
+
+    /proc/<pid>/comm fasst 15 (TASK_COMM_LEN). Der Fuss bekommt dort
+    "sehr-langer-pro" und findet dazu keinen Anwendungseintrag. Die
+    FENSTERKLASSE ist unveraendert "Gimp".
+    """
+    return _lauf(bundle, tmp_path_factory.mktemp("langer-name"),
+                 menues=(GIMP_TITEL,), langer_name=True)
+
+
+def test_auch_ein_langer_programmname_bekommt_seine_zwei_punkte(langer_name):
+    """DER FALL DES NUTZERS, woertlich: "ausserdem habe ich diese beiden
+    button nicht im tooltip bei bereits geoeffneten anwendungen unten in
+    der dock".
+
+    Vor dem 03.09.2026 gab dockName() hier `null` zurueck - comm war
+    abgeschnitten, entryFor() fand nichts, und fensterMenue() haengt
+    beide Punkte an genau diese Bedingung. Der Nutzer sah nur
+    "Schliessen".
+
+    Der dritte Weg sucht jetzt ueber die Fensterklasse, und belongsTo()
+    konnte das schon immer - es wurde nur nie fuer noch nicht
+    angeheftete Fenster gefragt.
+    """
+    assert _menue(langer_name, GIMP_TITEL) == [
+        f"{PIN_ICON} Add to dock",
+        f"{HOME_ICON} Add to Home",
+        f"{CLOSE_ICON} Close",
+    ], langer_name["lauf"].trace

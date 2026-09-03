@@ -1377,18 +1377,66 @@ export function DockContent(): Gtk.Box {
    *     Ein Punkt, der ihn anhefte, schriebe wieder einen Namen, den das
    *     naechste Lesen verwirft.
    */
+  /** Der Eintrag zu einer FENSTERKLASSE, ueber alle Eintraege gesucht.
+   *
+   * Der zweite Weg neben dem ueber /proc/<pid>/comm, und er ist seit
+   * dem 03.09.2026 da, weil der erste eine harte Grenze hat: comm ist
+   * vom Kernel auf 15 Zeichen abgeschnitten (TASK_COMM_LEN). Was
+   * laenger heisst, kommt dort gekuerzt an und passt zu keinem
+   * Anwendungseintrag mehr.
+   *
+   * belongsTo() kann diese Frage schon - es vergleicht die Klasse mit
+   * dem Programmnamen, der Kennung UND dem, was der Eintrag selbst
+   * unter StartupWMClass angibt. Es wurde nur nie fuer Fenster
+   * gefragt, die noch nicht angeheftet sind.
+   */
+  const eintragZurKlasse = (
+      appClass: string): GioUnix.DesktopAppInfo | null => {
+    if (!appClass) return null
+    for (const kandidat of Gio.AppInfo.get_all()) {
+      const eintrag = kandidat as GioUnix.DesktopAppInfo
+      // "" als Programmname: belongsTo() vergleicht ihn mit der Klasse,
+      // und eine nicht-leere Klasse ist nie "". Damit zaehlen hier nur
+      // die Kennung und StartupWMClass.
+      if (belongsTo(appClass, eintrag, "")) return eintrag
+    }
+    return null
+  }
+
+  /** Unter welchem Namen sich dieses Fenster ablegen laesst.
+   *
+   * DREI WEGE, IN DIESER REIHENFOLGE:
+   *   1. eine Anheftung, die schon zu diesem Fenster gehoert
+   *   2. /proc/<pid>/comm - genau, solange der Name kurz genug ist
+   *   3. die FENSTERKLASSE, ueber alle Anwendungseintraege gesucht
+   *
+   * Der dritte kam am 03.09.2026 dazu. GEMELDET, woertlich: "ausserdem
+   * habe ich diese beiden button nicht im tooltip bei bereits
+   * geoeffneten anwendungen unten in der dock". Ohne ihn gab diese
+   * Funktion `null` zurueck, sobald comm zu keinem Eintrag passte - und
+   * fensterMenue() haengt beide Punkte an genau diese Bedingung. Der
+   * Nutzer sah dann nur "Schliessen".
+   */
   const dockName = (client: Hyprland.Client): string | null => {
     const vertreter = pins.find(
       pin => belongsTo(client.class, pin.info, pin.program))
     if (vertreter) return vertreter.program
 
     const program = programOf(client.pid)
-    if (!program) return null
-    if (namen.includes(program)) return program
-    const info = entryFor(program)
-    if (!info || info.get_nodisplay() || info.get_is_hidden()) return null
-    const kennung = info.get_id()
-    return kennung ? kennung.replace(/\.desktop$/, "") : program
+    if (program) {
+      if (namen.includes(program)) return program
+      const info = entryFor(program)
+      if (info && !info.get_nodisplay() && !info.get_is_hidden()) {
+        const kennung = info.get_id()
+        return kennung ? kennung.replace(/\.desktop$/, "") : program
+      }
+    }
+
+    const ueberKlasse = eintragZurKlasse(client.class)
+    if (!ueberKlasse) return null
+    if (ueberKlasse.get_nodisplay() || ueberKlasse.get_is_hidden()) return null
+    const kennung = ueberKlasse.get_id()
+    return kennung ? kennung.replace(/\.desktop$/, "") : null
   }
 
   /** Was ein Rechtsklick auf ein FENSTER anbietet.
