@@ -36,7 +36,7 @@
 //
 //    Auf DERSELBEN Ebene entscheidet die Anmeldereihenfolge, wer oben
 //    liegt - und `wallpaper-manager` startet swaybg bei jedem
-//    Tapetenwechsel NEU (`pkill -9 -f swaybg`, dann `swaybg ... &`).
+//    Tapetenwechsel NEU (`pkill -9 -x swaybg`, dann `swaybg ... &`).
 //    GEMESSEN mit einem Home auf `background`:
 //
 //        vor dem Wechsel:   ['wallpaper', 'zepos-home']

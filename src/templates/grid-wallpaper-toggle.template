@@ -187,7 +187,30 @@ start_wallpapers() {
 
     # In den Hintergrund, weil swaybg ein Dienst ist und kein Befehl: es
     # laeuft, solange die Bilder stehen, und endet erst mit dem
-    # `pkill -9 -f swaybg` des naechsten Umschaltens.
+    # -x UND NICHT -f, UND DAS IST GEMESSEN (04.09.2026)
+    #
+    #     `pkill -9 -f swaybg` vergleicht die GANZE Befehlszeile - und die
+    #     seines eigenen Starters enthaelt "swaybg". Es erschiesst sich also
+    #     selbst, mitten im Aufraeumen.
+    #
+    #     GEMESSEN mit einem eigenen Muster, damit nichts Echtes getroffen
+    #     wird: ein `timeout 2 pkill -9 -f zepprobe-muster-xyz` endete mit
+    #     137 - SIGKILL, von sich selbst. Im Protokoll eines Laufes stand
+    #     dieselbe Zeile mit dem echten Muster:
+    #
+    #         wallpaper-manager: Zeile 256: 223953 Getoetet
+    #             timeout 2 pkill -9 -f swaybg
+    #
+    #     Die Folge ist keine Fehlermeldung, sondern Zufall: welche swaybg
+    #     das Aufraeumen noch erreicht, haengt daran, wie weit es kam. Danach
+    #     wird je Schirm neu gestartet - und ein Schirm, dessen alter Prozess
+    #     ueberlebt hat, bekommt zwei, ein anderer keinen. Auf dem Schirm
+    #     heisst das: schwarz.
+    #
+    #     `-x` vergleicht den PROZESSNAMEN genau. Der ist bei swaybg
+    #     "swaybg" und beim Aufraeumer "pkill" - kein Selbsttreffer, und
+    #     kein Treffer auf irgendeinen Editor, der die Datei offen hat.
+    # `pkill -9 -x swaybg` des naechsten Umschaltens.
     #
     # Im Vordergrund kehrte diese Funktion deshalb nie zurueck. Alles,
     # was danach kommt, kam nie: die Meldung "Grid Overlay aktiviert"
@@ -205,7 +228,7 @@ start_wallpapers() {
 reload_wallpapers() {
     [ -f "$TOGGLE_FILE" ] || return 0
 
-    pkill -9 -f swaybg
+    pkill -9 -x swaybg
     sleep 0.2
     start_wallpapers
 }
@@ -326,7 +349,7 @@ toggle_wallpaper() {
         rm -f "$TOGGLE_FILE"
 
         # Kill alle swaybg Prozesse
-        pkill -9 -f swaybg
+        pkill -9 -x swaybg
         sleep 0.2
 
         # Starte random wallpaper script neu
@@ -338,7 +361,7 @@ toggle_wallpaper() {
         touch "$TOGGLE_FILE"
 
         # Kill alle swaybg Prozesse
-        pkill -9 -f swaybg
+        pkill -9 -x swaybg
         sleep 0.2
 
         # Setze auf jedem Schirm das Bild, das zu ihm gehört. Fehlende

@@ -241,7 +241,30 @@ apply_default_wallpaper() {
     local wallpaper="$1"
     [ -f "$wallpaper" ] || return 1
 
-    timeout 2 pkill -9 -f swaybg 2>/dev/null || true
+    # -x UND NICHT -f, UND DAS IST GEMESSEN (04.09.2026)
+    #
+    #     `pkill -9 -f swaybg` vergleicht die GANZE Befehlszeile - und die
+    #     seines eigenen Starters enthaelt "swaybg". Es erschiesst sich also
+    #     selbst, mitten im Aufraeumen.
+    #
+    #     GEMESSEN mit einem eigenen Muster, damit nichts Echtes getroffen
+    #     wird: ein `timeout 2 pkill -9 -f zepprobe-muster-xyz` endete mit
+    #     137 - SIGKILL, von sich selbst. Im Protokoll eines Laufes stand
+    #     dieselbe Zeile mit dem echten Muster:
+    #
+    #         wallpaper-manager: Zeile 256: 223953 Getoetet
+    #             timeout 2 pkill -9 -f swaybg
+    #
+    #     Die Folge ist keine Fehlermeldung, sondern Zufall: welche swaybg
+    #     das Aufraeumen noch erreicht, haengt daran, wie weit es kam. Danach
+    #     wird je Schirm neu gestartet - und ein Schirm, dessen alter Prozess
+    #     ueberlebt hat, bekommt zwei, ein anderer keinen. Auf dem Schirm
+    #     heisst das: schwarz.
+    #
+    #     `-x` vergleicht den PROZESSNAMEN genau. Der ist bei swaybg
+    #     "swaybg" und beim Aufraeumer "pkill" - kein Selbsttreffer, und
+    #     kein Treffer auf irgendeinen Editor, der die Datei offen hat.
+    timeout 2 pkill -9 -x swaybg 2>/dev/null || true
     sleep 0.2
 
     hyprctl monitors -j | jq -r '.[].name' | while read -r name; do
@@ -283,8 +306,18 @@ apply_wallpaper() {
 
     # Kill existing swaybg for target monitor only, or all if no target
     if [ -n "$target_monitor_name" ]; then
+        # HIER MUSS ES -f SEIN - und deshalb die Klammern um das erste
+        # Zeichen. Gesucht wird EIN Schirm, und der steht nur in den
+        # Argumenten; -x koennte ihn nicht von seinen Nachbarn trennen.
+        #
+        # `[s]waybg -o DP-1` ist ein Ausdruck, der auf "swaybg -o DP-1"
+        # passt und auf sich selbst NICHT: in der eigenen Befehlszeile
+        # steht "[s]waybg", dort folgt dem s eine Klammer und kein
+        # "waybg". Ohne diesen Kniff erschiesst der Aufraeumer seinen
+        # eigenen Starter - gemessen, siehe die Begruendung weiter oben.
+        #
         # Use timeout and suppress errors to prevent hangs
-        timeout 2 pkill -f "swaybg -o $target_monitor_name" 2>/dev/null || true
+        timeout 2 pkill -f "[s]waybg -o $target_monitor_name" 2>/dev/null || true
         sleep 0.15
         swaybg -o "$target_monitor_name" -m fill -i "$wallpaper" &
         disown  # Prevent zombie processes
@@ -303,7 +336,7 @@ apply_wallpaper() {
             is_portrait=true
         fi
 
-        timeout 2 pkill -9 -f swaybg 2>/dev/null || true
+        timeout 2 pkill -9 -x swaybg 2>/dev/null || true
         sleep 0.2
 
         hyprctl monitors -j | jq -r '.[] | "\(.name) \(.width) \(.height) \(.transform)"' | while read -r name width height transform; do

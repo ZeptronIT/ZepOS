@@ -249,3 +249,107 @@ def test_the_marker_directory_is_the_one_the_toggle_writes_to():
             f"the {name} must honour TMPDIR, not hardcode /tmp")
         assert "grid-wallpaper-active-" in text, (
             f"the {name} lost the marker's name")
+
+
+# --------------------------------------------------------------------
+# Dass kein Aufraeumer sich selbst erschiesst
+# --------------------------------------------------------------------
+
+# Die Vorlagen, die swaybg beenden. Ausgeschrieben und nicht gesucht:
+# eine Liste, die sich aus dem Bestand ergibt, ist mit jedem Bestand
+# einverstanden - auch mit einem, in dem eine davon den Aufraeumer
+# verloren hat.
+TAPETEN_VORLAGEN = (
+    "wallpaper-manager-config.template",
+    "grid-wallpaper-toggle.template",
+    "random-wallpaper-config.template",
+)
+
+
+def _befehlszeilen(vorlage: str) -> list[tuple[int, str]]:
+    """Die Zeilen einer Vorlage, ohne die Kommentare.
+
+    `pkill -9 -f swaybg` steht in mehreren Koepfen als Beschreibung
+    dessen, was passiert. Eine Suche ueber den ganzen Text faende die
+    Erklaerung und nicht den Befehl.
+    """
+    pfad = SRC / "templates" / vorlage
+    gefunden = []
+    for nummer, zeile in enumerate(
+            pfad.read_text(encoding="utf-8").splitlines(), 1):
+        ohne = zeile.split("#", 1)[0]
+        if ohne.strip():
+            gefunden.append((nummer, ohne))
+    return gefunden
+
+
+@pytest.mark.parametrize("vorlage", TAPETEN_VORLAGEN)
+def test_kein_aufraeumer_vergleicht_die_ganze_befehlszeile(vorlage):
+    """`pkill -f swaybg` trifft seinen eigenen Starter.
+
+    WAS GEMESSEN IST (04.09.2026)
+        `pkill -9 -f <muster>` vergleicht die GANZE Befehlszeile, und
+        die des eigenen Starters enthaelt das Muster. Ein
+        `timeout 2 pkill -9 -f zepprobe-muster-xyz` endete mit 137 -
+        SIGKILL, von sich selbst. Mit dem echten Muster stand dieselbe
+        Zeile im Protokoll eines Laufes:
+
+            wallpaper-manager: Zeile 256: 223953 Getoetet
+                timeout 2 pkill -9 -f swaybg
+
+        Die Folge ist keine Fehlermeldung, sondern Zufall: wie weit das
+        Aufraeumen kam, entscheidet, welche swaybg es erreicht hat.
+        Danach wird je Schirm neu gestartet, und ein Schirm, dessen
+        alter Prozess ueberlebte, bekommt zwei - ein anderer keinen.
+        Auf dem Schirm heisst das schwarz, und genau das war die
+        Meldung vom 04.09.2026.
+
+    ZWEI ERLAUBTE FORMEN
+        `-x swaybg`       vergleicht den Prozessnamen genau. Der ist
+                          beim Aufraeumer "pkill" - kein Selbsttreffer.
+        `-f "[s]waybg"`   wo ein EINZELNER Schirm gemeint ist und nur
+                          die Argumente ihn nennen: ein Ausdruck, der
+                          auf "swaybg" passt und auf sich selbst nicht.
+    """
+    schlecht = []
+    for nummer, zeile in _befehlszeilen(vorlage):
+        for werkzeug in ("pkill", "pgrep"):
+            if werkzeug not in zeile:
+                continue
+            if "-f" not in zeile:
+                continue
+            if "swaybg" not in zeile:
+                continue
+            if "[s]waybg" in zeile:
+                continue          # der Klammerkniff, siehe oben
+            schlecht.append(f"{vorlage}:{nummer}: {zeile.strip()}")
+
+    assert schlecht == [], (
+        "diese Zeilen vergleichen die ganze Befehlszeile gegen "
+        "\"swaybg\" und treffen damit ihren eigenen Starter:\n  "
+        + "\n  ".join(schlecht)
+        + "\n\nEntweder `-x swaybg` (der Prozessname) oder, wo ein "
+          "einzelner Schirm gemeint ist, `-f \"[s]waybg -o <name>\"`.")
+
+
+def test_die_zusicherung_wuerde_die_alte_form_sehen():
+    """Der Gegenbeweis - eine Zusicherung, die nichts findet, ist gruen.
+
+    Nachgestellt wird genau die Zeile, die bis zum 04.09.2026 in
+    wallpaper-manager-config.template stand.
+    """
+    zeilen = [
+        (1, '    timeout 2 pkill -9 -f swaybg 2>/dev/null || true'),
+        (2, '    timeout 2 pkill -9 -x swaybg 2>/dev/null || true'),
+        (3, '    timeout 2 pkill -f "[s]waybg -o $name" 2>/dev/null || true'),
+    ]
+    getroffen = []
+    for nummer, zeile in zeilen:
+        if ("pkill" in zeile and "-f" in zeile and "swaybg" in zeile
+                and "[s]waybg" not in zeile):
+            getroffen.append(nummer)
+
+    assert getroffen == [1], (
+        f"die Regel trifft die Zeilen {getroffen} - sie soll genau die "
+        f"erste treffen: die alte Form. Die zweite (-x) und die dritte "
+        f"(Klammerkniff) sind die beiden erlaubten.")

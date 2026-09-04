@@ -56,14 +56,37 @@ trap 'rm -rf "$LOCKDIR"' EXIT
 sleep 2
 
 # Kill ALL vorherige swaybg Instanzen
-pkill -9 -f swaybg
+# -x UND NICHT -f, UND DAS IST GEMESSEN (04.09.2026)
+#
+#     `pkill -9 -f swaybg` vergleicht die GANZE Befehlszeile - und die
+#     seines eigenen Starters enthaelt "swaybg". Es erschiesst sich also
+#     selbst, mitten im Aufraeumen.
+#
+#     GEMESSEN mit einem eigenen Muster, damit nichts Echtes getroffen
+#     wird: ein `timeout 2 pkill -9 -f zepprobe-muster-xyz` endete mit
+#     137 - SIGKILL, von sich selbst. Im Protokoll eines Laufes stand
+#     dieselbe Zeile mit dem echten Muster:
+#
+#         wallpaper-manager: Zeile 256: 223953 Getoetet
+#             timeout 2 pkill -9 -f swaybg
+#
+#     Die Folge ist keine Fehlermeldung, sondern Zufall: welche swaybg
+#     das Aufraeumen noch erreicht, haengt daran, wie weit es kam. Danach
+#     wird je Schirm neu gestartet - und ein Schirm, dessen alter Prozess
+#     ueberlebt hat, bekommt zwei, ein anderer keinen. Auf dem Schirm
+#     heisst das: schwarz.
+#
+#     `-x` vergleicht den PROZESSNAMEN genau. Der ist bei swaybg
+#     "swaybg" und beim Aufraeumer "pkill" - kein Selbsttreffer, und
+#     kein Treffer auf irgendeinen Editor, der die Datei offen hat.
+pkill -9 -x swaybg
 
 # Warte bis Prozesse sauber beendet sind (0.5s für Sicherheit)
 sleep 0.5
 
 # Doppelt sicherstellen dass alle weg sind
-while pgrep -f swaybg > /dev/null; do
-    pkill -9 -f swaybg
+while pgrep -x swaybg > /dev/null; do
+    pkill -9 -x swaybg
     sleep 0.1
 done
 

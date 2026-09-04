@@ -171,6 +171,31 @@ exec-once = setsid -f /usr/bin/python3 /usr/lib/hyprclipx/collector.py >/dev/nul
 exec-once = ~/.config/hypr/hypr-monitor-detect.sh
 exec-once = ~/.config/ags/bar-workspace-detect.sh
 
+# UND EIN WAECHTER DAHINTER, DER DASSELBE BEI JEDEM KABEL TUT
+#
+# GEMELDET am 04.09.2026, woertlich: "bei anschliessen eines weiteren
+# bildschirm wird der background schwarz und wenn ich verusche allgemein
+# ags sachen dort zu machen erscheinen die fenster nur auf der edp also
+# dem laptop monitor und sie werdne nicht als getrennte instanzen
+# behandelt".
+#
+# Die zwei Zeilen darueber und `wallpaper-manager restore` weiter unten
+# sind exec-once - sie laufen beim Anmelden und nie wieder. Ein Schirm,
+# der spaeter dazukommt, bekam deshalb kein swaybg (er ist SCHWARZ) und
+# keine Arbeitsflaeche (jede lag weiter auf dem ersten Schirm, wer auf
+# dem neuen etwas oeffnete, sprang zurueck - das ist "nur auf der edp").
+#
+# Der Waechter horcht auf .socket2.sock und zieht bei einem
+# Schirmwechsel genau diese drei nach. Seine eigene Kopfzeile hat die
+# ganze Begruendung, auch die, warum er ein eigener Prozess ist und
+# nicht ein Teil der Oberflaeche.
+#
+# setsid -f, wie beim vpn-watcher: er soll den Aufruf ueberleben, der
+# ihn gestartet hat. Sein Protokoll liegt in
+# $XDG_RUNTIME_DIR/zepos-monitor-watch.log - es schreibt sich selbst
+# dorthin, damit diese Zeile stdout wegwerfen darf.
+exec-once = setsid -f python3 ~/.config/hypr/hypr-monitor-watch.py >/dev/null 2>&1
+
 # Profile-specific autostart (sourced from profile)
 source = ~/.config/hypr/profile-autostart.conf
 

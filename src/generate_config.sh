@@ -1215,6 +1215,15 @@ case "$CONFIG_NAME" in
         CONFIG_FILE="hypr-monitor-detect.sh"
         MAKE_EXECUTABLE=true
         ;;
+    hypr-monitor-watch-config)
+        # Next to the script it calls, because it is the same subject:
+        # what follows from the attached screens. Its own header has the
+        # reasoning, including why it is a process of its own and not a
+        # part of the shell.
+        CONFIG_DIR="$ZEPOS_OUTPUT_ROOT/hypr"
+        CONFIG_FILE="hypr-monitor-watch.py"
+        MAKE_EXECUTABLE=true
+        ;;
     hypr-window-rescue-config)
         CONFIG_DIR="$ZEPOS_USER_ROOT/helpers"
         CONFIG_FILE="hypr-window-rescue.sh"
