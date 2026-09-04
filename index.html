@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZepOS-Paketquelle</title>
+<style>
+  body { font-family: sans-serif; max-width: 46rem; margin: 2rem auto;
+         padding: 0 1rem; line-height: 1.5; }
+  code, pre { font-family: ui-monospace, monospace; }
+  pre { background: #f4f4f4; padding: .75rem; overflow-x: auto; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #16161a; color: #e6e6e6; }
+    pre { background: #232329; }
+  }
+</style>
+<h1>ZepOS-Paketquelle</h1>
+<p>Dies ist die Paketquelle von ZepOS. Sie wird von <code>pacman</code>
+gelesen, nicht von einem Browser.</p>
+<h2>Eintrag in <code>/etc/pacman.conf</code></h2>
+<pre>[zepos]
+SigLevel = Required TrustedOnly
+Server = https://zeptronit.github.io/ZepOS/$arch</pre>
+<p>Ein installiertes ZepOS hat diesen Eintrag bereits; das Paket
+<code>zepos-keyring</code> bringt den Schluessel mit.</p>
+<h2>Schluessel</h2>
+<p>Fingerabdruck:</p>
+<pre>FF2EB06C08A57FEA9E33FC46157C1725A578B80C</pre>
+<p>LeonMarzollDev (ZepOS Release) <126802872+LeonMarzollDev@users.noreply.github.com></p>
+<p>Der oeffentliche Schluessel liegt als
+<a href="zepos-repo.pub">zepos-repo.pub</a> daneben. Von Hand importiert
+wird er so:</p>
+<pre>pacman-key --add zepos-repo.pub
+pacman-key --lsign-key FF2EB06C08A57FEA9E33FC46157C1725A578B80C</pre>
+<h2>Was hier liegt</h2>
+<p><a href="manifest.txt">manifest.txt</a> nennt den Commit, den
+Arch-Stichtag und die sha256-Summe jedes Pakets.
+<a href="x86_64/">x86_64/</a> ist das Verzeichnis, das <code>$arch</code>
+im Server-Eintrag aufloest.</p>
+</html>

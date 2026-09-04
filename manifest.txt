@@ -1,0 +1,31 @@
+version           0.1.19
+commit            d5b29c43b2d90048ff31995c3d0dbc49d3f29701
+package source    2026/08/04
+SOURCE_DATE_EPOCH 1788547232
+signed            yes, key FF2EB06C08A57FEA9E33FC46157C1725A578B80C
+built             2026-09-04T18:53:42Z
+
+44c15ac61099072f0f9ce19dacdd36d75cff5f8e049c3f9ffdc09d3b223380ed  aylurs-gtk-shell-3.1.2-1-x86_64.pkg.tar.zst
+cdded95742ef519412087f9e6c8789835a6ff3848912b3ddcb51bc276a35a27f  libastal-4-r912.9dac92f-1-x86_64.pkg.tar.zst
+19f601e96f35bd672d96a1a9025cd2381823fc7ae99a350fb6b2cbb4d4d3e32b  libastal-io-r912.9dac92f-1-x86_64.pkg.tar.zst
+6d65b20ba2acdffadc0f072d8854b61f793c95f16c5889555a34825c64d35434  libastal-notifd-r912.9dac92f-1-x86_64.pkg.tar.zst
+3e57ae653eb510d84f42aa3765ecddb09b107e659cee1e02c745d7fc0d221c3e  zepos-apps-0.1.19-1-any.pkg.tar.zst
+7fe6127339f90c96521d45fdbd80a3c6ed40362c02e84e1ef787d5f4a30be68e  zepos-apps-devel-0.1.19-1-any.pkg.tar.zst
+fe0d714287ef337aae3990083a7e6ad03b9862db18d2dc5be3f19055ee0fe710  zepos-apps-office-0.1.19-1-any.pkg.tar.zst
+ae510f68f4a87a69616d07be562c4dc7ad67aaa9976591751fa3e90e30b8c632  zepos-borders-plus-plus-0.56.0-1-x86_64.pkg.tar.zst
+37c19f07ab5c6d91736838ee419b45435f24932949d956a54deef9dedfc2fd67  zepos-claude-code-1:0.1.19-1-any.pkg.tar.zst
+bd6c8fd012802c5091d432ad94b681d63caae34bdb4824bccfd5635d6146334d  zepos-config-0.1.19-1-any.pkg.tar.zst
+5b28a464d9cbc433c7651155ad7801ca07f5574502f139b310075ff07fe4a965  zepos-desktop-0.1.19-1-any.pkg.tar.zst
+2dbeb9d3dea6faaef736ae9eb174a96056f46cc0bf12088774ba40e86afa99fc  zepos-hyprbars-0.56.0-1-x86_64.pkg.tar.zst
+06adb9ee799ec7437e41e95f6f3c209435fedb896272de5018d44f8e5daa5342  zepos-hyprclipx-0.1.19-1-x86_64.pkg.tar.zst
+a3f8c95197ad8fd8fb622b5579ce7c9c18c0e483ae470c1153d87a48c84eb5e9  zepos-hyprland-0.56.1-1-x86_64.pkg.tar.zst
+0c78394767aaadae562c50cc4c005274dbaba0f30115e3312412face9d0fd0cb  zepos-hyprlaunch-0.1.19-1-x86_64.pkg.tar.zst
+d6dd9692eace064441fff1d635e7a8c3e81c48a03558f061272cc8ebeb217008  zepos-hyprzones-0.3.2.r87.73171c7-1-x86_64.pkg.tar.zst
+7a2ff4c5f53beded0309af945071b396f33a861b1905bab2db212bfbe6ef2474  zepos-installer-0.1.19-1-any.pkg.tar.zst
+a69f8a41d9ecd52d703073e369dbb3ef28127d133b291378bbdf661c6557cbff  zepos-installer-gui-0.1.19-1-any.pkg.tar.zst
+8ab92b8f4810b03256a652100159a914fd9a9be92e5d7b50156a5bc11cfb79a7  zepos-installer-tui-0.1.19-1-any.pkg.tar.zst
+42e086b581f4195880b98197ea14a84dda49b6414e1b26e2e7e460323bce64f5  zepos-keyring-0.1.19-1-any.pkg.tar.zst
+0ed019c2ab85287dd04da0f6e941134c38ad1e156c10777737485c1718eb2861  zepos-lock-0.1.19-1-x86_64.pkg.tar.zst
+326aafd78b0263c70ea116171eaa3b21df356f8044bca67d73a6cbafca5f1552  zepos-menu-0.1.19-1-any.pkg.tar.zst
+6f9cffe0a087751cfe8d3fcdf198b6181cc4106b651b039a2394d3d384062581  zepos-settings-gui-0.1.19-1-any.pkg.tar.zst
+db1b4f230a63fba04099bdb2235a6a4da53856ff0371570ef9726502bf4d1758  zsh-theme-powerlevel10k-1.20.0-1-any.pkg.tar.zst
