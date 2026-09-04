@@ -2463,7 +2463,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
          struct ClickData {
              LauncherRenderer* self;
              size_t index;
-@@ -514,13 +608,369 @@
+@@ -514,13 +608,358 @@
                  delete static_cast<ClickData*>(data);
              }, G_CONNECT_DEFAULT);
  
@@ -2708,44 +2708,33 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 +    GtkWidget* menu = gtk_popover_new();
 +    gtk_popover_set_has_arrow(GTK_POPOVER(menu), FALSE);
 +
-+    // OHNE GRIFF - 03.09.2026, und das ist der Unterschied zum Fuss.
++    // DER GRIFF WAR ES NICHT - GEMESSEN AM NUTZER, 04.09.2026
 +    //
-+    //     GEMELDET, mehrfach und zuletzt woertlich: "doch rechtklick
-+    //     kommt popover dock hinzufuegen home hinzufuegen usw. aber
-+    //     danach passiert nichts mehr". Das Menue steht also; der Klick
-+    //     kommt am Knopf nicht an.
++    //     Hier stand einen Tag lang gtk_popover_set_autohide(FALSE).
++    //     Die Ueberlegung: der Fuss, dessen Menue geht, haelt
++    //     Astal.Keymode.ON_DEMAND, dieser Starter
++    //     GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE, und ein
++    //     autohide-Popover nimmt einen xdg_popup.grab - die eine
++    //     Stelle, an der sich die beiden unterscheiden.
 +    //
-+    //     WAS GEMESSEN IST: die Schreibseite ist heil. Loest ein Lauf
-+    //     den Menuepunkt aus (tests/render/test_launcher_menue.py,
-+    //     `waehle:`), dann laeuft settings.py und die Anheftung steht
-+    //     danach in der Datei - auch zwei Sekunden nach dem Aufklappen,
-+    //     die Zeile stirbt also nicht dazwischen. Was dieser Messstand
-+    //     NICHT nachstellen kann, ist der Weg des Zeigers zu einem
-+    //     xdg_popup: dafuer braeuchte er ein Werkzeug, das im
-+    //     verschachtelten Compositor wirklich klickt (ydotool o.ae.),
-+    //     und das liegt auf dieser Maschine nicht.
++    //     ERGEBNIS, woertlich vom Nutzer: der Menuepunkt wirkt
++    //     weiterhin nicht. Und er kostete etwas: "kann ich im ags
++    //     launcher jetzt rechsklick machen aber nicht mehr mit
++    //     linksklick auswaehlen". Ohne autohide schliesst sich das
++    //     Menue bei einem Klick daneben nicht mehr - es blieb stehen
++    //     und schluckte jeden weiteren Linksklick auf die Liste.
 +    //
-+    //     DER UNTERSCHIED ZUM FUSS, dessen Menue beim Nutzer geht:
-+    //     dessen Flaeche haelt Astal.Keymode.ON_DEMAND, diese hier
-+    //     GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE. Ein autohide-Popover
-+    //     nimmt einen xdg_popup.grab; auf einer Flaeche, die die
-+    //     Tastatur ausschliesslich haelt, ist das die eine Stelle, an
-+    //     der sich die beiden Menues unterscheiden.
++    //     WAS DER FEHLVERSUCH TROTZDEM ERGEBEN HAT, und es ist der
++    //     erste harte Befund an dieser Stelle: der Zeiger ERREICHT die
++    //     Flaeche des Popups. Sonst haette sie nichts schlucken
++    //     koennen. Die Frage ist also nicht mehr, ob der Klick
++    //     ankommt, sondern warum er den KNOPF nicht erreicht.
 +    //
-+    //     Ohne autohide nimmt GTK keinen Griff. Der Popup ist dann eine
-+    //     gewoehnliche Flaeche, und seine Eingaben gehen den normalen
-+    //     Weg. Zugemacht wird er dafuer von Hand - und das war er auch
-+    //     vorher schon an jeder Stelle, die zaehlt: bei der Auswahl
-+    //     (der Rueckruf ruft popdown), bei Escape (onKeyPress), beim
-+    //     naechsten Rechtsklick (oben in dieser Funktion) und beim
-+    //     Verschwinden des Starters (hide).
-+    //
-+    //     WAS DAMIT WEGFAELLT: der Klick DANEBEN schliesst das Menue
-+    //     nicht mehr von selbst. Escape tut es, die Auswahl tut es, und
-+    //     der Starter selbst geht bei Fokusverlust zu. Das ist der
-+    //     Preis, und er ist kleiner als ein Menue, das man anklicken
-+    //     kann und das nichts tut.
-+    gtk_popover_set_autohide(GTK_POPOVER(menu), FALSE);
++    //     Vier Vermutungen sind damit gemessen und verworfen:
++    //     can_focus, der Tastenweg, der Tastenmodus und der Griff.
++    //     Keine davon steht noch im Quelltext. Die naechste Runde
++    //     misst statt zu raten - mit einem echten Zeiger ueber
++    //     zwlr_virtual_pointer_v1 im verschachtelten Compositor.
 +    gtk_widget_add_css_class(menu, "launcher-menu-popover");
 +    gtk_popover_set_child(GTK_POPOVER(menu), list);
 +    gtk_widget_set_parent(menu, anchor);
@@ -2834,7 +2823,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  void LauncherRenderer::updateSelection(int newIndex) {
-@@ -568,7 +1018,7 @@
+@@ -568,7 +1007,7 @@
  }
  
  // ============================================================================
@@ -2843,7 +2832,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  void LauncherRenderer::activateSelected() {
-@@ -593,7 +1043,7 @@
+@@ -593,7 +1032,7 @@
  }
  
  // ============================================================================
@@ -2852,7 +2841,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  gboolean LauncherRenderer::onKeyPress(GtkEventControllerKey*, guint keyval,
-@@ -601,6 +1051,38 @@
+@@ -601,6 +1040,38 @@
      auto* self = static_cast<LauncherRenderer*>(data);
      int maxIndex = static_cast<int>(self->m_resultButtons.size()) - 1;
  
