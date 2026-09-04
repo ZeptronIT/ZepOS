@@ -327,31 +327,43 @@ apply_wallpaper() {
         echo "$wallpaper" > "$CURRENT_FILE"
         notify-send -t 2000 "{{ICON_WALLPAPER}} Wallpaper" "$(basename "$wallpaper")\nMonitor: $target_monitor_name"
     else
-        # Legacy: apply to all matching monitors
-        local img_width=$(identify -format "%w" "$wallpaper" 2>/dev/null)
-        local img_height=$(identify -format "%h" "$wallpaper" 2>/dev/null)
-        local is_portrait=false
-
-        if [ "$img_height" -gt "$img_width" ]; then
-            is_portrait=true
-        fi
-
+        # JEDER Schirm, den der Compositor meldet - und kein Filter mehr.
+        #
+        # WAS HIER STAND, UND WARUM ES EIN LOCH WAR (04.09.2026)
+        #     Diese Schleife verglich die Ausrichtung des BILDES mit der
+        #     des Schirms und liess einen Schirm, der nicht passte, ganz
+        #     aus:
+        #
+        #         if [ "$is_portrait" = "$monitor_portrait" ]; then
+        #             swaybg -o "$name" ...
+        #
+        #     Dieser Zweig hat GENAU EIN Bild - der Nutzer hat eines
+        #     gewaehlt, und es steht in $CURRENT_FILE. Ein Filter kann
+        #     darin nichts verbessern: er kann nur dafuer sorgen, dass
+        #     ein Schirm NICHTS bekommt, und nichts heisst das Schwarz
+        #     des Compositors.
+        #
+        #     GEMESSEN in tests/src/test_wallpaper_manager.py: bei einem
+        #     Schirm mit transform=1 kam genau ein swaybg heraus, fuer
+        #     den anderen - der gedrehte blieb leer. Das ist woertlich
+        #     die Meldung vom 04.09.2026, "bei anschliessen eines
+        #     weiteren bildschirm wird der background schwarz".
+        #
+        #     `-m fill` schneidet zu und zerrt nicht. Ein
+        #     zugeschnittenes Bild auf einem hochkanten Schirm ist kein
+        #     schoener Anblick; ein schwarzer Schirm ist keiner.
+        #
+        #     Wer je Schirm ein EIGENES Bild will, hat das schon:
+        #     restore_wallpaper() liest ${CURRENT_FILE}_<n> zuerst, und
+        #     apply_wallpaper mit einer Schirmnummer schreibt es. Die
+        #     Ausrichtung gehoert dorthin, wo es mehr als ein Bild gibt.
         timeout 2 pkill -9 -x swaybg 2>/dev/null || true
         sleep 0.2
 
-        hyprctl monitors -j | jq -r '.[] | "\(.name) \(.width) \(.height) \(.transform)"' | while read -r name width height transform; do
-            local monitor_portrait=false
-
-            if [ "$transform" = "1" ] || [ "$transform" = "3" ]; then
-                monitor_portrait=true
-            elif [ "$height" -gt "$width" ]; then
-                monitor_portrait=true
-            fi
-
-            if [ "$is_portrait" = "$monitor_portrait" ]; then
-                swaybg -o "$name" -m fill -i "$wallpaper" &
-                disown  # Prevent zombie processes
-            fi
+        hyprctl monitors -j | jq -r '.[].name' | while read -r name; do
+            [ -n "$name" ] || continue
+            swaybg -o "$name" -m fill -i "$wallpaper" &
+            disown  # Prevent zombie processes
         done
 
         echo "$wallpaper" > "$CURRENT_FILE"

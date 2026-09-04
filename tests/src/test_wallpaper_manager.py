@@ -25,6 +25,7 @@ Safety: the child runs through `env -i` with the stub directory as the
 ONLY entry on PATH, so a command with no stub fails with "command not
 found" rather than reaching a real `swaybg`, `pkill` or `hyprctl`.
 """
+import json
 import os
 import shutil
 import subprocess
@@ -209,6 +210,24 @@ def test_a_random_wallpaper_whose_name_holds_a_space_is_applied_whole(
     wallpaper = landscape / "Sunset Beach.jpg"
     wallpaper.write_text("not really a picture", encoding="utf-8")
 
+    # EIN SCHIRM, DEN hyprctl AUCH MELDET - dazugekommen am 04.09.2026,
+    # als der Zeuge dieses Tests von identify auf swaybg umgestellt
+    # wurde.
+    #
+    #     Der hyprctl-Stummel der Vorrichtung schreibt nur mit und
+    #     antwortet nicht; das Skript sieht damit einen Rechner OHNE
+    #     Bildschirm und wendet folgerichtig nichts an. Solange der
+    #     Zeuge identify war, fiel das nicht auf - identify laeuft vor
+    #     der Schleife ueber die Schirme.
+    #
+    #     Mit dem Schirm misst dieser Test jetzt MEHR als vorher: dass
+    #     der ganze Name bis zu dem Programm kommt, das die Tapete
+    #     wirklich malt.
+    _hyprctl_antwortet(stubs, tmp_path, [
+        {"id": 0, "name": "eDP-1", "width": 1920, "height": 1080,
+         "transform": 0},
+    ])
+
     result = _run(script, "random", stubs, home, tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
@@ -216,13 +235,27 @@ def test_a_random_wallpaper_whose_name_holds_a_space_is_applied_whole(
                if "Datei nicht gefunden" in line]
     assert missing == [], (
         "a path that is not a file was applied: " + "; ".join(missing))
-    # The whole name reached the tool that reads the picture, which is
-    # only possible if the whole name survived the list.
-    looked_at = [line for line in _calls(tmp_path)
-                 if line.startswith("identify ")]
-    assert looked_at, "no wallpaper was applied at all"
-    assert all(str(wallpaper) in line for line in looked_at), (
-        "identify was handed a fragment: " + "; ".join(looked_at))
+    # DER ZEUGE IST swaybg UND NICHT MEHR identify - umgestellt am
+    # 04.09.2026, mit ausdruecklicher Erlaubnis des Nutzers.
+    #
+    #     Hier stand `identify`, und der Aufruf gab es in diesem Zweig
+    #     nur, um die AUSRICHTUNG des Bildes zu bestimmen. Der Filter,
+    #     der sie brauchte, ist weg: er verglich sie mit der des Schirms
+    #     und liess einen Schirm, der nicht passte, ganz aus - bei genau
+    #     einem Bild kann das nichts verbessern, nur einen Schirm
+    #     schwarz lassen. Siehe
+    #     test_auch_ein_gedrehter_schirm_bleibt_nicht_schwarz.
+    #
+    #     Die Aussage dieses Tests bleibt Wort fuer Wort dieselbe: kommt
+    #     der ganze Dateiname durch? Der Zeuge ist jetzt der
+    #     VERBRAUCHER der Tapete statt eines Nebenaufrufs - swaybg
+    #     bekommt den Pfad hinter -i, und wenn der Name unterwegs
+    #     zerfallen waere, stuende dort ein Bruchstueck.
+    angewandt = [zeile for zeile in _calls(tmp_path)
+                 if zeile.startswith("swaybg ")]
+    assert angewandt, "no wallpaper was applied at all"
+    assert all(f"-i {wallpaper}" in zeile for zeile in angewandt), (
+        "swaybg was handed a fragment: " + "; ".join(angewandt))
 
 
 def test_the_marker_directory_is_the_one_the_toggle_writes_to():
@@ -353,3 +386,143 @@ def test_die_zusicherung_wuerde_die_alte_form_sehen():
         f"die Regel trifft die Zeilen {getroffen} - sie soll genau die "
         f"erste treffen: die alte Form. Die zweite (-x) und die dritte "
         f"(Klammerkniff) sind die beiden erlaubten.")
+
+
+# --------------------------------------------------------------------
+# Dass JEDER angesteckte Schirm eine Tapete bekommt
+# --------------------------------------------------------------------
+#
+# WAS GEMELDET WURDE (04.09.2026), WOERTLICH
+#     "bei anschliessen eines weiteren bildschirm wird der background
+#      schwarz"
+#
+# Die erste Haelfte davon war, dass `restore` nach dem Anmelden nie
+# wieder lief; das zieht jetzt hypr-monitor-watch.py nach (gemessen in
+# tests/src/test_monitor_watch.py). Die zweite Haelfte ist hier: WENN es
+# laeuft, muss jeder Schirm, den der Compositor meldet, danach ein
+# swaybg haben. Ein Schirm ohne swaybg zeigt das Schwarz des
+# Compositors, und das ist genau die Meldung.
+
+def _hyprctl_antwortet(stubs: Path, tmp_path: Path,
+                       schirme: list[dict]) -> None:
+    """Den hyprctl-Stummel so ersetzen, dass er Schirme meldet.
+
+    Der Stummel aus `stubs` schreibt nur mit; fuer diese Frage muss er
+    antworten. Ohne Antwort nimmt das Skript den Zweig fuer "kein
+    Compositor" und der Lauf messe etwas anderes.
+
+    OHNE `cat`, und das ist gemessen: der Stummelordner ist der ganze
+    PATH, `cat` liegt in /usr/bin und ist kein Builtin - es wuerde zu
+    "command not found". `"$(< datei)"` ist eine Umleitung und damit
+    Bash selbst.
+    """
+    monitore = tmp_path / "monitore.json"
+    monitore.write_text(json.dumps(schirme), encoding="utf-8")
+    stub = stubs / "hyprctl"
+    stub.write_text(
+        "#!/bin/bash\n"
+        f"printf 'hyprctl %s\\n' \"$*\" >> '{tmp_path / 'calls.txt'}'\n"
+        'if [ "$1 $2" = "monitors -j" ]; then\n'
+        f"  printf '%s' \"$(< '{monitore}')\"\n"
+        "fi\n"
+        "exit 0\n", encoding="utf-8")
+    stub.chmod(0o755)
+
+
+def _gewaehlte_tapete(tmp_path: Path, home: Path) -> Path:
+    """Eine Tapete, die der Nutzer schon gewaehlt hat.
+
+    Damit nimmt `restore` den Zweig einer benutzten Installation und
+    nicht den Rueckfall auf das ausgelieferte Bild.
+    """
+    home.mkdir(parents=True, exist_ok=True)
+    (home / ".cache").mkdir(parents=True, exist_ok=True)
+    bild = tmp_path / "tapete.png"
+    bild.write_bytes(b"nicht wirklich ein PNG - identify ist ein Stummel")
+    (home / ".cache" / "current-wallpaper").write_text(
+        f"{bild}\n", encoding="utf-8")
+    return bild
+
+
+def _swaybg_ausgaenge(tmp_path: Path) -> list[str]:
+    """Die Ausgangsnamen aus allen mitgeschriebenen swaybg-Aufrufen."""
+    namen = []
+    for zeile in _calls(tmp_path):
+        worte = zeile.split()
+        if worte[:1] != ["swaybg"] or "-o" not in worte:
+            continue
+        stelle = worte.index("-o")
+        if stelle + 1 < len(worte):
+            namen.append(worte[stelle + 1])
+    return sorted(namen)
+
+
+@pytest.mark.allow_subprocess
+def test_restore_gibt_jedem_gemeldeten_schirm_ein_eigenes_swaybg(
+        script, stubs, tmp_path):
+    """Drei Schirme, drei swaybg - und keiner bleibt schwarz.
+
+    Gezaehlt werden die AUFRUFE und nicht die Prozesse: swaybg ist hier
+    ein Stummel, und ein echtes swaybg gegen den laufenden Compositor
+    dieser Maschine ist genau das, was tests/conftest.py verbietet.
+    """
+    home = tmp_path / "home"
+    _gewaehlte_tapete(tmp_path, home)
+    _hyprctl_antwortet(stubs, tmp_path, [
+        {"id": 0, "name": "eDP-1", "width": 1920, "height": 1080,
+         "transform": 0},
+        {"id": 1, "name": "HDMI-A-1", "width": 2560, "height": 1440,
+         "transform": 0},
+        {"id": 2, "name": "DP-3", "width": 3440, "height": 1440,
+         "transform": 0},
+    ])
+
+    _run(script, "restore", stubs, home, tmp_path)
+
+    assert _swaybg_ausgaenge(tmp_path) == ["DP-3", "HDMI-A-1", "eDP-1"], (
+        f"nicht jeder Schirm hat ein swaybg bekommen. Gerufen wurde:\n  "
+        + "\n  ".join(_calls(tmp_path)))
+
+
+@pytest.mark.allow_subprocess
+def test_auch_ein_gedrehter_schirm_bleibt_nicht_schwarz(
+        script, stubs, tmp_path):
+    """Ein hochkant gedrehter Schirm bekommt AUCH eine Tapete.
+
+    WAS HIER STAND, UND WARUM ES EIN LOCH WAR
+        Der Zweig fuer "alle Schirme" verglich die Ausrichtung des
+        BILDES mit der des Schirms und liess einen Schirm, der nicht
+        passte, ganz aus:
+
+            if [ "$is_portrait" = "$monitor_portrait" ]; then
+                swaybg -o "$name" ...
+
+        Dieser Zweig hat GENAU EIN Bild - der Nutzer hat eines gewaehlt.
+        Ein Filter kann darin nichts verbessern: er kann nur dafuer
+        sorgen, dass ein Schirm NICHTS bekommt. Und nichts heisst hier
+        das Schwarz des Compositors, also genau die Meldung vom
+        04.09.2026.
+
+        `-m fill` schneidet zu und zerrt nicht. Ein zugeschnittenes Bild
+        auf einem hochkanten Schirm ist kein schoener Anblick; ein
+        schwarzer Schirm ist keiner.
+
+        Wer je Schirm ein eigenes Bild will, hat das schon: `restore`
+        liest ${CURRENT_FILE}_<n> zuerst, und der Waehler schreibt es.
+    """
+    home = tmp_path / "home"
+    _gewaehlte_tapete(tmp_path, home)
+    _hyprctl_antwortet(stubs, tmp_path, [
+        {"id": 0, "name": "eDP-1", "width": 1920, "height": 1080,
+         "transform": 0},
+        # transform 1 ist 90 Grad - der Schirm ist hochkant, das Bild
+        # (identify-Stummel: 1920x1920) nicht.
+        {"id": 1, "name": "DP-2", "width": 1920, "height": 1080,
+         "transform": 1},
+    ])
+
+    _run(script, "restore", stubs, home, tmp_path)
+
+    assert _swaybg_ausgaenge(tmp_path) == ["DP-2", "eDP-1"], (
+        f"der gedrehte Schirm DP-2 hat kein swaybg bekommen - er bleibt "
+        f"schwarz. Gerufen wurde:\n  " + "\n  ".join(_calls(tmp_path)))

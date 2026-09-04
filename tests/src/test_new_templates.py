@@ -1282,5 +1282,28 @@ def test_the_template_count_is_seventy_seven():
     tests/src/test_bar_vpn.py ausgefuehrt und nicht gelesen; die
     vollstaendige Rechnung steht bei der Zwillingszusicherung in
     tests/src/test_inventory.py, und beide muessen zusammen wandern.
+    92 STATT 91, am 04.09.2026: hypr-monitor-watch-config. Es ist die
+    Antwort auf eine Meldung, die drei Symptome in einem Satz hatte -
+    "bei anschliessen eines weiteren bildschirm wird der background
+    schwarz und wenn ich verusche allgemein ags sachen dort zu machen
+    erscheinen die fenster nur auf der edp".
+
+    DREI ABLEITUNGEN, EIN AUSLOESER  swaybg je Ausgang
+    (wallpaper-manager restore), die Arbeitsflaechen-Zuordnung
+    (hypr-monitor-detect.sh) und die Aufteilung der Leiste
+    (bar-workspace-detect.sh) folgen alle aus "welche Schirme haengen
+    dran" - und alle drei standen als `exec-once` in der
+    Hyprland-Konfiguration, liefen also genau einmal beim Anmelden. Ein
+    Schirm, der spaeter dazukam, war schwarz und hatte keine eigene
+    Arbeitsflaeche; damit lag JEDE Arbeitsflaeche weiter auf dem ersten
+    Schirm.
+
+    NETTO PLUS EINE DATEI  Geloescht wurde nichts: die drei Skripte
+    bleiben, was sie sind, und der Waechter ruft genau sie. Er ist ein
+    eigener Prozess und kein Teil der Oberflaeche, weil die
+    Arbeitsflaechen und die Tapete nicht davon abhaengen duerfen, dass
+    die Shell laeuft - sie wird bei jedem Erzeugungslauf neu gestartet.
+    Die Messung dazu steht in tests/render/test_schirm_nachziehen.py,
+    mit dem Gegenbeweis ohne Waechter.
     """
-    assert len(list(TEMPLATES.glob("*.template"))) == 91
+    assert len(list(TEMPLATES.glob("*.template"))) == 92

@@ -481,8 +481,31 @@ def test_template_count_is_seventy_seven():
     Netto plus eine Datei und minus nichts: geloescht wurde nichts, weil
     es nichts gab. ICON_VPN_ERROR (nf-md-shield_alert) stand seit jeher
     in src/icon_definition.py und hatte bis heute keinen Leser.
+    92 STATT 91, am 04.09.2026: hypr-monitor-watch-config. Es ist die
+    Antwort auf eine Meldung, die drei Symptome in einem Satz hatte -
+    "bei anschliessen eines weiteren bildschirm wird der background
+    schwarz und wenn ich verusche allgemein ags sachen dort zu machen
+    erscheinen die fenster nur auf der edp".
+
+    DREI ABLEITUNGEN, EIN AUSLOESER  swaybg je Ausgang
+    (wallpaper-manager restore), die Arbeitsflaechen-Zuordnung
+    (hypr-monitor-detect.sh) und die Aufteilung der Leiste
+    (bar-workspace-detect.sh) folgen alle aus "welche Schirme haengen
+    dran" - und alle drei standen als `exec-once` in der
+    Hyprland-Konfiguration, liefen also genau einmal beim Anmelden. Ein
+    Schirm, der spaeter dazukam, war schwarz und hatte keine eigene
+    Arbeitsflaeche; damit lag JEDE Arbeitsflaeche weiter auf dem ersten
+    Schirm.
+
+    NETTO PLUS EINE DATEI  Geloescht wurde nichts: die drei Skripte
+    bleiben, was sie sind, und der Waechter ruft genau sie. Er ist ein
+    eigener Prozess und kein Teil der Oberflaeche, weil die
+    Arbeitsflaechen und die Tapete nicht davon abhaengen duerfen, dass
+    die Shell laeuft - sie wird bei jedem Erzeugungslauf neu gestartet.
+    Die Messung dazu steht in tests/render/test_schirm_nachziehen.py,
+    mit dem Gegenbeweis ohne Waechter.
     """
-    assert len(list((SRC / "templates").glob("*.template"))) == 91
+    assert len(list((SRC / "templates").glob("*.template"))) == 92
 
 
 def test_nothing_refers_to_a_deleted_template():
