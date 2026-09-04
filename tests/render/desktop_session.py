@@ -117,6 +117,89 @@ def locale_is_generated(name: str) -> bool:
 # waere jede Aussage ueber Durchsicht unbelegt.
 WALLPAPER = SRC / "branding" / "zepos-wallpaper.png"
 
+# ---------------------------------------------------------------------
+# DER ECHTE ZEIGER
+# ---------------------------------------------------------------------
+#
+# WOFUER
+#     Ein Rueckruf laesst sich von Hand ausloesen; der WEG dorthin nicht.
+#     Genau daran haengt seit dem 21.08.2026 der Fehler im Starter:
+#     "wnen ich rechtklick auf ein hyprlaunch item mache und zur dock
+#     oder home hinzufuegen klappt nicht". Vier Vermutungen sind daran
+#     gemessen und verworfen worden, und eine davon hat dem Nutzer den
+#     Linksklick gekostet, bevor sie widerlegt war.
+#
+#     zwlr_virtual_pointer_v1 schickt echte Zeigerereignisse. Hyprland
+#     bietet das Protokoll an, und seine Beschreibung liegt in dem
+#     Quellbaum, den dieses Projekt ohnehin baut - herausgenommen nach
+#     tests/render/, wie schon wlr-output-management-unstable-v1.xml.
+#
+# DASS ER DIE SITZUNG NICHT VERLAESST
+#     Er verbindet sich mit dem WAYLAND_DISPLAY aus seiner Umgebung, und
+#     die kommt aus Session.environment() - die refuse_the_real_session()
+#     vorher geprueft hat. Ohne verschachtelte Sitzung findet er keinen
+#     Compositor und endet mit 1.
+ZEIGER_XML = Path(__file__).resolve().parent / (
+    "wlr-virtual-pointer-unstable-v1.xml")
+ZEIGER_C = Path(__file__).resolve().parent / "zeiger_client.c"
+
+# Die Tasten, die zeiger_client.c kennt. Ausgeschrieben, damit ein
+# Tippfehler hier auffaellt und nicht als "unbekannte Taste" im Kind.
+TASTEN = ("links", "rechts", "mitte")
+
+
+def zeiger_fehlt() -> list[str]:
+    """Was zum Bauen des Zeigers fehlt - leer heisst: es geht."""
+    mangel = [name for name in ("wayland-scanner", "pkg-config")
+              if not shutil.which(name)]
+    if not (shutil.which("cc") or shutil.which("gcc")):
+        mangel.append("cc")
+    if not ZEIGER_XML.is_file():
+        mangel.append(str(ZEIGER_XML))
+    pruefung = subprocess.run(
+        ["pkg-config", "--exists", "wayland-client"],
+        capture_output=True, timeout=30) if shutil.which("pkg-config") else None
+    if pruefung is not None and pruefung.returncode != 0:
+        mangel.append("wayland-client (Entwicklungsdateien)")
+    return mangel
+
+
+def baue_zeiger(ziel: Path) -> Path:
+    """zeiger_client.c uebersetzen. Zurueck kommt das Programm.
+
+    Dasselbe Verfahren wie beim Ausgangs-Client in
+    tests/render/test_live_spiegel.py: wayland-scanner erzeugt Kopf und
+    Rumpf des Protokolls, cc bindet sie mit dem Client zusammen.
+    """
+    ziel.mkdir(parents=True, exist_ok=True)
+    fertig = ziel / "zeiger"
+    if fertig.is_file():
+        return fertig
+
+    kopf = ziel / "wlr-virtual-pointer-unstable-v1-client-protocol.h"
+    rumpf = ziel / "wlr-virtual-pointer-unstable-v1-protocol.c"
+    for art, datei in (("client-header", kopf), ("private-code", rumpf)):
+        lauf = subprocess.run(
+            ["wayland-scanner", art, str(ZEIGER_XML), str(datei)],
+            capture_output=True, text=True, timeout=60)
+        assert lauf.returncode == 0, (
+            f"wayland-scanner {art} misslang:\n{lauf.stderr}")
+
+    flags = subprocess.run(
+        ["pkg-config", "--cflags", "--libs", "wayland-client"],
+        capture_output=True, text=True, timeout=60)
+    assert flags.returncode == 0, (
+        f"pkg-config kennt wayland-client nicht:\n{flags.stderr}")
+
+    uebersetzer = shutil.which("cc") or shutil.which("gcc")
+    lauf = subprocess.run(
+        [uebersetzer, "-O1", "-o", str(fertig), str(ZEIGER_C), str(rumpf),
+         f"-I{ziel}", *flags.stdout.split()],
+        capture_output=True, text=True, timeout=180)
+    assert lauf.returncode == 0, (
+        f"der Zeiger liess sich nicht uebersetzen:\n{lauf.stderr}")
+    return fertig
+
 # Was aus welcher Vorlage wird. Die Liste ist aus den case-Zweigen von
 # src/generate_config.sh abgelesen, nicht geraten - dort steht je Ziel
 # CONFIG_DIR und CONFIG_FILE.
@@ -919,6 +1002,144 @@ class Session:
                           XDG_CONFIG_HOME=str(config),
                           HYPRLAND_INSTANCE_SIGNATURE=signature,
                           **extra)
+
+    def _weltkoordinate(self, x: int, y: int) -> tuple[int, int, int, int]:
+        """Aus einem Punkt AUF DIESEM SCHIRM einen fuer das Protokoll.
+
+        WARUM DAS NOETIG IST - UND ES IST GEMESSEN
+            zwlr_virtual_pointer_v1.motion_absolute nimmt x und y als
+            Bruchteil von x_extent und y_extent, und der Compositor legt
+            das auf seine GANZE Ausgangsanordnung - nicht auf einen
+            Schirm. Eine verschachtelte Sitzung hat aber zwei Ausgaenge:
+            den headless-Ausgang, den Session anlegt, und das Fenster des
+            Wirts daneben.
+
+            GEMESSEN am 04.09.2026 mit x_extent = 1920 (der Breite DIESES
+            Schirms) und `hyprctl cursorpos` als Gegenprobe:
+
+                gewollt  300, 200   ->  gemeldet   770, 200
+                gewollt  960, 540   ->  gemeldet  2465, 540
+
+            770/300 = 2,567 und 2465/960 = 2,568 - ein FAKTOR und kein
+            Versatz. Die Anordnung war rund 4929 breit, also 2,567 mal
+            dieser Schirm. Ein Klick auf die Mitte des Starters landete
+            damit weit rechts daneben, und der Lauf haette gemeldet, der
+            Rechtsklick oeffne das Menue nicht.
+
+        Der Ausweg ist einfach: die Ausmasse der ANORDNUNG mitgeben und
+        die Weltkoordinate des Punktes. Dann ist die Abbildung die
+        Identitaet, und es gibt nichts mehr umzurechnen.
+        """
+        monitore = self.hyprctl_json("monitors") or []
+        assert monitore, "hyprctl nennt keine Schirme - kein Bezugsrahmen"
+
+        breite = max(m.get("x", 0) + m.get("width", 0) for m in monitore)
+        hoehe = max(m.get("y", 0) + m.get("height", 0) for m in monitore)
+
+        meiner = [m for m in monitore if m.get("name") == self.output]
+        assert meiner, (
+            f"{self.output} steht nicht in `hyprctl monitors`: "
+            f"{[m.get('name') for m in monitore]}")
+        return (meiner[0].get("x", 0) + x, meiner[0].get("y", 0) + y,
+                breite, hoehe)
+
+    def warte_bis(self, bedingung, frist: float = 20.0,
+                  takt: float = 0.1, was: str = "") -> object:
+        """Warten, bis `bedingung()` etwas Wahres liefert - und keine
+        Sekunde laenger. Zurueck kommt dieser Wert.
+
+        WARUM DAS DIE ANTWORT AUF "die tests dauern zu lange" IST
+            GEMESSEN am 04.09.2026: in tests/render/ stecken 361
+            Sekunden fester `time.sleep()` - bei einer Bildspur von 599
+            Sekunden also sechzig Prozent der Zeit. Jede dieser Zahlen
+            ist eine Schaetzung ("so lange braucht die Oberflaeche
+            wohl"), und eine Schaetzung ist zweimal falsch:
+
+                zu lang   im Normalfall wird gewartet, obwohl laengst
+                          alles steht - das ist die Zeit, die der
+                          Entwickler bezahlt
+                zu kurz   unter Last reicht sie nicht, und der Lauf
+                          faellt an einer Stelle, an der nichts kaputt
+                          ist. Genau das waren die elf Fehler in
+                          test_geometry.py und test_schale_stil.py, als
+                          zwoelf Spuren nebeneinander liefen.
+
+            Auf die BEDINGUNG zu warten behebt beides auf einmal: im
+            Normalfall kommt sie nach Millisekunden, unter Last darf sie
+            sich Zeit lassen. Deshalb ist diese Funktion auch die
+            Voraussetzung dafuer, die Bildlaeufe je parallel laufen zu
+            lassen.
+
+        `frist` ist die Grenze, an der aufgegeben wird - sie darf
+        grosszuegig sein, weil sie im Normalfall nie erreicht wird.
+        """
+        ende = time.monotonic() + frist
+        letzter = None
+        while True:
+            letzter = bedingung()
+            if letzter:
+                return letzter
+            if time.monotonic() >= ende:
+                raise AssertionError(
+                    f"nach {frist:.0f} s nicht eingetreten"
+                    + (f": {was}" if was else "")
+                    + f" (zuletzt: {letzter!r})")
+            time.sleep(takt)
+
+    def warte_auf_flaechen(self, *namen: str, frist: float = 20.0) -> dict:
+        """Warten, bis diese Namensraeume auf dem Schirm liegen.
+
+        Der haeufigste Fall von warte_bis(): nach `shell()` steht die
+        Oberflaeche nicht sofort, und bisher wurde dafuer pauschal
+        gewartet.
+        """
+        def stehen():
+            liegen = self.layers()
+            return liegen if all(name in liegen for name in namen) else None
+
+        return self.warte_bis(
+            stehen, frist=frist,
+            was=f"die Flaechen {', '.join(namen)} liegen auf dem Schirm")
+
+    def klick(self, x: int, y: int, taste: str = "links",
+              beruhigung: float = 0.4) -> None:
+        """Ein ECHTER Klick auf (x, y) - in Bildpunkten dieses Schirms.
+
+        Ueber zwlr_virtual_pointer_v1 und nicht ueber ein Signal: dieser
+        Weg geht durch den Compositor, durch die Flaechenzuordnung und
+        durch GTKs Zeigerverwaltung - also genau durch das, woran die
+        Frage haengt, ob ein Klick seinen Knopf erreicht.
+
+        `beruhigung` ist die Zeit danach. Ein Klick loest eine Kette aus
+        (Compositor -> Flaeche -> Widget -> Rueckruf -> vielleicht ein
+        Unterprozess), und wer sofort misst, misst den Anfang davon.
+        """
+        assert taste in TASTEN, f"unbekannte Taste: {taste}"
+        zeiger = baue_zeiger(self.runtime / "zeiger-bau")
+        welt_x, welt_y, breite, hoehe = self._weltkoordinate(x, y)
+        lauf = subprocess.run(
+            [str(zeiger), str(breite), str(hoehe),
+             str(welt_x), str(welt_y), taste],
+            env=self.environment(), capture_output=True, text=True,
+            timeout=60)
+        assert lauf.returncode == 0, (
+            f"der Zeiger kam nicht durch ({taste} auf {x},{y}): "
+            f"{lauf.stdout}{lauf.stderr}")
+        time.sleep(beruhigung)
+
+    def zeige_auf(self, x: int, y: int, beruhigung: float = 0.2) -> None:
+        """Nur bewegen, ohne zu druecken - fuer alles, was auf den
+        Zeiger reagiert, ohne dass geklickt wird."""
+        zeiger = baue_zeiger(self.runtime / "zeiger-bau")
+        welt_x, welt_y, breite, hoehe = self._weltkoordinate(x, y)
+        lauf = subprocess.run(
+            [str(zeiger), str(breite), str(hoehe), str(welt_x), str(welt_y)],
+            env=self.environment(), capture_output=True, text=True,
+            timeout=60)
+        assert lauf.returncode == 0, (
+            f"der Zeiger liess sich nicht auf {x},{y} bewegen: "
+            f"{lauf.stdout}{lauf.stderr}")
+        time.sleep(beruhigung)
 
     def move_cursor(self, x: int, y: int) -> None:
         """Den Zeiger auf den abgebildeten Schirm setzen.

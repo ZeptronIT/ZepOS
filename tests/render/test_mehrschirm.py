@@ -50,15 +50,7 @@ from tests.render.desktop_session import (                      # noqa: E402
 
 BREITE, HOEHE = 1920, 1080
 
-# Wie lange die Oberflaeche nach dem Start braucht, bis sie steht.
-# Dieselbe Zahl wie in test_dock_breite.py, und aus demselben Grund:
-# gemessen wird das Ergebnis, nicht die Dauer.
-RUHE = 7.0
 
-# Wie lange nach einem Schirmwechsel gewartet wird. Ein Wechsel geht
-# ueber drei Stationen - Compositor, GDK, die Rueckrufe der Oberflaeche -,
-# und jede davon laeuft in ihrer eigenen Schleife.
-WECHSEL = 6.0
 
 # Die fuenf Flaechen, die es JE SCHIRM gibt. Nicht "die Leiste und das
 # Dock": der Nutzer hat den Kopf und das Dock genannt, aber ein Schirm
@@ -98,6 +90,33 @@ def eigene(sitzung: Session) -> dict[str, list[str]]:
     """Dasselbe, aber nur die fuenf Flaechen dieses Projekts."""
     return {schirm: [name for name in namen if name in JE_SCHIRM]
             for schirm, namen in flaechen_je_schirm(sitzung).items()}
+
+
+def warte_auf_alle(sitzung: Session, frist: float = 25.0
+                   ) -> dict[str, list[str]]:
+    """Warten, bis JEDER Schirm die fuenf Flaechen traegt - genau einmal.
+
+    Die Bedingung ist dieselbe, die die Zusicherungen unten pruefen. Sie
+    hier abzufragen ist deshalb kein zweiter Massstab, sondern derselbe:
+    der Lauf wartet, bis das Ergebnis dasteht, und misst es dann.
+
+    "Genau einmal" gehoert dazu: nach einem Umstecken kann eine Flaeche
+    fuer einen Augenblick zweimal liegen (die alte ist noch nicht
+    abgeraeumt, die neue steht schon). Wer in diesem Augenblick misst,
+    meldet den Fehler, den es nicht gibt.
+    """
+    def steht():
+        gefunden = eigene(sitzung)
+        if not gefunden:
+            return None
+        for namen in gefunden.values():
+            if sorted(namen) != sorted(JE_SCHIRM):
+                return None
+        return gefunden
+
+    return sitzung.warte_bis(
+        steht, frist=frist,
+        was=f"jeder Schirm traegt {', '.join(JE_SCHIRM)}")
 
 
 def schirme(sitzung: Session) -> list[str]:
@@ -150,23 +169,31 @@ def umstecken(tmp_path_factory) -> dict:
         workspaces_file(bau, sitzung.output)
         sitzung.hyprctl("keyword", "cursor:invisible", "true")
         sitzung.wallpaper()
-        time.sleep(1.5)
         sitzung.shell(schale, bau)
-        time.sleep(RUHE)
 
-        vorher = eigene(sitzung)
+        # AUF DIE BEDINGUNG UND NICHT AUF DIE UHR - seit dem 04.09.2026.
+        #
+        #     Hier stand `time.sleep(RUHE)` und viermal
+        #     `time.sleep(WECHSEL)` - zusammen 31 Sekunden Schaetzung.
+        #     Eine Schaetzung ist zweimal falsch: im Normalfall wartet
+        #     sie zu lang, und unter Last reicht sie nicht. Beides
+        #     zusammen sind 361 Sekunden fester Schlaf in tests/render/
+        #     (gemessen am selben Tag) und die elf Fehler, die auftraten,
+        #     als zwoelf Spuren nebeneinander liefen.
+        #
+        #     `warte_auf_alle` fragt genau das ab, was die Zusicherungen
+        #     darunter behaupten: dass JEDER Schirm die fuenf Flaechen
+        #     traegt. Damit ist der Lauf schneller UND haelt Last aus.
+        vorher = warte_auf_alle(sitzung)
 
         dazu = steck_an(sitzung)
-        time.sleep(WECHSEL)
-        mit = eigene(sitzung)
+        mit = warte_auf_alle(sitzung)
 
         steck_ab(sitzung, dazu)
-        time.sleep(WECHSEL)
-        ohne = eigene(sitzung)
+        ohne = warte_auf_alle(sitzung)
 
         wieder = steck_an(sitzung)
-        time.sleep(WECHSEL)
-        erneut = eigene(sitzung)
+        erneut = warte_auf_alle(sitzung)
 
         # UND ZULETZT DER SCHIRM, DER VON ANFANG AN FLAECHEN TRUG.
         #
@@ -183,8 +210,20 @@ def umstecken(tmp_path_factory) -> dict:
         #     wirklich zu stellen.
         alter = sitzung.output
         steck_ab(sitzung, alter)
-        time.sleep(WECHSEL)
-        danach = eigene(sitzung)
+        # HIER wird KEIN vollstaendiger Zustand erwartet: der Schirm,
+        # der gerade verschwunden ist, soll ja gerade nichts mehr
+        # tragen. Gewartet wird darauf, dass er aus der Auskunft des
+        # Compositors heraus ist - und dass die Oberflaeche ihre
+        # Rueckrufe gefahren hat, erkennt man daran, dass kein
+        # Namensraum mehr doppelt liegt.
+        danach = sitzung.warte_bis(
+            lambda: (eigene(sitzung)
+                     if alter not in eigene(sitzung)
+                     and all(len(n) == len(set(n))
+                             for n in eigene(sitzung).values())
+                     else None),
+            frist=20.0,
+            was=f"{alter} ist fort und nichts liegt doppelt")
 
         protokoll = sitzung.read_shell_log()
 

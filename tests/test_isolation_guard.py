@@ -1208,3 +1208,123 @@ def test_kein_testmodul_traegt_den_namen_eines_anderen():
         "bricht das Sammeln mit 'import file mismatch' ab - die Sammlung "
         "laesst sich dann nur noch in zwei Aufrufen abdecken. Eine der "
         "beiden umbenennen, nach dem, was sie misst.")
+
+
+# --------------------------------------------------------------------
+# Und der Laeufer muss wissen, was nicht nebeneinander darf
+# --------------------------------------------------------------------
+
+def test_der_laeufer_kennt_jede_datei_mit_einer_anzeigenummer():
+    """tests/tor.py verteilt die Pruefungen auf parallele Spuren.
+
+    Zwei Sorten duerfen dabei nicht nebeneinander laufen, und eine davon
+    steht in tor.MIT_ANZEIGE: Dateien, die eine kopflose Oberflaeche
+    starten. Sie nehmen eine ANZEIGENUMMER, und die Bereiche
+    ueberlappen sich zwischen den Dateien - nachgesehen am 04.09.2026:
+
+        tests/menu/test_menu_headless.py          21-98
+        tests/src/test_sprachwechsel.py           71
+        tests/src/test_bar_headless.py           120-159
+        tests/settings/test_settings_headless.py 121-198
+        tests/src/test_vpn_schalter.py           200-219
+
+    Nacheinander stoert das nie. Nebeneinander verweigert
+    gtk4_headless.refuse_a_foreign_display() den Dienst - und das waere
+    ein Fehlschlag, den der Messstand erfunden hat.
+
+    Die Liste ist ausgeschrieben und nicht gesucht, damit sie nicht mit
+    jedem Bestand einverstanden ist. Genau deshalb braucht sie diese
+    Zusicherung: wer eine Datei hinzufuegt, die broadwayd startet, und
+    die Liste vergisst, bekommt sonst ein Flackern, das nur unter Last
+    auftritt.
+    """
+    wurzel = pathlib.Path(__file__).resolve().parent
+    sys.path.insert(0, str(wurzel))
+    try:
+        import tor
+    finally:
+        sys.path.remove(str(wurzel))
+
+    # Die drei Spuren, die eine Anzeige aufmachen. `gtk4_headless` ist
+    # der Weg dorthin, die beiden anderen sind die Namen, unter denen
+    # eine Datei die Nummer weiterreicht.
+    spuren = ("BROADWAY_DISPLAY", "gtk4_headless", "start_broadwayd")
+    gefunden = set()
+    for pfad in wurzel.rglob("test_*.py"):
+        text = pfad.read_text(encoding="utf-8", errors="replace")
+        if any(spur in text for spur in spuren):
+            gefunden.add(str(pfad.relative_to(wurzel)))
+
+    # Die Bildlaeufe haben ihre eigene Spur - sie stehen nicht in
+    # MIT_ANZEIGE und sollen es auch nicht.
+    gefunden = {name for name in gefunden if not name.startswith("render/")}
+    # Diese Datei selbst nennt die Namen nur, um sie zu pruefen.
+    gefunden.discard(str(pathlib.Path(__file__).name))
+
+    fehlend = sorted(gefunden - set(tor.MIT_ANZEIGE))
+    assert fehlend == [], (
+        f"diese Dateien starten eine kopflose Oberflaeche, stehen aber "
+        f"nicht in tor.MIT_ANZEIGE: {fehlend}. Der Laeufer wuerde sie "
+        f"parallel starten, und ihre Anzeigenummern koennen sich "
+        f"ueberlappen.")
+
+    veraltet = sorted(set(tor.MIT_ANZEIGE) - gefunden)
+    assert veraltet == [], (
+        f"diese Eintraege in tor.MIT_ANZEIGE starten keine kopflose "
+        f"Oberflaeche mehr: {veraltet}. Sie halten eine Spur auf, die "
+        f"sich verteilen koennte.")
+
+
+def test_der_laeufer_kennt_jede_datei_die_einen_compositor_startet():
+    """Die zweite Sorte, die nicht nebeneinander darf.
+
+    tests/render/ startet ein verschachteltes Hyprland, und drei Dateien
+    ausserhalb tun es auch. Sie messen Fristen - "in 3 s ist ein
+    Zeigergrund entstanden" -, und zwei Compositoren nebeneinander sind
+    genau die Last, gegen die diese Fristen nicht gebaut sind.
+
+    GEMESSEN am 04.09.2026: mit tests/lock/ in der Anzeigespur, also
+    neben der Bildspur, fiel test_a_wrong_password_leaves_the_session_
+    locked; allein ist es in 6,58 s gruen. Seither stehen sie in
+    tor.MIT_COMPOSITOR und laufen in derselben Spur wie die Bildlaeufe.
+    """
+    wurzel = pathlib.Path(__file__).resolve().parent
+    sys.path.insert(0, str(wurzel))
+    try:
+        import tor
+    finally:
+        sys.path.remove(str(wurzel))
+
+    # AM AUFRUF UND NICHT AM WORT - erst so misst diese Zusicherung
+    # etwas. Die erste Fassung suchte nach "desktop_session" im Text und
+    # fand vier Dateien, die es nur in einem KOMMENTAR nennen
+    # ("gemessen ... tests/render/desktop_session.py"), und eine, die
+    # daraus nur eine Tabelle importiert. Keine davon startet etwas.
+    #
+    # Was einen Compositor startet, tut eines von beidem: es holt sich
+    # nested_compositor, oder es ruft Session() - den Konstruktor, der
+    # in desktop_session.py das verschachtelte Hyprland hochfaehrt.
+    import re as regeln
+    gefunden = set()
+    for pfad in wurzel.rglob("test_*.py"):
+        text = pfad.read_text(encoding="utf-8", errors="replace")
+        holt = regeln.search(r"^\s*(from|import)\b.*nested_compositor",
+                             text, regeln.M)
+        ruft = ("desktop_session" in text
+                and regeln.search(r"\bSession\(", text))
+        if holt or ruft:
+            name = str(pfad.relative_to(wurzel))
+            if not name.startswith("render/"):
+                gefunden.add(name)
+    gefunden.discard(str(pathlib.Path(__file__).name))
+
+    fehlend = sorted(gefunden - set(tor.MIT_COMPOSITOR))
+    assert fehlend == [], (
+        f"diese Dateien starten einen verschachtelten Compositor, stehen "
+        f"aber nicht in tor.MIT_COMPOSITOR: {fehlend}. Der Laeufer wuerde "
+        f"sie neben der Bildspur starten, und beide messen Fristen.")
+
+    veraltet = sorted(set(tor.MIT_COMPOSITOR) - gefunden)
+    assert veraltet == [], (
+        f"diese Eintraege in tor.MIT_COMPOSITOR starten keinen Compositor "
+        f"mehr: {veraltet}. Sie halten die laengste Spur auf.")

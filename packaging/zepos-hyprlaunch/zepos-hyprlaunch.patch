@@ -144,7 +144,7 @@
 #
 diff -ruN a/CMakeLists.txt b/CMakeLists.txt
 --- a/CMakeLists.txt	2026-02-10 08:35:57.000000000 +0100
-+++ b/CMakeLists.txt	2026-09-02 11:00:45.109299859 +0200
++++ b/CMakeLists.txt	2026-09-04 20:31:34.244538812 +0200
 @@ -1,7 +1,7 @@
  cmake_minimum_required(VERSION 3.19)
  project(hyprlaunch
@@ -268,7 +268,7 @@ diff -ruN a/CMakeLists.txt b/CMakeLists.txt
  install(TARGETS hyprlaunch-ui RUNTIME DESTINATION bin)
 diff -ruN a/include/hyprlaunch/AppDiscovery.hpp b/include/hyprlaunch/AppDiscovery.hpp
 --- a/include/hyprlaunch/AppDiscovery.hpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/include/hyprlaunch/AppDiscovery.hpp	2026-08-20 22:44:14.566366859 +0200
++++ b/include/hyprlaunch/AppDiscovery.hpp	2026-09-04 20:31:34.244612454 +0200
 @@ -2,6 +2,7 @@
  
  #include "AppEntry.hpp"
@@ -399,7 +399,7 @@ diff -ruN a/include/hyprlaunch/AppDiscovery.hpp b/include/hyprlaunch/AppDiscover
      std::vector<AppEntry> m_apps;
 diff -ruN a/include/hyprlaunch/Config.hpp b/include/hyprlaunch/Config.hpp
 --- a/include/hyprlaunch/Config.hpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/include/hyprlaunch/Config.hpp	2026-08-20 22:43:40.020056370 +0200
++++ b/include/hyprlaunch/Config.hpp	2026-09-04 20:31:34.244702324 +0200
 @@ -1,25 +1,242 @@
 +// SPDX-License-Identifier: BSD-3-Clause
 +//
@@ -651,7 +651,7 @@ diff -ruN a/include/hyprlaunch/Config.hpp b/include/hyprlaunch/Config.hpp
  
 diff -ruN a/include/hyprlaunch/ConfigParser.hpp b/include/hyprlaunch/ConfigParser.hpp
 --- a/include/hyprlaunch/ConfigParser.hpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/include/hyprlaunch/ConfigParser.hpp	2026-08-20 22:30:49.711088925 +0200
++++ b/include/hyprlaunch/ConfigParser.hpp	2026-09-04 20:31:34.244745033 +0200
 @@ -1,12 +1,32 @@
 +// SPDX-License-Identifier: BSD-3-Clause
 +//
@@ -690,7 +690,7 @@ diff -ruN a/include/hyprlaunch/ConfigParser.hpp b/include/hyprlaunch/ConfigParse
  } // namespace hyprlaunch
 diff -ruN a/include/hyprlaunch/i18n.hpp b/include/hyprlaunch/i18n.hpp
 --- a/include/hyprlaunch/i18n.hpp	1970-01-01 01:00:00.000000000 +0100
-+++ b/include/hyprlaunch/i18n.hpp	1970-01-01 01:00:00.000000000 +0100
++++ b/include/hyprlaunch/i18n.hpp	2026-09-04 20:31:34.244765314 +0200
 @@ -0,0 +1,151 @@
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +//
@@ -845,7 +845,7 @@ diff -ruN a/include/hyprlaunch/i18n.hpp b/include/hyprlaunch/i18n.hpp
 +} // namespace hyprlaunch
 diff -ruN a/include/hyprlaunch/LauncherRenderer.hpp b/include/hyprlaunch/LauncherRenderer.hpp
 --- a/include/hyprlaunch/LauncherRenderer.hpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/include/hyprlaunch/LauncherRenderer.hpp	2026-08-20 22:46:54.507587086 +0200
++++ b/include/hyprlaunch/LauncherRenderer.hpp	2026-09-04 20:32:32.233837557 +0200
 @@ -5,6 +5,7 @@
  #include "AppEntry.hpp"
  #include <gtk/gtk.h>
@@ -889,7 +889,7 @@ diff -ruN a/include/hyprlaunch/LauncherRenderer.hpp b/include/hyprlaunch/Launche
      LauncherMode m_mode = LauncherMode::Apps;
      std::string m_query;
      std::vector<AppEntry> m_results;
-@@ -43,25 +56,80 @@
+@@ -43,25 +56,86 @@
      int m_selectedIndex = 0;
      std::atomic<bool> m_visible{false};
  
@@ -914,6 +914,11 @@ diff -ruN a/include/hyprlaunch/LauncherRenderer.hpp b/include/hyprlaunch/Launche
 +    //     onKeyPress() fragt ihn als ERSTES ab. Warum das noetig ist,
 +    //     steht dort.
 +    GtkWidget* m_menu = nullptr;
++    // Die Flaeche, die das Menue traegt, und der Fang darunter. Seit dem
++    // 04.09.2026 ist das Menue KEIN GtkPopover mehr - die Begruendung
++    // steht bei showMenu().
++    GtkWidget* m_overlay = nullptr;
++    GtkWidget* m_menuFang = nullptr;
 +
 +    // Der Aufbau der Oberflaeche
      void buildUI();
@@ -943,6 +948,7 @@ diff -ruN a/include/hyprlaunch/LauncherRenderer.hpp b/include/hyprlaunch/Launche
 +     * das Menue dort aufgeht, wo der Zeiger steht, und nicht in der
 +     * Mitte einer 500 Punkte breiten Zeile.
 +     */
++    void hideMenu();
 +    void showMenu(GtkWidget* anchor, double x, double y,
 +                  const std::vector<MenuEntry>& entries);
 +
@@ -977,7 +983,7 @@ diff -ruN a/include/hyprlaunch/LauncherRenderer.hpp b/include/hyprlaunch/Launche
  } // namespace hyprlaunch
 diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
 --- a/src/AppDiscovery.cpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/src/AppDiscovery.cpp	2026-09-02 11:00:25.638217500 +0200
++++ b/src/AppDiscovery.cpp	2026-09-04 20:31:34.244907440 +0200
 @@ -1,10 +1,12 @@
 -// App discovery, search, and launch logic
 -// 1:1 port of AGS ags-launcher-zofi.template
@@ -1491,7 +1497,7 @@ diff -ruN a/src/AppDiscovery.cpp b/src/AppDiscovery.cpp
  } // namespace hyprlaunch
 diff -ruN a/src/ConfigParser.cpp b/src/ConfigParser.cpp
 --- a/src/ConfigParser.cpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/src/ConfigParser.cpp	2026-08-20 22:43:47.314692126 +0200
++++ b/src/ConfigParser.cpp	2026-09-04 20:31:34.245048724 +0200
 @@ -1,27 +1,52 @@
 -// Configuration file parsing
 +// SPDX-License-Identifier: BSD-3-Clause
@@ -1643,16 +1649,13 @@ diff -ruN a/src/ConfigParser.cpp b/src/ConfigParser.cpp
 -        else if (key == "visible_items") config.visibleItems = parseInt(value);
 -        else if (key == "hotkey") config.hotkey = parseString(value);
 -    }
--
--    return config;
--}
 +        if (key == "hotkey") {
 +            config.hotkey = parseString(value);
 +            continue;
 +        }
  
--bool saveConfig(const Config& config) {
--    std::string configPath = getConfigPath();
+-    return config;
+-}
 +        // Das Verzeichnis, aus dem der Helfer-Modus seine Skripte
 +        // liest (hyprctl hyprlaunch:helpers, angeboten von der Leiste
 +        // und vom Kontrollzentrum).
@@ -1672,7 +1675,8 @@ diff -ruN a/src/ConfigParser.cpp b/src/ConfigParser.cpp
 +            continue;
 +        }
  
--    fs::create_directories(fs::path(configPath).parent_path());
+-bool saveConfig(const Config& config) {
+-    std::string configPath = getConfigPath();
 +        // Die zwei Zeichen des Rechtsklick-Menues (21.08.2026).
 +        // Config.hpp begruendet, warum sie durch diese Datei gehen und
 +        // nicht als Literale danebenstehen.
@@ -1693,7 +1697,8 @@ diff -ruN a/src/ConfigParser.cpp b/src/ConfigParser.cpp
 +            config.homeIcon = parseString(value);
 +            continue;
 +        }
-+
+ 
+-    fs::create_directories(fs::path(configPath).parent_path());
 +        // Der Pfad zu settings.py, seit dem 21.08.2026. Config.hpp
 +        // begruendet, warum er durch diese Datei geht: dieses Programm
 +        // kann nicht wissen, aus welchem Paket es stammt.
@@ -1750,7 +1755,7 @@ diff -ruN a/src/ConfigParser.cpp b/src/ConfigParser.cpp
  } // namespace hyprlaunch
 diff -ruN a/src/Globals.cpp b/src/Globals.cpp
 --- a/src/Globals.cpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/src/Globals.cpp	2026-08-20 22:30:49.711297547 +0200
++++ b/src/Globals.cpp	2026-09-04 20:31:34.245101388 +0200
 @@ -1,5 +1,5 @@
 -// Global instance management (plugin side - NO GTK!)
 -// Uses fork+exec to launch UI binary
@@ -1776,7 +1781,7 @@ diff -ruN a/src/Globals.cpp b/src/Globals.cpp
          _exit(1);
 diff -ruN a/src/IPCHandler.cpp b/src/IPCHandler.cpp
 --- a/src/IPCHandler.cpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/src/IPCHandler.cpp	2026-08-20 22:30:49.711321000 +0200
++++ b/src/IPCHandler.cpp	2026-09-04 20:31:34.245124921 +0200
 @@ -1,5 +1,5 @@
 -// IPC command handling (plugin side - NO GTK!)
 -// Forwards UI commands to hyprlaunch-ui via fork+exec
@@ -1787,7 +1792,7 @@ diff -ruN a/src/IPCHandler.cpp b/src/IPCHandler.cpp
  #include "hyprlaunch/Globals.hpp"
 diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 --- a/src/LauncherRenderer.cpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/src/LauncherRenderer.cpp	2026-09-02 11:05:48.368196833 +0200
++++ b/src/LauncherRenderer.cpp	2026-09-04 20:33:29.822434693 +0200
 @@ -1,8 +1,10 @@
 -// HyprLaunch UI - GTK4 layer-shell app launcher
 -// 1:1 port of AGS ags-launcher-zofi.template
@@ -2209,7 +2214,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
      if (m_scroll) {
          GtkAdjustment* vadj = gtk_scrolled_window_get_vadjustment(
              GTK_SCROLLED_WINDOW(m_scroll));
-@@ -243,6 +287,17 @@
+@@ -243,6 +287,14 @@
  
  void LauncherRenderer::hide() {
      if (!m_window) return;
@@ -2219,15 +2224,12 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 +    // Fenster darunter, sondern bliebe als Kasten ueber dem
 +    // Schreibtisch stehen. Und die Zeile, an der er haengt, vergeht
 +    // beim naechsten updateResults().
-+    if (m_menu) {
-+        gtk_popover_popdown(GTK_POPOVER(m_menu));
-+        m_menu = nullptr;
-+    }
++    hideMenu();
 +
      gtk_widget_set_visible(m_window, FALSE);
      m_visible = false;
  }
-@@ -264,15 +319,32 @@
+@@ -264,15 +316,32 @@
  }
  
  // ============================================================================
@@ -2263,7 +2265,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
      gtk_widget_add_css_class(searchBox, "launcher-search");
  
      GtkWidget* searchIcon = gtk_label_new(ICON_SEARCH);
-@@ -282,8 +354,10 @@
+@@ -282,8 +351,10 @@
      gtk_widget_set_hexpand(m_searchEntry, TRUE);
      gtk_widget_set_can_focus(m_searchEntry, FALSE);
      gtk_widget_add_css_class(m_searchEntry, "launcher-search-input");
@@ -2275,7 +2277,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  
      g_signal_connect(m_searchEntry, "changed",
          G_CALLBACK(+[](GtkEditable* editable, gpointer data) {
-@@ -295,19 +369,19 @@
+@@ -295,27 +366,33 @@
      gtk_box_append(GTK_BOX(searchBox), searchIcon);
      gtk_box_append(GTK_BOX(searchBox), m_searchEntry);
  
@@ -2298,7 +2300,14 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
      gtk_box_append(GTK_BOX(mainBox), searchBox);
      gtk_box_append(GTK_BOX(mainBox), m_scroll);
  
-@@ -315,7 +389,7 @@
+-    gtk_window_set_child(GTK_WINDOW(m_window), mainBox);
++    // EINE UEBERLAGERUNG UM DEN GANZEN INHALT - seit dem 04.09.2026.
++    //
++    //     Sie traegt das Rechtsklickmenue. Warum es keine eigene
++    //     Wayland-Flaeche mehr sein darf, steht bei showMenu().
++    m_overlay = gtk_overlay_new();
++    gtk_overlay_set_child(GTK_OVERLAY(m_overlay), mainBox);
++    gtk_window_set_child(GTK_WINDOW(m_window), m_overlay);
  }
  
  // ============================================================================
@@ -2307,7 +2316,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  void LauncherRenderer::onSearch(const std::string& text) {
-@@ -336,7 +410,7 @@
+@@ -336,7 +413,7 @@
  
      updateResults();
  
@@ -2316,7 +2325,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
      if (m_scroll) {
          GtkAdjustment* vadj = gtk_scrolled_window_get_vadjustment(
              GTK_SCROLLED_WINDOW(m_scroll));
-@@ -345,7 +419,7 @@
+@@ -345,7 +422,7 @@
  }
  
  // ============================================================================
@@ -2325,7 +2334,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  void LauncherRenderer::removeAllChildren(GtkWidget* box) {
-@@ -360,10 +434,25 @@
+@@ -360,10 +437,22 @@
  void LauncherRenderer::updateResults() {
      if (!m_resultsList) return;
  
@@ -2339,10 +2348,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 +    // onKeyPress() schluckt jede Taste, solange eines steht, und hide()
 +    // raeumt es weg. Die Zeilen stehen trotzdem hier, weil "heute nicht
 +    // erreichbar" bei einem Widgetbaum kein haltbarer Zustand ist.
-+    if (m_menu) {
-+        gtk_popover_popdown(GTK_POPOVER(m_menu));
-+        m_menu = nullptr;
-+    }
++    hideMenu();
 +
      removeAllChildren(m_resultsList);
      m_resultButtons.clear();
@@ -2463,7 +2469,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
          struct ClickData {
              LauncherRenderer* self;
              size_t index;
-@@ -514,13 +608,358 @@
+@@ -514,13 +608,382 @@
                  delete static_cast<ClickData*>(data);
              }, G_CONNECT_DEFAULT);
  
@@ -2699,52 +2705,11 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 +    // Steht noch eines, geht es zuerst zu. Zwei Popover mit je einem
 +    // Griff (xdg_popup.grab) sind zwei Fenster, die beide glauben, die
 +    // Eingabe zu haben.
-+    if (m_menu)
-+        gtk_popover_popdown(GTK_POPOVER(m_menu));
++    hideMenu();
 +
 +    GtkWidget* list = gtk_box_new(GTK_ORIENTATION_VERTICAL, m_config.space(2));
 +    gtk_widget_add_css_class(list, "launcher-menu");
 +
-+    GtkWidget* menu = gtk_popover_new();
-+    gtk_popover_set_has_arrow(GTK_POPOVER(menu), FALSE);
-+
-+    // DER GRIFF WAR ES NICHT - GEMESSEN AM NUTZER, 04.09.2026
-+    //
-+    //     Hier stand einen Tag lang gtk_popover_set_autohide(FALSE).
-+    //     Die Ueberlegung: der Fuss, dessen Menue geht, haelt
-+    //     Astal.Keymode.ON_DEMAND, dieser Starter
-+    //     GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE, und ein
-+    //     autohide-Popover nimmt einen xdg_popup.grab - die eine
-+    //     Stelle, an der sich die beiden unterscheiden.
-+    //
-+    //     ERGEBNIS, woertlich vom Nutzer: der Menuepunkt wirkt
-+    //     weiterhin nicht. Und er kostete etwas: "kann ich im ags
-+    //     launcher jetzt rechsklick machen aber nicht mehr mit
-+    //     linksklick auswaehlen". Ohne autohide schliesst sich das
-+    //     Menue bei einem Klick daneben nicht mehr - es blieb stehen
-+    //     und schluckte jeden weiteren Linksklick auf die Liste.
-+    //
-+    //     WAS DER FEHLVERSUCH TROTZDEM ERGEBEN HAT, und es ist der
-+    //     erste harte Befund an dieser Stelle: der Zeiger ERREICHT die
-+    //     Flaeche des Popups. Sonst haette sie nichts schlucken
-+    //     koennen. Die Frage ist also nicht mehr, ob der Klick
-+    //     ankommt, sondern warum er den KNOPF nicht erreicht.
-+    //
-+    //     Vier Vermutungen sind damit gemessen und verworfen:
-+    //     can_focus, der Tastenweg, der Tastenmodus und der Griff.
-+    //     Keine davon steht noch im Quelltext. Die naechste Runde
-+    //     misst statt zu raten - mit einem echten Zeiger ueber
-+    //     zwlr_virtual_pointer_v1 im verschachtelten Compositor.
-+    gtk_widget_add_css_class(menu, "launcher-menu-popover");
-+    gtk_popover_set_child(GTK_POPOVER(menu), list);
-+    gtk_widget_set_parent(menu, anchor);
-+
-+    // AM ZEIGER UND NICHT IN DER ZEILENMITTE. Eine Trefferzeile ist so
-+    // breit wie das Fenster; ein Menue in ihrer Mitte staende
-+    // irgendwo. GTK dreht selbst nach oben, wenn unten kein Platz ist.
-+    const GdkRectangle at{static_cast<int>(x), static_cast<int>(y), 1, 1};
-+    gtk_popover_set_pointing_to(GTK_POPOVER(menu), &at);
-+    gtk_popover_set_position(GTK_POPOVER(menu), GTK_POS_BOTTOM);
 +
 +    for (size_t i = 0; i < entries.size(); i++) {
 +        const MenuEntry& item = entries[i];
@@ -2779,12 +2744,12 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 +        // Anheften offen stehenbliebe, verlangte einen zweiten
 +        // Handgriff fuer etwas, das fertig ist. Derselbe Abschluss, den
 +        // jeder Linksklick nimmt.
-+        struct ActData { LauncherRenderer* self; GtkWidget* menu; std::function<void()> act; };
-+        auto* actData = new ActData{this, menu, item.act};
++        struct ActData { LauncherRenderer* self; std::function<void()> act; };
++        auto* actData = new ActData{this, item.act};
 +        g_signal_connect_data(line, "clicked",
 +            G_CALLBACK(+[](GtkButton*, gpointer data) {
 +                auto* ad = static_cast<ActData*>(data);
-+                gtk_popover_popdown(GTK_POPOVER(ad->menu));
++                ad->self->hideMenu();
 +                if (ad->act) ad->act();
 +                ad->self->hide();
 +            }), actData,
@@ -2795,27 +2760,92 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 +        gtk_box_append(GTK_BOX(list), line);
 +    }
 +
-+    // ABGENOMMEN IM LEERLAUF UND NICHT IM RUECKRUF
-+    //     "closed" laeuft MITTEN im Abbau des Popovers; GTK reicht
-+    //     danach noch den Tastaturfokus zurueck. Wer in diesem
-+    //     Augenblick den Widgetbaum anfasst, nimmt genau dem Widget den
-+    //     Boden weg, nach dem GTK gerade fragt. GEMESSEN im Fuss am
-+    //     20.08.2026 und dort wortgleich geloest.
-+    g_signal_connect(menu, "closed",
-+        G_CALLBACK(+[](GtkPopover* popover, gpointer data) {
-+            auto* self = static_cast<LauncherRenderer*>(data);
-+            self->m_menu = nullptr;
-+            g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
-+                +[](gpointer widget) -> gboolean {
-+                    GtkWidget* menu = static_cast<GtkWidget*>(widget);
-+                    if (gtk_widget_get_parent(menu))
-+                        gtk_widget_unparent(menu);
-+                    return G_SOURCE_REMOVE;
-+                }, popover, nullptr);
-+        }), this);
++    // ---- WOHIN ES GELEGT WIRD ----------------------------------
++    //
++    // Die Stelle ist der Klickpunkt IN der Zeile, umgerechnet auf die
++    // Ueberlagerung. Beide liegen in derselben Wayland-Flaeche, also
++    // rechnet GTK das zuverlaessig aus - genau das war beim Popover
++    // nicht so.
++    graphene_point_t punkt{static_cast<float>(x), static_cast<float>(y)};
++    graphene_point_t imFenster{0.0f, 0.0f};
++    if (!gtk_widget_compute_point(anchor, m_overlay, &punkt, &imFenster))
++        imFenster = punkt;
 +
-+    m_menu = menu;
-+    gtk_popover_popup(GTK_POPOVER(menu));
++    // Der Fang liegt UNTER dem Menue und ueber allem anderen: ein Klick
++    // daneben macht zu, statt in die Trefferliste durchzuschlagen. Das
++    // ist das, was autohide beim Popover getan hat - hier von Hand und
++    // in derselben Flaeche.
++    GtkWidget* fang = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
++    gtk_widget_set_hexpand(fang, TRUE);
++    gtk_widget_set_vexpand(fang, TRUE);
++    GtkGesture* zu = gtk_gesture_click_new();
++    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(zu), 0);   // jede Taste
++    g_signal_connect_data(zu, "pressed",
++        G_CALLBACK(+[](GtkGestureClick* geste, gint, gdouble, gdouble,
++                       gpointer data) {
++            gtk_gesture_set_state(GTK_GESTURE(geste),
++                                  GTK_EVENT_SEQUENCE_CLAIMED);
++            static_cast<LauncherRenderer*>(data)->hideMenu();
++        }), this, nullptr, G_CONNECT_DEFAULT);
++    gtk_widget_add_controller(fang, GTK_EVENT_CONTROLLER(zu));
++    gtk_overlay_add_overlay(GTK_OVERLAY(m_overlay), fang);
++    m_menuFang = fang;
++
++    // Erst messen, dann legen: ein Menue, das unten oder rechts
++    // hinausragte, waere zur Haelfte unerreichbar. GTK hat das beim
++    // Popover selbst gedreht; in einer Ueberlagerung ist es unsere
++    // Aufgabe.
++    gtk_widget_add_css_class(list, "launcher-menu-popover");
++    gtk_widget_set_halign(list, GTK_ALIGN_START);
++    gtk_widget_set_valign(list, GTK_ALIGN_START);
++    gtk_overlay_add_overlay(GTK_OVERLAY(m_overlay), list);
++
++    int mindestens = 0, breite = 0, hoehe = 0;
++    gtk_widget_measure(list, GTK_ORIENTATION_HORIZONTAL, -1,
++                       &mindestens, &breite, nullptr, nullptr);
++    gtk_widget_measure(list, GTK_ORIENTATION_VERTICAL, breite,
++                       &mindestens, &hoehe, nullptr, nullptr);
++
++    const int platzX = gtk_widget_get_width(m_overlay) - breite;
++    const int platzY = gtk_widget_get_height(m_overlay) - hoehe;
++    const int legeX = std::max(0, std::min(static_cast<int>(imFenster.x),
++                                           std::max(0, platzX)));
++    const int legeY = std::max(0, std::min(static_cast<int>(imFenster.y),
++                                           std::max(0, platzY)));
++    gtk_widget_set_margin_start(list, legeX);
++    gtk_widget_set_margin_top(list, legeY);
++
++    m_menu = list;
++}
++
++// Das Menue abnehmen - von wo auch immer.
++//
++// ABGENOMMEN IM LEERLAUF UND NICHT IM RUECKRUF
++//     Diese Funktion wird unter anderem aus dem "clicked" eines Knopfes
++//     gerufen, der IM Menue liegt. Wer in diesem Augenblick den
++//     Widgetbaum abraeumt, nimmt genau dem Widget den Boden weg, das
++//     gerade sein Signal abarbeitet. Also erst unsichtbar machen - das
++//     wirkt sofort und ist das, was der Nutzer sieht - und das
++//     Abnehmen dem naechsten Leerlauf ueberlassen. Dieselbe Loesung wie
++//     im Fuss (20.08.2026) und wie beim Popover vorher.
++void LauncherRenderer::hideMenu() {
++    for (GtkWidget** teil : {&m_menu, &m_menuFang}) {
++        GtkWidget* widget = *teil;
++        *teil = nullptr;
++        if (!widget)
++            continue;
++        gtk_widget_set_visible(widget, FALSE);
++        g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
++            +[](gpointer daten) -> gboolean {
++                GtkWidget* weg = static_cast<GtkWidget*>(daten);
++                GtkWidget* eltern = gtk_widget_get_parent(weg);
++                if (GTK_IS_OVERLAY(eltern))
++                    gtk_overlay_remove_overlay(GTK_OVERLAY(eltern), weg);
++                else if (eltern)
++                    gtk_widget_unparent(weg);
++                return G_SOURCE_REMOVE;
++            }, widget, nullptr);
++    }
 +}
 +
 +// ============================================================================
@@ -2823,7 +2853,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  void LauncherRenderer::updateSelection(int newIndex) {
-@@ -568,7 +1007,7 @@
+@@ -568,7 +1031,7 @@
  }
  
  // ============================================================================
@@ -2832,7 +2862,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  void LauncherRenderer::activateSelected() {
-@@ -593,7 +1032,7 @@
+@@ -593,7 +1056,7 @@
  }
  
  // ============================================================================
@@ -2841,7 +2871,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
  // ============================================================================
  
  gboolean LauncherRenderer::onKeyPress(GtkEventControllerKey*, guint keyval,
-@@ -601,6 +1040,38 @@
+@@ -601,6 +1064,38 @@
      auto* self = static_cast<LauncherRenderer*>(data);
      int maxIndex = static_cast<int>(self->m_resultButtons.size()) - 1;
  
@@ -2873,7 +2903,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
 +    //         antworten richtig, egal welchen Weg die Taste nimmt.
 +    if (self->m_menu) {
 +        if (keyval == GDK_KEY_Escape)
-+            gtk_popover_popdown(GTK_POPOVER(self->m_menu));
++            self->hideMenu();
 +        return TRUE;
 +    }
 +
@@ -2882,7 +2912,7 @@ diff -ruN a/src/LauncherRenderer.cpp b/src/LauncherRenderer.cpp
              self->hide();
 diff -ruN a/src/main.cpp b/src/main.cpp
 --- a/src/main.cpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/src/main.cpp	2026-09-02 11:01:04.934383731 +0200
++++ b/src/main.cpp	2026-09-04 20:31:34.245440437 +0200
 @@ -1,6 +1,7 @@
 -// HyprLaunch - Layer-shell app launcher for Hyprland
 -// Plugin entry point - LIGHTWEIGHT (no GTK, no threads)
@@ -3052,7 +3082,7 @@ diff -ruN a/src/main.cpp b/src/main.cpp
  }
 diff -ruN a/src/main_ui.cpp b/src/main_ui.cpp
 --- a/src/main_ui.cpp	2026-02-10 08:35:57.000000000 +0100
-+++ b/src/main_ui.cpp	2026-09-02 10:58:05.870626241 +0200
++++ b/src/main_ui.cpp	2026-09-04 20:31:34.245484704 +0200
 @@ -1,9 +1,12 @@
 -// HyprLaunch UI - Standalone GTK4 process (NOT inside compositor!)
 -// Runs as a normal Wayland client. Receives commands via Unix socket.

@@ -71,7 +71,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tests.adopted_plugin_source import plugin_source              # noqa: E402
 from tests.lock.nested_compositor import missing_tools             # noqa: E402
-from tests.render.desktop_session import Session                   # noqa: E402
+from tests.render.desktop_session import (                         # noqa: E402
+    Session, zeiger_fehlt)
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -768,3 +769,386 @@ def test_das_menue_ist_heute_nur_mit_dem_zeiger_zu_bedienen(lauf):
     assert lauf["nach_der_taste"] == lauf["vor_der_taste"], (
         "die Tastatur erreicht das Menue jetzt doch - dann ist der "
         "zweite Weg da, und dieser Text ist zu erneuern")
+
+
+# ---------------------------------------------------------------------
+# DERSELBE STARTER, ABER MIT EINEM ECHTEN ZEIGER
+# ---------------------------------------------------------------------
+#
+# WARUM ES DIESEN ZWEITEN LAUF GIBT
+#     Der Lauf darueber loest den Menuepunkt mit `g_signal_emit_by_name
+#     (knopf, "clicked")` aus. Das misst den RUECKRUF und nicht den WEG
+#     dorthin - und genau der Weg ist die offene Frage:
+#
+#         "wnen ich rechtklick auf ein hyprlaunch item mache und zur
+#          dock oder home hinzufuegen klappt nicht"
+#
+#     Vier Vermutungen dazu sind gemessen und verworfen worden -
+#     can_focus, der Tastenweg, der Tastenmodus, der Griff -, und die
+#     vierte hat dem Nutzer den Linksklick gekostet, bevor sie widerlegt
+#     war. Der Grund fuer das Raten war immer, dass kein Lauf einen
+#     echten Klick schicken konnte.
+#
+#     Seit dem 04.09.2026 kann er es: zwlr_virtual_pointer_v1, gebaut
+#     aus tests/render/zeiger_client.c gegen die Protokollbeschreibung
+#     aus dem Hyprland-Quellbaum. Die Ereignisse gehen durch den
+#     Compositor, durch seine Flaechenzuordnung und durch GTKs
+#     Zeigerverwaltung - also durch alles, woran es haengen kann.
+#
+# WAS DIESER LAUF BEANTWORTET, SCHRITT FUER SCHRITT
+#     Jede Zusicherung unten ist eine eigene Station. Faellt eine, ist
+#     der Ort des Fehlers damit benannt, statt "es geht nicht":
+#
+#         der Rechtsklick oeffnet das Menue  -> der Zeiger erreicht die
+#                                               Zeile
+#         das Menue nennt seine Lage         -> die Flaeche des Popups
+#                                               ist auffindbar
+#         der Linksklick schreibt            -> der Klick erreicht den
+#                                               KNOPF
+
+
+def _kasten(antwort: str) -> tuple[int, int, int, int]:
+    """"... teile=kasten:44,14+136x27 ..." -> (44, 14, 136, 27).
+
+    Der Kasten ist die Lage des Widgets IN seinem Popover - die Haelfte
+    der Rechnung, die GTK zuverlaessig beantwortet.
+    """
+    marke = "kasten:"
+    assert marke in antwort, f"kein Kasten in {antwort!r}"
+    stueck = antwort[antwort.index(marke) + len(marke):].split(" ", 1)[0]
+    ecke, masse = stueck.split("+")
+    x, y = (int(teil) for teil in ecke.split(","))
+    breite, hoehe = (int(teil) for teil in masse.split("x"))
+    return x, y, breite, hoehe
+
+
+def _lage(antwort: str) -> tuple[int, int]:
+    """"lage:123,456 teile=..." -> (123, 456).
+
+    Alles hinter dem ersten Leerzeichen sind die Summanden, aus denen
+    die Zahl entstanden ist - sie stehen fuer die Fehlersuche dabei und
+    gehen hier nicht ein.
+    """
+    assert antwort.startswith("lage:"), f"keine Lage: {antwort!r}"
+    kopf = antwort[len("lage:"):].split(" ", 1)[0]
+    x, y = kopf.split(",")
+    return int(x), int(y)
+
+
+@pytest.fixture(scope="module")
+def zeigerlauf(tmp_path_factory) -> dict:
+    """Rechtsklick und Auswahl mit einem echten Zeiger."""
+    fehlt = missing_tools("Hyprland", "hyprctl", "grim", "swaybg")
+    if fehlt:
+        pytest.skip(f"fuer diesen Lauf fehlt: {', '.join(fehlt)}")
+    if not (shutil.which("g++") or shutil.which("c++")):
+        pytest.skip("kein C++-Uebersetzer - das Menue-Kind ist nicht baubar")
+    mangel = zeiger_fehlt()
+    if mangel:
+        pytest.skip("fuer den echten Zeiger fehlt: " + ", ".join(mangel))
+
+    quelle = plugin_source("hyprlaunch")
+    bau = tmp_path_factory.mktemp("launcher-zeiger-bau")
+    bilder = tmp_path_factory.mktemp("launcher-zeiger-bild")
+    kind_bin = bau / "launcher_menue_child"
+    _uebersetze(quelle, kind_bin)
+
+    with Session(BREITE, HOEHE) as sitzung:
+        heim = sitzung.home
+        _erzeuge(heim / ".config" / "hyprlaunch", FAKTOR)
+        sitzung.hyprctl("keyword", "cursor:invisible", "true")
+        sitzung.wallpaper()
+        # Denselben Schirm aktiv machen wie oben, aus demselben Grund:
+        # der Starter baut GENAU EINE Flaeche und ruft kein
+        # gtk_layer_set_monitor().
+        sitzung.hyprctl("dispatch", "focusmonitor", sitzung.output)
+        time.sleep(1.5)
+
+        umgebung = sitzung.environment()
+        kindlog = bau / "kind.log"
+        prozess = subprocess.Popen(
+            [str(kind_bin)], env=umgebung, stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=open(kindlog, "wb"),
+            text=True, bufsize=1)
+        sitzung.children.append(prozess)
+        start = prozess.stdout.readline().strip()
+        kind = Kind(prozess)
+
+        flaechen = _warte_auf_flaeche(sitzung, "hyprlaunch",
+                                      protokoll=kindlog)
+        time.sleep(RUHE)
+        bereit = kind.frage("bereit", timeout=40.0)
+        fx, fy, _fb, _fh = flaechen["hyprlaunch"]
+
+        # ---- die Zeile finden und WIRKLICH rechtsklicken ------------
+        wo_zeile = kind.frage("wo:zeile")
+        zeile_bild = None
+        gemalt = None
+        menue_nach_rechtsklick = "<nicht versucht>"
+        wo_punkt = "<nicht versucht>"
+        vor_der_wahl = nach_der_wahl = ""
+        menue_nach_klick = "<nicht versucht>"
+        geklickt_auf = None
+        punkt_auf = None
+
+        datei = heim / ".config" / "zepos" / "user-settings.json"
+
+        from tests.render import measure
+
+        if wo_zeile.startswith("lage:"):
+            zx, zy = _lage(wo_zeile)
+            geklickt_auf = (fx + zx, fy + zy)
+
+            # DER ZEIGER STEHT SCHON AUF DER ZEILE, BEVOR DAS ERSTE BILD
+            # ENTSTEHT - und das ist gemessen.
+            #
+            #     Ohne diese Zeile lag der Zeiger beim ersten Bild
+            #     woanders und beim zweiten auf der Zeile. Die Zeile
+            #     hebt sich unter dem Zeiger hervor, also stand ihre
+            #     HERVORHEBUNG im Unterschied - 799 Punkte breit. Der
+            #     Kasten, der das Menue umschliessen sollte, war damit
+            #     807x285 statt 200x148, und die daraus errechnete
+            #     Klickstelle lag irgendwo.
+            #
+            #     Steht der Zeiger in BEIDEN Bildern dort, hebt sich die
+            #     Hervorhebung weg und uebrig bleibt das Menue.
+            sitzung.zeige_auf(*geklickt_auf, beruhigung=0.8)
+            ohne_menue = sitzung.shoot(bilder / "0-ohne-menue.png")
+            sitzung.klick(*geklickt_auf, taste="rechts", beruhigung=1.5)
+            menue_nach_rechtsklick = kind.frage("menue")
+            zeile_bild = sitzung.shoot(bilder / "1-nach-rechtsklick.png")
+
+            # WO DAS MENUE WIRKLICH LIEGT - am Bild und nicht an GTKs
+            # Koordinaten. Zwei unabhaengige Wege zur selben Zahl: wenn
+            # sie auseinandergehen, ist die Rechnung falsch und nicht
+            # der Klick.
+            gemalt = measure.changed_bounds(
+                measure.read_png(ohne_menue), measure.read_png(zeile_bild),
+                (0, 0, BREITE, HOEHE))
+
+            # ---- den Punkt finden und WIRKLICH anklicken ------------
+            wo_punkt = kind.frage("wo:Add to dock")
+            if wo_punkt.startswith("lage:") and gemalt:
+                # DIE STELLE KOMMT AUS DEM BILD UND AUS GTK, JE ZUR
+                # HAELFTE - und das ist gemessen, nicht bequem.
+                #
+                #     WO das Popup liegt, sagt das Bild: der Kasten, der
+                #     sich zwischen "ohne Menue" und "mit Menue"
+                #     veraendert hat.
+                #
+                #     WO der Punkt IM Popup liegt, sagt GTK:
+                #     gtk_widget_compute_bounds() gegen das Popover.
+                #
+                #     WARUM NICHT BEIDES VON GTK: gdk_popup_get_position
+                #     stimmt nicht mit dem Bild ueberein. GEMESSEN am
+                #     04.09.2026:
+                #
+                #         GTK sagt      popup:614,122
+                #         bemalt ist    308,60
+                #
+                #     Genau das Doppelte, in beiden Richtungen. Fuer die
+                #     ZEILE stimmte GTKs Rechnung dagegen auf den
+                #     Bildpunkt (kasten 8,77+799x63 -> geklickt auf 407,
+                #     und das Menue ging auf). Der Faktor steckt also
+                #     nicht in den Widgetkoordinaten, sondern in dem,
+                #     was GDK ueber die LAGE der Popup-Flaeche glaubt.
+                #
+                #     Das ist ein Befund und kein Nebenbei: wenn GDK die
+                #     Flaeche woanders vermutet als der Compositor sie
+                #     hingelegt hat, ist das ein Kandidat fuer die
+                #     Ursache des gemeldeten Fehlers.
+                # SEIT DEM UMBAU LIEGT DAS MENUE IM FENSTER, also gibt
+                # `wo:` schon Fensterkoordinaten - dieselben, in denen
+                # auch die ZEILE gemessen wird, und die haben von Anfang
+                # an gestimmt. Dazu kommt nur noch die Ecke der Flaeche.
+                #
+                #     Vorher war das Menue ein eigener xdg_popup, und
+                #     GTKs Lage dafuer war doppelt so gross wie die
+                #     bemalte (614,122 gegen 308,60). Deshalb stand hier
+                #     eine Rechnung ueber den gemalten Kasten. Sie ist
+                #     jetzt falsch herum: sie zaehlte die Ecke zweimal.
+                # DIE STELLE KOMMT AUS DEM BILD - und das ist eine
+                # Feststellung, keine Bequemlichkeit.
+                #
+                #     GTKs compute_bounds() und das gemalte Bild sagen
+                #     Verschiedenes: GEMESSEN am 04.09.2026 nach dem
+                #     Umbau meldet GTK den Punkt bei 669..805 in
+                #     Fensterkoordinaten, gemalt wird das ganze Menue
+                #     aber bei 327..508. Ein Blick auf den Abzug zeigt
+                #     das Menue dort, wo das BILD es sagt.
+                #
+                #     Fuer die ZEILE stimmt GTKs Rechnung dagegen (ein
+                #     Klick auf 407 oeffnet das Menue). Der Widerspruch
+                #     betrifft also nur die Ueberlagerung, und er ist
+                #     der naechste Faden - hier wird erst einmal das
+                #     gemessen, was der Nutzer sieht.
+                #
+                # Das Menue hat zwei Punkte; der obere ist "Add to
+                # dock".
+                gx, gy, gb, gh = gemalt
+                punkt_auf = (gx + gb // 2, gy + gh // 4)
+                vor_der_wahl = (datei.read_text(encoding="utf-8")
+                                if datei.exists() else "")
+                sitzung.klick(*punkt_auf, taste="links", beruhigung=2.5)
+                nach_der_wahl = (datei.read_text(encoding="utf-8")
+                                 if datei.exists() else "")
+                # WAS AUS DEM MENUE GEWORDEN IST, und das ist die
+                # naechste Frage nach einem Klick, der nichts schreibt:
+                #
+                #   ZU    der Klick ist beim Popup angekommen, aber
+                #         nicht auf dem Knopf - autohide macht bei einem
+                #         Klick DANEBEN zu.
+                #   OFFEN der Klick hat das Popup gar nicht erreicht.
+                #
+                # Zwei verschiedene Fehler mit demselben Anblick.
+                menue_nach_klick = kind.frage("menue")
+
+        nach_bild = sitzung.shoot(bilder / "2-nach-der-wahl.png")
+        # Die Bilder aufheben, solange an dieser Stelle gesucht wird.
+        schau = Path("/tmp/claude-1000/-home-lmarzoll--config-iconmanager"
+                     "/266580fc-2b16-4932-92a1-29f52b0b0e18/scratchpad/schau")
+        schau.mkdir(parents=True, exist_ok=True)
+        for bild in sorted(bilder.glob("*.png")):
+            (schau / bild.name).write_bytes(bild.read_bytes())
+        kind.frage("ende")
+        protokoll = kindlog.read_text(encoding="utf-8", errors="replace")
+
+    return {
+        "start": start, "bereit": bereit,
+        "flaeche": (fx, fy),
+        "wo_zeile": wo_zeile, "geklickt_auf": geklickt_auf,
+        "menue_nach_rechtsklick": menue_nach_rechtsklick,
+        "wo_punkt": wo_punkt, "punkt_auf": punkt_auf,
+        "vor_der_wahl": vor_der_wahl, "nach_der_wahl": nach_der_wahl,
+        "menue_nach_klick": menue_nach_klick,
+        "gemalt": gemalt,
+        "bilder": {"zeile": zeile_bild, "nach": nach_bild},
+        "protokoll": protokoll,
+    }
+
+
+def test_der_starter_nennt_die_lage_seiner_ersten_zeile(zeigerlauf):
+    """Die Grundlage. Ohne eine Lage gibt es keinen Ort zum Klicken, und
+    jede Zusicherung darunter waere eine Aussage ueber nichts."""
+    assert zeigerlauf["wo_zeile"].startswith("lage:"), (
+        f"das Kind nennt die Lage der ersten Zeile nicht: "
+        f"{zeigerlauf['wo_zeile']!r}\n{zeigerlauf['protokoll'][-2000:]}")
+
+
+def test_ein_echter_rechtsklick_oeffnet_das_menue(zeigerlauf):
+    """STATION 1: erreicht der Zeiger die Zeile?
+
+    Bis zum 04.09.2026 wurde diese Geste synthetisch ausgeloest
+    (`g_signal_emit_by_name(gesture, "pressed", ...)`). Hier geht ein
+    echtes Tastenereignis durch den Compositor.
+    """
+    assert zeigerlauf["menue_nach_rechtsklick"].startswith("offen:"), (
+        f"nach einem echten Rechtsklick auf {zeigerlauf['geklickt_auf']} "
+        f"ist kein Menue offen: {zeigerlauf['menue_nach_rechtsklick']!r}\n"
+        f"{zeigerlauf['protokoll'][-2000:]}")
+
+
+def test_das_menue_nennt_die_lage_seines_punktes(zeigerlauf):
+    """STATION 2: ist die Flaeche des Popups auffindbar?
+
+    Ein Popover ist ein eigener xdg_popup. Seine Punkte liegen NICHT im
+    Koordinatensystem des Starters - erst gdk_popup_get_position_x/y()
+    und gtk_native_get_surface_transform() setzen beides zusammen.
+    """
+    assert zeigerlauf["wo_punkt"].startswith("lage:"), (
+        f"das Kind nennt die Lage von 'Add to dock' nicht: "
+        f"{zeigerlauf['wo_punkt']!r}\n{zeigerlauf['protokoll'][-2000:]}")
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "DER GEMELDETE FEHLER, nachgestellt am 04.09.2026. Ein echter "
+    "Linksklick landet SICHTBAR auf dem Menuepunkt (bemalt 1168..1368 x "
+    "500..648, geklickt 1280,527), das Menue geht zu, und geschrieben "
+    "wird nichts. Ein autohide-Popover schliesst nur bei einem Klick, "
+    "den GTK fuer AUSSERHALB haelt - GTK verortet die Flaeche also "
+    "woanders, als der Compositor sie hingelegt hat. Dazu passt, dass "
+    "gdk_popup_get_position das Doppelte der bemalten Lage meldet "
+    "(614,122 gegen 308,60), waehrend dieselbe Rechnung fuer die ZEILE "
+    "auf den Bildpunkt stimmt. strict=True: wird das Menue eine Flaeche "
+    "IM Starterfenster statt eines xdg_popup, faellt diese Markierung "
+    "auf und muss weg."))
+def test_ein_echter_linksklick_auf_den_punkt_schreibt_wirklich(zeigerlauf):
+    """STATION 3, UND DAS IST DIE FRAGE DES NUTZERS.
+
+    "wnen ich rechtklick auf ein hyprlaunch item mache und zur dock oder
+    home hinzufuegen klappt nicht" - und auf die Nachfrage, ob der Punkt
+    nach 0.1.18 wirke: "Nein, immer noch nichts".
+
+    Faellt diese Zusicherung, dann ist der Fehler zum ersten Mal an
+    einem Messstand nachgestellt: der Klick erreicht den Knopf nicht.
+    Haelt sie, dann liegt es nicht am Zeigerweg, und die Suche geht
+    woanders weiter - bei der Umgebung des Starters oder dem, was
+    settings.py bei ihm vorfindet.
+    """
+    assert zeigerlauf["punkt_auf"], (
+        "es wurde gar nicht geklickt - siehe die Stationen darueber")
+    assert "dock_pins" in zeigerlauf["nach_der_wahl"], (
+        f"nach einem echten Linksklick auf {zeigerlauf['punkt_auf']} steht "
+        f"keine Anheftung in der Datei.\n"
+        f"vorher: {zeigerlauf['vor_der_wahl'][:300]!r}\n"
+        f"nachher: {zeigerlauf['nach_der_wahl'][:300]!r}\n"
+        f"{zeigerlauf['protokoll'][-2000:]}")
+
+
+def test_was_aus_dem_menue_nach_dem_klick_wurde(zeigerlauf):
+    """Kein Urteil, sondern ein BEFUND - und er trennt zwei Fehler.
+
+    Ein Klick, der nichts schreibt, kann zweierlei heissen:
+
+        das Menue ist ZU     der Klick ist beim Popup angekommen, aber
+                             nicht auf dem Knopf. Dann stimmt die Lage
+                             nicht, die das Kind nennt.
+        das Menue ist OFFEN  der Klick hat das Popup gar nicht erreicht.
+                             Dann ist es der Weg dorthin.
+
+    Diese Zusicherung haelt fest, was gemessen wurde, damit der Befund
+    im Protokoll steht und nicht in einer Erinnerung. Sie faellt nur,
+    wenn gar nicht geklickt wurde.
+    """
+    assert zeigerlauf["punkt_auf"], (
+        "es wurde gar nicht geklickt - siehe die Stationen darueber")
+    print(f"\nMenue nach dem echten Linksklick auf "
+          f"{zeigerlauf['punkt_auf']}: {zeigerlauf['menue_nach_klick']!r}")
+    fx, fy = zeigerlauf["flaeche"]
+    print(f"\nLage der Zeile: {zeigerlauf['wo_zeile']}, "
+          f"Lage des Punktes: {zeigerlauf['wo_punkt']}, "
+          f"Flaeche des Starters bei {zeigerlauf['flaeche']}")
+    gemalt = zeigerlauf["gemalt"]
+    if gemalt:
+        gx, gy, gb, gh = gemalt
+        print(f"Das Menue bemalt auf dem Schirm: x={gx}..{gx + gb} "
+              f"y={gy}..{gy + gh}  (also in der Flaeche des Starters: "
+              f"x={gx - fx}..{gx + gb - fx} y={gy - fy}..{gy + gh - fy})")
+        print(f"Geklickt wurde auf {zeigerlauf['punkt_auf']} - das ist "
+              f"{'INNERHALB' if gx <= zeigerlauf['punkt_auf'][0] <= gx + gb and gy <= zeigerlauf['punkt_auf'][1] <= gy + gh else 'AUSSERHALB'} "
+              f"des bemalten Rechtecks.")
+
+
+def test_was_das_kind_ueber_die_schirme_meldet(zeigerlauf):
+    """Ein Befund aus dem Protokoll, kein Urteil.
+
+    GEMESSEN am 04.09.2026 im Protokoll des Starters:
+
+        Gdk-CRITICAL **: gdk_monitor_set_scale: assertion 'scale > 0.'
+        failed
+
+    GDK bekommt fuer einen Schirm den Massstab 0. Das ist ein Kandidat
+    fuer die Ursache des gemeldeten Fehlers: mit einem kaputten Massstab
+    rechnet GDK die Lage einer Popup-Flaeche falsch - und moeglicherweise
+    auch die Umrechnung eingehender Zeigerkoordinaten.
+
+    Diese Zusicherung faellt nicht daran; sie schreibt es auf, damit es
+    im Protokoll steht.
+    """
+    zeilen = [z for z in zeigerlauf["protokoll"].splitlines()
+              if "CRITICAL" in z or "WARNING" in z or "scale" in z.lower()]
+    print("\nWas das Kind gemeldet hat:")
+    for zeile in dict.fromkeys(zeilen):
+        print("   ", zeile.strip()[:160])
+    if not zeilen:
+        print("    (nichts)")

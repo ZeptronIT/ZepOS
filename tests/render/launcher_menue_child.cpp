@@ -236,6 +236,128 @@ void handle(const std::string& command) {
         return;
     }
 
+    // WO ETWAS WIRKLICH LIEGT - seit dem 04.09.2026.
+    //
+    //     Bis hierher konnte dieser Messstand einen Rueckruf ausloesen,
+    //     aber nie einen ZEIGER schicken. Vier Vermutungen sind daran
+    //     verworfen worden, eine davon erst, nachdem sie beim Nutzer
+    //     den Linksklick gekostet hatte. Mit zeiger_client.c gibt es
+    //     jetzt einen echten Zeiger - er braucht nur Bildpunkte.
+    //
+    //     DREI SUMMANDEN, UND DER MITTLERE IST DER GANZE WITZ
+    //
+    //         Punkt im Popover      gtk_widget_compute_bounds() gegen
+    //                               das Popover selbst
+    //         + Versatz der Flaeche gtk_native_get_surface_transform():
+    //                               GTKs Widgetkoordinaten fangen nicht
+    //                               am Rand der Wayland-Flaeche an,
+    //                               sondern hinter ihrem Schatten
+    //         + Lage des Popups     gdk_popup_get_position_x/y() - wo
+    //                               die EIGENE Flaeche des Menues
+    //                               relativ zur Flaeche des Starters
+    //                               liegt
+    //
+    //     Ein Popover ist eine eigene Wayland-Flaeche (xdg_popup). Wer
+    //     seine Punkte im Koordinatensystem des Fensters sucht, findet
+    //     sie nicht - genau daran ist die Frage "erreicht der Klick den
+    //     Knopf" bisher gescheitert.
+    //
+    //     Herauskommt die Lage in der Flaeche des STARTERS. Wo die auf
+    //     dem Schirm liegt, weiss `hyprctl layers`, und das weiss der
+    //     Test.
+    if (command.rfind("wo:", 0) == 0) {
+        const std::string gesucht = command.substr(3);
+
+        GtkWidget* ziel = nullptr;
+        GtkWidget* bezug = nullptr;
+        if (gesucht == "zeile") {
+            GtkWidget* window = launcherWindow();
+            if (!window) {
+                answer("kein-fenster");
+                return;
+            }
+            const auto rows = widgetsWithClass(window, "launcher-item");
+            if (rows.empty()) {
+                answer("keine-zeile");
+                return;
+            }
+            ziel = rows.front();
+            bezug = window;
+        } else {
+            GtkWidget* menu = openMenu();
+            if (!menu) {
+                answer("kein-menue");
+                return;
+            }
+            for (GtkWidget* label :
+                 widgetsWithClass(menu, "launcher-menu-label")) {
+                if (!GTK_IS_LABEL(label)) continue;
+                const char* text = gtk_label_get_text(GTK_LABEL(label));
+                if (!text || gesucht != std::string(text)) continue;
+                ziel = label;
+                break;
+            }
+            if (!ziel) {
+                answer("nicht-gefunden:" + gesucht);
+                return;
+            }
+            // GEGEN DAS FENSTER UND NICHT GEGEN DAS MENUE - seit dem
+            // Umbau am 04.09.2026.
+            //
+            //     Solange das Menue ein eigener xdg_popup war, musste
+            //     hier gegen das Popover gerechnet und die Lage der
+            //     Flaeche dazugezaehlt werden - und genau diese Lage
+            //     meldete GDK falsch (614,122 statt 308,60).
+            //
+            //     Jetzt liegt das Menue IN derselben Flaeche wie die
+            //     Trefferliste. Damit rechnet GTK denselben Weg wie fuer
+            //     die ZEILE, und der hat von Anfang an gestimmt.
+            bezug = launcherWindow();
+            if (!bezug) {
+                answer("kein-fenster");
+                return;
+            }
+        }
+
+        graphene_rect_t kasten;
+        if (!gtk_widget_compute_bounds(ziel, bezug, &kasten)) {
+            answer("keine-lage");
+            return;
+        }
+
+        double x = kasten.origin.x + kasten.size.width / 2.0;
+        double y = kasten.origin.y + kasten.size.height / 2.0;
+
+        double v_x = 0, v_y = 0;
+        int p_x = 0, p_y = 0;
+        GtkNative* flaeche = gtk_widget_get_native(bezug);
+        if (flaeche) {
+            gtk_native_get_surface_transform(flaeche, &v_x, &v_y);
+            x += v_x;
+            y += v_y;
+
+            GdkSurface* oberflaeche = gtk_native_get_surface(flaeche);
+            if (oberflaeche && GDK_IS_POPUP(oberflaeche)) {
+                p_x = gdk_popup_get_position_x(GDK_POPUP(oberflaeche));
+                p_y = gdk_popup_get_position_y(GDK_POPUP(oberflaeche));
+                x += p_x;
+                y += p_y;
+            }
+        }
+
+        answer("lage:" + std::to_string(static_cast<int>(x)) + ","
+               + std::to_string(static_cast<int>(y))
+               + " teile=kasten:" + std::to_string((int)kasten.origin.x)
+               + "," + std::to_string((int)kasten.origin.y)
+               + "+" + std::to_string((int)kasten.size.width)
+               + "x" + std::to_string((int)kasten.size.height)
+               + " versatz:" + std::to_string((int)v_x)
+               + "," + std::to_string((int)v_y)
+               + " popup:" + std::to_string(p_x)
+               + "," + std::to_string(p_y));
+        return;
+    }
+
     if (command == "ende") {
         answer("tschuess");
         if (g_loop) g_main_loop_quit(g_loop);
