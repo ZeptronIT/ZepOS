@@ -171,7 +171,12 @@ def _lauf(bau: Path) -> dict:
         # cursorpos`). Begruendet in desktop_session.move_cursor().
         sitzung.move_cursor(BREITE // 2, HOEHE // 2)
         sitzung.shell(bau / "zepos-shell.js", bau)
-        time.sleep(SETTLE)
+        # AUF DIE RUHE UND NICHT AUF DIE UHR - seit dem 04.09.2026.
+        # Hier stand ein fester Schlaf. Warum "die Flaeche ist da"
+        # dafuer nicht reicht - und mit welchen Zahlen das gemessen
+        # ist - steht bei Session.warte_auf_ruhe().
+        sitzung.warte_auf_ruhe("zepos-bar", "zepos-dock",
+                               frist=40.0)
 
         # AUFWAERMEN: der allererste `ags request` einer Sitzung laesst
         # die Flaeche in einem Teil der Laeufe nicht erscheinen - siehe

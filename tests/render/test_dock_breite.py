@@ -114,30 +114,69 @@ def breite(tmp_path_factory) -> dict:
         workspaces_file(bau, sitzung.output)
         sitzung.hyprctl("keyword", "cursor:invisible", "true")
         sitzung.wallpaper()
-        time.sleep(1.5)
         sitzung.shell(schale, bau)
-        time.sleep(SETTLE)
+        # AUF DIE RUHE UND NICHT AUF DIE UHR - seit dem 04.09.2026.
+        # "Die Flaeche ist da" reicht nicht: gemessen stand der Fuss
+        # dann auf (860, 880, 200, 200) statt auf (784, 996, 353, 60).
+        # Die Begruendung steht bei Session.warte_auf_ruhe().
+        sitzung.warte_auf_ruhe("zepos-dock", "zepos-bar", frist=40.0)
 
         leer = _stand(sitzung)
         assert leer[0] is not None, (
             "der Fuss liegt gar nicht auf dem Schirm:\n"
             + sitzung.read_shell_log())
 
-        sitzung.spawn([TERMINAL])
-        time.sleep(RUHE)
-        eins = _stand(sitzung)
+        # AUF DIE AENDERUNG UND NICHT AUF DIE UHR - seit dem
+        # 04.09.2026. Gewartet wird genau auf das, was diese Datei misst:
+        # dass der Fuss auf ein Fenster reagiert. WAS er dann anzeigt,
+        # sagen die Zusicherungen unten - der Wartevorgang nimmt ihnen
+        # nichts ab.
+        # ANDERS ALS VORHER *UND* ZUR RUHE GEKOMMEN.
+        #
+        #     Der erste Versuch wartete nur auf "anders als vorher" und
+        #     war GEMESSEN falsch: der Fuss geht ueber ZWISCHENSTUFEN -
+        #     das Fenster ist da, die Breite noch nicht nachgezogen.
+        #     Wer die erste Abweichung nimmt, misst die Zwischenstufe,
+        #     und der naechste Schritt vergleicht dann gegen einen Stand,
+        #     den es nie gab. Der Lauf endete mit "der Fuss hat das
+        #     geschlossene Fenster bemerkt (zuletzt: None)".
+        #
+        #     Zwei gleiche Messungen hintereinander heissen: er ist
+        #     fertig. Das ist dieselbe Aussage, die die sechs Sekunden
+        #     behaupten wollten - nur gepruft statt geschaetzt.
+        def ruhig_und_anders(vorher):
+            zuletzt = {"stand": None}
+
+            def pruefe():
+                jetzt = _stand(sitzung)
+                vorher_gesehen = zuletzt["stand"]
+                zuletzt["stand"] = jetzt
+                if jetzt == vorher:
+                    return None
+                return jetzt if jetzt == vorher_gesehen else None
+
+            return pruefe
+
+        def anders_als(vorher):
+            return ruhig_und_anders(vorher)
 
         sitzung.spawn([TERMINAL])
-        time.sleep(RUHE)
-        zwei = _stand(sitzung)
+        eins = sitzung.warte_bis(anders_als(leer), frist=25.0,
+                                 was="der Fuss hat das erste Fenster bemerkt")
+
+        sitzung.spawn([TERMINAL])
+        zwei = sitzung.warte_bis(anders_als(eins), frist=25.0,
+                                 was="der Fuss hat das zweite Fenster bemerkt")
 
         _schliesse(sitzung, TERMINAL)
-        time.sleep(RUHE)
-        wieder_eins = _stand(sitzung)
+        wieder_eins = sitzung.warte_bis(
+            anders_als(zwei), frist=25.0,
+            was="der Fuss hat das geschlossene Fenster bemerkt")
 
         _schliesse(sitzung, TERMINAL)
-        time.sleep(RUHE)
-        wieder_leer = _stand(sitzung)
+        wieder_leer = sitzung.warte_bis(
+            anders_als(wieder_eins), frist=25.0,
+            was="der Fuss ist wieder leer")
 
         protokoll = sitzung.read_shell_log()
 

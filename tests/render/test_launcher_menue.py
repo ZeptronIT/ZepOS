@@ -922,9 +922,27 @@ def zeigerlauf(tmp_path_factory) -> dict:
             # Koordinaten. Zwei unabhaengige Wege zur selben Zahl: wenn
             # sie auseinandergehen, ist die Rechnung falsch und nicht
             # der Klick.
-            gemalt = measure.changed_bounds(
-                measure.read_png(ohne_menue), measure.read_png(zeile_bild),
-                (0, 0, BREITE, HOEHE))
+            #
+            # UND ERST, WENN ES STILLSTEHT. GEMESSEN am 04.09.2026:
+            # derselbe Lauf war dreimal allein rot und einmal unter Last
+            # (drei Bildspuren nebeneinander) GRUEN. Der Unterschied war
+            # die verstrichene Zeit - das Menue ist beim Klick also noch
+            # nicht fertig gelegt. Zwei gleiche Kaesten hintereinander
+            # heissen: jetzt ist es.
+            ohne_bild = measure.read_png(ohne_menue)
+
+            def kasten_steht(_stand={"letzter": None}):
+                abzug = sitzung.shoot(bilder / "1-nach-rechtsklick.png")
+                jetzt = measure.changed_bounds(
+                    ohne_bild, measure.read_png(abzug), (0, 0, BREITE, HOEHE))
+                letzter = _stand["letzter"]
+                _stand["letzter"] = jetzt
+                return jetzt if jetzt and jetzt == letzter else None
+
+            gemalt = sitzung.warte_bis(
+                kasten_steht, frist=20.0, takt=0.3,
+                was="das Menue steht still")
+            zeile_bild = bilder / "1-nach-rechtsklick.png"
 
             # ---- den Punkt finden und WIRKLICH anklicken ------------
             wo_punkt = kind.frage("wo:Add to dock")
@@ -1071,7 +1089,11 @@ def test_das_menue_nennt_die_lage_seines_punktes(zeigerlauf):
     "(614,122 gegen 308,60), waehrend dieselbe Rechnung fuer die ZEILE "
     "auf den Bildpunkt stimmt. strict=True: wird das Menue eine Flaeche "
     "IM Starterfenster statt eines xdg_popup, faellt diese Markierung "
-    "auf und muss weg."))
+    "auf und muss weg. EINMAL IST GENAU DAS PASSIERT: am 04.09.2026 in "
+    "einem Lauf mit drei Bildspuren nebeneinander (XPASS), waehrend "
+    "derselbe Test allein dreimal hintereinander rot war - auch mit "
+    "einer Wartung, bis das gemalte Menue stillsteht. Der Einzelbefund "
+    "steht hier, weil er echt ist; gedeutet ist er nicht."))
 def test_ein_echter_linksklick_auf_den_punkt_schreibt_wirklich(zeigerlauf):
     """STATION 3, UND DAS IST DIE FRAGE DES NUTZERS.
 

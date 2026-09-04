@@ -246,7 +246,12 @@ def starter(tmp_path_factory) -> dict:
 
         # -- Die Oberflaeche -------------------------------------------
         sitzung.shell(schale, bau)
-        time.sleep(SETTLE)
+        # AUF DIE RUHE UND NICHT AUF DIE UHR - seit dem 04.09.2026.
+        # Hier stand ein fester Schlaf. Warum "die Flaeche ist da"
+        # dafuer nicht reicht - und mit welchen Zahlen das gemessen
+        # ist - steht bei Session.warte_auf_ruhe().
+        sitzung.warte_auf_ruhe("zepos-bar", "zepos-dock",
+                               frist=40.0)
 
         flaechen_an = sitzung.layers()
         assert STARTER in flaechen_an, (

@@ -168,7 +168,12 @@ def schale(tmp_path_factory):
         vorher = measure.read_png(sitzung.shoot(bilder / "nur-tapete.png"))
 
         sitzung.shell(bau / "zepos-shell.js", bau)
-        time.sleep(SETTLE)
+        # AUF DIE RUHE UND NICHT AUF DIE UHR - seit dem 04.09.2026.
+        # Hier stand ein fester Schlaf. Warum "die Flaeche ist da"
+        # dafuer nicht reicht - und mit welchen Zahlen das gemessen
+        # ist - steht bei Session.warte_auf_ruhe().
+        sitzung.warte_auf_ruhe("zepos-bar", "zepos-dock",
+                               frist=40.0)
 
         for anfrage, name in SEITEN:
             antwort = sitzung.request(anfrage)

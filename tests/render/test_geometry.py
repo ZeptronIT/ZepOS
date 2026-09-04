@@ -173,7 +173,12 @@ def gemalt(request, tmp_path_factory) -> dict:
         ohne = sitzung.shoot(bilder / "nur-tapete.png")
 
         sitzung.shell(bau / "zepos-shell.js", bau)
-        time.sleep(SETTLE)
+        # AUF DIE RUHE UND NICHT AUF DIE UHR - seit dem 04.09.2026.
+        # Hier stand ein fester Schlaf. Warum "die Flaeche ist da"
+        # dafuer nicht reicht - und mit welchen Zahlen das gemessen
+        # ist - steht bei Session.warte_auf_ruhe().
+        sitzung.warte_auf_ruhe("zepos-bar", "zepos-dock",
+                               frist=40.0)
         flaechen = sitzung.layers()
         assert "zepos-bar" in flaechen and "zepos-dock" in flaechen, (
             "Kopf oder Fuss liegen nicht auf dem Schirm:\n"

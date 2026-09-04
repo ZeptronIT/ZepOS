@@ -128,7 +128,12 @@ def gemessen(tmp_path_factory) -> dict:
         nur_tapete = sitzung.shoot(bilder / "nur-tapete.png")
 
         sitzung.shell(bau / "zepos-shell.js", bau)
-        time.sleep(SETTLE)
+        # AUF DIE RUHE UND NICHT AUF DIE UHR - seit dem 04.09.2026.
+        # Hier stand `time.sleep(SETTLE)`. Warum "die Flaeche ist da"
+        # dafuer NICHT reicht, steht bei Session.warte_auf_ruhe() - mit
+        # den Zahlen, die dieser Lauf dabei gemessen hat.
+        sitzung.warte_auf_ruhe(NAMENSRAUM, "zepos-dock", "zepos-bar",
+                               frist=40.0)
 
         ebenen = _ebenen(sitzung)
         flaechen = sitzung.layers()

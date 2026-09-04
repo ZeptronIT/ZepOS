@@ -207,7 +207,12 @@ def _lauf(bau, kind: str) -> str:
         workspaces_file(bau, sitzung.output)
         sitzung.wallpaper()
         sitzung.shell(bau / "zepos-shell.js", bau)
-        time.sleep(SETTLE)
+        # AUF DIE RUHE UND NICHT AUF DIE UHR - seit dem 04.09.2026.
+        # Hier stand ein fester Schlaf. Warum "die Flaeche ist da"
+        # dafuer nicht reicht - und mit welchen Zahlen das gemessen
+        # ist - steht bei Session.warte_auf_ruhe().
+        sitzung.warte_auf_ruhe("zepos-bar", "zepos-dock",
+                               frist=40.0)
 
         antwort = sitzung.request(NAMESPACE)
         assert "toggled" in antwort, (
@@ -456,7 +461,12 @@ def _bilder(bau) -> dict:
         #     jeher; sie hat hier gefehlt.
         sitzung.move_cursor(960, 540)
         sitzung.shell(bau / "zepos-shell.js", bau)
-        time.sleep(SETTLE)
+        # AUF DIE RUHE UND NICHT AUF DIE UHR - seit dem 04.09.2026.
+        # Hier stand ein fester Schlaf. Warum "die Flaeche ist da"
+        # dafuer nicht reicht - und mit welchen Zahlen das gemessen
+        # ist - steht bei Session.warte_auf_ruhe().
+        sitzung.warte_auf_ruhe("zepos-bar", "zepos-dock",
+                               frist=40.0)
 
         blank = sitzung.shoot(bau / "0-nur-schreibtisch.png")
 

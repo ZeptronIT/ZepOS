@@ -194,7 +194,12 @@ def einfahrt(tmp_path_factory) -> dict:
         tapete = sitzung.shoot(bilder / "0-nur-tapete.png")
 
         sitzung.shell(bau / "zepos-shell.js", bau)
-        time.sleep(SETTLE)
+        # AUF DIE RUHE UND NICHT AUF DIE UHR - seit dem 04.09.2026.
+        # Hier stand ein fester Schlaf. Warum "die Flaeche ist da"
+        # dafuer nicht reicht - und mit welchen Zahlen das gemessen
+        # ist - steht bei Session.warte_auf_ruhe().
+        sitzung.warte_auf_ruhe("zepos-bar", "zepos-dock",
+                               frist=40.0)
 
         flaechen = sitzung.layers()
         assert DOCK in flaechen and KNOPF in flaechen, (

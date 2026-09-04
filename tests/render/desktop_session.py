@@ -1101,6 +1101,53 @@ class Session:
             stehen, frist=frist,
             was=f"die Flaechen {', '.join(namen)} liegen auf dem Schirm")
 
+    def warte_auf_ruhe(self, *namen: str, frist: float = 30.0,
+                       gleiche: int = 3, takt: float = 0.2) -> dict:
+        """Warten, bis diese Flaechen da sind UND stillstehen.
+
+        WARUM "DA" NICHT REICHT - UND ES IST GEMESSEN
+            warte_auf_flaechen() kehrt zurueck, sobald der Namensraum in
+            `hyprctl layers` auftaucht. Das ist frueher, als es
+            aussieht: der Compositor hat der Flaeche dann noch keine
+            Groesse zugeteilt, und die Oberflaeche hat ihren Inhalt noch
+            nicht gebaut.
+
+            GEMESSEN am 04.09.2026, als genau das versucht wurde:
+
+                der Fuss stand auf   (860, 880, 200, 200)
+                in Wahrheit ist er   (784, 996, 353, 60)
+
+                das Home meldete     "fuer baobab ist auf dieser
+                                      Flaeche kein Platz (3x2 Zellen)"
+
+            Beide Laeufe massen eine Oberflaeche im Aufbau und fielen an
+            Zusicherungen, an denen nichts kaputt war.
+
+        DREI GLEICHE MESSUNGEN HINTEREINANDER heissen: sie steht. Das
+        ist dieselbe Aussage, die ein `time.sleep(6.0)` behaupten
+        wollte - nur geprueft statt geschaetzt, und im Normalfall nach
+        einem halben statt nach sechs Sekunden.
+        """
+        stand: dict[str, object] = {"letzte": None, "zaehler": 0}
+
+        def stillstand():
+            jetzt = self.layers()
+            if not all(name in jetzt for name in namen):
+                stand["letzte"] = None
+                stand["zaehler"] = 0
+                return None
+            aktuell = {name: jetzt[name] for name in namen}
+            if aktuell == stand["letzte"]:
+                stand["zaehler"] = int(stand["zaehler"]) + 1
+            else:
+                stand["letzte"] = aktuell
+                stand["zaehler"] = 1
+            return jetzt if int(stand["zaehler"]) >= gleiche else None
+
+        return self.warte_bis(
+            stillstand, frist=frist, takt=takt,
+            was=f"{', '.join(namen)} liegen still")
+
     def klick(self, x: int, y: int, taste: str = "links",
               beruhigung: float = 0.4) -> None:
         """Ein ECHTER Klick auf (x, y) - in Bildpunkten dieses Schirms.
