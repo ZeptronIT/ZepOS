@@ -276,11 +276,54 @@ def test_a_base64_key_survives_its_padding():
 
 
 def test_several_allowed_ips_lines_are_one_list():
-    """wg-quick erlaubt mehrere AllowedIPs-Zeilen je Gegenstelle. Die
-    einzige Wiederholung, die kein Fehler ist."""
+    """wg-quick erlaubt mehrere AllowedIPs-Zeilen je Gegenstelle."""
     conf = parse_wg_conf(CONF, "wg0.conf")
     document = wireguard_document(conf)
     assert document["peers"][0]["allowed_ips"] == ["10.0.0.0/8", "192.0.2.0/24"]
+
+
+# So, wie die Fritzbox sie erzeugt: DNS zweimal untereinander.
+FRITZBOX_CONF = f"""[Interface]
+PrivateKey = {PRIVATE_KEY}
+Address = 192.168.178.204/24
+DNS = 192.168.178.1
+DNS = fritz.box
+
+[Peer]
+PublicKey = {PEER_KEY}
+PresharedKey = {PRESHARED}
+AllowedIPs = 192.168.178.0/24,0.0.0.0/0
+Endpoint = example.myfritz.invalid:51820
+PersistentKeepalive = 25
+"""
+
+
+def test_a_fritzbox_file_with_two_dns_lines_is_read():
+    """GEMELDET am 05.10.2026: "DNS appears twice in the same section"
+    - jede Fritzbox-Datei wurde abgelehnt. Beide Zeilen kommen an, der
+    Server als Server und fritz.box als Suchdomaene."""
+    conf = parse_wg_conf(FRITZBOX_CONF, "Heimnetzwerk.conf")
+    assert wireguard_dns(conf) == {"servers": ["192.168.178.1"],
+                                   "search_domain": "fritz.box"}
+
+
+def test_several_address_lines_are_one_list():
+    """wg-quick haengt auch wiederholte Address-Zeilen aneinander."""
+    conf = parse_wg_conf(
+        CONF.replace("Address = 203.0.113.9/32, 198.51.100.4/32",
+                     "Address = 203.0.113.9/32\nAddress = 198.51.100.4/32"),
+        "wg0.conf")
+    document = wireguard_document(conf)
+    assert document["addresses"] == ["203.0.113.9/32", "198.51.100.4/32"]
+
+
+def test_a_repeated_single_value_key_is_still_refused():
+    """Nur die Listen duerfen doppelt stehen. Zwei MTU-Zeilen sind ein
+    Widerspruch, kein Zusammenhaengen."""
+    doubled = CONF.replace("MTU = 1380", "MTU = 1380\nMTU = 1420")
+    with pytest.raises(UnreadableWireGuardConfig) as raised:
+        parse_wg_conf(doubled, "wg0.conf")
+    assert "MTU appears twice" in str(raised.value)
 
 
 def test_an_unknown_key_is_refused_with_file_and_line():

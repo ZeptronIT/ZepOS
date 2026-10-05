@@ -1175,6 +1175,16 @@ WG_INTERFACE_KEYS = ("PrivateKey", "Address", "ListenPort", "DNS", "MTU",
 WG_PEER_KEYS = ("PublicKey", "PresharedKey", "AllowedIPs", "Endpoint",
                 "PersistentKeepalive")
 
+# Die Schluessel, die wg-quick mehrfach je Abschnitt annimmt und zu EINER
+# Liste zusammenhaengt - alle anderen sind doppelt ein Fehler.
+#
+# GEMELDET am 05.10.2026: "nicht eingelesen: Error:
+# /home/musa/Heimnetzwerk.conf:5: DNS appears twice in the same
+# section". Die Fritzbox schreibt in jede WireGuard-Datei, die sie
+# erzeugt, `DNS = <server>` und darunter `DNS = fritz.box`. Bis dahin
+# stand hier nur AllowedIPs; jede Fritzbox-Datei wurde abgelehnt.
+WG_LIST_KEYS = ("Address", "DNS", "AllowedIPs")
+
 _WG_CANONICAL = {name.lower(): name
                  for name in WG_INTERFACE_KEYS + WG_PEER_KEYS + WG_HOOK_KEYS}
 
@@ -1285,10 +1295,9 @@ def parse_wg_conf(text: str, source: str = "<eingabe>") -> WireGuardConf:
                 f"[{section.capitalize()}] section")
 
         target = conf.interface if section == "interface" else conf.peers[-1]
-        if canonical == "AllowedIPs" and canonical in target:
-            # wg-quick erlaubt mehrere AllowedIPs-Zeilen je Gegenstelle
-            # und haengt sie aneinander. Die einzige Wiederholung, die
-            # kein Fehler ist.
+        if canonical in WG_LIST_KEYS and canonical in target:
+            # wg-quick haengt wiederholte Listen-Zeilen aneinander, siehe
+            # WG_LIST_KEYS.
             target[canonical] = f"{target[canonical]},{value}"
             continue
         if canonical in target:
